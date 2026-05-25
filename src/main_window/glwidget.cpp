@@ -1,4 +1,5 @@
 #include "glwidget.h"
+#include "terrain_brush.h"
 
 #include <QTimer>
 #include <QPainter>
@@ -313,6 +314,16 @@ void GLWidget::mouseReleaseEvent(QMouseEvent* event) {
 
 void GLWidget::wheelEvent(QWheelEvent* event) {
 	if (!map) {
+		return;
+	}
+
+	if ((event->modifiers() & Qt::ShiftModifier) && dynamic_cast<TerrainBrush*>(map->brush)) {
+		if (event->angleDelta().y() > 0) {
+			map->brush->increase_size(5 );
+		} else if (event->angleDelta().y() < 0) {
+			map->brush->decrease_size(5);
+		}
+		event->accept();
 		return;
 	}
 

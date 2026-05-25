@@ -37,6 +37,7 @@ class Brush: public QObject {
 	Brush();
 
 	virtual glm::vec2 get_position() const;
+	virtual glm::ivec2 get_size() const;
 	virtual void set_size(glm::ivec2 size);
 	virtual void set_shape(Shape shape);
 	virtual void increase_size(int size);
@@ -116,5 +117,6 @@ class Brush: public QObject {
 	virtual void unselect_id(std::string_view id) {}
 
   signals:
+	void size_changed(glm::ivec2 size);
 	void selection_changed();
 };

@@ -533,6 +533,12 @@ void TerrainPalette::setup_brush_menu() {
 		brush.set_size(glm::ivec2(value));
 		ui.brushSize->setValue(value);
 	});
+	connect(&brush, &Brush::size_changed, this, [&](glm::ivec2 size) {
+		const QSignalBlocker slider_blocker(ui.brushSizeSlider);
+		const QSignalBlocker spinbox_blocker(ui.brushSize);
+		ui.brushSizeSlider->setValue(size.x);
+		ui.brushSize->setValue(size.x);
+	});
 
 	connect(ui.deformationCheckbox, &QCheckBox::clicked, [&](bool checked) {
 		if (checked) {
