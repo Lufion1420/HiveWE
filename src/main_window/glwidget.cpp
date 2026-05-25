@@ -1,4 +1,5 @@
 #include "glwidget.h"
+#include "doodad_brush.h"
 #include "terrain_brush.h"
 
 #include <QTimer>
@@ -317,14 +318,26 @@ void GLWidget::wheelEvent(QWheelEvent* event) {
 		return;
 	}
 
-	if ((event->modifiers() & Qt::ShiftModifier) && dynamic_cast<TerrainBrush*>(map->brush)) {
-		if (event->angleDelta().y() > 0) {
-			map->brush->increase_size(5 );
-		} else if (event->angleDelta().y() < 0) {
-			map->brush->decrease_size(5);
+	if (event->modifiers() & Qt::ShiftModifier) {
+		if (auto* doodad_brush = dynamic_cast<DoodadBrush*>(map->brush); doodad_brush && !doodad_brush->selections.empty()) {
+			if (event->angleDelta().y() > 0) {
+				doodad_brush->scale_selection(1.1f);
+			} else if (event->angleDelta().y() < 0) {
+				doodad_brush->scale_selection(1.f / 1.1f);
+			}
+			event->accept();
+			return;
 		}
-		event->accept();
-		return;
+
+		if (dynamic_cast<TerrainBrush*>(map->brush)) {
+			if (event->angleDelta().y() > 0) {
+				map->brush->increase_size(5);
+			} else if (event->angleDelta().y() < 0) {
+				map->brush->decrease_size(5);
+			}
+			event->accept();
+			return;
+		}
 	}
 
 	camera.mouse_scroll_event(event);

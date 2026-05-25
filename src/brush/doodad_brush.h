@@ -109,6 +109,7 @@ class DoodadBrush: public Brush {
 	void set_selection_absolute_height(float height);
 	void set_selection_relative_height(float height);
 	void set_selection_scale_component(int component, float scale);
+	void scale_selection(float factor);
 
 	void unselect_id(std::string_view id) override;
 

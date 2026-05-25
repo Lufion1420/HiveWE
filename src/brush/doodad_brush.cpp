@@ -723,6 +723,27 @@ void DoodadBrush::set_selection_scale_component(const int component, const float
 	end_action();
 }
 
+void DoodadBrush::scale_selection(const float factor) {
+	start_action(Action::scale);
+	for (auto& i : selections) {
+		const bool is_doodad = doodads_slk.row_headers.contains(i->id);
+		slk::SLK& slk = is_doodad ? doodads_slk : destructibles_slk;
+
+		const float min_scale = slk.data<float>("minscale", i->id);
+		const float max_scale = slk.data<float>("maxscale", i->id);
+
+		if (!is_doodad) {
+			const float scaled = std::clamp(i->scale.x * factor, min_scale, max_scale);
+			i->scale = glm::vec3(scaled);
+		} else {
+			i->scale = glm::clamp(i->scale * factor, glm::vec3(min_scale), glm::vec3(max_scale));
+		}
+		i->update(map->terrain);
+	}
+	end_action();
+	emit scale_changed();
+}
+
 void DoodadBrush::unselect_id(const std::string_view id) {
 	if (doodad.id == id) {
 		set_doodad("ATtr");
