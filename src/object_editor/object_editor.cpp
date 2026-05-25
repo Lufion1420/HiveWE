@@ -16,6 +16,8 @@
 #include <QScrollBar>
 #include <QMenu>
 #include <QMessageBox>
+#include <QSettings>
+#include <QSet>
 
 import std;
 import UnitSelector;
@@ -24,6 +26,82 @@ import Globals;
 import ResourceManager;
 import SlkConversions;
 import "single_model.h";
+
+namespace {
+const BaseTreeItem* tree_item_from_index(const QModelIndex& index) {
+	if (!index.isValid()) {
+		return nullptr;
+	}
+
+	const QModelIndex source_index = [&]() -> QModelIndex {
+		if (const auto* proxy = qobject_cast<const QAbstractProxyModel*>(index.model())) {
+			return proxy->mapToSource(index);
+		}
+		return index;
+	}();
+
+	if (!source_index.isValid()) {
+		return nullptr;
+	}
+
+	return static_cast<const BaseTreeItem*>(source_index.internalPointer());
+}
+
+QString tree_item_path(const QModelIndex& index) {
+	QStringList parts;
+	const auto* item = tree_item_from_index(index);
+	while (item && item->parent) {
+		if (item->baseCategory || item->subCategory) {
+			parts.prepend(QString::fromStdString(item->label));
+		}
+		item = item->parent;
+	}
+	return parts.join('/');
+}
+
+void collect_expanded_paths(const QTreeView* view, const QModelIndex& parent, QStringList& paths) {
+	const auto* model = view->model();
+	for (int row = 0; row < model->rowCount(parent); ++row) {
+		const QModelIndex child = model->index(row, 0, parent);
+		if (!child.isValid()) {
+			continue;
+		}
+
+		const auto* item = tree_item_from_index(child);
+		if (!item || !(item->baseCategory || item->subCategory)) {
+			continue;
+		}
+
+		if (view->isExpanded(child)) {
+			paths.push_back(tree_item_path(child));
+		}
+
+		collect_expanded_paths(view, child, paths);
+	}
+}
+
+void expand_saved_paths(QTreeView* view, const QModelIndex& parent, const QSet<QString>& paths) {
+	const auto* model = view->model();
+	for (int row = 0; row < model->rowCount(parent); ++row) {
+		const QModelIndex child = model->index(row, 0, parent);
+		if (!child.isValid()) {
+			continue;
+		}
+
+		const auto* item = tree_item_from_index(child);
+		if (!item || !(item->baseCategory || item->subCategory)) {
+			continue;
+		}
+
+		const QString path = tree_item_path(child);
+		if (paths.contains(path)) {
+			view->expand(child);
+		}
+
+		expand_saved_paths(view, child, paths);
+	}
+}
+}
 
 ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	ui.setupUi(this);
@@ -97,7 +175,8 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	);
 	addTypeTreeView(buffTreeModel, buffTreeFilter, buff_table, buff_explorer, custom_buff_icon->icon, "Buffs", Category::buff);
 
-	explorer_area->setCurrentIndex(0);
+	QSettings settings;
+	explorer_area->setCurrentIndex(settings.value("ObjectEditor/currentTab", 0).toInt());
 	// Set initial sizes, the second size doesn't really matter with only 2 dock areas
 	dock_manager->setSplitterSizes(explorer_area, {645, 9999});
 
@@ -130,6 +209,45 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	});
 
 	show();
+}
+
+bool ObjectEditor::restore_tree_state(const QString& key, QTreeView* view) const {
+	QSettings settings;
+	const QStringList expanded_paths = settings.value("ObjectEditor/" + key + "/expandedPaths").toStringList();
+	if (expanded_paths.isEmpty()) {
+		return false;
+	}
+
+	QSet<QString> expanded_path_set;
+	for (const auto& path : expanded_paths) {
+		expanded_path_set.insert(path);
+	}
+
+	view->collapseAll();
+	expand_saved_paths(view, QModelIndex(), expanded_path_set);
+	return true;
+}
+
+void ObjectEditor::save_tree_state(const QString& key, const QTreeView* view) const {
+	QStringList expanded_paths;
+	collect_expanded_paths(view, QModelIndex(), expanded_paths);
+
+	QSettings settings;
+	settings.setValue("ObjectEditor/" + key + "/expandedPaths", expanded_paths);
+}
+
+void ObjectEditor::closeEvent(QCloseEvent* event) {
+	QSettings settings;
+	settings.setValue("ObjectEditor/currentTab", explorer_area ? explorer_area->currentIndex() : 0);
+	save_tree_state("units", unit_explorer);
+	save_tree_state("items", item_explorer);
+	save_tree_state("doodads", doodad_explorer);
+	save_tree_state("destructibles", destructible_explorer);
+	save_tree_state("abilities", ability_explorer);
+	save_tree_state("upgrades", upgrade_explorer);
+	save_tree_state("buffs", buff_explorer);
+
+	QMainWindow::closeEvent(event);
 }
 
 void ObjectEditor::itemClicked(const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index) {
@@ -330,7 +448,9 @@ void ObjectEditor::addTypeTreeView(
 
 		return subtree_has_custom;
 	};
-	expand_custom_branch({});
+	if (!restore_tree_state(name.toLower(), view)) {
+		expand_custom_branch(QModelIndex());
+	}
 
 	connect(view, &QTreeView::customContextMenuRequested, [=, this](const QPoint& pos) {
 		QMenu menu;

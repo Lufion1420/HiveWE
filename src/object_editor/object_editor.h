@@ -6,9 +6,10 @@
 
 #include "DockManager.h"
 #include "DockAreaWidget.h"
-#include <QTreeView>
-#include <QSortFilterProxyModel>
+#include <QCloseEvent>
 #include <QElapsedTimer>
+#include <QSortFilterProxyModel>
+#include <QTreeView>
 
 #include "global_search.h"
 #include "nlohmann/json.hpp"
@@ -92,7 +93,12 @@ private:
 	void itemClicked(const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index);
 	void addTypeTreeView(BaseTreeModel* treeModel, BaseFilter*& filter, TableModel* table, QTreeView* view, QIcon icon, QString name, Category category);
 	void reset_details_panel();
+	bool restore_tree_state(const QString& key, QTreeView* view) const;
+	void save_tree_state(const QString& key, const QTreeView* view) const;
+protected:
+	void closeEvent(QCloseEvent* event) override;
 
+private:
 	QElapsedTimer double_shift_timer;
 
 	void keyPressEvent(QKeyEvent* event) override {
