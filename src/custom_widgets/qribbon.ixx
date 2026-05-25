@@ -37,7 +37,6 @@ export class QRibbonButton : public QToolButton {
 		for (auto&& i : attach_to) {
 			shortcuts.push_back(new QShortcut(sequence, i));
 			connect(shortcuts.back(), &QShortcut::activated, this, &QToolButton::click);
-			connect(shortcuts.back(), &QShortcut::activatedAmbiguously, []() { printf("kut2\n"); });
 		}
 	}
 

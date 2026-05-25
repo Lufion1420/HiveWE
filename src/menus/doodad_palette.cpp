@@ -118,8 +118,7 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	find_this = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), this, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
 	find_parent = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), parent, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
 
-	change_mode_this = new QShortcut(Qt::Key_Space, this, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
-	change_mode_parent = new QShortcut(Qt::Key_Space, parent, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
+	change_mode_parent = new QShortcut(Qt::Key_Space, window(), nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
 
 	QRibbonSection* placement_section = new QRibbonSection;
 	placement_section->setText("Placement");
@@ -326,13 +325,7 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 		ui.search->selectAll();
 	});
 
-	connect(change_mode_this, &QShortcut::activated, [&]() {
-		selection_mode->click();
-	});
-
-	connect(change_mode_parent, &QShortcut::activated, [&]() {
-		selection_mode->click();
-	});
+	connect(change_mode_parent, &QShortcut::activated, selection_mode, &QToolButton::click);
 
 	connect(ui.search, &QLineEdit::textEdited, doodad_filter_model, &QSortFilterProxyModel::setFilterFixedString);
 	connect(ui.search, &QLineEdit::textEdited, destructable_filter_model, &QSortFilterProxyModel::setFilterFixedString);
@@ -467,14 +460,12 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 DoodadPalette::~DoodadPalette() {
 	map->brush = nullptr;
 	delete change_mode_parent;
-	delete change_mode_this;
 	delete ribbon_tab;
 }
 
 void DoodadPalette::activate_palette() {
 	find_this->setEnabled(true);
 	find_parent->setEnabled(true);
-	change_mode_this->setEnabled(true);
 	change_mode_parent->setEnabled(true);
 	map->brush = &brush;
 	emit ribbon_tab_requested(ribbon_tab, "Doodad Palette");
@@ -544,7 +535,6 @@ void DoodadPalette::deactivate(QRibbonTab* tab) {
 		selection_mode->disableShortcuts();
 		find_this->setEnabled(false);
 		find_parent->setEnabled(false);
-		change_mode_this->setEnabled(false);
 		change_mode_parent->setEnabled(false);
 	}
 }

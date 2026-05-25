@@ -18,6 +18,12 @@ export class WindowHandler : public QObject {
 		const auto found = std::find_if(windows.begin(), windows.end(), [&](const auto& item) { return item.first == typeid(T).name(); });
 		if (found != windows.end()) {
 			T* window = dynamic_cast<T*>(found->second);
+			if (window->windowState() & Qt::WindowMinimized) {
+				window->setWindowState((window->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+				window->showNormal();
+			} else if (window->isHidden()) {
+				window->show();
+			}
 			window->raise();
 			window->activateWindow();
 			created = false;

@@ -95,7 +95,6 @@ private:
 
 	QShortcut* find_this;
 	QShortcut* find_parent;
-	QShortcut* change_mode_this;
 	QShortcut* change_mode_parent;
 
 

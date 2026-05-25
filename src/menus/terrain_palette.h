@@ -36,7 +36,6 @@ class TerrainPalette: public Palette {
 	QRibbonTab* ribbon_tab = new QRibbonTab;
 	QRibbonButton* selection_mode = new QRibbonButton;
 
-	QShortcut* change_mode_this;
 	QShortcut* change_mode_parent;
 
 	// GUI creation functions

@@ -47,7 +47,7 @@ UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 
 	find_this = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), this, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
 	find_parent = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), parent, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
-	selection_mode->setShortCut(Qt::Key_Space, { this, parent });
+	selection_mode->setShortCut(Qt::Key_Space, { window() });
 
 	current_selection_section = new QRibbonSection;
 	current_selection_section->setText("Current Selection");

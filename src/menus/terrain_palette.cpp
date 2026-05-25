@@ -19,8 +19,7 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 
 	brush.texture_operator.tile_id = map->terrain.tileset_ids.front();
 
-	change_mode_this = new QShortcut(Qt::Key_Space, this, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
-	change_mode_parent = new QShortcut(Qt::Key_Space, parent, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
+	change_mode_parent = new QShortcut(Qt::Key_Space, window(), nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
 
 	ui.flowLayout_placeholder->addLayout(textures_layout);
 	ui.flowLayout_placeholder_2->addLayout(cliff_layout);
@@ -45,7 +44,6 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 TerrainPalette::~TerrainPalette() {
 	map->brush = nullptr;
 	delete change_mode_parent;
-	delete change_mode_this;
 	delete ribbon_tab;
 }
 
@@ -57,7 +55,6 @@ void TerrainPalette::refresh() {
 }
 
 void TerrainPalette::activate_palette() {
-	change_mode_this->setEnabled(true);
 	change_mode_parent->setEnabled(true);
 	map->brush = &brush;
 	sync_brush_controls(&brush);
@@ -89,7 +86,6 @@ void TerrainPalette::sync_brush_controls(Brush* active_brush) {
 void TerrainPalette::deactivate(QRibbonTab* tab) {
 	if (tab != ribbon_tab) {
 		brush.clear_selection();
-		change_mode_this->setEnabled(false);
 		change_mode_parent->setEnabled(false);
 	}
 }
@@ -504,13 +500,7 @@ void TerrainPalette::create_ribbon() {
 	connect(selection_mode, &QRibbonButton::toggled, [&]() {
 		brush.switch_mode();
 	});
-	connect(change_mode_this, &QShortcut::activated, [&]() {
-		selection_mode->click();
-	});
-
-	connect(change_mode_parent, &QShortcut::activated, [&]() {
-		selection_mode->click();
-	});
+	connect(change_mode_parent, &QShortcut::activated, selection_mode, &QToolButton::click);
 
 	connect(enforce_water_height_limit, &QRibbonButton::toggled, [&](bool checked) {
 		brush.enforce_water_height_limits = checked;
