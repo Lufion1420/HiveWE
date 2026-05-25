@@ -9,13 +9,14 @@ namespace fs = std::filesystem;
 #include <QSettings>
 #include <QObject>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QGridLayout>
 #include <QLabel>
 #include <QMenu>
 #include <QPainter>
 #include <QKeyEvent>
+#include <memory>
 
-#include "ui_HiveWE.h"
 #include "global_search.h"
 
 import QRibbon;
@@ -26,11 +27,16 @@ import <glm/gtc/quaternion.hpp>;
 import "palette.h";
 import "minimap.h";
 
+namespace Ui {
+class HiveWEClass;
+}
+
 class HiveWE : public QMainWindow {
 	Q_OBJECT
 
 public:
 	explicit HiveWE(QWidget* parent = nullptr);
+	~HiveWE();
 
 	void load_map(const fs::path& directory);
 
@@ -42,7 +48,7 @@ public:
 	void play_test();
 
 private:
-	Ui::HiveWEClass ui;
+	std::unique_ptr<Ui::HiveWEClass> ui;
 	QRibbonTab* current_custom_tab = nullptr;
 	Minimap* minimap = new Minimap(this);
 

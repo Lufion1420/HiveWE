@@ -106,12 +106,31 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"object_editor/ability_list_editor.ixx"
 )
 
+set(HIVEWE_UI_FILES
+	"main_window/HiveWE.ui"
+	"menus/doodad_palette.ui"
+	"menus/map_info_editor.ui"
+	"menus/minimap.ui"
+	"menus/pathing_palette.ui"
+	"menus/settings_editor.ui"
+	"menus/terrain_palette.ui"
+	"menus/tile_pather.ui"
+	"menus/tile_picker.ui"
+	"menus/tile_setter.ui"
+	"menus/unit_palette.ui"
+	"object_editor/object_editor.ui"
+	"trigger_editor/trigger_editor.ui"
+	"trigger_editor/variable_editor.ui"
+)
+
 target_sources(HiveWE PRIVATE
 	"main.cpp"
+	${HIVEWE_UI_FILES}
 	"main_window/hivewe.rc"
 )
 
 target_sources(HiveWE_lib PRIVATE
+	${HIVEWE_UI_FILES}
 	"main_window/hivewe.cpp"
 	"main_window/glwidget.cpp"
 	"main_window/main_ribbon.cpp"
