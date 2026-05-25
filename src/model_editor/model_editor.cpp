@@ -35,11 +35,10 @@ class CCustomComponentsFactory: public ads::CDockComponentsFactory {
 		const auto title_bar = new ads::CDockAreaTitleBar(dock_area);
 
 		const auto add_tab = new QToolButton(title_bar);
-		add_tab->setToolTip("Open Model");
-		add_tab->setIcon(QIcon("data/icons/model_editor/plus.png"));
-		add_tab->setMinimumSize(23, 23);
-		add_tab->setIconSize(QSize(13, 13));
-		add_tab->setAutoRaise(true);
+		add_tab->setToolTip("Browse Models");
+		add_tab->setText("Browse Models");
+		add_tab->setMinimumSize(110, 28);
+		add_tab->setAutoRaise(false);
 
 		const int index = title_bar->indexOf(title_bar->tabBar());
 		title_bar->insertWidget(index + 1, add_tab);
