@@ -52,6 +52,8 @@ private:
 	ads::CDockManager* dock_manager;
 	ads::CDockAreaWidget* dock_area = nullptr;
 	ads::CDockAreaWidget* explorer_area = nullptr;
+	ads::CDockWidget* details_dock = nullptr;
+	std::string current_details_id;
 
 	QTreeView* unit_explorer = new QTreeView;
 	QTreeView* doodad_explorer = new QTreeView;
@@ -89,6 +91,7 @@ private:
 
 	void itemClicked(const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index);
 	void addTypeTreeView(BaseTreeModel* treeModel, BaseFilter*& filter, TableModel* table, QTreeView* view, QIcon icon, QString name, Category category);
+	void reset_details_panel();
 
 	QElapsedTimer double_shift_timer;
 

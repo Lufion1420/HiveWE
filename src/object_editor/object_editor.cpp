@@ -44,14 +44,10 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	dock_manager->setStyleSheet("");
 	setCentralWidget(dock_manager);
 
-	QLabel* image = new QLabel();
-	image->setPixmap(QPixmap("data/icons/object_editor/background.png"));
-	image->setAlignment(Qt::AlignCenter);
-
-	auto centraldock_widget = new ads::CDockWidget(dock_manager, "CentralWidget");
-	centraldock_widget->setWidget(image);
-	centraldock_widget->setFeature(ads::CDockWidget::NoTab, true);
-	dock_area = dock_manager->setCentralWidget(centraldock_widget);
+	details_dock = new ads::CDockWidget(dock_manager, "Object Data");
+	details_dock->setFeature(ads::CDockWidget::NoTab, true);
+	dock_area = dock_manager->setCentralWidget(details_dock);
+	reset_details_panel();
 
 	unitTreeModel = new UnitTreeModel(this);
 	itemTreeModel = new ItemTreeModel(this);
@@ -145,12 +141,20 @@ void ObjectEditor::itemClicked(const QSortFilterProxyModel* model, TableModel* t
 	open_by_id(table, item->id, index.data(Qt::DisplayRole).toString(), index.data(Qt::DecorationRole).value<QIcon>());
 }
 
+void ObjectEditor::reset_details_panel() {
+	QLabel* image = new QLabel();
+	image->setPixmap(QPixmap("data/icons/object_editor/background.png"));
+	image->setAlignment(Qt::AlignCenter);
+	details_dock->setWidget(image);
+	details_dock->setWindowTitle("Object Data");
+	details_dock->setIcon(QIcon());
+	current_details_id.clear();
+}
+
 void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon) {
-	// If there is already one open for this item
-	if (const auto found = dock_manager->findDockWidget(QString::fromStdString(id)); found) {
-		found->dockAreaWidget()->setCurrentDockWidget(found);
-		found->setFocus();
-		found->raise();
+	if (current_details_id == id) {
+		details_dock->setFocus();
+		details_dock->raise();
 		return;
 	}
 
@@ -219,17 +223,10 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	area->setWidget(container);
 	area->setWidgetResizable(true);
 
-	ads::CDockWidget* dock_tab = new ads::CDockWidget(dock_manager, "");
-	dock_tab->setFeature(ads::CDockWidget::DockWidgetFeature::DockWidgetDeleteOnClose, true);
-	dock_tab->setWidget(area);
-	// dock_tab->setWidget(view);
-	dock_tab->setObjectName(QString::fromStdString(id));
-	dock_tab->setWindowTitle(name);
-	dock_tab->setIcon(icon);
-
-
-
-	dock_manager->addDockWidget(ads::CenterDockWidgetArea, dock_tab, dock_area);
+	details_dock->setWidget(area);
+	details_dock->setWindowTitle(name);
+	details_dock->setIcon(icon);
+	current_details_id = id;
 
 	// Scroll just past the ability insights
 	const int y = view->mapTo(area->widget(), QPoint(0, 0)).y();
@@ -488,9 +485,8 @@ void ObjectEditor::addTypeTreeView(
 
 				ids_to_delete.push_back(treeItem->id);
 
-				// Close any open dock widget
-				if (auto found = dock_manager->findDockWidget(QString::fromStdString(treeItem->id)); found) {
-					found->closeDockWidget();
+				if (current_details_id == treeItem->id) {
+					reset_details_panel();
 				}
 			}
 			for (const auto& i : ids_to_delete) {
