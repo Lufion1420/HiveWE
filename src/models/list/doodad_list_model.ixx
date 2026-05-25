@@ -57,6 +57,8 @@ export class DoodadListModel: public BaseListModel {
 };
 
 export class DoodadListFilter : public QSortFilterProxyModel {
+	static constexpr std::string_view custom_category = "__custom__";
+
 	[[nodiscard]] bool filterAcceptsRow(const int sourceRow, const QModelIndex& sourceParent) const override {
 		if (!filterRegularExpression().pattern().isEmpty()) {
 			if (QString::fromStdString(doodads_slk.index_to_row.at(sourceRow)).contains(filterRegularExpression())) {
@@ -68,7 +70,12 @@ export class DoodadListFilter : public QSortFilterProxyModel {
 		}
 
 		if (filterCategory) {
-			if (doodads_slk.data<std::string_view>("category", sourceRow) != filterCategory->toStdString()) {
+			const std::string_view id = doodads_slk.index_to_row.at(sourceRow);
+			if (*filterCategory == custom_category) {
+				if (!doodads_slk.shadow_data.contains(id) || !doodads_slk.shadow_data.at(id).contains("oldid")) {
+					return false;
+				}
+			} else if (doodads_slk.data<std::string_view>("category", sourceRow) != *filterCategory) {
 				return false;
 			}
 		}
@@ -87,13 +94,13 @@ export class DoodadListFilter : public QSortFilterProxyModel {
 		return doodads_slk.data<std::string_view>("name", left.row()) < doodads_slk.data<std::string_view>("name", right.row());
 	}
 
-	std::optional<QString> filterCategory;
+	std::optional<std::string> filterCategory;
 	std::optional<char> filterTileset;
 
 public:
 	void setFilterCategory(const QString& category) {
 		beginFilterChange();
-		filterCategory = category;
+		filterCategory = category.toStdString();
 		endFilterChange(Direction::Rows);
 	}
 

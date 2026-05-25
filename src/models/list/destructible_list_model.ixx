@@ -57,6 +57,8 @@ export class DestructableListModel: public BaseListModel {
 };
 
 export class DestructableListFilter: public QSortFilterProxyModel {
+	static constexpr std::string_view custom_category = "__custom__";
+
 	[[nodiscard]] bool filterAcceptsRow(const int sourceRow, const QModelIndex& sourceParent) const override {
 		if (!filterRegularExpression().pattern().isEmpty()) {
 			if (QString::fromStdString(destructibles_slk.index_to_row.at(sourceRow)).contains(filterRegularExpression())) {
@@ -68,7 +70,12 @@ export class DestructableListFilter: public QSortFilterProxyModel {
 		}
 
 		if (filterCategory) {
-			if (destructibles_slk.data<std::string_view>("category", sourceRow) != filterCategory->toStdString()) {
+			const std::string_view id = destructibles_slk.index_to_row.at(sourceRow);
+			if (*filterCategory == custom_category) {
+				if (!destructibles_slk.shadow_data.contains(id) || !destructibles_slk.shadow_data.at(id).contains("oldid")) {
+					return false;
+				}
+			} else if (destructibles_slk.data<std::string_view>("category", sourceRow) != *filterCategory) {
 				return false;
 			}
 		}
@@ -87,13 +94,13 @@ export class DestructableListFilter: public QSortFilterProxyModel {
 		return destructibles_slk.data<std::string_view>("name", left.row()) < destructibles_slk.data<std::string_view>("name", right.row());
 	}
 
-	std::optional<QString> filterCategory;
+	std::optional<std::string> filterCategory;
 	std::optional<char> filterTileset;
 
   public:
 	void setFilterCategory(const QString& category) {
 		beginFilterChange();
-		filterCategory = category;
+		filterCategory = category.toStdString();
 		endFilterChange(Direction::Rows);
 	}
 

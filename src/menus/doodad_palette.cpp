@@ -67,6 +67,9 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	for (const auto& [key, value] : world_edit_data.section("DestructibleCategories")) {
 		ui.type->addItem(QString::fromStdString(value.front()), QString::fromStdString(key));
 	}
+	ui.type->addItem("Custom", "__custom__");
+	ui.type->setMaxVisibleItems(20);
+	ui.type->setStyleSheet("QComboBox { combobox-popup: 0; }");
 
 	doodad_list_model = new DoodadListModel(this);
 	doodad_list_model->setSourceModel(doodads_table);

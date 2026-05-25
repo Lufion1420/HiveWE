@@ -8,6 +8,7 @@
 ## Build, run, test
 - Required toolchain: Visual Studio 2022 17.14+ on Windows. The README explicitly calls out C++20 modules support; the current CMake files request `cxx_std_23`.
 - Dependency management: `vcpkg` via `VCPKG_ROOT`, with custom overlay ports in `overlay-ports/`.
+- User preference: do not run `cmake --build ...` from Codex unless the user explicitly asks to re-enable that. Leave build/debug execution manual.
 - Configure/build:
 ```powershell
 cmake --preset Release
