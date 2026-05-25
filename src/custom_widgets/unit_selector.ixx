@@ -52,6 +52,7 @@ export class UnitSelector : public QWidget {
 			}
 			race->addItem(QString::fromStdString(value[1]), QString::fromStdString(value[0]));
 		}
+		race->addItem("Custom", "__custom__");
 
 		connect(race, QOverload<int>::of(&QComboBox::currentIndexChanged), [&]() {
 			filter_model->setFilterRace(race->currentData().toString());

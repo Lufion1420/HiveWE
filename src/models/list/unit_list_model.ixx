@@ -30,8 +30,22 @@ export class UnitListModel: public BaseListModel {
 		}
 
 		switch (role) {
-			case Qt::DisplayRole:
-				return mapToSource(index).data(role).toString() + " " + QString::fromUtf8(units_slk.data<std::string_view>("editorsuffix", index.row()));
+			case Qt::DisplayRole: {
+				QString label = mapToSource(index).data(role).toString() + " " + QString::fromUtf8(units_slk.data<std::string_view>("editorsuffix", index.row()));
+				const std::string_view id = units_slk.index_to_row.at(index.row());
+				if (units_slk.shadow_data.contains(id) && units_slk.shadow_data.at(id).contains("oldid")) {
+					const bool isBuilding = units_slk.data<std::string_view>("isbldg", index.row()) == "1";
+					const bool isHero = isupper(id.front());
+					if (isHero) {
+						label += " [Hero]";
+					} else if (isBuilding) {
+						label += " [Building]";
+					} else {
+						label += " [Unit]";
+					}
+				}
+				return label;
+			}
 			case Qt::UserRole:
 				return QString::fromStdString("units/" + units_slk.data("race", index.row()) + "/" + units_slk.index_to_row.at(index.row()));
 			case Qt::DecorationRole:
@@ -44,6 +58,7 @@ export class UnitListModel: public BaseListModel {
 
 export class UnitListFilter: public QSortFilterProxyModel {
 	Q_OBJECT
+	static constexpr std::string_view custom_race = "__custom__";
 
 	[[nodiscard]]
 	bool filterAcceptsRow(const int sourceRow, const QModelIndex& sourceParent) const override {
@@ -57,7 +72,12 @@ export class UnitListFilter: public QSortFilterProxyModel {
 		}
 
 		if (filterRace) {
-			if (units_slk.data<std::string_view>("race", sourceRow) != filterRace->toStdString()) {
+			const std::string_view id = units_slk.index_to_row.at(sourceRow);
+			if (*filterRace == custom_race) {
+				if (!units_slk.shadow_data.contains(id) || !units_slk.shadow_data.at(id).contains("oldid")) {
+					return false;
+				}
+			} else if (units_slk.data<std::string_view>("race", sourceRow) != *filterRace) {
 				return false;
 			}
 		}
@@ -67,9 +87,26 @@ export class UnitListFilter: public QSortFilterProxyModel {
 
 	[[nodiscard]]
 	bool lessThan(const QModelIndex& left, const QModelIndex& right) const override {
+		if (filterRace && *filterRace == custom_race) {
+			auto sort_key = [&](const QModelIndex& index) {
+				const bool isBuilding = units_slk.data<std::string_view>("isbldg", index.row()) == "1";
+				const bool isHero = isupper(units_slk.index_to_row.at(index.row()).front());
+
+				QString prefix = "1";
+				if (isHero) {
+					prefix = "0";
+				} else if (isBuilding) {
+					prefix = "2";
+				}
+
+				return prefix + QString::fromUtf8(units_slk.data<std::string_view>("name", index.row()));
+			};
+
+			return sort_key(left) < sort_key(right);
+		}
+
 		QString leftIndex = "0";
 		{
-			const bool isHostile = units_slk.data<std::string_view>("hostilepal", left.row()) == "1";
 			const bool isBuilding = units_slk.data<std::string_view>("isbldg", left.row()) == "1";
 			const bool isHero = isupper(units_slk.index_to_row.at(left.row()).front());
 			const bool isSpecial = units_slk.data<std::string_view>("special", left.row()) == "1";
@@ -86,7 +123,6 @@ export class UnitListFilter: public QSortFilterProxyModel {
 
 		QString rightIndex = "0";
 		{
-			const bool isHostile = units_slk.data<std::string_view>("hostilepal", right.row()) == "1";
 			const bool isBuilding = units_slk.data<std::string_view>("isbldg", right.row()) == "1";
 			const bool isHero = isupper(units_slk.index_to_row.at(right.row()).front());
 			const bool isSpecial = units_slk.data<std::string_view>("special", right.row()) == "1";
@@ -100,11 +136,11 @@ export class UnitListFilter: public QSortFilterProxyModel {
 			}
 			rightIndex += QString::fromUtf8(units_slk.data<std::string_view>("name", right.row()));
 		}
-
+		
 		return leftIndex < rightIndex;
 	}
 
-	std::optional<QString> filterRace;
+	std::optional<std::string> filterRace;
 
   public:
 	using QSortFilterProxyModel::QSortFilterProxyModel;
@@ -113,7 +149,7 @@ export class UnitListFilter: public QSortFilterProxyModel {
 
 	void setFilterRace(const QString& race) {
   		beginFilterChange();
-		filterRace = race;
+		filterRace = race.toStdString();
   		endFilterChange(Direction::Rows);
 	}
 };
