@@ -70,6 +70,14 @@ class Brush: public QObject {
 
 	virtual void clear_clipboard() {}
 
+	virtual GLuint terrain_overlay_texture() const {
+		return brush_texture;
+	}
+
+	virtual bool show_terrain_overlay() const {
+		return mode != Mode::selection;
+	}
+
 	void render();
 	virtual void render_selector() const;
 

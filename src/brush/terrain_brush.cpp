@@ -9,6 +9,107 @@ import PathingUndo;
 import TerrainUndo;
 import Camera;
 import Rects;
+import OpenGLUtilities;
+import Globals;
+
+namespace {
+TerrainRect normalized_tile_area(const glm::vec2& a, const glm::vec2& b, const Terrain& terrain) {
+	const int left = static_cast<int>(std::floor(std::min(a.x, b.x)));
+	const int top = static_cast<int>(std::floor(std::min(a.y, b.y)));
+	const int right = static_cast<int>(std::ceil(std::max(a.x, b.x)));
+	const int bottom = static_cast<int>(std::ceil(std::max(a.y, b.y)));
+
+	return TerrainRect(left, top, std::max(1, right - left), std::max(1, bottom - top)).intersected({0, 0, terrain.width - 1, terrain.height - 1});
+}
+
+TerrainRect corner_area_from_tile_area(const TerrainRect& tile_area) {
+	return TerrainRect(tile_area.x(), tile_area.y(), tile_area.width() + 1, tile_area.height() + 1);
+}
+
+PathingRect pathing_area_from_tile_area(const TerrainRect& tile_area) {
+	return PathingRect(tile_area.x() * 4, tile_area.y() * 4, tile_area.width() * 4, tile_area.height() * 4);
+}
+
+glm::vec2 tile_area_center(const TerrainRect& area) {
+	return glm::vec2(area.x() + area.width() * 0.5f, area.y() + area.height() * 0.5f);
+}
+
+std::vector<uint8_t> selection_mask_for_area(const TerrainRect& area, Brush::Shape shape) {
+	std::vector<uint8_t> mask(area.width() * area.height(), true);
+	if (shape == Brush::Shape::square || area.width() <= 0 || area.height() <= 0) {
+		return mask;
+	}
+
+	const float half_width = area.width() * 0.5f;
+	const float half_height = area.height() * 0.5f;
+
+	for (int y = 0; y < area.height(); ++y) {
+		for (int x = 0; x < area.width(); ++x) {
+			const float normalized_x = (x + 0.5f - half_width) / std::max(half_width, 0.5f);
+			const float normalized_y = (y + 0.5f - half_height) / std::max(half_height, 0.5f);
+
+			bool selected = true;
+			if (shape == Brush::Shape::circle) {
+				selected = normalized_x * normalized_x + normalized_y * normalized_y <= 1.f;
+			} else if (shape == Brush::Shape::diamond) {
+				selected = std::abs(normalized_x) + std::abs(normalized_y) <= 1.f;
+			}
+
+			mask[y * area.width() + x] = selected;
+		}
+	}
+
+	return mask;
+}
+
+bool tile_is_selected(const std::vector<uint8_t>& mask, const int width, const int x, const int y) {
+	return x >= 0 && y >= 0 && y * width + x < static_cast<int>(mask.size()) && mask[y * width + x];
+}
+
+bool corner_is_selected(const std::vector<uint8_t>& mask, const int width, const int height, const int x, const int y) {
+	return tile_is_selected(mask, width, x, y) || tile_is_selected(mask, width, x - 1, y) || tile_is_selected(mask, width, x, y - 1)
+		|| tile_is_selected(mask, width, x - 1, y - 1);
+}
+
+void rebuild_overlay_texture(GLuint& texture, const std::vector<uint8_t>& mask, const int width, const int height) {
+	if (texture != 0) {
+		glDeleteTextures(1, &texture);
+		texture = 0;
+	}
+
+	if (width <= 0 || height <= 0 || mask.empty()) {
+		return;
+	}
+
+	std::vector<glm::u8vec4> pixels(width * height, {0, 0, 0, 0});
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			if (mask[y * width + x]) {
+				pixels[y * width + x] = {255, 96, 160, 96};
+			}
+		}
+	}
+
+	glCreateTextures(GL_TEXTURE_2D, 1, &texture);
+	glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTextureParameteri(texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTextureParameteri(texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTextureStorage2D(texture, 1, GL_RGBA8, width * 4, height * 4);
+
+	std::vector<glm::u8vec4> expanded(width * height * 16, {0, 0, 0, 0});
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			for (int yy = 0; yy < 4; ++yy) {
+				for (int xx = 0; xx < 4; ++xx) {
+					expanded[((y * 4 + yy) * width * 4) + x * 4 + xx] = pixels[y * width + x];
+				}
+			}
+		}
+	}
+	glTextureSubImage2D(texture, 0, 0, 0, width * 4, height * 4, GL_RGBA, GL_UNSIGNED_BYTE, expanded.data());
+}
+}
 
 TerrainBrush::TerrainBrush() :
 	Brush(),
@@ -22,6 +123,38 @@ TerrainBrush::TerrainBrush() :
 	brush_type = Brush::Type::corner;
 
 	set_size(size);
+}
+
+TerrainBrush::~TerrainBrush() {
+	if (selection_texture != 0) {
+		glDeleteTextures(1, &selection_texture);
+	}
+	if (clipboard_texture != 0) {
+		glDeleteTextures(1, &clipboard_texture);
+	}
+}
+
+glm::vec2 TerrainBrush::get_position() const {
+	if (mode == Mode::selection) {
+		if (selection_started) {
+			const TerrainRect area = normalized_tile_area(glm::vec2(selection_start), glm::vec2(input_handler.mouse_world), map->terrain);
+			return tile_area_center(area);
+		}
+		if (has_selection_area) {
+			return tile_area_center(selection_area);
+		}
+	}
+
+	if (mode == Mode::pasting && has_clipboard) {
+		return tile_area_center(TerrainRect(
+			static_cast<int>(std::floor(input_handler.mouse_world.x)),
+			static_cast<int>(std::floor(input_handler.mouse_world.y)),
+			clipboard_tile_area.width(),
+			clipboard_tile_area.height()
+		));
+	}
+
+	return Brush::get_position();
 }
 
 void TerrainBrush::deactivate_operator(TerrainOperator& target) {
@@ -73,6 +206,12 @@ void TerrainBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 void TerrainBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 	Brush::mouse_move_event(event, frame_delta);
 
+	if (mode == Mode::selection && selection_started) {
+		const TerrainRect area = normalized_tile_area(glm::vec2(selection_start), glm::vec2(input_handler.mouse_world), map->terrain);
+		context->makeCurrent();
+		rebuild_overlay_texture(selection_texture, selection_mask_for_area(area, shape), area.width(), area.height());
+	}
+
 	/*if (event->buttons() == Qt::LeftButton) {
 		if (mode == Mode::selection) {
 			if (dragging) {
@@ -109,6 +248,14 @@ void TerrainBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 }
 
 void TerrainBrush::mouse_release_event(QMouseEvent* event) {
+	if (mode == Mode::selection && selection_started) {
+		selection_area = normalized_tile_area(glm::vec2(selection_start), glm::vec2(input_handler.mouse_world), map->terrain);
+		has_selection_area = selection_area.width() > 0 && selection_area.height() > 0;
+		selection_tile_mask = selection_mask_for_area(selection_area, shape);
+		context->makeCurrent();
+		rebuild_overlay_texture(selection_texture, selection_tile_mask, selection_area.width(), selection_area.height());
+	}
+
 	//dragging = false;
 	//if (dragged) {
 	//	dragged = false;
@@ -119,6 +266,182 @@ void TerrainBrush::mouse_release_event(QMouseEvent* event) {
 	//}
 
 	Brush::mouse_release_event(event);
+}
+
+void TerrainBrush::copy_selection() {
+	if (!has_selection_area) {
+		return;
+	}
+
+	clipboard_tile_area = selection_area;
+	clipboard_tile_mask = selection_tile_mask;
+	clipboard_corners.clear();
+	clipboard_pathing_cells_static.clear();
+
+	const TerrainRect corner_area = corner_area_from_tile_area(selection_area);
+	clipboard_corners.reserve(corner_area.width() * corner_area.height());
+	for (int j = corner_area.top(); j <= corner_area.bottom(); ++j) {
+		for (int i = corner_area.left(); i <= corner_area.right(); ++i) {
+			clipboard_corners.push_back(map->terrain.get_corner(i, j));
+		}
+	}
+
+	const PathingRect pathing_area = pathing_area_from_tile_area(selection_area);
+	clipboard_pathing_cells_static.reserve(pathing_area.width() * pathing_area.height());
+	for (int j = pathing_area.top(); j <= pathing_area.bottom(); ++j) {
+		for (int i = pathing_area.left(); i <= pathing_area.right(); ++i) {
+			clipboard_pathing_cells_static.push_back(map->pathing_map.pathing_cells_static[j * map->pathing_map.width + i]);
+		}
+	}
+
+	has_clipboard = true;
+	context->makeCurrent();
+	rebuild_overlay_texture(clipboard_texture, clipboard_tile_mask, clipboard_tile_area.width(), clipboard_tile_area.height());
+}
+
+void TerrainBrush::cut_selection() {
+	copy_selection();
+}
+
+void TerrainBrush::clear_selection() {
+	has_selection_area = false;
+	selection_tile_mask.clear();
+}
+
+void TerrainBrush::place_clipboard() {
+	if (!has_clipboard) {
+		return;
+	}
+
+	const TerrainRect destination_tile_area = TerrainRect(
+		static_cast<int>(std::floor(input_handler.mouse_world.x)),
+		static_cast<int>(std::floor(input_handler.mouse_world.y)),
+		clipboard_tile_area.width(),
+		clipboard_tile_area.height()
+	).intersected({0, 0, map->terrain.width - 1, map->terrain.height - 1});
+
+	if (destination_tile_area.width() <= 0 || destination_tile_area.height() <= 0) {
+		return;
+	}
+
+	const int source_tile_x = destination_tile_area.x() - static_cast<int>(std::floor(input_handler.mouse_world.x));
+	const int source_tile_y = destination_tile_area.y() - static_cast<int>(std::floor(input_handler.mouse_world.y));
+
+	const TerrainRect destination_corner_area = corner_area_from_tile_area(destination_tile_area);
+	const PathingRect destination_pathing_area = pathing_area_from_tile_area(destination_tile_area);
+	const TerrainRect source_corner_area(source_tile_x, source_tile_y, destination_corner_area.width(), destination_corner_area.height());
+	const PathingRect source_pathing_area(source_tile_x * 4, source_tile_y * 4, destination_pathing_area.width(), destination_pathing_area.height());
+
+	map->world_undo.new_undo_group();
+
+	auto terrain_undo = std::make_unique<TerrainGenericAction>();
+	terrain_undo->area = destination_corner_area;
+	terrain_undo->undo_type = TerrainUndoType::full;
+	terrain_undo->old_corners.reserve(destination_corner_area.width() * destination_corner_area.height());
+	terrain_undo->new_corners.reserve(destination_corner_area.width() * destination_corner_area.height());
+
+	for (int j = 0; j < destination_corner_area.height(); ++j) {
+		for (int i = 0; i < destination_corner_area.width(); ++i) {
+			const int destination_x = destination_corner_area.x() + i;
+			const int destination_y = destination_corner_area.y() + j;
+			const int source_index = (source_corner_area.y() + j) * (clipboard_tile_area.width() + 1) + source_corner_area.x() + i;
+
+			terrain_undo->old_corners.push_back(map->terrain.get_corner(destination_x, destination_y));
+			if (corner_is_selected(
+					clipboard_tile_mask,
+					clipboard_tile_area.width(),
+					clipboard_tile_area.height(),
+					source_corner_area.x() + i,
+					source_corner_area.y() + j
+				)) {
+				map->terrain.set_corner(destination_x, destination_y, clipboard_corners[source_index]);
+			}
+			terrain_undo->new_corners.push_back(map->terrain.get_corner(destination_x, destination_y));
+		}
+	}
+	map->world_undo.add_undo_action(std::move(terrain_undo));
+
+	auto pathing_undo = std::make_unique<PathingMapAction>();
+	pathing_undo->area = destination_pathing_area;
+	pathing_undo->old_pathing.reserve(destination_pathing_area.width() * destination_pathing_area.height());
+	pathing_undo->new_pathing.reserve(destination_pathing_area.width() * destination_pathing_area.height());
+
+	for (int j = 0; j < destination_pathing_area.height(); ++j) {
+		for (int i = 0; i < destination_pathing_area.width(); ++i) {
+			const int destination_x = destination_pathing_area.x() + i;
+			const int destination_y = destination_pathing_area.y() + j;
+			const int source_index = (source_pathing_area.y() + j) * (clipboard_tile_area.width() * 4) + source_pathing_area.x() + i;
+
+			pathing_undo->old_pathing.push_back(map->pathing_map.pathing_cells_static[destination_y * map->pathing_map.width + destination_x]);
+			if (tile_is_selected(
+					clipboard_tile_mask,
+					clipboard_tile_area.width(),
+					(source_pathing_area.x() + i) / 4,
+					(source_pathing_area.y() + j) / 4
+				)) {
+				map->pathing_map.pathing_cells_static[destination_y * map->pathing_map.width + destination_x] =
+					clipboard_pathing_cells_static[source_index];
+			}
+			pathing_undo->new_pathing.push_back(map->pathing_map.pathing_cells_static[destination_y * map->pathing_map.width + destination_x]);
+		}
+	}
+	map->world_undo.add_undo_action(std::move(pathing_undo));
+
+	map->terrain.update_ground_heights(destination_corner_area);
+	map->terrain.update_cliff_meshes(destination_corner_area);
+	map->terrain.update_ground_textures(destination_corner_area);
+	map->terrain.update_water(destination_corner_area);
+	map->pathing_map.upload_static_pathing();
+	map->terrain.update_minimap();
+	map->units.update_area(
+		TerrainRectF(
+			destination_corner_area.x(),
+			destination_corner_area.y(),
+			destination_corner_area.width(),
+			destination_corner_area.height()
+		),
+		map->terrain
+	);
+
+	selection_area = destination_tile_area;
+	has_selection_area = true;
+	selection_tile_mask.resize(destination_tile_area.width() * destination_tile_area.height());
+	for (int y = 0; y < destination_tile_area.height(); ++y) {
+		for (int x = 0; x < destination_tile_area.width(); ++x) {
+			selection_tile_mask[y * destination_tile_area.width() + x] =
+				clipboard_tile_mask[(source_tile_y + y) * clipboard_tile_area.width() + source_tile_x + x];
+		}
+	}
+	context->makeCurrent();
+	rebuild_overlay_texture(selection_texture, selection_tile_mask, selection_area.width(), selection_area.height());
+}
+
+void TerrainBrush::render_selector() const {}
+
+void TerrainBrush::render_selection() const {
+}
+
+void TerrainBrush::render_clipboard() {
+}
+
+GLuint TerrainBrush::terrain_overlay_texture() const {
+	if (mode == Mode::pasting && has_clipboard) {
+		return clipboard_texture;
+	}
+	if (mode == Mode::selection && (selection_started || has_selection_area)) {
+		return selection_texture;
+	}
+	return brush_texture;
+}
+
+bool TerrainBrush::show_terrain_overlay() const {
+	if (mode == Mode::selection) {
+		return selection_started || has_selection_area;
+	}
+	if (mode == Mode::pasting) {
+		return has_clipboard;
+	}
+	return true;
 }
 
 bool TerrainBrush::has_active_operators() {

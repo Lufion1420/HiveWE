@@ -599,9 +599,9 @@ export class Terrain: public QObject {
 		glBindTextureUnit(17, pathing_map.texture_static);
 		glBindTextureUnit(18, pathing_map.texture_dynamic);
 
-		glUniform1i(6, brush && brush->get_mode() != Brush::Mode::selection);
+		glUniform1i(6, brush && brush->show_terrain_overlay());
 		if (brush) {
-			glBindTextureUnit(19, brush->brush_texture);
+			glBindTextureUnit(19, brush->terrain_overlay_texture());
 		}
 
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, cliff_level_buffer);
@@ -641,7 +641,7 @@ export class Terrain: public QObject {
 		if (brush) {
 			glUniform2fv(4, 1, &brush->get_position()[0]);
 		}
-		glUniform1i(5, brush && brush->get_mode() != Brush::Mode::selection);
+		glUniform1i(5, brush && brush->show_terrain_overlay());
 
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ground_height_buffer);
 
@@ -651,7 +651,7 @@ export class Terrain: public QObject {
 		glUniform2i(7, width, height);
 
 		if (brush) {
-			glBindTextureUnit(3, brush->brush_texture);
+			glBindTextureUnit(3, brush->terrain_overlay_texture());
 		}
 		for (const auto& i : cliff_meshes) {
 			i->render();

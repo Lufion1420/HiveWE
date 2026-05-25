@@ -12,7 +12,8 @@ export enum class TerrainUndoType {
 	texture,
 	height,
 	cliff,
-	water
+	water,
+	full
 };
 
 export class TerrainGenericAction final: public WorldCommand {
@@ -48,8 +49,15 @@ export class TerrainGenericAction final: public WorldCommand {
 			ctx.terrain.update_water(area);
 		}
 
+		if (undo_type == TerrainUndoType::full) {
+			ctx.terrain.update_ground_heights(area);
+			ctx.terrain.update_cliff_meshes(area);
+			ctx.terrain.update_ground_textures(area);
+			ctx.terrain.update_water(area);
+		}
+
 		ctx.terrain.update_minimap();
-		ctx.units.update_area(area, ctx.terrain);
+		ctx.units.update_area(TerrainRectF(area.x(), area.y(), area.width(), area.height()), ctx.terrain);
 	}
 
 	void redo(WorldEditContext& ctx) override {
@@ -78,7 +86,14 @@ export class TerrainGenericAction final: public WorldCommand {
 			ctx.terrain.update_water(area);
 		}
 
+		if (undo_type == TerrainUndoType::full) {
+			ctx.terrain.update_ground_heights(area);
+			ctx.terrain.update_cliff_meshes(area);
+			ctx.terrain.update_ground_textures(area);
+			ctx.terrain.update_water(area);
+		}
+
 		ctx.terrain.update_minimap();
-		ctx.units.update_area(area, ctx.terrain);
+		ctx.units.update_area(TerrainRectF(area.x(), area.y(), area.width(), area.height()), ctx.terrain);
 	}
 };
