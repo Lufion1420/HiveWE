@@ -12,6 +12,7 @@ import ResourceManager;
 
 TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 	ui.setupUi(this);
+	ui.verticalLayout->setAlignment(Qt::AlignTop);
 	ui.verticalLayout->setContentsMargins(0, 0, 0, 0);
 	ui.verticalLayout->setSpacing(6);
 	monitor_activation();

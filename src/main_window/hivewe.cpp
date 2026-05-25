@@ -287,10 +287,15 @@ void HiveWE::setup_palette_sidebar() {
 	terrain_column_layout->setSpacing(0);
 
 	auto* terrain_header = new QLabel("Terrain", terrain_column);
-	terrain_header->setStyleSheet("QLabel { font-size: 15px; font-weight: 700; padding: 0 2px 1px 2px; margin: 0; }");
+	terrain_header->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+	terrain_header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	terrain_header->setFixedHeight(24);
+	terrain_header->setStyleSheet("QLabel { font-size: 15px; font-weight: 700; padding: 0 2px 4px 2px; margin: 0; }");
 
 	terrain_host = new QFrame(terrain_column);
 	terrain_host->setObjectName("terrainSidebarHost");
+	terrain_host->setFrameShape(QFrame::NoFrame);
+	terrain_host->setContentsMargins(0, 0, 0, 0);
 	auto* terrain_layout = new QVBoxLayout(terrain_host);
 	terrain_layout->setContentsMargins(0, 0, 0, 0);
 	terrain_layout->setSpacing(0);
@@ -298,13 +303,18 @@ void HiveWE::setup_palette_sidebar() {
 	auto* pathing_separator = new QFrame(terrain_column);
 	pathing_separator->setFrameShape(QFrame::HLine);
 	pathing_separator->setFrameShadow(QFrame::Sunken);
-	pathing_separator->setContentsMargins(0, 6, 0, 4);
+	pathing_separator->setFixedHeight(8);
 
 	auto* pathing_header = new QLabel("Pathing", terrain_column);
-	pathing_header->setStyleSheet("QLabel { font-size: 15px; font-weight: 700; padding: 0 2px 1px 2px; margin: 0; }");
+	pathing_header->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+	pathing_header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	pathing_header->setFixedHeight(24);
+	pathing_header->setStyleSheet("QLabel { font-size: 15px; font-weight: 700; padding: 2px 2px 3px 2px; margin: 0; }");
 
 	pathing_host = new QFrame(terrain_column);
 	pathing_host->setObjectName("pathingSidebarHost");
+	pathing_host->setFrameShape(QFrame::NoFrame);
+	pathing_host->setContentsMargins(0, 0, 0, 0);
 	auto* pathing_layout = new QVBoxLayout(pathing_host);
 	pathing_layout->setContentsMargins(0, 0, 0, 0);
 	pathing_layout->setSpacing(0);

@@ -14,7 +14,16 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 	ui.setupUi(this);
 	monitor_activation();
 	ui.verticalLayout->setContentsMargins(0, 0, 0, 0);
-	ui.verticalLayout->setSpacing(6);
+	ui.verticalLayout->setSpacing(7);
+	ui.verticalLayout->setAlignment(Qt::AlignTop);
+	ui.ToolTypeLayout->setSpacing(5);
+	ui.horizontalLayout->setSpacing(5);
+	ui.brushOperationLabel->setContentsMargins(0, 3, 0, 3);
+	ui.brushTypeLabel->setContentsMargins(0, 5, 0, 3);
+	ui.verticalLayout->removeWidget(ui.brushSizeLabel);
+	ui.verticalLayout->removeItem(ui.horizontalLayout_2);
+	ui.verticalLayout->removeItem(ui.horizontalLayout_3);
+	ui.verticalLayout->removeItem(ui.brushShapeLayout);
 	ui.brushSizeLabel->hide();
 	ui.brushSize1->hide();
 	ui.brushSize3->hide();

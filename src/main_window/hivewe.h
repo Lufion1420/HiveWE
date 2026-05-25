@@ -101,10 +101,10 @@ private:
 	QWidget* sidebar_root = nullptr;
 	QWidget* object_column = nullptr;
 	QWidget* terrain_column = nullptr;
-	QWidget* doodad_host = nullptr;
-	QWidget* unit_host = nullptr;
-	QWidget* terrain_host = nullptr;
-	QWidget* pathing_host = nullptr;
+	QFrame* doodad_host = nullptr;
+	QFrame* unit_host = nullptr;
+	QFrame* terrain_host = nullptr;
+	QFrame* pathing_host = nullptr;
 	QVBoxLayout* object_column_layout = nullptr;
 	QVBoxLayout* terrain_column_layout = nullptr;
 	TerrainPalette* terrain_palette = nullptr;
