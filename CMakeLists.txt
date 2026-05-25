@@ -35,6 +35,7 @@ find_package(tracy CONFIG REQUIRED)
 qt_standard_project_setup()
 
 option(HIVEWE_BUILD_TESTS "Build HiveWE unit tests" ON)
+option(HIVEWE_AUTO_RUN_AFTER_BUILD "Launch HiveWE automatically after a successful build" ON)
 
 add_library(HiveWE_lib STATIC)
 add_executable(HiveWE
@@ -133,6 +134,30 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 	"${PROJECT_SOURCE_DIR}/data"
 	"$<TARGET_FILE_DIR:HiveWE>/data"
 )
+
+if(WIN32 AND HIVEWE_AUTO_RUN_AFTER_BUILD)
+	add_custom_command(TARGET ${PROJECT_NAME} PRE_LINK
+		COMMAND powershell
+		-NoProfile
+		-ExecutionPolicy Bypass
+		-Command "Get-Process HiveWE -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; exit 0"
+	)
+
+	add_custom_target(HiveWE_run_after_build ALL
+		COMMAND powershell
+		-NoProfile
+		-ExecutionPolicy Bypass
+		-Command "Get-Process HiveWE -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; exit 0"
+		COMMAND powershell
+		-NoProfile
+		-ExecutionPolicy Bypass
+		-Command "Start-Process -FilePath '$<TARGET_FILE:HiveWE>' -WorkingDirectory '$<TARGET_FILE_DIR:HiveWE>'"
+		COMMAND ${CMAKE_COMMAND}
+		-E rm -f
+		"${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/HiveWE_run_after_build"
+	)
+	add_dependencies(HiveWE_run_after_build ${PROJECT_NAME})
+endif()
 
 # vcpkg's tracy port installs the Debug DLL under debug/bin/Debug/ (extra
 # subfolder), which VCPKG_APPLOCAL_DEPS doesn't pick up. Copy it manually using
