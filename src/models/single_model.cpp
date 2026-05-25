@@ -291,16 +291,25 @@ void SingleModel::sourceDataChanged(const QModelIndex& topLeft, const QModelInde
 /// Manually color the headers because the default QHeaderView will only alternatively color the items
 void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logicalIndex) const {
 	const Qt::Alignment align = (Qt::AlignLeft | Qt::AlignTop);
+	bool is_selected = false;
 
-	painter->fillRect(rect, palette().color(QPalette::Base));
+	if (const auto* item_view = qobject_cast<const QAbstractItemView*>(parentWidget())) {
+		if (const auto* selection_model = item_view->selectionModel()) {
+			is_selected = selection_model->isRowSelected(logicalIndex, QModelIndex()) || selection_model->currentIndex().row() == logicalIndex;
+		}
+	}
 
-	painter->setPen(QPen(model()->headerData(logicalIndex, orientation(), Qt::ForegroundRole).value<QColor>()));
+	painter->fillRect(rect, palette().color(is_selected ? QPalette::Highlight : QPalette::Base));
+
+	const QColor text_color = is_selected ? palette().color(QPalette::HighlightedText)
+										  : model()->headerData(logicalIndex, orientation(), Qt::ForegroundRole).value<QColor>();
+	painter->setPen(QPen(text_color));
 	painter->drawText(
 		rect.adjusted(2 * style()->pixelMetric(QStyle::PM_HeaderMargin, nullptr, this), 5, 0, 0),
 		align,
 		model()->headerData(logicalIndex, orientation(), Qt::DisplayRole).toString()
 	);
-	painter->setPen(QPen(palette().color(QPalette::Base)));
+	painter->setPen(QPen(palette().color(QPalette::Mid)));
 	painter->drawLine(rect.x(), rect.bottom(), rect.right(), rect.bottom());
 }
 

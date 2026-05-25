@@ -207,6 +207,9 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	view->horizontalHeader()->hide();
 	view->setAlternatingRowColors(false);
 	view->setVerticalHeader(new AlterHeader(Qt::Vertical, view));
+	view->setSelectionBehavior(QAbstractItemView::SelectRows);
+	view->setSelectionMode(QAbstractItemView::SingleSelection);
+	view->verticalHeader()->setSectionsClickable(true);
 	view->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeMode::ResizeToContents);
 	view->verticalHeader()->setMinimumSectionSize(28);
 	view->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeMode::Stretch);
@@ -214,6 +217,49 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	view->setWordWrap(true);
 	view->setSizeAdjustPolicy(QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents);
 	view->setModel(single_model);
+	connect(view->verticalHeader(), &QHeaderView::sectionPressed, view, [view, single_model](int section) {
+		const QModelIndex index = single_model->index(section, 0);
+		view->setCurrentIndex(index);
+		view->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+		view->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
+		view->edit(index);
+	});
+
+	QWidget* column_header = new QWidget;
+	column_header->setObjectName("objectEditorColumnHeader");
+	column_header->setStyleSheet(
+		"#objectEditorColumnHeader {"
+		"border-bottom: 1px solid palette(mid);"
+		"}"
+	);
+
+	QHBoxLayout* column_header_layout = new QHBoxLayout(column_header);
+	column_header_layout->setContentsMargins(0, 0, 0, 0);
+	column_header_layout->setSpacing(0);
+
+	QLabel* name_header = new QLabel("Name");
+	name_header->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+	name_header->setContentsMargins(8, 4, 8, 4);
+
+	QFrame* header_separator = new QFrame;
+	header_separator->setFrameShape(QFrame::VLine);
+	header_separator->setFrameShadow(QFrame::Sunken);
+
+	QLabel* value_header = new QLabel("Value");
+	value_header->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+	value_header->setContentsMargins(8, 4, 8, 4);
+
+	column_header_layout->addWidget(name_header);
+	column_header_layout->addWidget(header_separator);
+	column_header_layout->addWidget(value_header, 1);
+
+	const auto sync_column_header = [view, name_header]() {
+		name_header->setFixedWidth(view->verticalHeader()->width());
+	};
+	connect(view->verticalHeader(), &QHeaderView::geometriesChanged, column_header, sync_column_header);
+	sync_column_header();
+
+	layout->addWidget(column_header);
 	layout->addWidget(view);
 
 	QWidget* container = new QWidget;
