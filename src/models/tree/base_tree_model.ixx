@@ -45,11 +45,31 @@ export class BaseTreeItem {
 	}
 
 	std::string id;
+	std::string label;
 	bool baseCategory = false;
 	bool subCategory = false;
+	bool customFolder = false;
 };
 
 export class BaseTreeModel : public QAbstractProxyModel {
+	bool subtree_contains_custom(const BaseTreeItem* item) const {
+		if (!item) {
+			return false;
+		}
+
+		if (!(item->baseCategory || item->subCategory)) {
+			return slk->shadow_data.contains(item->id) && slk->shadow_data.at(item->id).contains("oldid");
+		}
+
+		for (const auto* child : item->children) {
+			if (subtree_contains_custom(child)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	int rowCount(const QModelIndex& parent) const override {
 		if (parent.column() > 0) {
 			return 0;
@@ -205,6 +225,9 @@ export class BaseTreeModel : public QAbstractProxyModel {
 				}
 			case Qt::ForegroundRole:
 				if (item->baseCategory || item->subCategory) {
+					if (item->customFolder && subtree_contains_custom(item)) {
+						return QColor("violet");
+					}
 					return {};
 				}
 

@@ -15,10 +15,11 @@ export class UpgradeTreeModel : public BaseTreeModel {
 	struct Category {
 		std::string name;
 		BaseTreeItem* item;
+		BaseTreeItem* custom_item;
 	};
 
 	hive::unordered_map<std::string, Category> categories;
-	std::vector<std::string> rowToCategory;
+	BaseTreeItem* custom_root = nullptr;
 
 	BaseTreeItem* getFolderParent(const std::string& id) const override {
 		const std::string_view race = upgrade_slk.data<std::string_view>("race", id);
@@ -26,8 +27,9 @@ export class UpgradeTreeModel : public BaseTreeModel {
 			std::cout << "Empty race for " << id << " in items\n";
 			return nullptr;
 		}
+		const bool is_custom = upgrade_slk.shadow_data.contains(id) && upgrade_slk.shadow_data.at(id).contains("oldid");
 
-		return categories.at(race).item;
+		return is_custom ? categories.at(race).custom_item : categories.at(race).item;
 	}
 
 	QModelIndex mapToSource(const QModelIndex& proxyIndex) const override {
@@ -61,7 +63,7 @@ export class UpgradeTreeModel : public BaseTreeModel {
 			case Qt::EditRole:
 			case Qt::DisplayRole:
 				if (item->baseCategory) {
-					return QString::fromStdString(categories.at(rowToCategory[index.row()]).name);
+					return QString::fromStdString(item->label);
 				} else {
 					return QAbstractProxyModel::data(index, role).toString() + " " + QString::fromUtf8(upgrade_slk.data<std::string_view>("editorsuffix", item->id));
 				}
@@ -74,6 +76,11 @@ export class UpgradeTreeModel : public BaseTreeModel {
 		: BaseTreeModel(parent) {
 		slk = &upgrade_slk;
 
+		custom_root = new BaseTreeItem(rootItem);
+		custom_root->baseCategory = true;
+		custom_root->customFolder = true;
+		custom_root->label = "Custom";
+
 		for (const auto& [key, value] : unit_editor_data.section("unitRace")) {
 			if (key == "Sort" || key == "NumValues") {
 				continue;
@@ -82,7 +89,11 @@ export class UpgradeTreeModel : public BaseTreeModel {
 			categories[value[0]].name = value[1];
 			categories[value[0]].item = new BaseTreeItem(rootItem);
 			categories[value[0]].item->baseCategory = true;
-			rowToCategory.push_back(value[0]);
+			categories[value[0]].item->label = value[1];
+			categories[value[0]].custom_item = new BaseTreeItem(custom_root);
+			categories[value[0]].custom_item->baseCategory = true;
+			categories[value[0]].custom_item->customFolder = true;
+			categories[value[0]].custom_item->label = value[1];
 		}
 
 		for (int i = 0; i < upgrade_slk.rows(); i++) {

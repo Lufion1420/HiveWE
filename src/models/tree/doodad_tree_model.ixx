@@ -19,24 +19,26 @@ export class DoodadTreeModel : public BaseTreeModel {
 		std::string name;
 		std::shared_ptr<QIconResource> icon;
 		BaseTreeItem* item;
+		BaseTreeItem* custom_item;
 	};
 
 	std::unordered_map<char, Category> categories;
-	std::vector<char> rowToCategory;
+	BaseTreeItem* custom_root = nullptr;
 
 	BaseTreeItem* getFolderParent(const std::string& id) const override {
 		const std::string_view category = doodads_slk.data<std::string_view>("category", id);
+		const bool is_custom = doodads_slk.shadow_data.contains(id) && doodads_slk.shadow_data.at(id).contains("oldid");
 
 		if (category.empty()) {
 			std::println("Doodad with id: {} has no category set. Set a category!", id);
-			return categories.begin()->second.item;
+			return is_custom ? categories.begin()->second.custom_item : categories.begin()->second.item;
 		}
 
 		if (const auto found = categories.find(category.front()); found != categories.end()) {
-			return found->second.item;
+			return is_custom ? found->second.custom_item : found->second.item;
 		}
 
-		return categories.begin()->second.item;
+		return is_custom ? categories.begin()->second.custom_item : categories.begin()->second.item;
 	}
 
   public:
@@ -51,7 +53,7 @@ export class DoodadTreeModel : public BaseTreeModel {
 			case Qt::EditRole:
 			case Qt::DisplayRole:
 				if (item->baseCategory) {
-					return QString::fromStdString(categories.at(rowToCategory[index.row()]).name);
+					return QString::fromStdString(item->label);
 				} else {
 					return QAbstractProxyModel::data(index, role).toString();
 				}
@@ -59,8 +61,7 @@ export class DoodadTreeModel : public BaseTreeModel {
 				if (item->baseCategory || item->subCategory) {
 					return folderIcon;
 				}
-
-				return categories.at(rowToCategory[index.parent().row()]).icon->icon;
+				return categories.at(doodads_slk.data<std::string_view>("category", item->id).front()).icon->icon;
 			default:
 				return BaseTreeModel::data(index, role);
 		}
@@ -70,12 +71,21 @@ export class DoodadTreeModel : public BaseTreeModel {
 		: BaseTreeModel(parent) {
 		slk = &doodads_slk;
 
+		custom_root = new BaseTreeItem(rootItem);
+		custom_root->baseCategory = true;
+		custom_root->customFolder = true;
+		custom_root->label = "Custom";
+
 		for (const auto& [key, value] : world_edit_data.section("DoodadCategories")) {
 			categories[key.front()].name = value[0];
 			categories[key.front()].icon = resource_manager.load<QIconResource>(value[1]).value();
 			categories[key.front()].item = new BaseTreeItem(rootItem);
 			categories[key.front()].item->baseCategory = true;
-			rowToCategory.push_back(key.front());
+			categories[key.front()].item->label = value[0];
+			categories[key.front()].custom_item = new BaseTreeItem(custom_root);
+			categories[key.front()].custom_item->baseCategory = true;
+			categories[key.front()].custom_item->customFolder = true;
+			categories[key.front()].custom_item->label = value[0];
 		}
 
 		for (size_t i = 0; i < doodads_slk.rows(); i++) {

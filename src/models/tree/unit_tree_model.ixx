@@ -18,10 +18,11 @@ export class UnitTreeModel : public BaseTreeModel {
 	struct Category {
 		std::string name;
 		BaseTreeItem* item;
+		BaseTreeItem* custom_item;
 	};
 
 	hive::unordered_map<std::string, Category> categories;
-	std::vector<std::string> rowToCategory;
+	BaseTreeItem* custom_root = nullptr;
 
 	std::array<std::string, 4> subCategories = {
 		"Units",
@@ -35,6 +36,7 @@ export class UnitTreeModel : public BaseTreeModel {
 		const bool isBuilding = units_slk.data<std::string_view>("isbldg", id) == "1";
 		const bool isHero = isupper(id.front());
 		const bool isSpecial = units_slk.data<std::string_view>("special", id) == "1";
+		const bool is_custom = units_slk.shadow_data.contains(id) && units_slk.shadow_data.at(id).contains("oldid");
 
 		int subIndex = 0;
 		if (isSpecial) {
@@ -46,10 +48,10 @@ export class UnitTreeModel : public BaseTreeModel {
 		}
 
 		if (const auto found = categories.find(race); found != categories.end()) {
-			return found->second.item->children[subIndex];
+			return (is_custom ? found->second.custom_item : found->second.item)->children[subIndex];
 		} else {
 			std::println("Unit with id: {} has no race set. Set a race!", id);
-			return categories.begin()->second.item->children[subIndex];
+			return (is_custom ? categories.begin()->second.custom_item : categories.begin()->second.item)->children[subIndex];
 		}
 	}
 
@@ -65,9 +67,9 @@ export class UnitTreeModel : public BaseTreeModel {
 			case Qt::EditRole:
 			case Qt::DisplayRole:
 				if (item->baseCategory) {
-					return QString::fromStdString(categories.at(rowToCategory[index.row()]).name);
+					return QString::fromStdString(item->label);
 				} else if (item->subCategory) {
-					return QString::fromStdString(subCategories[index.row()] + " (" + std::to_string(item->children.size()) + ")");
+					return QString::fromStdString(item->label + " (" + std::to_string(item->children.size()) + ")");
 				} else {
 					if (units_slk.data<std::string_view>("campaign", item->id) == "1") {
 						const std::string_view properNames = units_slk.data<std::string_view>("propernames", item->id);
@@ -88,6 +90,11 @@ export class UnitTreeModel : public BaseTreeModel {
 		: BaseTreeModel(parent) {
 		slk = &units_slk;
 
+		custom_root = new BaseTreeItem(rootItem);
+		custom_root->baseCategory = true;
+		custom_root->customFolder = true;
+		custom_root->label = "Custom";
+
 		for (const auto& [key, value] : unit_editor_data.section("unitRace")) {
 			if (key == "Sort" || key == "NumValues") {
 				continue;
@@ -96,13 +103,23 @@ export class UnitTreeModel : public BaseTreeModel {
 			categories[value[0]].name = value[1];
 			categories[value[0]].item = new BaseTreeItem(rootItem);
 			categories[value[0]].item->baseCategory = true;
-			rowToCategory.push_back(value[0]);
+			categories[value[0]].item->label = value[1];
+			categories[value[0]].custom_item = new BaseTreeItem(custom_root);
+			categories[value[0]].custom_item->baseCategory = true;
+			categories[value[0]].custom_item->customFolder = true;
+			categories[value[0]].custom_item->label = value[1];
 		}
 
-		for (const auto& i : rootItem->children) {
+		for (const auto& [key, category] : categories) {
 			for (const auto& subCategory : subCategories) {
-				BaseTreeItem* item = new BaseTreeItem(i);
+				BaseTreeItem* item = new BaseTreeItem(category.item);
 				item->subCategory = true;
+				item->label = subCategory;
+
+				BaseTreeItem* custom_item = new BaseTreeItem(category.custom_item);
+				custom_item->subCategory = true;
+				custom_item->customFolder = true;
+				custom_item->label = subCategory;
 			}
 		}
 

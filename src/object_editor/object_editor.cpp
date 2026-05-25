@@ -302,6 +302,36 @@ void ObjectEditor::addTypeTreeView(
 	view->setUniformRowHeights(true);
 	view->collapseAll();
 
+	const std::function<bool(const QModelIndex&)> expand_custom_branch = [&](const QModelIndex& parent) -> bool {
+		bool subtree_has_custom = false;
+
+		for (int row = 0; row < filter->rowCount(parent); ++row) {
+			const QModelIndex child = filter->index(row, 0, parent);
+			if (!child.isValid()) {
+				continue;
+			}
+
+			const auto* tree_item = static_cast<const BaseTreeItem*>(filter->mapToSource(child).internalPointer());
+			if (!tree_item) {
+				continue;
+			}
+
+			const bool child_has_custom = (tree_item->baseCategory || tree_item->subCategory) ? expand_custom_branch(child)
+																								  : table->slk->shadow_data.contains(tree_item->id)
+																										&& table->slk->shadow_data.at(tree_item->id).contains("oldid");
+
+			if (child_has_custom) {
+				subtree_has_custom = true;
+				if (tree_item->customFolder) {
+					view->expand(child);
+				}
+			}
+		}
+
+		return subtree_has_custom;
+	};
+	expand_custom_branch({});
+
 	connect(view, &QTreeView::customContextMenuRequested, [=, this](const QPoint& pos) {
 		QMenu menu;
 		QAction* addAction = menu.addAction("Add " + name);
