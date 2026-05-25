@@ -1,5 +1,6 @@
 #include "HiveWE.h"
 #include "ui_HiveWE.h"
+#include "shortcut_config_dialog.h"
 #define __STORMLIB_NO_STATIC_LINK__
 #include "StormLib.h"
 
@@ -136,6 +137,7 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->export_mpq, &QPushButton::clicked, this, &HiveWE::export_mpq);
 	connect(ui->ribbon->test_map, &QPushButton::clicked, this, &HiveWE::play_test);
 	connect(ui->ribbon->settings, &QPushButton::clicked, [&]() { new SettingsEditor(this); });
+	connect(ui->ribbon->config, &QPushButton::clicked, [&]() { new ShortcutConfigDialog(this); });
 	connect(ui->ribbon->switch_warcraft, &QPushButton::clicked, this, &HiveWE::switch_warcraft);
 	connect(ui->ribbon->exit, &QPushButton::clicked, [&]() { QApplication::exit(); });
 

@@ -59,6 +59,14 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	pathing_palette->setText("Pathing");
 	palette_section->addWidget(pathing_palette);
 
+	QRibbonSection* config_section = new QRibbonSection;
+	config_section->setText("Config");
+
+	config->setIcon(QIcon("data/icons/ribbon/options.png"));
+	config->setText("Config");
+	config->setToolTip("Open the shortcut and behavior reference.");
+	config_section->addWidget(config);
+
 
 
 	//view_history->setIcon(QIcon("data/icons/ribbon/description.png"));
@@ -92,6 +100,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	home_tab->addSection(history_section);
 	home_tab->addSection(editor_section);
 	home_tab->addSection(palette_section);
+	home_tab->addSection(config_section);
 
 	// View
 	QRibbonTab* view_tab = new QRibbonTab;

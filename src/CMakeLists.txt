@@ -157,6 +157,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/palette.cpp"
 	"menus/pathing_palette.cpp"
 	"menus/settings_editor.cpp"
+	"menus/shortcut_config_dialog.cpp"
 	"menus/terrain_palette.cpp"
 	"menus/unit_palette.cpp"
 	"menus/tile_pather.cpp"
@@ -164,6 +165,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/tile_setter.cpp"
 	"menus/gameplay_constants_editor.cpp"
 	"menus/gameplay_constants_editor.h"
+	"menus/shortcut_config_dialog.h"
 
 	"asset_manager/asset_manager.cpp"
 	"asset_manager/asset_manager.h"
