@@ -1,6 +1,11 @@
 #include "main_ribbon.h"
 
 MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
+	auto set_tooltip = [](QWidget* widget, QString text) {
+		widget->setToolTip(std::move(text));
+		widget->setStatusTip(widget->toolTip());
+	};
+
 	// Home
 	QRibbonTab* home_tab = new QRibbonTab;
 
@@ -100,57 +105,67 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	units_visible->setText("Units");
 	units_visible->setCheckable(true);
 	units_visible->setChecked(true);
+	set_tooltip(units_visible, "Show or hide units.\nShortcut: Ctrl+U");
 	visible_section->addWidget(units_visible);
 
 	doodads_visible->setIcon(QIcon("data/icons/ribbon/doodads.png"));
 	doodads_visible->setText("Doodads");
 	doodads_visible->setCheckable(true);
 	doodads_visible->setChecked(true);
+	set_tooltip(doodads_visible, "Show or hide doodads.\nShortcut: Ctrl+D");
 	visible_section->addWidget(doodads_visible);
 
 	pathing_visible->setIcon(QIcon("data/icons/ribbon/pathing.png"));
 	pathing_visible->setText("Pathing");
 	pathing_visible->setCheckable(true);
+	set_tooltip(pathing_visible, "Show or hide the pathing overlay.\nShortcut: Ctrl+P");
 	visible_section->addWidget(pathing_visible);
 	
 	brush_visible->setIcon(QIcon("data/icons/ribbon/brush.png"));
 	brush_visible->setText("Brush");
 	brush_visible->setCheckable(true);
 	brush_visible->setChecked(true);
+	set_tooltip(brush_visible, "Show or hide the active brush overlay.");
 	visible_section->addWidget(brush_visible);
 
 	lighting_visible->setIcon(QIcon("data/icons/ribbon/lighting.png"));
 	lighting_visible->setText("Lighting");
 	lighting_visible->setCheckable(true);
 	lighting_visible->setChecked(true);
+	set_tooltip(lighting_visible, "Turn scene lighting on or off.\nShortcut: Ctrl+L");
 	visible_section->addWidget(lighting_visible);
 
 	water_visible->setIcon(QIcon("data/icons/ribbon/water.png"));
 	water_visible->setText("Water");
 	water_visible->setCheckable(true);
 	water_visible->setChecked(true);
+	set_tooltip(water_visible, "Show or hide water.\nShortcut: Ctrl+W");
 	visible_section->addWidget(water_visible);
 
 	click_helpers_visible->setIcon(QIcon("data/icons/ribbon/click_helpers.png"));
 	click_helpers_visible->setText("Click\nHelpers");
 	click_helpers_visible->setCheckable(true);
 	click_helpers_visible->setChecked(true);
+	set_tooltip(click_helpers_visible, "Show or hide click helper markers.\nShortcut: Ctrl+I");
 	visible_section->addWidget(click_helpers_visible);
 
 	wireframe_visible->setIcon(QIcon("data/icons/ribbon/wireframe.png"));
 	wireframe_visible->setText("Wireframe");
 	wireframe_visible->setCheckable(true);
+	set_tooltip(wireframe_visible, "Show or hide wireframe rendering.\nShortcut: Ctrl+T");
 	visible_section->addWidget(wireframe_visible);
 
 	debug_visible->setIcon(QIcon("data/icons/ribbon/debug.png"));
 	debug_visible->setText("Debug");
 	debug_visible->setCheckable(true);
+	set_tooltip(debug_visible, "Show or hide debug rendering.\nShortcut: F3");
 	visible_section->addWidget(debug_visible);
 
 	minimap_visible->setIcon(QIcon("data/icons/ribbon/minimap.png"));
 	minimap_visible->setText("Minimap");
 	minimap_visible->setCheckable(true);
 	minimap_visible->setChecked(true);
+	set_tooltip(minimap_visible, "Show or hide the minimap.");
 	visible_section->addWidget(minimap_visible);
 	// Camera section
 	QRibbonSection* camera_section = new QRibbonSection;
@@ -159,6 +174,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 
 	reset_camera->setIcon(QIcon("data/icons/ribbon/reset.png"));
 	reset_camera->setText("Reset");
+	set_tooltip(reset_camera, "Reset the camera to its default view.\nShortcut: Ctrl+Shift+C");
 	camera_section->addWidget(reset_camera);
 
 	// Menu actions
