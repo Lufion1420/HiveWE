@@ -14,6 +14,8 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QSortFilterProxyModel>
+#include <QMouseEvent>
+#include <QTimer>
 
 #include "object_editor/icon_view.h"
 
@@ -25,6 +27,24 @@ import UnitTreeModel;
 import UnitSelector;
 import Utilities;
 import Globals;
+
+class DownwardComboBox : public QComboBox {
+  public:
+	using QComboBox::QComboBox;
+
+  protected:
+	void mousePressEvent(QMouseEvent* event) override {
+		QComboBox::mousePressEvent(event);
+		QTimer::singleShot(0, this, [this]() {
+			showPopup();
+		});
+	}
+
+	void showPopup() override {
+		setStyleSheet("QComboBox { combobox-popup: 0; }");
+		QComboBox::showPopup();
+	}
+};
 
 SingleModel::SingleModel(TableModel* table, QObject* parent) : QAbstractProxyModel(parent) {
 	slk = table->slk;
@@ -378,7 +398,7 @@ QWidget* TableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem
 	} else if (type.ends_with("List")) {
 		return create_list_editor(parent);
 	} else if (unit_editor_data.section_exists(type)) {
-		QComboBox* editor = new QComboBox(parent);
+		DownwardComboBox* editor = new DownwardComboBox(parent);
 		for (const auto& [key, value] : unit_editor_data.section(type)) {
 			if (key == "NumValues" || key == "Sort" || key.ends_with("_Alt")) {
 				continue;
@@ -393,13 +413,13 @@ QWidget* TableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem
 	} else if (type == "icon") {
 		return create_icon_editor(parent);
 	} else if (type == "doodadCategory") {
-		QComboBox* editor = new QComboBox(parent);
+		DownwardComboBox* editor = new DownwardComboBox(parent);
 		for (const auto& [key, value] : world_edit_data.section("DoodadCategories")) {
 			editor->addItem(QString::fromStdString(value[0]), QString::fromStdString(key));
 		}
 		return editor;
 	} else if (type == "destructableCategory") {
-		QComboBox* editor = new QComboBox(parent);
+		DownwardComboBox* editor = new DownwardComboBox(parent);
 		for (const auto& [key, value] : world_edit_data.section("DestructibleCategories")) {
 			editor->addItem(QString::fromStdString(value[0]), QString::fromStdString(key));
 		}
@@ -481,6 +501,9 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 				combo->setCurrentIndex(i);
 			}
 		}
+		QTimer::singleShot(0, combo, [combo]() {
+			combo->showPopup();
+		});
 	} else if (type == "icon") {
 		IconView* list = editor->findChild<IconView*>("iconView");
 		list->setCurrentIconPath(index.data(Qt::EditRole).toString());
@@ -491,6 +514,9 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 				combo->setCurrentIndex(i);
 			}
 		}
+		QTimer::singleShot(0, combo, [combo]() {
+			combo->showPopup();
+		});
 	} else if (type == "destructableCategory") {
 		const auto combo = dynamic_cast<QComboBox*>(editor);
 		for (int i = 0; i < combo->count(); i++) {
@@ -498,6 +524,9 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 				combo->setCurrentIndex(i);
 			}
 		}
+		QTimer::singleShot(0, combo, [combo]() {
+			combo->showPopup();
+		});
 	} else {
 		dynamic_cast<QLineEdit*>(editor)->setText(index.data(Qt::EditRole).toString());
 	}
