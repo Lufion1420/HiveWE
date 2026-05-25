@@ -259,17 +259,35 @@ void SingleModel::buildMapping() {
 	}
 
 	std::ranges::sort(id_mapping, [&](const auto& left, const auto& right) {
-		const std::string_view category1 =
-			world_edit_data.data<std::string_view>("ObjectEditorCategories", meta_slk->data<std::string_view>("category", left.key));
-		const std::string left_string =
-			std::format("{} - {}{}", category1, meta_slk->data<std::string_view>("displayname", left.key), left.field);
+		auto normalize = [](std::string text) {
+			std::erase(text, '&');
+			return to_lowercase_copy(text);
+		};
 
-		const std::string_view category2 =
-			world_edit_data.data<std::string_view>("ObjectEditorCategories", meta_slk->data<std::string_view>("category", right.key));
-		const std::string right_string =
-			std::format("{} - {}{}", category2, meta_slk->data<std::string_view>("displayname", right.key), right.field);
+		const std::string left_display = std::string(meta_slk->data<std::string_view>("displayname", left.key));
+		const std::string right_display = std::string(meta_slk->data<std::string_view>("displayname", right.key));
+		const std::string left_category =
+			std::string(world_edit_data.data<std::string_view>("ObjectEditorCategories", meta_slk->data<std::string_view>("category", left.key)));
+		const std::string right_category =
+			std::string(world_edit_data.data<std::string_view>("ObjectEditorCategories", meta_slk->data<std::string_view>("category", right.key)));
 
-		return left_string < right_string;
+		const std::string left_group = normalize(left_category);
+		const std::string right_group = normalize(right_category);
+		if (left_group != right_group) {
+			return left_group < right_group;
+		}
+
+		const std::string left_name = normalize(left_display);
+		const std::string right_name = normalize(right_display);
+		if (left_name != right_name) {
+			return left_name < right_name;
+		}
+
+		if (left.level != right.level) {
+			return left.level < right.level;
+		}
+
+		return left.field < right.field;
 	});
 	endResetModel();
 }

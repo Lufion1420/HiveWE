@@ -89,7 +89,7 @@ export class TableModel : public QAbstractTableModel {
 					for (const auto& part : parts) {
 						result.append(units_table->data(part, "name", role).toString());
 					}
-					return result.join('\n');
+					return result.join(", ");
 				} else if (type == "abilityList" || type == "abilitySkinList" || type == "heroAbilityList") {
 					std::vector<std::string_view> parts = absl::StrSplit(field_data, ',', absl::SkipEmpty());
 
@@ -97,7 +97,7 @@ export class TableModel : public QAbstractTableModel {
 					for (const auto& part : parts) {
 						result.append(abilities_table->data(part, "name", role).toString());
 					}
-					return result.join('\n');
+					return result.join(", ");
 				} else if (type == "upgradeList") {
 					std::vector<std::string_view> parts = absl::StrSplit(field_data, ',', absl::SkipEmpty());
 
@@ -105,7 +105,7 @@ export class TableModel : public QAbstractTableModel {
 					for (const auto& part : parts) {
 						result.append(upgrade_table->data(part, "name1", role).toString());
 					}
-					return result.join('\n');
+					return result.join(", ");
 				} else if (type == "buffList") {
 					std::vector<std::string_view> parts = absl::StrSplit(field_data, ',', absl::SkipEmpty());
 
@@ -118,7 +118,7 @@ export class TableModel : public QAbstractTableModel {
 							result += editor_name;
 						}
 					}
-					return result.join('\n');
+					return result.join(", ");
 				} else if (type == "techList") {
 					std::vector<std::string_view> parts = absl::StrSplit(field_data, ',', absl::SkipEmpty());
 
@@ -132,7 +132,7 @@ export class TableModel : public QAbstractTableModel {
 							result += QString::fromStdString(std::string(part));
 						}
 					}
-					return result.join('\n');
+					return result.join(", ");
 				} else if (type == "targetList") {
 					std::vector<std::string_view> parts = absl::StrSplit(field_data, ',', absl::SkipEmpty());
 					QStringList result;
