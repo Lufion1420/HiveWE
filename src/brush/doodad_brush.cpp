@@ -508,6 +508,15 @@ void DoodadBrush::render_brush() {
 	doodad.update(map->terrain);
 	doodad.skeleton.update(0.016f);
 	map->render_manager.queue_render(*doodad.mesh, doodad.skeleton, doodad.color, 0);
+
+	const bool is_doodad = doodads_slk.row_headers.contains(doodad.id);
+	const slk::SLK& slk = is_doodad ? doodads_slk : destructibles_slk;
+	const bool use_click_helper = slk.data<bool>("useclickhelper", doodad.id);
+	if (use_click_helper) {
+		click_helper_skeleton.matrix = doodad.skeleton.matrix;
+		click_helper_skeleton.update(0.016f);
+		map->render_manager.queue_render(*click_helper, click_helper_skeleton, glm::vec3(1.f), 0);
+	}
 }
 
 // Quads are drawn and then in the fragment shader fragments are discarded to form a circle
