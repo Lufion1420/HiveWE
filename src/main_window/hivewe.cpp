@@ -51,6 +51,24 @@ HiveWE::HiveWE(QWidget* parent)
 	ui->setupUi(this);
 	context = ui->widget;
 
+	transient_notice = new QLabel(this);
+	transient_notice->hide();
+	transient_notice->setAttribute(Qt::WA_TransparentForMouseEvents);
+	transient_notice->setAlignment(Qt::AlignCenter);
+	transient_notice->setStyleSheet(
+		"QLabel {"
+		"background-color: rgba(20, 24, 30, 228);"
+		"color: rgb(244, 247, 250);"
+		"border: 1px solid rgba(255, 255, 255, 52);"
+		"border-radius: 10px;"
+		"padding: 18px 32px;"
+		"font-size: 24px;"
+		"font-weight: 700;"
+		"}"
+	);
+	transient_notice_timer.setSingleShot(true);
+	connect(&transient_notice_timer, &QTimer::timeout, transient_notice, &QLabel::hide);
+
 	connect(ui->ribbon->undo, &QPushButton::clicked, [&]() {
 		// ToDo: temporary, undoing should still allow a selection to persist
 		if (map->brush) {
@@ -408,7 +426,9 @@ void HiveWE::load_mpq() {
 
 void HiveWE::save() {
 	emit saving_initiated();
-	map->save(map->filesystem_path);
+	if (map->save(map->filesystem_path)) {
+		show_transient_notice("Map saved");
+	}
 };
 
 void HiveWE::save_as() {
@@ -426,12 +446,16 @@ void HiveWE::save_as() {
 
 	emit saving_initiated();
 	if (fs::exists(file_name) && fs::equivalent(file_name, map->filesystem_path)) {
-		map->save(map->filesystem_path);
+		if (map->save(map->filesystem_path)) {
+			show_transient_notice("Map saved");
+		}
 	} else {
 		fs::create_directories(file_name / map->name);
 
 		hierarchy.map_directory = file_name / map->name;
-		map->save(file_name / map->name);
+		if (map->save(file_name / map->name)) {
+			show_transient_notice("Map saved");
+		}
 	}
 
 	setWindowTitle("HiveWE 0.11 - " + QString::fromStdString(map->filesystem_path.string()));
@@ -504,11 +528,13 @@ void HiveWE::closeEvent(QCloseEvent* event) {
 
 void HiveWE::resizeEvent(QResizeEvent* event) {
 	QMainWindow::resizeEvent(event);
+	position_transient_notice();
 	QTimer::singleShot(0, [&] { save_window_state(); });
 }
 
 void HiveWE::moveEvent(QMoveEvent* event) {
 	QMainWindow::moveEvent(event);
+	position_transient_notice();
 	QTimer::singleShot(0, [&] { save_window_state(); });
 }
 
@@ -609,4 +635,24 @@ void HiveWE::remove_custom_tab() {
 			return;
 		}
 	}
+}
+
+void HiveWE::show_transient_notice(const QString& text, int timeout_ms) {
+	transient_notice->setText(text);
+	transient_notice->adjustSize();
+	transient_notice->resize(transient_notice->width() + 24, transient_notice->height() + 16);
+	position_transient_notice();
+	transient_notice->show();
+	transient_notice->raise();
+	transient_notice_timer.start(timeout_ms);
+}
+
+void HiveWE::position_transient_notice() {
+	if (!transient_notice) {
+		return;
+	}
+
+	const int x = (width() - transient_notice->width()) / 2;
+	const int y = (height() - transient_notice->height()) / 2;
+	transient_notice->move(std::max(0, x), std::max(0, y));
 }

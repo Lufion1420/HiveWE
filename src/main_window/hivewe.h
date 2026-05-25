@@ -78,10 +78,15 @@ private:
 	void add_recent_map(const fs::path& directory);
 	void update_recent_maps_menu();
 	void open_recent_map(int index);
+	void show_transient_notice(const QString& text, int timeout_ms = 1800);
+	void position_transient_notice();
 
 	/// Adds the tab to the ribbon and sets the current index to this tab
 	void set_current_custom_tab(QRibbonTab* tab, QString name);
 	void remove_custom_tab();
+
+	QLabel* transient_notice = nullptr;
+	QTimer transient_notice_timer;
 
 	template <typename T>
 	void open_palette() {
