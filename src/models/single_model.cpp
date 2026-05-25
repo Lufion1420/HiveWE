@@ -292,11 +292,7 @@ void SingleModel::sourceDataChanged(const QModelIndex& topLeft, const QModelInde
 void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logicalIndex) const {
 	const Qt::Alignment align = (Qt::AlignLeft | Qt::AlignTop);
 
-	if (logicalIndex % 2 > 0) {
-		painter->fillRect(rect, palette().color(QPalette::AlternateBase));
-	} else {
-		painter->fillRect(rect, palette().color(QPalette::Base));
-	}
+	painter->fillRect(rect, palette().color(QPalette::Base));
 
 	painter->setPen(QPen(model()->headerData(logicalIndex, orientation(), Qt::ForegroundRole).value<QColor>()));
 	painter->drawText(

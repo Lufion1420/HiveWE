@@ -105,25 +105,25 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	// Set initial sizes, the second size doesn't really matter with only 2 dock areas
 	dock_manager->setSplitterSizes(explorer_area, {645, 9999});
 
-	connect(unit_explorer, &QTreeView::doubleClicked, [&](const QModelIndex& index) {
+	connect(unit_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
 		itemClicked(unitTreeFilter, units_table, index);
 	});
-	connect(item_explorer, &QTreeView::doubleClicked, [&](const QModelIndex& index) {
+	connect(item_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
 		itemClicked(itemTreeFilter, items_table, index);
 	});
-	connect(doodad_explorer, &QTreeView::doubleClicked, [&](const QModelIndex& index) {
+	connect(doodad_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
 		itemClicked(doodadTreeFilter, doodads_table, index);
 	});
-	connect(destructible_explorer, &QTreeView::doubleClicked, [&](const QModelIndex& index) {
+	connect(destructible_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
 		itemClicked(destructibleTreeFilter, destructibles_table, index);
 	});
-	connect(ability_explorer, &QTreeView::doubleClicked, [&](const QModelIndex& index) {
+	connect(ability_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
 		itemClicked(abilityTreeFilter, abilities_table, index);
 	});
-	connect(upgrade_explorer, &QTreeView::doubleClicked, [&](const QModelIndex& index) {
+	connect(upgrade_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
 		itemClicked(upgradeTreeFilter, upgrade_table, index);
 	});
-	connect(buff_explorer, &QTreeView::doubleClicked, [&](const QModelIndex& index) {
+	connect(buff_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
 		itemClicked(buffTreeFilter, buff_table, index);
 	});
 
@@ -201,7 +201,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	QTableView* view = new QTableView;
 	view->setItemDelegate(delegate);
 	view->horizontalHeader()->hide();
-	view->setAlternatingRowColors(true);
+	view->setAlternatingRowColors(false);
 	view->setVerticalHeader(new AlterHeader(Qt::Vertical, view));
 	view->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeMode::ResizeToContents);
 	view->verticalHeader()->setMinimumSectionSize(28);
@@ -257,7 +257,7 @@ void ObjectEditor::addTypeTreeView(
 	view->setSelectionBehavior(QAbstractItemView::SelectRows);
 	view->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	view->setUniformRowHeights(true);
-	view->expandAll();
+	view->collapseAll();
 
 	connect(view, &QTreeView::customContextMenuRequested, [=, this](const QPoint& pos) {
 		QMenu menu;
@@ -548,49 +548,49 @@ void ObjectEditor::select_id(Category category, const std::string& id) const {
 			const auto index = unitTreeFilter->mapFromSource(unitTreeModel->getIdIndex(id));
 			unit_explorer->setCurrentIndex(index);
 			unit_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit unit_explorer->doubleClicked(index);
+			emit unit_explorer->clicked(index);
 			break;
 		}
 		case Category::item: {
 			const auto index = itemTreeFilter->mapFromSource(itemTreeModel->getIdIndex(id));
 			item_explorer->setCurrentIndex(index);
 			item_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit item_explorer->doubleClicked(index);
+			emit item_explorer->clicked(index);
 			break;
 		}
 		case Category::doodad: {
 			const auto index = doodadTreeFilter->mapFromSource(doodadTreeModel->getIdIndex(id));
 			doodad_explorer->setCurrentIndex(index);
 			doodad_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit doodad_explorer->doubleClicked(index);
+			emit doodad_explorer->clicked(index);
 			break;
 		}
 		case Category::destructible: {
 			const auto index = destructibleTreeFilter->mapFromSource(destructibleTreeModel->getIdIndex(id));
 			destructible_explorer->setCurrentIndex(index);
 			destructible_explorer->scrollTo(index, QAbstractItemView::PositionAtCenter);
-			emit destructible_explorer->doubleClicked(index);
+			emit destructible_explorer->clicked(index);
 			break;
 		}
 		case Category::ability: {
 			const auto index = abilityTreeFilter->mapFromSource(abilityTreeModel->getIdIndex(id));
 			ability_explorer->setCurrentIndex(index);
 			ability_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit ability_explorer->doubleClicked(index);
+			emit ability_explorer->clicked(index);
 			break;
 		}
 		case Category::upgrade: {
 			const auto index = upgradeTreeFilter->mapFromSource(upgradeTreeModel->getIdIndex(id));
 			upgrade_explorer->setCurrentIndex(index);
 			upgrade_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit upgrade_explorer->doubleClicked(index);
+			emit upgrade_explorer->clicked(index);
 			break;
 		}
 		case Category::buff: {
 			const auto index = buffTreeFilter->mapFromSource(buffTreeModel->getIdIndex(id));
 			buff_explorer->setCurrentIndex(index);
 			buff_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit buff_explorer->doubleClicked(index);
+			emit buff_explorer->clicked(index);
 			break;
 		}
 	}
