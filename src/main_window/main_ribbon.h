@@ -2,6 +2,7 @@
 
 import QRibbon;
 
+#include <array>
 #include <QObject>
 #include <QToolButton>
 
@@ -55,6 +56,7 @@ public:
 	QToolButton* new_map = new QToolButton;
 	QToolButton* open_map_mpq = new QToolButton;
 	QToolButton* open_map_folder = new QToolButton;
+	std::array<QToolButton*, 3> recent_maps = {new QToolButton, new QToolButton, new QToolButton};
 
 	QToolButton* save_map = new QToolButton;
 	QToolButton* save_map_as = new QToolButton;

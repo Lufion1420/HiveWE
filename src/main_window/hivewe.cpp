@@ -33,6 +33,8 @@ import "trigger_editor.h";
 #include "QProcess"
 #include "QKeySequence"
 #include "QString"
+#include <QFileInfo>
+#include <QStringList>
 import "menus/gameplay_constants_editor.h";
 import "asset_manager/asset_manager.h";
 
@@ -132,6 +134,9 @@ HiveWE::HiveWE(QWidget* parent)
 	// connect(ui.ribbon->new_map, &QAction::triggered, this, &HiveWE::load);
 	connect(ui->ribbon->open_map_folder, &QPushButton::clicked, this, &HiveWE::load_folder);
 	connect(ui->ribbon->open_map_mpq, &QPushButton::clicked, this, &HiveWE::load_mpq);
+	for (int i = 0; i < static_cast<int>(ui->ribbon->recent_maps.size()); ++i) {
+		connect(ui->ribbon->recent_maps[i], &QPushButton::clicked, this, [this, i]() { open_recent_map(i); });
+	}
 	connect(ui->ribbon->save_map, &QPushButton::clicked, this, &HiveWE::save);
 	connect(ui->ribbon->save_map_as, &QPushButton::clicked, this, &HiveWE::save_as);
 	connect(ui->ribbon->export_mpq, &QPushButton::clicked, this, &HiveWE::export_mpq);
@@ -209,6 +214,7 @@ HiveWE::HiveWE(QWidget* parent)
 	});
 
 	restore_window_state();
+	update_recent_maps_menu();
 
 	minimap->setParent(ui->widget);
 	minimap->move(10, 10);
@@ -249,9 +255,72 @@ void HiveWE::load_map(const fs::path& directory) {
 	});
 
 	map->load(directory);
+	add_recent_map(directory);
 
 	map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
 	setWindowTitle("HiveWE 0.11 - " + QString::fromStdString(map->filesystem_path.string()));
+}
+
+void HiveWE::add_recent_map(const fs::path& directory) {
+	QSettings settings;
+	QStringList recent_maps = settings.value("recentMaps").toStringList();
+	const QString map_path = QString::fromStdString(directory.lexically_normal().string());
+
+	recent_maps.removeAll(map_path);
+	recent_maps.prepend(map_path);
+
+	while (recent_maps.size() > 3) {
+		recent_maps.removeLast();
+	}
+
+	settings.setValue("recentMaps", recent_maps);
+	update_recent_maps_menu();
+}
+
+void HiveWE::update_recent_maps_menu() {
+	QSettings settings;
+	QStringList recent_maps = settings.value("recentMaps").toStringList();
+
+	int button_index = 0;
+	for (const auto& map_path : recent_maps) {
+		if (button_index >= static_cast<int>(ui->ribbon->recent_maps.size())) {
+			break;
+		}
+
+		const fs::path directory = map_path.toStdString();
+		if (!fs::exists(directory / "war3map.w3i")) {
+			continue;
+		}
+
+		auto* button = ui->ribbon->recent_maps[button_index];
+		const QFileInfo info(map_path);
+		button->setText(info.fileName());
+		button->setToolTip(map_path);
+		button->setStatusTip(map_path);
+		button->show();
+		++button_index;
+	}
+
+	for (; button_index < static_cast<int>(ui->ribbon->recent_maps.size()); ++button_index) {
+		ui->ribbon->recent_maps[button_index]->hide();
+	}
+}
+
+void HiveWE::open_recent_map(int index) {
+	QSettings settings;
+	const QStringList recent_maps = settings.value("recentMaps").toStringList();
+	if (index < 0 || index >= recent_maps.size()) {
+		return;
+	}
+
+	const fs::path directory = recent_maps[index].toStdString();
+	if (!fs::exists(directory / "war3map.w3i")) {
+		QMessageBox::information(this, "Opening map failed", "The recent map path no longer exists.");
+		update_recent_maps_menu();
+		return;
+	}
+
+	load_map(directory);
 }
 
 void HiveWE::load_folder() {

@@ -75,6 +75,9 @@ private:
 	void import_heightmap();
 	void save_window_state();
 	void restore_window_state();
+	void add_recent_map(const fs::path& directory);
+	void update_recent_maps_menu();
+	void open_recent_map(int index);
 
 	/// Adds the tab to the ribbon and sets the current index to this tab
 	void set_current_custom_tab(QRibbonTab* tab, QString name);

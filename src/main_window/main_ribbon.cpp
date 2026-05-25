@@ -206,6 +206,14 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	open_map_mpq->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 	addMenuItem(open_map_mpq);
 
+	for (auto* recent_map : recent_maps) {
+		recent_map->setIcon(QIcon("data/icons/ribbon/open.png"));
+		recent_map->setIconSize({ 32, 32 });
+		recent_map->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+		recent_map->hide();
+		addMenuItem(recent_map);
+	}
+
 	save_map->setText("Save Map");
 	save_map->setIcon(QIcon("data/icons/ribbon/save.png"));
 	save_map->setIconSize({ 32, 32 });
