@@ -12,11 +12,21 @@ namespace fs = std::filesystem;
 
 PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 	ui.setupUi(this);
-
-	setAttribute(Qt::WA_DeleteOnClose);
-	show();
-
-	map->brush = &brush;
+	monitor_activation();
+	ui.verticalLayout->setContentsMargins(0, 0, 0, 0);
+	ui.verticalLayout->setSpacing(6);
+	ui.brushSizeLabel->hide();
+	ui.brushSize1->hide();
+	ui.brushSize3->hide();
+	ui.brushSize5->hide();
+	ui.brushSize7->hide();
+	ui.brushSize9->hide();
+	ui.brushSize11->hide();
+	ui.brushSize->hide();
+	ui.brushSizeSlider->hide();
+	ui.brushShapeCircle->hide();
+	ui.brushShapeSquare->hide();
+	ui.brushShapeDiamond->hide();
 
 	QRibbonSection* selection_section = new QRibbonSection;
 	selection_section->setText("Selection");
@@ -58,17 +68,6 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 			brush.brush_mask |= 0b00001000;
 		}
 	});
-
-	connect(ui.brushSizeGroup, QOverload<QAbstractButton *>::of(&QButtonGroup::buttonClicked), [&](QAbstractButton* button) { 
-		brush.set_size(glm::ivec2(button->text().toInt()));
-		ui.brushSize->setValue(button->text().toInt());
-	});
-
-	connect(ui.brushSizeSlider, &QSlider::valueChanged, [&](int value) { brush.set_size(glm::ivec2(value)); });
-
-	connect(ui.brushShapeCircle, &QPushButton::clicked, [&]() { brush.set_shape(Brush::Shape::circle); });
-	connect(ui.brushShapeSquare, &QPushButton::clicked, [&]() { brush.set_shape(Brush::Shape::square); });
-	connect(ui.brushShapeDiamond, &QPushButton::clicked, [&]() { brush.set_shape(Brush::Shape::diamond); });
 
 	connect(import_pathing, &QSmallRibbonButton::clicked, [&]() {
 		QSettings settings;
@@ -117,24 +116,18 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 			QMessageBox::critical(this, "Error", "Failed to save image");
 		}
 	});
+
+	monitor_activation();
 }
 
 PathingPalette::~PathingPalette() {
 	map->brush = nullptr;
+	delete ribbon_tab;
 }
 
-bool PathingPalette::event(QEvent* e) {
-	if (e->type() == QEvent::Close) {
-		// Remove shortcut from parent
-		selection_mode->disconnectShortcuts();
-		ribbon_tab->setParent(nullptr);
-		delete ribbon_tab;
-	} else if (e->type() == QEvent::WindowActivate) {
-		selection_mode->enableShortcuts();
-		map->brush = &brush;
-		emit ribbon_tab_requested(ribbon_tab, "Pathing Palette");
-	}
-	return QWidget::event(e);
+void PathingPalette::activate_palette() {
+	selection_mode->enableShortcuts();
+	map->brush = &brush;
 }
 
 void PathingPalette::deactivate(QRibbonTab* tab) {

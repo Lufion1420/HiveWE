@@ -33,6 +33,9 @@ import "trigger_editor.h";
 #include "QProcess"
 #include "QKeySequence"
 #include "QString"
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QFrame>
 #include <QFileInfo>
 #include <QStringList>
 import "menus/gameplay_constants_editor.h";
@@ -50,6 +53,7 @@ HiveWE::HiveWE(QWidget* parent)
 	// setAttribute(Qt::WA_LayoutOnEntireRect, true);
 	ui->setupUi(this);
 	context = ui->widget;
+	setup_palette_sidebar();
 
 	transient_notice = new QLabel(this);
 	transient_notice->hide();
@@ -172,38 +176,20 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->map_options, &QRibbonButton::clicked, [&]() { (new MapInfoEditor(this))->ui.tabs->setCurrentIndex(2); });
 	// connect(ui, &QAction::triggered, [&]() { (new MapInfoEditor(this))->ui.tabs->setCurrentIndex(3); });
 
-	connect(new QShortcut(QKeySequence(Qt::Key_T), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, [&]() {
-		open_palette<TerrainPalette>();
-	});
+	ui->ribbon->terrain_palette->setCheckable(true);
+	ui->ribbon->doodad_palette->setCheckable(true);
+	ui->ribbon->unit_palette->setCheckable(true);
+	ui->ribbon->pathing_palette->hide();
+	connect(ui->ribbon->pathing_palette, &QRibbonButton::clicked, this, &HiveWE::toggle_terrain_sidebar);
 
-	connect(ui->ribbon->terrain_palette, &QRibbonButton::clicked, [this]() {
-		open_palette<TerrainPalette>();
-	});
+	connect(new QShortcut(QKeySequence(Qt::Key_T), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, this, &HiveWE::toggle_terrain_sidebar);
+	connect(ui->ribbon->terrain_palette, &QRibbonButton::clicked, this, &HiveWE::toggle_terrain_sidebar);
 
-	connect(new QShortcut(QKeySequence(Qt::Key_D), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, [&]() {
-		open_palette<DoodadPalette>();
-	});
-	connect(ui->ribbon->doodad_palette, &QRibbonButton::clicked, [this]() {
-		open_palette<DoodadPalette>();
-	});
+	connect(new QShortcut(QKeySequence(Qt::Key_D), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, this, &HiveWE::toggle_doodad_palette);
+	connect(ui->ribbon->doodad_palette, &QRibbonButton::clicked, this, &HiveWE::toggle_doodad_palette);
 
-	connect(new QShortcut(QKeySequence(Qt::Key_U), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, [&]() {
-		open_palette<UnitPalette>();
-	});
-
-	connect(ui->ribbon->unit_palette, &QRibbonButton::clicked, [this]() {
-		open_palette<UnitPalette>();
-	});
-
-	connect(new QShortcut(QKeySequence(Qt::Key_P), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, [&]() {
-		ui->ribbon->pathing_visible->setChecked(true);
-		open_palette<PathingPalette>();
-	});
-
-	connect(ui->ribbon->pathing_palette, &QRibbonButton::clicked, [this]() {
-		ui->ribbon->pathing_visible->setChecked(true);
-		open_palette<PathingPalette>();
-	});
+	connect(new QShortcut(QKeySequence(Qt::Key_U), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, this, &HiveWE::toggle_unit_palette);
+	connect(ui->ribbon->unit_palette, &QRibbonButton::clicked, this, &HiveWE::toggle_unit_palette);
 
 	connect(ui->ribbon->trigger_editor, &QRibbonButton::clicked, [this]() {
 		bool created = false;
@@ -244,9 +230,8 @@ HiveWE::HiveWE(QWidget* parent)
 	map = new Map();
 	connect(&map->terrain, &Terrain::minimap_changed, minimap, &Minimap::set_minimap);
 	connect(&map->terrain, &Terrain::tileset_changed, [&]() {
-		const auto palette = window_handler.get_open<TerrainPalette>();
-		if (palette) {
-			palette.value()->refresh();
+		if (terrain_palette) {
+			terrain_palette->refresh();
 		}
 	});
 
@@ -255,9 +240,117 @@ HiveWE::HiveWE(QWidget* parent)
 
 HiveWE::~HiveWE() = default;
 
+void HiveWE::setup_palette_sidebar() {
+	auto* main_layout = qobject_cast<QVBoxLayout*>(centralWidget()->layout());
+	main_layout->removeWidget(ui->widget);
+
+	auto* content_layout = new QHBoxLayout;
+	content_layout->setContentsMargins(0, 0, 0, 0);
+	content_layout->setSpacing(0);
+	content_layout->addWidget(ui->widget, 1);
+	main_layout->addLayout(content_layout);
+
+	sidebar_root = new QWidget(centralWidget());
+	sidebar_root->setObjectName("paletteSidebar");
+	sidebar_root->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Expanding);
+	sidebar_root->setMinimumWidth(320);
+
+	auto* sidebar_layout = new QHBoxLayout(sidebar_root);
+	sidebar_layout->setContentsMargins(8, 0, 8, 0);
+	sidebar_layout->setSpacing(8);
+
+	object_column = new QWidget(sidebar_root);
+	object_column->setMinimumWidth(320);
+	object_column_layout = new QVBoxLayout(object_column);
+	object_column_layout->setContentsMargins(0, 0, 0, 0);
+	object_column_layout->setSpacing(6);
+
+	doodad_host = new QFrame(object_column);
+	doodad_host->setObjectName("doodadSidebarHost");
+	auto* doodad_layout = new QVBoxLayout(doodad_host);
+	doodad_layout->setContentsMargins(0, 0, 0, 0);
+	doodad_layout->setSpacing(0);
+
+	unit_host = new QFrame(object_column);
+	unit_host->setObjectName("unitSidebarHost");
+	auto* unit_layout = new QVBoxLayout(unit_host);
+	unit_layout->setContentsMargins(0, 0, 0, 0);
+	unit_layout->setSpacing(0);
+
+	object_column_layout->addWidget(doodad_host, 1);
+	object_column_layout->addWidget(unit_host, 1);
+
+	terrain_column = new QWidget(sidebar_root);
+	terrain_column->setMinimumWidth(340);
+	terrain_column_layout = new QVBoxLayout(terrain_column);
+	terrain_column_layout->setContentsMargins(0, 0, 0, 0);
+	terrain_column_layout->setSpacing(0);
+
+	auto* terrain_header = new QLabel("Terrain", terrain_column);
+	terrain_header->setStyleSheet("QLabel { font-size: 15px; font-weight: 700; padding: 0 2px 1px 2px; margin: 0; }");
+
+	terrain_host = new QFrame(terrain_column);
+	terrain_host->setObjectName("terrainSidebarHost");
+	auto* terrain_layout = new QVBoxLayout(terrain_host);
+	terrain_layout->setContentsMargins(0, 0, 0, 0);
+	terrain_layout->setSpacing(0);
+
+	auto* pathing_separator = new QFrame(terrain_column);
+	pathing_separator->setFrameShape(QFrame::HLine);
+	pathing_separator->setFrameShadow(QFrame::Sunken);
+	pathing_separator->setContentsMargins(0, 6, 0, 4);
+
+	auto* pathing_header = new QLabel("Pathing", terrain_column);
+	pathing_header->setStyleSheet("QLabel { font-size: 15px; font-weight: 700; padding: 0 2px 1px 2px; margin: 0; }");
+
+	pathing_host = new QFrame(terrain_column);
+	pathing_host->setObjectName("pathingSidebarHost");
+	auto* pathing_layout = new QVBoxLayout(pathing_host);
+	pathing_layout->setContentsMargins(0, 0, 0, 0);
+	pathing_layout->setSpacing(0);
+
+	terrain_column_layout->addWidget(terrain_header);
+	terrain_column_layout->addWidget(terrain_host, 3);
+	terrain_column_layout->addWidget(pathing_separator);
+	terrain_column_layout->addWidget(pathing_header);
+	terrain_column_layout->addWidget(pathing_host, 2);
+
+	sidebar_layout->addWidget(object_column);
+	sidebar_layout->addWidget(terrain_column);
+	content_layout->addWidget(sidebar_root);
+
+	sidebar_root->hide();
+	object_column->hide();
+	terrain_column->hide();
+	doodad_host->hide();
+	unit_host->hide();
+	terrain_host->hide();
+	pathing_host->hide();
+}
+
 void HiveWE::load_map(const fs::path& directory) {
 	window_handler.close_all();
 	ui->widget->makeCurrent();
+
+	delete terrain_palette;
+	terrain_palette = nullptr;
+	delete pathing_palette;
+	pathing_palette = nullptr;
+	delete doodad_palette;
+	doodad_palette = nullptr;
+	delete unit_palette;
+	unit_palette = nullptr;
+	remove_custom_tab();
+	sidebar_root->hide();
+	object_column->hide();
+	terrain_column->hide();
+	doodad_host->hide();
+	unit_host->hide();
+	terrain_host->hide();
+	pathing_host->hide();
+	ui->ribbon->terrain_palette->setChecked(false);
+	ui->ribbon->doodad_palette->setChecked(false);
+	ui->ribbon->unit_palette->setChecked(false);
 
 	delete map;
 	resource_manager.clear();
@@ -266,9 +359,8 @@ void HiveWE::load_map(const fs::path& directory) {
 
 	connect(&map->terrain, &Terrain::minimap_changed, minimap, &Minimap::set_minimap);
 	connect(&map->terrain, &Terrain::tileset_changed, [&]() {
-		const auto palette = window_handler.get_open<TerrainPalette>();
-		if (palette) {
-			palette.value()->refresh();
+		if (terrain_palette) {
+			terrain_palette->refresh();
 		}
 	});
 
@@ -634,6 +726,165 @@ void HiveWE::remove_custom_tab() {
 			current_custom_tab = nullptr;
 			return;
 		}
+	}
+}
+
+void HiveWE::activate_palette(Palette* palette) {
+	if (terrain_palette && pathing_palette) {
+		if (auto* terrain = dynamic_cast<TerrainPalette*>(palette)) {
+			if (dynamic_cast<PathingBrush*>(map->brush)) {
+				const QSignalBlocker blocker(terrain->current_brush());
+				terrain->current_brush().set_size(pathing_palette->current_brush().get_size());
+			}
+		} else if (auto* pathing = dynamic_cast<PathingPalette*>(palette)) {
+			if (dynamic_cast<TerrainBrush*>(map->brush)) {
+				const QSignalBlocker blocker(pathing->current_brush());
+				pathing->current_brush().set_size(terrain_palette->current_brush().get_size());
+			}
+		}
+	}
+
+	if (auto* terrain = dynamic_cast<TerrainPalette*>(palette)) {
+		terrain->activate_palette();
+	} else if (auto* pathing = dynamic_cast<PathingPalette*>(palette)) {
+		pathing->activate_palette();
+	} else if (auto* doodad = dynamic_cast<DoodadPalette*>(palette)) {
+		doodad->activate_palette();
+	} else if (auto* unit = dynamic_cast<UnitPalette*>(palette)) {
+		unit->activate_palette();
+	}
+
+	if (terrain_palette) {
+		terrain_palette->sync_brush_controls(map->brush);
+	}
+}
+
+void HiveWE::toggle_terrain_sidebar() {
+	if (!terrain_palette) {
+		terrain_palette = new TerrainPalette(terrain_host);
+		terrain_host->layout()->addWidget(terrain_palette);
+		connect(terrain_palette, &Palette::activated, this, [this]() { activate_palette(terrain_palette); });
+		connect(terrain_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(this, &HiveWE::palette_changed, terrain_palette, &Palette::deactivate);
+	}
+
+	if (!pathing_palette) {
+		pathing_palette = new PathingPalette(pathing_host);
+		pathing_host->layout()->addWidget(pathing_palette);
+		connect(pathing_palette, &Palette::activated, this, [this]() { activate_palette(pathing_palette); });
+		connect(pathing_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(this, &HiveWE::palette_changed, pathing_palette, &Palette::deactivate);
+		connect(&pathing_palette->current_brush(), &Brush::size_changed, this, [this](glm::ivec2) {
+			if (terrain_palette) {
+				const QSignalBlocker blocker(terrain_palette->current_brush());
+				terrain_palette->current_brush().set_size(pathing_palette->current_brush().get_size());
+			}
+			if (terrain_palette) {
+				terrain_palette->sync_brush_controls(map->brush);
+			}
+		});
+		if (terrain_palette) {
+			connect(&terrain_palette->current_brush(), &Brush::size_changed, this, [this](glm::ivec2) {
+				if (pathing_palette) {
+					const QSignalBlocker blocker(pathing_palette->current_brush());
+					pathing_palette->current_brush().set_size(terrain_palette->current_brush().get_size());
+				}
+				terrain_palette->sync_brush_controls(map->brush);
+			});
+		}
+	}
+
+	const bool visible = terrain_host->isHidden() || pathing_host->isHidden();
+	terrain_palette->setVisible(visible);
+	pathing_palette->setVisible(visible);
+	terrain_host->setVisible(visible);
+	pathing_host->setVisible(visible);
+	ui->ribbon->terrain_palette->setChecked(visible);
+
+	if (visible) {
+		activate_palette(terrain_palette);
+	} else if (doodad_palette && !doodad_palette->isHidden()) {
+		activate_palette(doodad_palette);
+	} else if (unit_palette && !unit_palette->isHidden()) {
+		activate_palette(unit_palette);
+	} else {
+		remove_custom_tab();
+	}
+
+	update_palette_sidebar_layout();
+}
+
+void HiveWE::toggle_doodad_palette() {
+	if (!doodad_palette) {
+		doodad_palette = new DoodadPalette(doodad_host);
+		doodad_host->layout()->addWidget(doodad_palette);
+		connect(doodad_palette, &Palette::activated, this, [this]() { activate_palette(doodad_palette); });
+		connect(doodad_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(this, &HiveWE::palette_changed, doodad_palette, &Palette::deactivate);
+	}
+
+	const bool visible = doodad_host->isHidden();
+	doodad_palette->setVisible(visible);
+	doodad_host->setVisible(visible);
+	ui->ribbon->doodad_palette->setChecked(visible);
+
+	if (visible) {
+		activate_palette(doodad_palette);
+	} else if (unit_palette && !unit_palette->isHidden()) {
+		activate_palette(unit_palette);
+	} else if (terrain_palette && !terrain_palette->isHidden()) {
+		activate_palette(terrain_palette);
+	} else {
+		remove_custom_tab();
+	}
+
+	update_palette_sidebar_layout();
+}
+
+void HiveWE::toggle_unit_palette() {
+	if (!unit_palette) {
+		unit_palette = new UnitPalette(unit_host);
+		unit_host->layout()->addWidget(unit_palette);
+		connect(unit_palette, &Palette::activated, this, [this]() { activate_palette(unit_palette); });
+		connect(unit_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(this, &HiveWE::palette_changed, unit_palette, &Palette::deactivate);
+	}
+
+	const bool visible = unit_host->isHidden();
+	unit_palette->setVisible(visible);
+	unit_host->setVisible(visible);
+	ui->ribbon->unit_palette->setChecked(visible);
+
+	if (visible) {
+		activate_palette(unit_palette);
+	} else if (doodad_palette && !doodad_palette->isHidden()) {
+		activate_palette(doodad_palette);
+	} else if (terrain_palette && !terrain_palette->isHidden()) {
+		activate_palette(terrain_palette);
+	} else {
+		remove_custom_tab();
+	}
+
+	update_palette_sidebar_layout();
+}
+
+void HiveWE::update_palette_sidebar_layout() {
+	const bool doodad_visible = doodad_host && !doodad_host->isHidden();
+	const bool unit_visible = unit_host && !unit_host->isHidden();
+	const bool object_visible = doodad_visible || unit_visible;
+	const bool terrain_visible = terrain_host && !terrain_host->isHidden();
+
+	object_column->setVisible(object_visible);
+	terrain_column->setVisible(terrain_visible);
+	sidebar_root->setVisible(object_visible || terrain_visible);
+
+	if (object_column_layout) {
+		object_column_layout->setStretch(0, doodad_visible && unit_visible ? 1 : (doodad_visible ? 1 : 0));
+		object_column_layout->setStretch(1, doodad_visible && unit_visible ? 1 : (unit_visible ? 1 : 0));
+	}
+	if (terrain_column_layout) {
+		terrain_column_layout->setStretch(0, 3);
+		terrain_column_layout->setStretch(1, 2);
 	}
 }
 

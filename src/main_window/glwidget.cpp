@@ -1,5 +1,6 @@
 #include "glwidget.h"
 #include "doodad_brush.h"
+#include "pathing_brush.h"
 #include "terrain_brush.h"
 
 #include <QTimer>
@@ -331,9 +332,19 @@ void GLWidget::wheelEvent(QWheelEvent* event) {
 
 		if (dynamic_cast<TerrainBrush*>(map->brush)) {
 			if (event->angleDelta().y() > 0) {
-				map->brush->increase_size(5);
+				map->brush->increase_size(2);
 			} else if (event->angleDelta().y() < 0) {
-				map->brush->decrease_size(5);
+				map->brush->decrease_size(2);
+			}
+			event->accept();
+			return;
+		}
+
+		if (dynamic_cast<PathingBrush*>(map->brush)) {
+			if (event->angleDelta().y() > 0) {
+				map->brush->increase_size(2);
+			} else if (event->angleDelta().y() < 0) {
+				map->brush->decrease_size(2);
 			}
 			event->accept();
 			return;

@@ -18,10 +18,11 @@ class TerrainPalette: public Palette {
 	~TerrainPalette() override;
 
 	void refresh();
+	void activate_palette();
+	void sync_brush_controls(Brush* active_brush = nullptr);
+	TerrainBrush& current_brush() { return brush; }
 
   private:
-	bool event(QEvent* e) override;
-
 	Ui::TerrainPalette ui;
 
 	TerrainBrush brush;

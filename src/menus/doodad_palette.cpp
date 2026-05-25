@@ -50,10 +50,7 @@ namespace fs = std::filesystem;
 
 DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	ui.setupUi(this);
-	setAttribute(Qt::WA_DeleteOnClose);
-	show();
-
-	map->brush = &brush;
+	monitor_activation();
 
 	ui.tileset->addItem("All Tilesets", '*');
 	for (const auto& [key, value] : world_edit_data.section("TileSets")) {
@@ -464,33 +461,23 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 
 	ui.doodads->setCurrentIndex(ui.doodads->model()->index(0, 0));
 	selection_changed(ui.doodads->model()->index(0, 0));
+	monitor_activation();
 }
 
 DoodadPalette::~DoodadPalette() {
 	map->brush = nullptr;
 	delete change_mode_parent;
 	delete change_mode_this;
+	delete ribbon_tab;
 }
 
-bool DoodadPalette::event(QEvent* e) {
-	if (e->type() == QEvent::Close) {
-		// Remove shortcut from parent
-		find_this->setEnabled(false);
-		find_parent->setEnabled(false);
-		change_mode_this->setEnabled(false);
-		change_mode_parent->setEnabled(false);
-		ribbon_tab->setParent(nullptr);
-		delete ribbon_tab;
-	} else if (e->type() == QEvent::WindowActivate) {
-		find_this->setEnabled(true);
-		find_parent->setEnabled(true);
-		change_mode_this->setEnabled(true);
-		change_mode_parent->setEnabled(true);
-		map->brush = &brush;
-		emit ribbon_tab_requested(ribbon_tab, "Doodad Palette");
-	}
-
-	return QWidget::event(e);
+void DoodadPalette::activate_palette() {
+	find_this->setEnabled(true);
+	find_parent->setEnabled(true);
+	change_mode_this->setEnabled(true);
+	change_mode_parent->setEnabled(true);
+	map->brush = &brush;
+	emit ribbon_tab_requested(ribbon_tab, "Doodad Palette");
 }
 
 void DoodadPalette::selection_changed(const QModelIndex& index) {

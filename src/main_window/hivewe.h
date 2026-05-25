@@ -31,6 +31,11 @@ namespace Ui {
 class HiveWEClass;
 }
 
+class TerrainPalette;
+class PathingPalette;
+class DoodadPalette;
+class UnitPalette;
+
 class HiveWE : public QMainWindow {
 	Q_OBJECT
 
@@ -80,6 +85,12 @@ private:
 	void open_recent_map(int index);
 	void show_transient_notice(const QString& text, int timeout_ms = 1800);
 	void position_transient_notice();
+	void setup_palette_sidebar();
+	void update_palette_sidebar_layout();
+	void activate_palette(Palette* palette);
+	void toggle_terrain_sidebar();
+	void toggle_doodad_palette();
+	void toggle_unit_palette();
 
 	/// Adds the tab to the ribbon and sets the current index to this tab
 	void set_current_custom_tab(QRibbonTab* tab, QString name);
@@ -87,20 +98,19 @@ private:
 
 	QLabel* transient_notice = nullptr;
 	QTimer transient_notice_timer;
-
-	template <typename T>
-	void open_palette() {
-		bool created = false;
-		auto palette = window_handler.create_or_raise<T>(this, created);
-		if (created) {
-			palette->move(this->x() + this->width() - palette->width() - 10, this->y() + 160);
-			connect(palette, &T::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
-			connect(this, &HiveWE::palette_changed, palette, &Palette::deactivate);
-			connect(palette, &T::finished, [&]() {
-				remove_custom_tab();
-			});
-		}
-	}
+	QWidget* sidebar_root = nullptr;
+	QWidget* object_column = nullptr;
+	QWidget* terrain_column = nullptr;
+	QWidget* doodad_host = nullptr;
+	QWidget* unit_host = nullptr;
+	QWidget* terrain_host = nullptr;
+	QWidget* pathing_host = nullptr;
+	QVBoxLayout* object_column_layout = nullptr;
+	QVBoxLayout* terrain_column_layout = nullptr;
+	TerrainPalette* terrain_palette = nullptr;
+	PathingPalette* pathing_palette = nullptr;
+	DoodadPalette* doodad_palette = nullptr;
+	UnitPalette* unit_palette = nullptr;
 
 signals:
 	void tileset_changed();

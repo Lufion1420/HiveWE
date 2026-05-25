@@ -22,6 +22,11 @@ class PathingBrush: public Brush {
 
 	PathingBrush();
 
+	glm::ivec2 get_size() const override;
+	void set_size(glm::ivec2 size) override;
+	void increase_size(int size) override;
+	void decrease_size(int size) override;
+
 	void apply_begin() override;
 	void apply(double frame_delta) override;
 	void apply_end() override;

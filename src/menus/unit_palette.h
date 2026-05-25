@@ -42,10 +42,9 @@ class UnitPalette : public Palette {
 public:
 	UnitPalette(QWidget* parent = nullptr);
 	~UnitPalette();
+	void activate_palette();
 
 private:
-	bool event(QEvent* e) override;
-
 	void select_id_in_palette(std::string id);
 
 	Ui::UnitPalette ui;

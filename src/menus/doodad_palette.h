@@ -57,10 +57,9 @@ class DoodadPalette : public Palette {
 public:
 	DoodadPalette(QWidget* parent = nullptr);
 	~DoodadPalette();
+	void activate_palette();
 
 private:
-	bool event(QEvent *e) override;
-
 	void selection_changed(const QModelIndex& index);
 	void select_id_in_palette(std::string id);
 

@@ -12,6 +12,22 @@ PathingBrush::PathingBrush() : Brush() {
 	brush_type = Brush::Type::cell;
 }
 
+glm::ivec2 PathingBrush::get_size() const {
+	return size / 4;
+}
+
+void PathingBrush::set_size(const glm::ivec2 new_size) {
+	Brush::set_size(new_size * 4);
+}
+
+void PathingBrush::increase_size(const int new_size) {
+	set_size(get_size() + new_size);
+}
+
+void PathingBrush::decrease_size(const int new_size) {
+	set_size(get_size() - new_size);
+}
+
 void PathingBrush::apply_begin() {
 	const glm::ivec2 pos = glm::vec2(input_handler.mouse_world) * 4.f - size.x / 2.f + 0.5f;
 	const int x = pos.x;

@@ -1,5 +1,6 @@
 #include "terrain_palette.h"
 #include "terrain_operators.h"
+#include "pathing_brush.h"
 
 import MapGlobal;
 
@@ -11,12 +12,11 @@ import ResourceManager;
 
 TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 	ui.setupUi(this);
-
-	setAttribute(Qt::WA_DeleteOnClose);
-	show();
+	ui.verticalLayout->setContentsMargins(0, 0, 0, 0);
+	ui.verticalLayout->setSpacing(6);
+	monitor_activation();
 
 	brush.texture_operator.tile_id = map->terrain.tileset_ids.front();
-	map->brush = &brush;
 
 	change_mode_this = new QShortcut(Qt::Key_Space, this, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
 	change_mode_parent = new QShortcut(Qt::Key_Space, parent, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
@@ -37,12 +37,15 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 
 	// brush menu
 	setup_brush_menu();
+	sync_brush_controls(&brush);
+	monitor_activation();
 }
 
 TerrainPalette::~TerrainPalette() {
 	map->brush = nullptr;
 	delete change_mode_parent;
 	delete change_mode_this;
+	delete ribbon_tab;
 }
 
 void TerrainPalette::refresh() {
@@ -52,19 +55,34 @@ void TerrainPalette::refresh() {
 	}
 }
 
-bool TerrainPalette::event(QEvent* e) {
-	if (e->type() == QEvent::Close) {
-		change_mode_this->setEnabled(false);
-		change_mode_parent->setEnabled(false);
-		ribbon_tab->setParent(nullptr);
-		delete ribbon_tab;
-	} else if (e->type() == QEvent::WindowActivate) {
-		change_mode_this->setEnabled(true);
-		change_mode_parent->setEnabled(true);
-		map->brush = &brush;
-		emit ribbon_tab_requested(ribbon_tab, "Terrain Palette");
+void TerrainPalette::activate_palette() {
+	change_mode_this->setEnabled(true);
+	change_mode_parent->setEnabled(true);
+	map->brush = &brush;
+	sync_brush_controls(&brush);
+	emit ribbon_tab_requested(ribbon_tab, "Terrain Palette");
+}
+
+void TerrainPalette::sync_brush_controls(Brush* active_brush) {
+	Brush* target = active_brush ? active_brush : (map && map->brush ? map->brush : &brush);
+	const auto size = target->get_size();
+	const bool use_odd_steps = dynamic_cast<TerrainBrush*>(target) || dynamic_cast<PathingBrush*>(target);
+
+	const QSignalBlocker slider_blocker(ui.brushSizeSlider);
+	const QSignalBlocker spinbox_blocker(ui.brushSize);
+	const QSignalBlocker size_1_blocker(ui.brushSize1);
+	const QSignalBlocker size_3_blocker(ui.brushSize3);
+	const QSignalBlocker size_5_blocker(ui.brushSize5);
+	const QSignalBlocker size_7_blocker(ui.brushSize7);
+	const QSignalBlocker size_9_blocker(ui.brushSize9);
+	const QSignalBlocker size_11_blocker(ui.brushSize11);
+	ui.brushSizeSlider->setSingleStep(use_odd_steps ? 4 : 1);
+	ui.brushSize->setSingleStep(use_odd_steps ? 4 : 1);
+	ui.brushSizeSlider->setValue(size.x);
+	ui.brushSize->setValue(size.x);
+	for (auto* button : ui.brushSizeButtonGroup->buttons()) {
+		button->setChecked(button->text().toInt() == size.x);
 	}
-	return QWidget::event(e);
 }
 
 void TerrainPalette::deactivate(QRibbonTab* tab) {
@@ -530,14 +548,12 @@ void TerrainPalette::setup_brush_menu() {
 		ui.brushSizeSlider->setValue(button->text().toInt());
 	});
 	connect(ui.brushSizeSlider, &QSlider::valueChanged, [&](int value) {
-		brush.set_size(glm::ivec2(value));
+		Brush* target = map && map->brush ? map->brush : &brush;
+		target->set_size(glm::ivec2(value));
 		ui.brushSize->setValue(value);
 	});
 	connect(&brush, &Brush::size_changed, this, [&](glm::ivec2 size) {
-		const QSignalBlocker slider_blocker(ui.brushSizeSlider);
-		const QSignalBlocker spinbox_blocker(ui.brushSize);
-		ui.brushSizeSlider->setValue(size.x);
-		ui.brushSize->setValue(size.x);
+		sync_brush_controls(&brush);
 	});
 
 	connect(ui.deformationCheckbox, &QCheckBox::clicked, [&](bool checked) {
@@ -549,13 +565,16 @@ void TerrainPalette::setup_brush_menu() {
 	});
 
 	connect(ui.brushShapeCircle, &QPushButton::clicked, [&]() {
-		brush.set_shape(Brush::Shape::circle);
+		Brush* target = map && map->brush ? map->brush : &brush;
+		target->set_shape(Brush::Shape::circle);
 	});
 	connect(ui.brushShapeSquare, &QPushButton::clicked, [&]() {
-		brush.set_shape(Brush::Shape::square);
+		Brush* target = map && map->brush ? map->brush : &brush;
+		target->set_shape(Brush::Shape::square);
 	});
 	connect(ui.brushShapeDiamond, &QPushButton::clicked, [&]() {
-		brush.set_shape(Brush::Shape::diamond);
+		Brush* target = map && map->brush ? map->brush : &brush;
+		target->set_shape(Brush::Shape::diamond);
 	});
 }
 

@@ -16,12 +16,17 @@ public:
 	~Palette();
 
 	std::vector<QShortcut*> shortcuts;
+	void monitor_activation(QWidget* widget = nullptr);
 
 	//void addShortcut(const QKeySequence sequence, const std::vector<QWidget*>& attach_to);
 
 signals:
 	void ribbon_tab_requested(QRibbonTab* tab, QString name);
+	void activated();
 
 public slots:
 	virtual void deactivate(QRibbonTab* tab) = 0;
+
+protected:
+	bool eventFilter(QObject* watched, QEvent* event) override;
 };

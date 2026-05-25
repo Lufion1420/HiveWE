@@ -13,10 +13,10 @@ class PathingPalette : public Palette {
 public:
 	explicit PathingPalette(QWidget* parent = nullptr);
 	~PathingPalette();
+	void activate_palette();
+	PathingBrush& current_brush() { return brush; }
 
 private:
-	bool event(QEvent *e) override;
-
 	Ui::PathingPalette ui;
 	PathingBrush brush;
 

@@ -18,8 +18,7 @@ import Globals;
 
 UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 	ui.setupUi(this);
-	setAttribute(Qt::WA_DeleteOnClose);
-	show();
+	monitor_activation();
 
 	for (const auto& player : map->info.players) {
 		std::string color_lookup = std::to_string(player.internal_number);
@@ -114,28 +113,20 @@ UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 	});
 
 	connect(&brush, &UnitBrush::selection_changed, this, &UnitPalette::update_selection_info);
+	monitor_activation();
 }
 
 UnitPalette::~UnitPalette() {
 	map->brush = nullptr;
+	delete ribbon_tab;
 }
 
-bool UnitPalette::event(QEvent* e) {
-	if (e->type() == QEvent::Close) {
-		// Remove shortcut from parent
-		find_this->setEnabled(false);
-		find_parent->setEnabled(false);
-		selection_mode->disconnectShortcuts();
-		ribbon_tab->setParent(nullptr);
-		delete ribbon_tab;
-	} else if (e->type() == QEvent::WindowActivate) {
-		find_this->setEnabled(true);
-		find_parent->setEnabled(true);
-		selection_mode->enableShortcuts();
-		map->brush = &brush;
-		emit ribbon_tab_requested(ribbon_tab, "Unit Palette");
-	}
-	return QWidget::event(e);
+void UnitPalette::activate_palette() {
+	find_this->setEnabled(true);
+	find_parent->setEnabled(true);
+	selection_mode->enableShortcuts();
+	map->brush = &brush;
+	emit ribbon_tab_requested(ribbon_tab, "Unit Palette");
 }
 
 void UnitPalette::select_id_in_palette(std::string id) {
