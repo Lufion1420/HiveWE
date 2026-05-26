@@ -207,6 +207,7 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		edit->setFocus();
 		edit->selectAll();
 	});
+	connect(new QShortcut(QKeySequence(Qt::Key_O), this), &QShortcut::activated, this, &QWidget::close);
 
 	show();
 }

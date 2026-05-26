@@ -32,6 +32,7 @@ const std::array shortcut_categories = {
 			{"Open the terrain palette.", "T"},
 			{"Open the doodad palette.", "D"},
 			{"Open the unit palette.", "U"},
+			{"Open or close the object editor.", "O"},
 			{"Open the pathing palette.", "P"},
 			{"Show or hide units.", "Ctrl+U"},
 			{"Show or hide doodads.", "Ctrl+D"},

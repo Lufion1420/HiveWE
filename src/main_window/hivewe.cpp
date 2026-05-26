@@ -15,6 +15,7 @@ import MapGlobal;
 import WorldUndoManager;
 import SkinnedMeshGlobals;
 import ResourceManager;
+import WindowHandler;
 import "pathing_palette.h";
 import "object_editor/object_editor.h";
 import "model_editor/model_editor.h";
@@ -198,6 +199,15 @@ HiveWE::HiveWE(QWidget* parent)
 	});
 
 	connect(ui->ribbon->object_editor, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ObjectEditor>(nullptr, created);
+	});
+	connect(new QShortcut(QKeySequence(Qt::Key_O), this, nullptr, nullptr, Qt::ApplicationShortcut), &QShortcut::activated, [this]() {
+		if (const auto open_editor = window_handler.get_open<ObjectEditor>(); open_editor.has_value() && *open_editor) {
+			(*open_editor)->close();
+			return;
+		}
+
 		bool created = false;
 		window_handler.create_or_raise<ObjectEditor>(nullptr, created);
 	});
