@@ -100,6 +100,9 @@ UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 		bool created;
 		const auto editor = window_handler.create_or_raise<ObjectEditor>(nullptr, created);
 		const Unit* unit = *brush.selections.begin();
+		if (unit->id == "sloc") {
+			return;
+		}
 		if (items_slk.row_headers.contains(unit->id)) {
 			editor->select_id(ObjectEditor::Category::item, unit->id);
 		} else {
@@ -109,6 +112,9 @@ UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 
 	connect(select_in_palette, &QSmallRibbonButton::clicked, [&]() {
 		const Unit* unit= *brush.selections.begin();
+		if (unit->id == "sloc") {
+			return;
+		}
 		select_id_in_palette(unit->id);
 	});
 
@@ -168,8 +174,12 @@ void UnitPalette::update_selection_info() {
 
 		// Set the name
 		if (same_object) {
-			auto index = units_table->index(units_slk.row_headers.at(unit.id), units_slk.column_headers.at("name"));
-			selection_name->setText(units_table->data(index).toString());
+			if (unit.id == "sloc") {
+				selection_name->setText(QString("Player Start Location (%1)").arg(unit.player + 1));
+			} else {
+				auto index = units_table->index(units_slk.row_headers.at(unit.id), units_slk.column_headers.at("name"));
+				selection_name->setText(units_table->data(index).toString());
+			}
 		} else {
 			selection_name->setText("Various");
 		}

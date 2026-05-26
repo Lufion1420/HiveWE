@@ -605,6 +605,12 @@ export class Map: public QObject {
 			name = (*--(--filesystem_path.end())).string();
 		}
 
+		if (!ensure_player_start_locations()) {
+			return false;
+		}
+
+		sync_player_start_locations_to_map_info();
+
 		pathing_map.save();
 		terrain.save();
 		shadow_map.save();
@@ -759,8 +765,11 @@ export class Map: public QObject {
 		if (render_units) {
 			for (auto& i : units.units) {
 				if (i.id == "sloc") {
+					auto color = RenderManager::player_color(i.player);
+					color.a = 235;
+					render_manager.queue_start_location_marker(i.position, color);
 					continue;
-				} // ToDo handle starting locations
+				}
 
 				render_manager.queue_render(*i.mesh, i.skeleton, i.color, i.player);
 			}
@@ -818,6 +827,82 @@ export class Map: public QObject {
 	std::vector<FileUsage> get_file_usage() const;
 
   private:
+	bool player_requires_start_location(const PlayerData& player) const {
+		return player.internal_number >= 0 && player.internal_number < 12
+			&& (player.type == PlayerType::human || player.type == PlayerType::computer);
+	}
+
+	glm::vec3 default_player_start_position(const PlayerData& player, size_t fallback_index) const {
+		glm::vec2 position = (player.starting_position - terrain.offset) / 128.f;
+		const bool inside_bounds = position.x >= 0.f && position.y >= 0.f && position.x <= terrain.width - 1 && position.y <= terrain.height - 1;
+
+		if (!inside_bounds) {
+			const glm::vec2 center(terrain.width * 0.5f, terrain.height * 0.5f);
+			const float radius = std::max(4.f, std::min(terrain.width, terrain.height) * 0.25f);
+			const float angle =
+				static_cast<float>(fallback_index) * static_cast<float>(std::numbers::pi_v<float> * 2.0) / std::max<size_t>(1, info.players.size());
+			position = center + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
+			position.x = std::clamp(position.x, 0.f, static_cast<float>(terrain.width - 1));
+			position.y = std::clamp(position.y, 0.f, static_cast<float>(terrain.height - 1));
+		}
+
+		return {position.x, position.y, terrain.interpolated_height(position.x, position.y, true)};
+	}
+
+	void sync_player_start_locations_to_map_info() {
+		for (auto& player : info.players) {
+			if (const Unit* start_location = units.find_start_location(player.internal_number)) {
+				player.starting_position = glm::vec2(start_location->position) * 128.f + terrain.offset;
+			}
+		}
+	}
+
+	bool ensure_player_start_locations() {
+		std::vector<const PlayerData*> missing_players;
+		for (const auto& player : info.players) {
+			if (!player_requires_start_location(player)) {
+				continue;
+			}
+
+			if (!units.find_start_location(player.internal_number)) {
+				missing_players.push_back(&player);
+			}
+		}
+
+		if (missing_players.empty()) {
+			return true;
+		}
+
+		QString player_names;
+		for (const auto* player : missing_players) {
+			const std::string name(trigger_strings.string(player->name));
+			if (!player_names.isEmpty()) {
+				player_names += '\n';
+			}
+			player_names += QString("Player %1: ").arg(player->internal_number + 1) + QString::fromStdString(name);
+		}
+
+		QMessageBox message_box;
+		message_box.setIcon(QMessageBox::Question);
+		message_box.setWindowTitle("Missing Start Locations");
+		message_box.setText("Some active player slots are missing start locations.");
+		message_box.setInformativeText("Create missing start locations automatically?");
+		message_box.setDetailedText(player_names);
+		message_box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+		message_box.setDefaultButton(QMessageBox::Yes);
+
+		if (message_box.exec() != QMessageBox::Yes) {
+			return false;
+		}
+
+		for (size_t i = 0; i < missing_players.size(); ++i) {
+			const PlayerData& player = *missing_players[i];
+			[[maybe_unused]] Unit& start_location = units.add_start_location(player.internal_number, default_player_start_position(player, i));
+		}
+
+		return true;
+	}
+
 	int update_object_positions(int delta_left, int delta_right, int delta_top, int delta_bottom);
 	void reset_map_edge_pathing(
 		int old_left,

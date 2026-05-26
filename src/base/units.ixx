@@ -399,11 +399,46 @@ export class Units {
 	}
 
 	[[nodiscard]]
+	Unit* find_start_location(const int player) {
+		for (auto& unit : units) {
+			if (unit.id == "sloc" && unit.player == player) {
+				return &unit;
+			}
+		}
+		return nullptr;
+	}
+
+	[[nodiscard]]
+	const Unit* find_start_location(const int player) const {
+		for (const auto& unit : units) {
+			if (unit.id == "sloc" && unit.player == player) {
+				return &unit;
+			}
+		}
+		return nullptr;
+	}
+
+	[[nodiscard]]
+	Unit& add_start_location(const int player, const glm::vec3 position) {
+		units.push_back(Unit());
+		Unit& unit = units.back();
+		unit.id = "sloc";
+		unit.skin_id = "sloc";
+		unit.position = position;
+		unit.scale = glm::vec3(1.f);
+		unit.angle = 0.f;
+		unit.player = player;
+		unit.random = {1, 0, 0, 0};
+		unit.creation_number = ++Unit::auto_increment;
+		return unit;
+	}
+
+	[[nodiscard]]
 	std::vector<Unit*> query_area(const TerrainRectF& area) {
 		std::vector<Unit*> result;
 
 		for (auto& i : units) {
-			if (area.contains(i.position.x, i.position.y) && i.id != "sloc") {
+			if (area.contains(i.position.x, i.position.y)) {
 				result.push_back(&i);
 			}
 		}

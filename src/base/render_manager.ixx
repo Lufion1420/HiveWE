@@ -16,6 +16,7 @@ import MDX;
 import Camera;
 import Utilities;
 import Globals;
+import OpenGLUtilities;
 import Units;
 import SLK;
 import UnorderedMap;
@@ -26,6 +27,37 @@ import Doodads;
 import Doodad;
 
 export class RenderManager {
+	static constexpr std::array<glm::u8vec4, 28> team_colors = {
+		glm::u8vec4(255, 3, 3, 255),
+		glm::u8vec4(0, 66, 255, 255),
+		glm::u8vec4(27, 231, 186, 255),
+		glm::u8vec4(85, 0, 129, 255),
+		glm::u8vec4(254, 252, 0, 255),
+		glm::u8vec4(254, 137, 13, 255),
+		glm::u8vec4(33, 191, 0, 255),
+		glm::u8vec4(228, 92, 175, 255),
+		glm::u8vec4(147, 149, 150, 255),
+		glm::u8vec4(126, 191, 241, 255),
+		glm::u8vec4(16, 98, 71, 255),
+		glm::u8vec4(79, 43, 5, 255),
+		glm::u8vec4(156, 0, 0, 255),
+		glm::u8vec4(0, 0, 195, 255),
+		glm::u8vec4(0, 235, 255, 255),
+		glm::u8vec4(189, 0, 255, 255),
+		glm::u8vec4(236, 206, 135, 255),
+		glm::u8vec4(247, 165, 139, 255),
+		glm::u8vec4(191, 255, 129, 255),
+		glm::u8vec4(219, 184, 235, 255),
+		glm::u8vec4(79, 80, 85, 255),
+		glm::u8vec4(236, 240, 255, 255),
+		glm::u8vec4(0, 120, 30, 255),
+		glm::u8vec4(165, 111, 52, 255),
+		glm::u8vec4(46, 45, 46, 255),
+		glm::u8vec4(46, 45, 46, 255),
+		glm::u8vec4(46, 45, 46, 255),
+		glm::u8vec4(46, 45, 46, 255),
+	};
+
 	struct PerMeshOffsets {
 		uint32_t instance_offset;
 		uint32_t bone_offset;
@@ -38,15 +70,23 @@ export class RenderManager {
 		float distance;
 	};
 
+	struct StartLocationMarker {
+		glm::vec3 position;
+		glm::u8vec4 color;
+		float scale;
+	};
+
 	std::shared_ptr<Shader> skinned_mesh_shader_sd;
 	std::shared_ptr<Shader> skinned_mesh_shader_hd;
 	std::shared_ptr<Shader> colored_skinned_shader;
+	std::shared_ptr<Shader> selection_circle_shader;
 
 	std::vector<SkinnedMesh*> skinned_meshes;
 	std::vector<SkinnedInstance> skinned_transparent_instances;
 
 	std::shared_ptr<SkinnedMesh> click_helper;
 	std::vector<SkeletalModelInstance> click_helper_instances;
+	std::vector<StartLocationMarker> start_location_markers;
 
 	GLuint color_buffer;
 	GLuint depth_buffer;
@@ -69,6 +109,8 @@ export class RenderManager {
 					{"data/shaders/skinned_mesh_instance_color_coded.vert", "data/shaders/skinned_mesh_instance_color_coded.frag"}
 				)
 				.value();
+		selection_circle_shader =
+			resource_manager.load<Shader>({"data/shaders/selection_circle.vert", "data/shaders/selection_circle.frag"}).value();
 
 		click_helper = resource_manager.load<SkinnedMesh>("Objects/InvalidObject/InvalidObject.mdx", "", std::nullopt).value();
 
@@ -134,6 +176,18 @@ export class RenderManager {
 		a.matrix = model;
 		a.update(0.016f);
 		click_helper_instances.push_back(a);
+	}
+
+	void queue_start_location_marker(const glm::vec3& position, const glm::u8vec4 color, const float scale = 3.45f) {
+		start_location_markers.push_back({position, color, scale});
+	}
+
+	[[nodiscard]]
+	static glm::u8vec4 player_color(const int player) {
+		if (player >= 0 && player < static_cast<int>(team_colors.size())) {
+			return team_colors[player];
+		}
+		return glm::u8vec4(96, 224, 255, 255);
 	}
 
 	void render(const bool render_lighting, const glm::vec3 light_direction) {
@@ -259,10 +313,38 @@ export class RenderManager {
 		glDepthMask(true);
 		glBindVertexArray(old_vao);
 
+		if (!start_location_markers.empty()) {
+			glDisable(GL_DEPTH_TEST);
+			glEnable(GL_BLEND);
+			selection_circle_shader->use();
+			glEnableVertexAttribArray(0);
+
+			for (const auto& marker : start_location_markers) {
+				glm::mat4 model(1.f);
+				model = glm::translate(model, marker.position - glm::vec3(marker.scale * 0.5f, marker.scale * 0.5f, 0.f));
+				model = glm::scale(model, glm::vec3(marker.scale));
+				model = camera.projection_view * model;
+
+				glUniformMatrix4fv(1, 1, GL_FALSE, &model[0][0]);
+				glUniform4f(2, marker.color.r / 255.f, marker.color.g / 255.f, marker.color.b / 255.f, marker.color.a / 255.f);
+				glUniform1i(3, GL_TRUE);
+
+				glBindBuffer(GL_ARRAY_BUFFER, shapes.vertex_buffer);
+				glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, shapes.index_buffer);
+				glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+			}
+
+			glDisableVertexAttribArray(0);
+			glEnable(GL_DEPTH_TEST);
+		}
+
 		for (auto* m : skinned_meshes) {
 			m->clear_render_data();
 		}
 		click_helper_instances.clear();
+		start_location_markers.clear();
 		skinned_meshes.clear();
 		skinned_transparent_instances.clear();
 	}

@@ -18,6 +18,27 @@ import MapGlobal;
 
 UnitBrush::UnitBrush() : Brush() {}
 
+namespace {
+Unit* pick_start_location_under_mouse(Units& units, const glm::vec3& mouse_world) {
+	Unit* closest = nullptr;
+	float closest_distance = 1.25f;
+
+	for (auto& unit : units.units) {
+		if (unit.id != "sloc") {
+			continue;
+		}
+
+		const float distance = glm::distance(glm::vec2(unit.position), glm::vec2(mouse_world));
+		if (distance <= closest_distance) {
+			closest_distance = distance;
+			closest = &unit;
+		}
+	}
+
+	return closest;
+}
+}
+
 void UnitBrush::set_shape(const Shape new_shape) {}
 
 void UnitBrush::key_press_event(QKeyEvent* event) {
@@ -82,6 +103,16 @@ void UnitBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 	if (event->button() == Qt::LeftButton && input_handler.mouse.y > 0.f) {
 		if (mode == Mode::selection) {
 			if (event->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
+				if (Unit* start_location = pick_start_location_under_mouse(map->units, input_handler.mouse_world)) {
+					if (selections.contains(start_location)) {
+						selections.erase(start_location);
+					} else {
+						selections.emplace(start_location);
+					}
+					emit selection_changed();
+					return;
+				}
+
 				const auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
 				if (id) {
 					if (selections.contains(&map->units.units[id.value()])) {
@@ -89,11 +120,29 @@ void UnitBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 					} else {
 						selections.emplace(&map->units.units[id.value()]);
 					}
+					emit selection_changed();
 					return;
 				}
 			}
 
 			if (!event->modifiers()) {
+				if (Unit* start_location = pick_start_location_under_mouse(map->units, input_handler.mouse_world)) {
+					drag_start = input_handler.mouse_world;
+					dragging = true;
+
+					if (std::find(selections.begin(), selections.end(), start_location) != selections.end()) {
+						drag_offsets.clear();
+						for (const auto& selection : selections) {
+							drag_offsets.push_back(input_handler.mouse_world - selection->position);
+						}
+					} else {
+						selections = {start_location};
+						drag_offsets = {input_handler.mouse_world - start_location->position};
+						emit selection_changed();
+					}
+					return;
+				}
+
 				const auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
 				if (id) {
 					Unit& unit = map->units.units[id.value()];
@@ -300,7 +349,8 @@ void UnitBrush::render_selection() const {
 	glEnableVertexAttribArray(0);
 
 	for (const auto& i : selections) {
-		const float selection_scale = i->mesh->mdx->sequences[i->skeleton.sequence_index].extent.bounds_radius / 128.f;
+		const float selection_scale =
+			i->id == "sloc" ? 1.25f : i->mesh->mdx->sequences[i->skeleton.sequence_index].extent.bounds_radius / 128.f;
 
 		glm::mat4 model(1.f);
 		model = glm::translate(model, i->position - glm::vec3(selection_scale * 0.5f, selection_scale * 0.5f, 0.f));
@@ -308,6 +358,8 @@ void UnitBrush::render_selection() const {
 
 		model = camera.projection_view * model;
 		glUniformMatrix4fv(1, 1, GL_FALSE, &model[0][0]);
+		glUniform4f(2, 0.f, 1.f, 0.f, 0.75f);
+		glUniform1i(3, GL_FALSE);
 
 		glBindBuffer(GL_ARRAY_BUFFER, shapes.vertex_buffer);
 		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);

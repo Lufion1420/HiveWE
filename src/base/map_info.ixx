@@ -23,7 +23,7 @@ export enum class PlayerRace {
 	night_elf
 };
 
-struct PlayerData {
+export struct PlayerData {
 	int internal_number;
 	PlayerType type;
 	PlayerRace race;

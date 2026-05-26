@@ -737,17 +737,19 @@ void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain,
 
 		script.write("\n");
 
-		for (const auto& i : units.units) {
-			if (i.id == "sloc") {
-				script.call(
-					"DefineStartLocation",
-					i.player,
-					i.position.x * 128.f + terrain.offset.x,
-					i.position.y * 128.f + terrain.offset.y
-				);
+		for (const auto& player : map_info.players) {
+			const Unit* start_location = units.find_start_location(player.internal_number);
+			if (!start_location) {
+				continue;
 			}
-		}
 
+			script.call(
+				"DefineStartLocation",
+				player.internal_number,
+				start_location->position.x * 128.f + terrain.offset.x,
+				start_location->position.y * 128.f + terrain.offset.y
+			);
+		}
 		script.write("\n");
 
 		script.call("InitCustomPlayerSlots");

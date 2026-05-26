@@ -541,6 +541,8 @@ void DoodadBrush::render_selection() const {
 
 		model = camera.projection_view * model;
 		glUniformMatrix4fv(1, 1, GL_FALSE, &model[0][0]);
+		glUniform4f(2, 0.f, 1.f, 0.f, 0.75f);
+		glUniform1i(3, GL_FALSE);
 
 		glBindBuffer(GL_ARRAY_BUFFER, shapes.vertex_buffer);
 		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
