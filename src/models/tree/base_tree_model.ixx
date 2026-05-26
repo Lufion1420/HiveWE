@@ -315,6 +315,12 @@ export class BaseFilter : public QSortFilterProxyModel {
 
 	bool filterCustom = false;
 
+	static std::string normalized_label(std::string label) {
+		std::erase(label, '&');
+		std::ranges::transform(label, label.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return label;
+	}
+
   public:
 	slk::SLK* slk;
 
@@ -335,6 +341,29 @@ export class BaseFilter : public QSortFilterProxyModel {
 		}
 
 		return sourceModel()->data(index0).toString().contains(filterRegularExpression());
+	}
+
+	bool lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const override {
+		const auto* left = static_cast<const BaseTreeItem*>(source_left.internalPointer());
+		const auto* right = static_cast<const BaseTreeItem*>(source_right.internalPointer());
+		if (!left || !right) {
+			return QSortFilterProxyModel::lessThan(source_left, source_right);
+		}
+
+		const bool left_folder = left->baseCategory || left->subCategory;
+		const bool right_folder = right->baseCategory || right->subCategory;
+		if (left_folder != right_folder) {
+			return left_folder;
+		}
+
+		if (left->customFolder != right->customFolder) {
+			return left->customFolder;
+		}
+
+		const std::string left_name = left_folder ? left->label : sourceModel()->data(source_left, Qt::DisplayRole).toString().toStdString();
+		const std::string right_name = right_folder ? right->label : sourceModel()->data(source_right, Qt::DisplayRole).toString().toStdString();
+
+		return normalized_label(left_name) < normalized_label(right_name);
 	}
 
   public slots:

@@ -411,7 +411,9 @@ void ObjectEditor::addTypeTreeView(
 	filter->slk = table->slk;
 	filter->setRecursiveFilteringEnabled(true);
 	filter->setFilterCaseSensitivity(Qt::CaseSensitivity::CaseInsensitive);
+	filter->setDynamicSortFilter(true);
 	filter->setSourceModel(treeModel);
+	filter->sort(0, Qt::AscendingOrder);
 	view->setModel(filter);
 	view->header()->hide();
 	view->setContextMenuPolicy(Qt::CustomContextMenu);
