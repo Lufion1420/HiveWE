@@ -15,6 +15,10 @@ constexpr float min_region_size = 0.25f;
 glm::vec2 mouse_world_xy() {
 	return glm::vec2(input_handler.mouse_world);
 }
+
+float region_area(const Region& region) {
+	return std::abs((region.right - region.left) * (region.top - region.bottom));
+}
 }
 
 RegionBrush::RegionBrush() {
@@ -104,10 +108,17 @@ void RegionBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 
 	const glm::vec2 mouse = mouse_world_xy();
 	int hit_index = -1;
-	for (int i = static_cast<int>(map->regions.regions.size()) - 1; i >= 0; --i) {
-		if (contains(map->regions.regions[i], mouse)) {
+
+	float smallest_area = std::numeric_limits<float>::max();
+	for (int i = 0; i < static_cast<int>(map->regions.regions.size()); ++i) {
+		if (!contains(map->regions.regions[i], mouse)) {
+			continue;
+		}
+
+		const float area = region_area(map->regions.regions[i]);
+		if (area < smallest_area) {
+			smallest_area = area;
 			hit_index = i;
-			break;
 		}
 	}
 
