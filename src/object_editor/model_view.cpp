@@ -93,6 +93,15 @@ ModelView::ModelView(QWidget* parent) : QWidget(parent) {
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->addWidget(search);
 
+	preview_animation->addItems({"Stand", "Spell", "Attack", "Birth", "Death"});
+	preview_animation->setCurrentText("Stand");
+
+	QHBoxLayout* preview_row = new QHBoxLayout;
+	preview_row->setContentsMargins(0, 0, 0, 0);
+	preview_row->addWidget(new QLabel("Preview Animation"));
+	preview_row->addWidget(preview_animation, 1);
+	layout->addLayout(preview_row);
+
 	QHBoxLayout* category_row = new QHBoxLayout;
 	category_row->setContentsMargins(0, 0, 0, 0);
 	std::vector<QCheckBox*> category_boxes(static_cast<size_t>(ModelCategory::Count), nullptr);
@@ -138,6 +147,7 @@ ModelView::ModelView(QWidget* parent) : QWidget(parent) {
 	});
 
 	connect(search, &QLineEdit::textChanged, grid, &ModelGridGLWidget::set_search);
+	connect(preview_animation, &QComboBox::currentTextChanged, grid, &ModelGridGLWidget::set_preview_sequence);
 
 	auto update_categories = [grid, category_boxes]() {
 		std::bitset<static_cast<size_t>(ModelCategory::Count)> mask;
@@ -168,6 +178,7 @@ ModelView::ModelView(QWidget* parent) : QWidget(parent) {
 	setLayout(layout);
 
 	search->setPlaceholderText("Search Models");
+	grid->set_preview_sequence(preview_animation->currentText());
 
 	connect(open_in_model_editor, &QPushButton::clicked, [this] {
 		bool created = false;

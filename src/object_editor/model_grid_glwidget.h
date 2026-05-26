@@ -55,6 +55,7 @@ class ModelGridGLWidget : public QOpenGLWidget {
 	void set_scroll_offset(int y);
 	void set_search(const QString& query);
 	void set_categories(std::bitset<static_cast<size_t>(ModelCategory::Count)> mask);
+	void set_preview_sequence(const QString& sequence_name);
 
   signals:
 	void clicked(const std::filesystem::path& path);
@@ -102,8 +103,10 @@ class ModelGridGLWidget : public QOpenGLWidget {
 
 	QElapsedTimer elapsed_timer;
 	double delta = 0.0;
+	std::string preview_sequence_name = "stand";
 
 	void load_cell(PreviewCell& cell) const;
+	void apply_preview_sequence(PreviewCell& cell) const;
 	void rebuild_layout();
 	int content_height_px() const;
 	int max_scroll_offset() const;

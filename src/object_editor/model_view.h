@@ -4,6 +4,7 @@
 
 namespace fs = std::filesystem;
 
+#include <QComboBox>
 #include <QLineEdit>
 #include <QPushButton>
 
@@ -13,6 +14,7 @@ class ModelView : public QWidget {
 	QLineEdit* search = new QLineEdit;
 	QLineEdit* finalPath = new QLineEdit;
 	QPushButton* open_in_model_editor = new QPushButton;
+	QComboBox* preview_animation = new QComboBox;
 
 public:
 	ModelView(QWidget* parent = nullptr);

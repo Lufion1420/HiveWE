@@ -295,6 +295,48 @@ void ModelGridGLWidget::set_categories(const std::bitset<static_cast<size_t>(Mod
 	update();
 }
 
+void ModelGridGLWidget::set_preview_sequence(const QString& sequence_name) {
+	const std::string normalized = lowercase_copy(sequence_name.toStdString());
+	if (normalized == preview_sequence_name) {
+		return;
+	}
+
+	preview_sequence_name = normalized;
+	for (auto& cell : all_cells) {
+		if (!cell.loaded) {
+			continue;
+		}
+		apply_preview_sequence(cell);
+	}
+	update();
+}
+
+void ModelGridGLWidget::apply_preview_sequence(PreviewCell& cell) const {
+	if (!cell.mdx) {
+		return;
+	}
+
+	cell.skeleton.set_sequence(preview_sequence_name);
+	if (cell.skeleton.sequence_index < 0
+		|| (cell.skeleton.sequence_index < static_cast<int>(cell.mdx->sequences.size())
+			&& SkeletalModelInstance::sequence_has_empty_extent(cell.mdx->sequences[cell.skeleton.sequence_index]))) {
+		SkeletalModelInstance::pick_preview_sequence(cell.skeleton, *cell.mdx);
+	}
+
+	if (cell.mdx->sequences.empty() || cell.skeleton.sequence_index < 0) {
+		cell.fit_distance = 200.f;
+		cell.fit_position = glm::vec3(0.f);
+		return;
+	}
+
+	const auto& extent = cell.mdx->sequences[cell.skeleton.sequence_index].extent;
+	const glm::vec3 size = extent.maximum - extent.minimum;
+	const float radius = glm::length(size) * 0.5f;
+	const float fov_rad = glm::radians(k_fov_deg);
+	cell.fit_distance = radius / std::sin(fov_rad * 0.5f);
+	cell.fit_position = glm::vec3(0.f, 0.f, extent.minimum.z + size.z * 0.5f);
+}
+
 void ModelGridGLWidget::load_cell(PreviewCell& cell) const {
 	auto reader = hierarchy.open_file(cell.path);
 	if (!reader) {
@@ -305,20 +347,7 @@ void ModelGridGLWidget::load_cell(PreviewCell& cell) const {
 		cell.mdx = std::make_shared<mdx::MDX>(reader.value());
 		cell.mesh = std::make_shared<EditableMesh>(cell.mdx, std::nullopt);
 		cell.skeleton = SkeletalModelInstance(cell.mdx);
-
-		SkeletalModelInstance::pick_preview_sequence(cell.skeleton, *cell.mdx);
-
-		if (cell.mdx->sequences.empty() || cell.skeleton.sequence_index < 0) {
-			cell.fit_distance = 200.f;
-			cell.fit_position = glm::vec3(0.f);
-		} else {
-			const auto& extent = cell.mdx->sequences[cell.skeleton.sequence_index].extent;
-			const glm::vec3 size = extent.maximum - extent.minimum;
-			const float radius = glm::length(size) * 0.5f;
-			const float fov_rad = glm::radians(k_fov_deg);
-			cell.fit_distance = radius / std::sin(fov_rad * 0.5f);
-			cell.fit_position = glm::vec3(0.f, 0.f, extent.minimum.z + size.z * 0.5f);
-		}
+		apply_preview_sequence(cell);
 		cell.loaded = true;
 	} catch (...) {
 		cell.load_failed = true;
