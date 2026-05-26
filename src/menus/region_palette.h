@@ -18,6 +18,7 @@ class RegionPalette : public Palette {
 
 	void activate_palette();
 	void deactivate(QRibbonTab* tab) override;
+	RegionBrush& current_brush() { return brush; }
 
   private:
 	RegionBrush brush;

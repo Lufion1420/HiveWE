@@ -195,6 +195,8 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(new QShortcut(QKeySequence(Qt::Key_U), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, this, &HiveWE::toggle_unit_palette);
 	connect(ui->ribbon->unit_palette, &QRibbonButton::clicked, this, &HiveWE::toggle_unit_palette);
 
+	connect(new QShortcut(QKeySequence(Qt::Key_R), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, this, &HiveWE::toggle_region_palette);
+
 	connect(ui->ribbon->trigger_editor, &QRibbonButton::clicked, [this]() {
 		bool created = false;
 		const auto editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
@@ -943,6 +945,9 @@ void HiveWE::toggle_region_palette() {
 	} else if (unit_palette && !unit_palette->isHidden()) {
 		activate_palette(unit_palette);
 	} else {
+		if (map->brush == &region_palette->current_brush()) {
+			map->brush = nullptr;
+		}
 		remove_custom_tab();
 	}
 
