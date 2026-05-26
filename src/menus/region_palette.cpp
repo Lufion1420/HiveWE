@@ -80,6 +80,10 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 			return;
 		}
 
+		if (brush.selected_index() != row) {
+			brush.select_region(row);
+		}
+
 		const Region& region = map->regions.regions[row];
 		camera.position.x = (region.left + region.right) * 0.5f;
 		camera.position.y = (region.bottom + region.top) * 0.5f;
@@ -138,13 +142,24 @@ void RegionPalette::refresh_region_list() {
 	const QSignalBlocker blocker(region_list);
 	const int selected = brush.selected_index();
 
-	region_list->clear();
-	for (const auto& region : map->regions.regions) {
-		region_list->addItem(QString::fromStdString(region.name));
+	if (region_list->count() != static_cast<int>(map->regions.regions.size())) {
+		region_list->clear();
+		for (const auto& region : map->regions.regions) {
+			region_list->addItem(QString::fromStdString(region.name));
+		}
+	} else {
+		for (int i = 0; i < region_list->count(); ++i) {
+			const QString label = QString::fromStdString(map->regions.regions[i].name);
+			if (region_list->item(i)->text() != label) {
+				region_list->item(i)->setText(label);
+			}
+		}
 	}
 
 	if (selected >= 0 && selected < region_list->count()) {
 		region_list->setCurrentRow(selected);
+	} else {
+		region_list->setCurrentRow(-1);
 	}
 }
 
