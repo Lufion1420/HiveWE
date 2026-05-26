@@ -125,6 +125,9 @@ void UnitPalette::activate_palette() {
 	find_this->setEnabled(true);
 	find_parent->setEnabled(true);
 	selection_mode->enableShortcuts();
+	if (brush.get_mode() != Brush::Mode::selection) {
+		selection_mode->setChecked(true);
+	}
 	map->brush = &brush;
 	emit ribbon_tab_requested(ribbon_tab, "Unit Palette");
 }

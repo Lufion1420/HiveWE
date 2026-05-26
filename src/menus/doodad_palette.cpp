@@ -467,6 +467,9 @@ void DoodadPalette::activate_palette() {
 	find_this->setEnabled(true);
 	find_parent->setEnabled(true);
 	change_mode_parent->setEnabled(true);
+	if (brush.get_mode() != Brush::Mode::selection) {
+		selection_mode->setChecked(true);
+	}
 	map->brush = &brush;
 	emit ribbon_tab_requested(ribbon_tab, "Doodad Palette");
 }

@@ -126,9 +126,10 @@ RegionPalette::~RegionPalette() {
 
 void RegionPalette::activate_palette() {
 	change_mode_parent->setEnabled(true);
+	if (brush.get_mode() != Brush::Mode::selection) {
+		selection_mode->setChecked(true);
+	}
 	map->brush = &brush;
-	const QSignalBlocker blocker(selection_mode);
-	selection_mode->setChecked(brush.get_mode() == Brush::Mode::selection);
 	emit ribbon_tab_requested(ribbon_tab, "Region Palette");
 }
 
