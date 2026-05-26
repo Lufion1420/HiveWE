@@ -81,7 +81,7 @@ export class Map: public QObject {
 	bool render_brush = true;
 	bool render_lighting = true;
 	bool render_water = true;
-	bool render_click_helpers = true;
+	bool render_click_helpers = false;
 	bool render_wireframe = false;
 	bool render_debug = false;
 

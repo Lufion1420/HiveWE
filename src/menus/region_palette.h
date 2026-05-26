@@ -27,8 +27,6 @@ class RegionPalette : public Palette {
 	QPushButton* new_region = new QPushButton("New Region", this);
 	QPushButton* delete_region = new QPushButton("Delete Region", this);
 	QLineEdit* name = new QLineEdit(this);
-	QLineEdit* weather_id = new QLineEdit(this);
-	QLineEdit* ambient_id = new QLineEdit(this);
 	QPushButton* color = new QPushButton("Choose Color", this);
 
 	QRibbonTab* ribbon_tab = new QRibbonTab;

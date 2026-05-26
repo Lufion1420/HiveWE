@@ -158,7 +158,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	click_helpers_visible->setIcon(QIcon("data/icons/ribbon/click_helpers.png"));
 	click_helpers_visible->setText("Click\nHelpers");
 	click_helpers_visible->setCheckable(true);
-	click_helpers_visible->setChecked(true);
+	click_helpers_visible->setChecked(false);
 	set_tooltip(click_helpers_visible, "Show or hide click helper markers.\nShortcut: Ctrl+I");
 	visible_section->addWidget(click_helpers_visible);
 

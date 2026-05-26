@@ -88,7 +88,9 @@ private:
 	void position_transient_notice();
 	void setup_palette_sidebar();
 	void update_palette_sidebar_layout();
-	void activate_palette(Palette* palette);
+	void update_active_palette_visuals();
+	void set_sidebar_section_state(QWidget* host, QLabel* header, bool visible, bool active);
+	void activate_palette(Palette* palette, bool show_feedback = true);
 	void toggle_terrain_sidebar();
 	void toggle_doodad_palette();
 	void toggle_unit_palette();
@@ -108,6 +110,11 @@ private:
 	QFrame* terrain_host = nullptr;
 	QFrame* pathing_host = nullptr;
 	QFrame* region_host = nullptr;
+	QLabel* doodad_header = nullptr;
+	QLabel* unit_header = nullptr;
+	QLabel* terrain_header = nullptr;
+	QLabel* pathing_header = nullptr;
+	QLabel* region_header = nullptr;
 	QVBoxLayout* object_column_layout = nullptr;
 	QVBoxLayout* terrain_column_layout = nullptr;
 	TerrainPalette* terrain_palette = nullptr;

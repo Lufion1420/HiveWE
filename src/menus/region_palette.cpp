@@ -26,8 +26,6 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 	auto* form = new QFormLayout;
 	form->setContentsMargins(0, 0, 0, 0);
 	form->addRow("Name", name);
-	form->addRow("Weather ID", weather_id);
-	form->addRow("Ambient ID", ambient_id);
 	form->addRow("Color", color);
 
 	layout->addWidget(region_list, 1);
@@ -94,8 +92,6 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 	});
 
 	connect(name, &QLineEdit::editingFinished, this, [this]() { brush.set_selected_name(name->text()); });
-	connect(weather_id, &QLineEdit::editingFinished, this, [this]() { brush.set_selected_weather_id(weather_id->text()); });
-	connect(ambient_id, &QLineEdit::editingFinished, this, [this]() { brush.set_selected_ambient_id(ambient_id->text()); });
 	connect(color, &QPushButton::clicked, this, [this]() {
 		const auto* selected = brush.selected_region();
 		const QColor current = selected ? QColor(static_cast<int>(selected->color.r), static_cast<int>(selected->color.g), static_cast<int>(selected->color.b))
@@ -109,8 +105,6 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 	});
 
 	name->setPlaceholderText("Region name");
-	weather_id->setPlaceholderText("FourCC or blank");
-	ambient_id->setPlaceholderText("Ambient sound or blank");
 
 	refresh_region_list();
 	sync_region_fields();
@@ -167,27 +161,19 @@ void RegionPalette::refresh_region_list() {
 void RegionPalette::sync_region_fields() {
 	const auto* selected = brush.selected_region();
 	const QSignalBlocker name_blocker(name);
-	const QSignalBlocker weather_blocker(weather_id);
-	const QSignalBlocker ambient_blocker(ambient_id);
 
 	const bool has_selection = selected != nullptr;
 	name->setEnabled(has_selection);
-	weather_id->setEnabled(has_selection);
-	ambient_id->setEnabled(has_selection);
 	color->setEnabled(has_selection);
 	delete_region->setEnabled(has_selection);
 
 	if (!selected) {
 		name->clear();
-		weather_id->clear();
-		ambient_id->clear();
 		update_color_button(QColor(80, 80, 80));
 		return;
 	}
 
 	name->setText(QString::fromStdString(selected->name));
-	weather_id->setText(QString::fromStdString(selected->weather_id));
-	ambient_id->setText(QString::fromStdString(selected->ambient_id));
 	update_color_button(QColor(static_cast<int>(selected->color.r), static_cast<int>(selected->color.g), static_cast<int>(selected->color.b)));
 }
 
