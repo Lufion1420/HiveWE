@@ -194,52 +194,38 @@ void GLWidget::paintGL() {
 		font.setStyleHint(QFont::Monospace);
 		p.setFont(font);
 
-		// Rendering time
-		static std::vector<double> frametimes;
-		frametimes.push_back(delta);
-		if (frametimes.size() > 60) {
-			frametimes.erase(frametimes.begin());
-		}
-		float average_frametime = std::accumulate(frametimes.begin(), frametimes.end(), 0.f) / frametimes.size();
-		p.drawText(10, 20, QString::fromStdString(std::format("Total time: {:.2f}ms", average_frametime * 1000.0)));
-
 		// General info
 		auto fmt_vec3 = [](const char* label, glm::vec3 v) {
 			return std::format("{:<20} X:{:>6.3f}  Y:{:>6.3f}  Z:{:>6.3f}", label, v.x, v.y, v.z);
 		};
 
-		auto fmt_vec2 = [](const char* label, glm::vec2 v) {
-			return std::format("{:<20} X:{:>6.3f}  Y:{:>6.3f}", label, v.x, v.y);
+		const auto to_wc3_position = [](glm::vec3 v) {
+			return glm::vec3 {
+				v.x * 128.f + map->terrain.offset.x,
+				v.y * 128.f + map->terrain.offset.y,
+				v.z * 128.f,
+			};
 		};
 
-		p.drawText(175, 20, QString::fromStdString(fmt_vec3("Mouse World Position", input_handler.mouse_world)));
-		p.drawText(175, 35, QString::fromStdString(fmt_vec3("Camera Position", camera.position)));
+		constexpr int debug_left_column_x = 10;
+		constexpr int debug_right_column_x = 500;
 
-		if (map->brush) {
-			p.drawText(175, 50, QString::fromStdString(fmt_vec2("Brush Grid Position", map->brush->get_position())));
-		}
-
-		p.drawText(175, 65, QString::fromStdString(std::format("Camera Horizontal Angle: {:.4f}", camera.horizontal_angle)));
-		p.drawText(175, 80, QString::fromStdString(std::format("Camera Vertical Angle: {:.4f}", camera.vertical_angle)));
+		p.drawText(debug_left_column_x, 20, QString::fromStdString(fmt_vec3("Mouse WC3 Position", to_wc3_position(input_handler.mouse_world))));
+		p.drawText(debug_left_column_x, 35, QString::fromStdString(fmt_vec3("Camera WC3 Position", to_wc3_position(camera.position))));
+		p.drawText(debug_left_column_x, 50, QString::fromStdString(std::format("Camera Horizontal Angle: {:.4f}", camera.horizontal_angle)));
+		p.drawText(debug_left_column_x, 65, QString::fromStdString(std::format("Camera Vertical Angle: {:.4f}", camera.vertical_angle)));
 
 		const glm::ivec2 terrain_index = input_handler.mouse_world;
 		const auto corner = map->terrain.get_corner(terrain_index.x, terrain_index.y);
-		p.drawText(550, 20, QString::fromStdString(std::format("Tile info")));
-		p.drawText(550, 35, QString::fromStdString(std::format("Cliff: {}", corner.cliff)));
-		p.drawText(550, 50, QString::fromStdString(std::format("Blight: {}", corner.blight)));
-		p.drawText(550, 65, QString::fromStdString(std::format("Boundary: {}", corner.boundary)));
-		p.drawText(550, 80, QString::fromStdString(std::format("Cliff texture: {}", corner.cliff_texture)));
-		p.drawText(550, 95, QString::fromStdString(std::format("Cliff variation: {}", corner.cliff_variation)));
-		p.drawText(550, 110, QString::fromStdString(std::format("Ground texture: {}", corner.ground_texture)));
-		p.drawText(550, 125, QString::fromStdString(std::format("Ground variation: {}", corner.ground_variation)));
-		p.drawText(550, 140, QString::fromStdString(std::format("Height: {}", corner.height)));
-		p.drawText(550, 155, QString::fromStdString(std::format("Layer height: {}", corner.layer_height)));
-		p.drawText(550, 170, QString::fromStdString(std::format("Map edge: {}", corner.map_edge)));
-		p.drawText(550, 185, QString::fromStdString(std::format("Ramp: {}", corner.ramp)));
-		p.drawText(550, 200, QString::fromStdString(std::format("Romp: {}", corner.romp)));
-		p.drawText(550, 215, QString::fromStdString(std::format("Special doodad: {}", corner.special_doodad)));
-		p.drawText(550, 230, QString::fromStdString(std::format("Water: {}", corner.water)));
-		p.drawText(550, 245, QString::fromStdString(std::format("Water height: {}", corner.water_height)));
+		p.drawText(debug_right_column_x, 20, QString::fromStdString(std::format("Tile info")));
+		p.drawText(debug_right_column_x, 35, QString::fromStdString(std::format("Cliff: {}", corner.cliff)));
+		p.drawText(debug_right_column_x, 50, QString::fromStdString(std::format("Blight: {}", corner.blight)));
+		p.drawText(debug_right_column_x, 65, QString::fromStdString(std::format("Boundary: {}", corner.boundary)));
+		p.drawText(debug_right_column_x, 80, QString::fromStdString(std::format("Height: {}", corner.height)));
+		p.drawText(debug_right_column_x, 95, QString::fromStdString(std::format("Ramp: {}", corner.ramp)));
+		p.drawText(debug_right_column_x, 110, QString::fromStdString(std::format("Romp: {}", corner.romp)));
+		p.drawText(debug_right_column_x, 125, QString::fromStdString(std::format("Water: {}", corner.water)));
+		p.drawText(debug_right_column_x, 140, QString::fromStdString(std::format("Water height: {}", corner.water_height)));
 
 		p.end();
 
