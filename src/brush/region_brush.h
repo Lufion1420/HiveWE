@@ -5,6 +5,7 @@
 #include <QColor>
 
 import Regions;
+import RegionsUndo;
 
 class RegionBrush : public Brush {
   public:
@@ -48,6 +49,7 @@ class RegionBrush : public Brush {
 	DragHandle drag_handle = DragHandle::none;
 	glm::vec2 drag_start_mouse = glm::vec2(0.f);
 	Region drag_start_region;
+	bool region_geometry_changed(const Region& lhs, const Region& rhs) const;
 
 	bool contains(const Region& region, const glm::vec2& point) const;
 	DragHandle resolve_drag_handle(const Region& region, const glm::vec2& point) const;

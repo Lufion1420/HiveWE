@@ -85,6 +85,7 @@ HiveWE::HiveWE(QWidget* parent)
 			.terrain = map->terrain,
 			.units = map->units,
 			.doodads = map->doodads,
+			.regions = map->regions,
 			.brush = map->brush,
 			.pathing_map = map->pathing_map,
 		};
@@ -101,6 +102,7 @@ HiveWE::HiveWE(QWidget* parent)
 			.terrain = map->terrain,
 			.units = map->units,
 			.doodads = map->doodads,
+			.regions = map->regions,
 			.brush = map->brush,
 			.pathing_map = map->pathing_map,
 		};

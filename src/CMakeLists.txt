@@ -30,6 +30,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"base/units_undo.ixx"
 	"base/pathing_undo.ixx"
 	"base/doodads_undo.ixx"
+	"base/regions_undo.ixx"
 	"base/units.ixx"
 	"base/terrain.ixx"
 

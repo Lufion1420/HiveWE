@@ -199,6 +199,16 @@ void RegionBrush::mouse_release_event(QMouseEvent* event) {
 		return;
 	}
 
+	if (drag_handle != DragHandle::none) {
+		if (auto* region = selected_region(); region && region_geometry_changed(drag_start_region, *region)) {
+			auto action = std::make_unique<RegionStateAction>();
+			action->old_region = drag_start_region;
+			action->new_region = *region;
+			map->world_undo.new_undo_group();
+			map->world_undo.add_undo_action(std::move(action));
+		}
+	}
+
 	drag_handle = DragHandle::none;
 }
 
@@ -352,6 +362,10 @@ int RegionBrush::next_creation_number() const {
 		max_value = std::max(max_value, region.creation_number);
 	}
 	return max_value + 1;
+}
+
+bool RegionBrush::region_geometry_changed(const Region& lhs, const Region& rhs) const {
+	return lhs.left != rhs.left || lhs.right != rhs.right || lhs.top != rhs.top || lhs.bottom != rhs.bottom;
 }
 
 void RegionBrush::emit_selection_change() {

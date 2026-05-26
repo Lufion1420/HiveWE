@@ -4,6 +4,7 @@ import std;
 import PathingMap;
 import Units;
 import Doodads;
+import Regions;
 import Terrain;
 import "brush/brush.h";
 
@@ -12,6 +13,7 @@ export struct WorldEditContext {
 	Terrain& terrain;
 	Units& units;
 	Doodads& doodads;
+	Regions& regions;
 	Brush* brush;
 	PathingMap& pathing_map;
 };
