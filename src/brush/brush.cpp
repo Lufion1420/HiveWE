@@ -222,6 +222,7 @@ void Brush::render_selector() const {
 		model = glm::scale(model, glm::vec3(glm::vec2(input_handler.mouse_world), 1.f) - glm::vec3(glm::vec2(selection_start), 1.f));
 		model = camera.projection_view * model;
 		glUniformMatrix4fv(1, 1, GL_FALSE, &model[0][0]);
+		glUniform4f(2, 0.f, 1.f, 0.f, 1.f);
 
 		glEnableVertexAttribArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, shapes.vertex_buffer);

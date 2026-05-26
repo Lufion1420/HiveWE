@@ -214,7 +214,16 @@ void RegionBrush::apply(double frame_delta) {
 void RegionBrush::render_selection() const {
 	for (int i = 0; i < static_cast<int>(map->regions.regions.size()); ++i) {
 		const bool selected = i == selection_index;
-		draw_region_outline(map->regions.regions[i], selected ? glm::u8vec4(255, 120, 210, 255) : glm::u8vec4(255, 214, 64, 190));
+		const auto& region = map->regions.regions[i];
+		const glm::u8vec4 fill_color(
+			static_cast<uint8_t>(std::clamp(region.color.r, 0.f, 255.f)),
+			static_cast<uint8_t>(std::clamp(region.color.g, 0.f, 255.f)),
+			static_cast<uint8_t>(std::clamp(region.color.b, 0.f, 255.f)),
+			selected ? 120 : 72
+		);
+		const glm::u8vec4 outline_color = selected ? glm::u8vec4(255, 120, 210, 255) : glm::u8vec4(fill_color.r, fill_color.g, fill_color.b, 215);
+		draw_region(region, fill_color, true);
+		draw_region(region, outline_color, false);
 	}
 }
 
@@ -349,8 +358,7 @@ void RegionBrush::emit_selection_change() {
 	emit selection_changed();
 }
 
-void RegionBrush::draw_region_outline(const Region& region, const glm::u8vec4& color) const {
-	(void)color;
+void RegionBrush::draw_region(const Region& region, const glm::u8vec4& color, const bool filled) const {
 	glDisable(GL_DEPTH_TEST);
 	selection_shader->use();
 
@@ -359,11 +367,12 @@ void RegionBrush::draw_region_outline(const Region& region, const glm::u8vec4& c
 	model = glm::scale(model, glm::vec3(region.right - region.left, region.top - region.bottom, 1.f));
 	model = camera.projection_view * model;
 	glUniformMatrix4fv(1, 1, GL_FALSE, &model[0][0]);
+	glUniform4f(2, color.r / 255.f, color.g / 255.f, color.b / 255.f, color.a / 255.f);
 
 	glEnableVertexAttribArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, shapes.vertex_buffer);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-	glDrawArrays(GL_LINE_LOOP, 0, 4);
+	glDrawArrays(filled ? GL_TRIANGLE_FAN : GL_LINE_LOOP, 0, 4);
 	glDisableVertexAttribArray(0);
 	glEnable(GL_DEPTH_TEST);
 }

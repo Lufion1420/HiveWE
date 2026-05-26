@@ -6,6 +6,7 @@
 #include <QSignalBlocker>
 
 import std;
+import Camera;
 import MapGlobal;
 
 RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
@@ -69,6 +70,20 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 	connect(delete_region, &QPushButton::clicked, &brush, &RegionBrush::delete_selection);
 
 	connect(region_list, &QListWidget::currentRowChanged, &brush, &RegionBrush::select_region);
+	connect(region_list, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+		if (!item) {
+			return;
+		}
+
+		const int row = region_list->row(item);
+		if (row < 0 || row >= static_cast<int>(map->regions.regions.size())) {
+			return;
+		}
+
+		const Region& region = map->regions.regions[row];
+		camera.position.x = (region.left + region.right) * 0.5f;
+		camera.position.y = (region.bottom + region.top) * 0.5f;
+	});
 	connect(&brush, &Brush::selection_changed, this, [this]() {
 		refresh_region_list();
 		sync_region_fields();

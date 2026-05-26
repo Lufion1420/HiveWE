@@ -56,5 +56,5 @@ class RegionBrush : public Brush {
 	std::string next_region_name() const;
 	int next_creation_number() const;
 	void emit_selection_change();
-	void draw_region_outline(const Region& region, const glm::u8vec4& color) const;
+	void draw_region(const Region& region, const glm::u8vec4& color, bool filled) const;
 };

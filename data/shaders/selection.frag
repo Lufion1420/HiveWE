@@ -1,7 +1,9 @@
 #version 450 core
 
+layout (location = 2) uniform vec4 selection_color;
+
 out vec4 color;
 
 void main() {
-	color = vec4(0, 1, 0, 1);
+	color = selection_color;
 }
