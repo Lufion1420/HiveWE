@@ -1,79 +1,65 @@
-# HiveWE
-HiveWE is a Warcraft III World Editor (WE) that focuses on speed and ease of use. 
-It improves massively on the vanilla WE, especially for large maps where the regular World Editor is often too slow and clunky.
-The aim is to be a lightweight tool that only does what it needs to and relegates other tasks to high-quality apps.
+# HiveWE (Fork)
 
-[Thread on the Hiveworkshop](https://www.hiveworkshop.com/threads/introducing-hivewe.303183/)
+This is a personal fork of [stijnherfst/HiveWE](https://github.com/stijnherfst/HiveWE).
 
-Some of the benefits over the vanilla WE:
-- Way faster loading times (32s -> 4s on a sample map)
-- Renders your whole map at 120 fps
-- Modern UI/UX
-- Edit the pathing map directly
-- Edit global tile pathing
-- Import heightmaps
-- Improved editing palettes
-  - Directly edit water height
-  - Brushes of size 1000+
-  - Doodad variation control
-- Unified global search (double shift)
+---
 
-## Features
+## Changes in this fork
 
-- Edit the terrain
-![HiveWE Screenshot](/Screenshots/HiveWE.png)
-- Advanced Object Editor
-![HiveWE Screenshot](/Screenshots/ObjectEditor.png)
-- Directly edit the pathing map  
-![Edit the Pathing Map](/Screenshots/PathingEditing.png)
-- Edit global tile pathing  
-![Edit global tile pathing](/Screenshots/GlobalPathingEditing.png)
+### Regions
+- Added Regions and a Region Palette
+- Regions are now colored for visual distinction
+- Regions are only visible when the Region Palette is open
+- Double-clicking a region in the list moves the camera to it
+- Layered regions now prioritize the smaller region on click
+- Region movement is wired into the undo/redo system
+- Added cursor feedback for drag and move actions on regions
+- Player Start Locations implemented as a region type
+- `R` shortcut added to toggle the Region Palette
 
-## Download
+### Object Editor
+- `O` shortcut added to open the Object Editor
+- Object Editor objects and data are now ordered alphabetically
+- Active object data is sorted alphabetically; stacked values are listed on one line for a cleaner look
+- Added a Custom Folder on every tab that holds all custom object data for better UX in highly custom maps
+- OE folders are now closed by default
+- OE state (active tab, open/closed folders) is now saved and restored between sessions
+- Clicking on an object (e.g. a unit) switches the active tab instead of opening a new one
+- Added proper column headers for the selected object data panel; entire row is now clickable and highlighted
+- Object editor now reads and displays custom images correctly
+- Reduced the number of clicks required for multi-click value fields in the abilities tab (e.g. target type)
+- Editors such as the Object Editor and Asset Manager are now unminimized and brought to the foreground when reopened
 
-See the [releases page](https://github.com/stijnherfst/HiveWE/releases) for binary downloads.
+### Model Editor
+- Model Editor window is now much larger and more visible
+- Added an animation dropdown to set which animation is played by placed effects
 
-## Other Community Tools
+### Palettes & Sidebar
+- Palettes reworked visually into a sidebar layout
+- Unit Palette now has a filter for custom-created units
+- Doodad Palette now has a custom tab showing only custom-created doodads
+- Fixed a visual bug with the Doodad Palette dropdown
 
-Trigger editing: [WC3 Typescript](https://cipherxof.github.io/w3ts/)  
-Model editing: [3DS Max Plugin](https://github.com/TaylorMouse/warcraft_III_reforged_tools)
-or [Retera Model Studio](https://github.com/Retera/ReterasModelStudio)
+### Doodads
+- Placing a doodad no longer shows an annoying click-to-confirm helper before placement
+- Doodads can be scaled using `Shift + Scroll`; works with multiple doodads selected at once
 
-## Build Instructions
+### Terrain
+- Terrain Copy/Paste functionality added (use with caution)
+- Brush size can be increased or decreased with `Shift + Scroll`
+- Fixed spacing issues with the terrain window/palette
 
-0. Requires Visual Studio 17.14 or higher (C++20 modules)
-1. Clone HiveWE somewhere 
-`git clone https://github.com/stijnherfst/HiveWE.git`
-2. Clone [vcpkg](https://github.com/microsoft/vcpkg) somewhere central (eg. "C:/")
-`git clone https://github.com/Microsoft/vcpkg.git`
-3. Run vcpkg/bootstrap-vcpkg.bat
-4. Add a user environment variable to your system:
-- `VCPKG_ROOT`: the location where vcpkg is installed (e.g. "C:\vcpkg")
-5. Build
-    ### Visual Studio or CLion
-   1. Open Visual Studio as an **Administrator** and using the open folder button to open the HiveWE folder. (**Administrator required** for creating a symbolic link on Windows)
-   2. Dependencies will be automatically compiled, might take about 15-20 minutes (mostly due to Qt)
-    ### CMake
-    ```shell
-    # Configure and build
-    cmake --preset Release
-    cmake --build --preset Release
-    
-    # Run tests
-    ctest --preset Release 
-    ```
+### General UX / UI
+- When switching panels, selection mode is now active by default
+- Reworked Panel/Sidebar behavior to be more UX-conformant
+- Saving the map now shows a fading on-screen message for clarity
+- Last 3 opened maps are listed under `File` for quick access
+- Descriptions on hover added for some header items under `View`, including shortcut hints
+- Debug view mode cleaned up; removed unimportant debug settings and added a display value for proper WC3 coordinates
 
-If you run into any issues, then feel free to contact me at HiveWorkshop (eejin) or on Discord (eejin)
+### Config & Shortcuts
+- Added a Config tab listing all usable shortcuts in the editor
+- Config window commands further categorized for clarity
 
-## Potential Contributions
-
-Want to help with the development of HiveWE? Below is a list of features that you could implement. You can try one of these or just add something else you feel like HiveWE should have. Any contributions are welcome!
-
-- Being able to change forces/teams
-- Making HiveWE run faster
-- An FDF frame editor
-- Text colorizer
-- Advanced terrain editing tools (e.g. flood fill, magic wand selection)
-- Or any other functionality you think would be cool
-
-If you have any questions, then don't be afraid to message me here, on the HiveWorkshop (eejin) or on Discord (eejin)
+### Build Process
+- Building the project now automatically launches it; any previously running instances are killed first
