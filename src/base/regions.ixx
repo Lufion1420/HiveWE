@@ -2,6 +2,7 @@ export module Regions;
 
 import std;
 import BinaryReader;
+import BinaryWriter;
 import Hierarchy;
 import <glm/glm.hpp>;
 
@@ -51,15 +52,26 @@ export class Regions {
 		return true;
 	}
 
-	void save() const {
-		//	BinaryWriter writer;
-		// writer.write_string("MP3W");
-		// writer.write<uint32_t>(write_version);
-		// writer.write<uint32_t>(width);
-		// writer.write<uint32_t>(height);
-		// writer.write_vector<uint8_t>(pathing_cells_static);
+	void save(float terrain_offset_x, float terrain_offset_y) const {
+		BinaryWriter writer;
+		writer.write<uint32_t>(write_version);
+		writer.write<uint32_t>(static_cast<uint32_t>(regions.size()));
 
-		//	hierarchy.map_file_write("war3map.wpr", writer.buffer);
+		for (const auto& region : regions) {
+			writer.write<float>(region.left * 128.f + terrain_offset_x);
+			writer.write<float>(region.bottom * 128.f + terrain_offset_y);
+			writer.write<float>(region.right * 128.f + terrain_offset_x);
+			writer.write<float>(region.top * 128.f + terrain_offset_y);
+
+			writer.write_c_string(region.name);
+			writer.write<int>(region.creation_number);
+			writer.write_c_string_padded(region.weather_id, 4);
+			writer.write_c_string(region.ambient_id);
+			writer.write<glm::u8vec3>(glm::u8vec3(region.color));
+			writer.write<uint8_t>(255);
+		}
+
+		hierarchy.map_file_write("war3map.w3r", writer.buffer);
 	}
 
 	void remove_region(Region* region) {

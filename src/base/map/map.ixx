@@ -628,6 +628,7 @@ export class Map: public QObject {
 		save_modification_file("war3mapSkin.w3h", buff_slk, buff_meta_slk, false, true);
 		save_modification_file("war3map.w3q", upgrade_slk, upgrade_meta_slk, true, false);
 		save_modification_file("war3mapSkin.w3q", upgrade_slk, upgrade_meta_slk, true, true);
+		regions.save(terrain.offset.x, terrain.offset.y);
 
 		info.save(terrain.tileset);
 		trigger_strings.save();

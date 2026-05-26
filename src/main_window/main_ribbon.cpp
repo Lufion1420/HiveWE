@@ -59,6 +59,10 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	pathing_palette->setText("Pathing");
 	palette_section->addWidget(pathing_palette);
 
+	region_palette->setIcon(QIcon("data/icons/ribbon/select.png"));
+	region_palette->setText("Regions");
+	palette_section->addWidget(region_palette);
+
 	QRibbonSection* config_section = new QRibbonSection;
 	config_section->setText("Config");
 

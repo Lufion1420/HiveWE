@@ -28,6 +28,7 @@ import "palette.h";
 import "terrain_palette.h";
 import "doodad_palette.h";
 import "unit_palette.h";
+import "region_palette.h";
 import "object_editor/icon_view.h";
 import "trigger_editor.h";
 #include "QMessageBox"
@@ -180,8 +181,10 @@ HiveWE::HiveWE(QWidget* parent)
 	ui->ribbon->terrain_palette->setCheckable(true);
 	ui->ribbon->doodad_palette->setCheckable(true);
 	ui->ribbon->unit_palette->setCheckable(true);
+	ui->ribbon->region_palette->setCheckable(true);
 	ui->ribbon->pathing_palette->hide();
 	connect(ui->ribbon->pathing_palette, &QRibbonButton::clicked, this, &HiveWE::toggle_terrain_sidebar);
+	connect(ui->ribbon->region_palette, &QRibbonButton::clicked, this, &HiveWE::toggle_region_palette);
 
 	connect(new QShortcut(QKeySequence(Qt::Key_T), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, this, &HiveWE::toggle_terrain_sidebar);
 	connect(ui->ribbon->terrain_palette, &QRibbonButton::clicked, this, &HiveWE::toggle_terrain_sidebar);
@@ -329,11 +332,33 @@ void HiveWE::setup_palette_sidebar() {
 	pathing_layout->setContentsMargins(0, 0, 0, 0);
 	pathing_layout->setSpacing(0);
 
+	auto* region_separator = new QFrame(terrain_column);
+	region_separator->setFrameShape(QFrame::HLine);
+	region_separator->setFrameShadow(QFrame::Sunken);
+	region_separator->setFixedHeight(8);
+
+	auto* region_header = new QLabel("Regions", terrain_column);
+	region_header->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+	region_header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	region_header->setFixedHeight(24);
+	region_header->setStyleSheet("QLabel { font-size: 15px; font-weight: 700; padding: 2px 2px 3px 2px; margin: 0; }");
+
+	region_host = new QFrame(terrain_column);
+	region_host->setObjectName("regionSidebarHost");
+	region_host->setFrameShape(QFrame::NoFrame);
+	region_host->setContentsMargins(0, 0, 0, 0);
+	auto* region_layout = new QVBoxLayout(region_host);
+	region_layout->setContentsMargins(0, 0, 0, 0);
+	region_layout->setSpacing(0);
+
 	terrain_column_layout->addWidget(terrain_header);
 	terrain_column_layout->addWidget(terrain_host, 3);
 	terrain_column_layout->addWidget(pathing_separator);
 	terrain_column_layout->addWidget(pathing_header);
 	terrain_column_layout->addWidget(pathing_host, 2);
+	terrain_column_layout->addWidget(region_separator);
+	terrain_column_layout->addWidget(region_header);
+	terrain_column_layout->addWidget(region_host, 2);
 
 	sidebar_layout->addWidget(object_column);
 	sidebar_layout->addWidget(terrain_column);
@@ -346,6 +371,7 @@ void HiveWE::setup_palette_sidebar() {
 	unit_host->hide();
 	terrain_host->hide();
 	pathing_host->hide();
+	region_host->hide();
 }
 
 void HiveWE::load_map(const fs::path& directory) {
@@ -360,6 +386,8 @@ void HiveWE::load_map(const fs::path& directory) {
 	doodad_palette = nullptr;
 	delete unit_palette;
 	unit_palette = nullptr;
+	delete region_palette;
+	region_palette = nullptr;
 	remove_custom_tab();
 	sidebar_root->hide();
 	object_column->hide();
@@ -368,9 +396,11 @@ void HiveWE::load_map(const fs::path& directory) {
 	unit_host->hide();
 	terrain_host->hide();
 	pathing_host->hide();
+	region_host->hide();
 	ui->ribbon->terrain_palette->setChecked(false);
 	ui->ribbon->doodad_palette->setChecked(false);
 	ui->ribbon->unit_palette->setChecked(false);
+	ui->ribbon->region_palette->setChecked(false);
 
 	delete map;
 	resource_manager.clear();
@@ -772,6 +802,8 @@ void HiveWE::activate_palette(Palette* palette) {
 		doodad->activate_palette();
 	} else if (auto* unit = dynamic_cast<UnitPalette*>(palette)) {
 		unit->activate_palette();
+	} else if (auto* region = dynamic_cast<RegionPalette*>(palette)) {
+		region->activate_palette();
 	}
 
 	if (terrain_palette) {
@@ -888,11 +920,41 @@ void HiveWE::toggle_unit_palette() {
 	update_palette_sidebar_layout();
 }
 
+void HiveWE::toggle_region_palette() {
+	if (!region_palette) {
+		region_palette = new RegionPalette(region_host);
+		region_host->layout()->addWidget(region_palette);
+		connect(region_palette, &Palette::activated, this, [this]() { activate_palette(region_palette); });
+		connect(region_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(this, &HiveWE::palette_changed, region_palette, &Palette::deactivate);
+	}
+
+	const bool visible = region_host->isHidden();
+	region_palette->setVisible(visible);
+	region_host->setVisible(visible);
+	ui->ribbon->region_palette->setChecked(visible);
+
+	if (visible) {
+		activate_palette(region_palette);
+	} else if (terrain_palette && !terrain_palette->isHidden()) {
+		activate_palette(terrain_palette);
+	} else if (doodad_palette && !doodad_palette->isHidden()) {
+		activate_palette(doodad_palette);
+	} else if (unit_palette && !unit_palette->isHidden()) {
+		activate_palette(unit_palette);
+	} else {
+		remove_custom_tab();
+	}
+
+	update_palette_sidebar_layout();
+}
+
 void HiveWE::update_palette_sidebar_layout() {
 	const bool doodad_visible = doodad_host && !doodad_host->isHidden();
 	const bool unit_visible = unit_host && !unit_host->isHidden();
 	const bool object_visible = doodad_visible || unit_visible;
-	const bool terrain_visible = terrain_host && !terrain_host->isHidden();
+	const bool terrain_visible = (terrain_host && !terrain_host->isHidden()) || (pathing_host && !pathing_host->isHidden())
+		|| (region_host && !region_host->isHidden());
 
 	object_column->setVisible(object_visible);
 	terrain_column->setVisible(terrain_visible);
@@ -903,8 +965,9 @@ void HiveWE::update_palette_sidebar_layout() {
 		object_column_layout->setStretch(1, doodad_visible && unit_visible ? 1 : (unit_visible ? 1 : 0));
 	}
 	if (terrain_column_layout) {
-		terrain_column_layout->setStretch(0, 3);
-		terrain_column_layout->setStretch(1, 2);
+		terrain_column_layout->setStretch(1, 3);
+		terrain_column_layout->setStretch(4, 2);
+		terrain_column_layout->setStretch(7, 2);
 	}
 }
 

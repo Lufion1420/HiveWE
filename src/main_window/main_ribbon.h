@@ -52,6 +52,7 @@ public:
 	QRibbonButton* doodad_palette = new QRibbonButton;
 	QRibbonButton* unit_palette = new QRibbonButton;
 	QRibbonButton* pathing_palette = new QRibbonButton;
+	QRibbonButton* region_palette = new QRibbonButton;
 
 	QToolButton* new_map = new QToolButton;
 	QToolButton* open_map_mpq = new QToolButton;

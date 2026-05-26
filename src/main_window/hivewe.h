@@ -35,6 +35,7 @@ class TerrainPalette;
 class PathingPalette;
 class DoodadPalette;
 class UnitPalette;
+class RegionPalette;
 
 class HiveWE : public QMainWindow {
 	Q_OBJECT
@@ -91,6 +92,7 @@ private:
 	void toggle_terrain_sidebar();
 	void toggle_doodad_palette();
 	void toggle_unit_palette();
+	void toggle_region_palette();
 
 	/// Adds the tab to the ribbon and sets the current index to this tab
 	void set_current_custom_tab(QRibbonTab* tab, QString name);
@@ -105,12 +107,14 @@ private:
 	QFrame* unit_host = nullptr;
 	QFrame* terrain_host = nullptr;
 	QFrame* pathing_host = nullptr;
+	QFrame* region_host = nullptr;
 	QVBoxLayout* object_column_layout = nullptr;
 	QVBoxLayout* terrain_column_layout = nullptr;
 	TerrainPalette* terrain_palette = nullptr;
 	PathingPalette* pathing_palette = nullptr;
 	DoodadPalette* doodad_palette = nullptr;
 	UnitPalette* unit_palette = nullptr;
+	RegionPalette* region_palette = nullptr;
 
 signals:
 	void tileset_changed();

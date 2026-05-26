@@ -138,6 +138,7 @@ target_sources(HiveWE_lib PRIVATE
 	"brush/brush.cpp"
 	"brush/doodad_brush.cpp"
 	"brush/pathing_brush.cpp"
+	"brush/region_brush.cpp"
 	"brush/terrain_brush.cpp"
 	"brush/terrain_operators.cpp"
 	"brush/unit_brush.cpp"
@@ -156,6 +157,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/minimap.cpp"
 	"menus/palette.cpp"
 	"menus/pathing_palette.cpp"
+	"menus/region_palette.cpp"
 	"menus/settings_editor.cpp"
 	"menus/shortcut_config_dialog.cpp"
 	"menus/terrain_palette.cpp"
@@ -165,6 +167,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/tile_setter.cpp"
 	"menus/gameplay_constants_editor.cpp"
 	"menus/gameplay_constants_editor.h"
+	"menus/region_palette.h"
 	"menus/shortcut_config_dialog.h"
 
 	"asset_manager/asset_manager.cpp"
