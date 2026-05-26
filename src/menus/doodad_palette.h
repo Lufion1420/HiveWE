@@ -58,6 +58,7 @@ public:
 	DoodadPalette(QWidget* parent = nullptr);
 	~DoodadPalette();
 	void activate_palette();
+	DoodadBrush& current_brush() { return brush; }
 
 private:
 	void selection_changed(const QModelIndex& index);

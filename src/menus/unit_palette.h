@@ -43,6 +43,7 @@ public:
 	UnitPalette(QWidget* parent = nullptr);
 	~UnitPalette();
 	void activate_palette();
+	UnitBrush& current_brush() { return brush; }
 
 private:
 	void select_id_in_palette(std::string id);

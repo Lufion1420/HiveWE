@@ -848,7 +848,21 @@ void HiveWE::toggle_terrain_sidebar() {
 		}
 	}
 
-	const bool visible = terrain_host->isHidden() || pathing_host->isHidden();
+	const bool sidebar_visible = !terrain_host->isHidden() && !pathing_host->isHidden();
+	const bool terrain_active = map->brush == &terrain_palette->current_brush() || map->brush == &pathing_palette->current_brush();
+
+	if (sidebar_visible && !terrain_active) {
+		terrain_palette->setVisible(true);
+		pathing_palette->setVisible(true);
+		terrain_host->setVisible(true);
+		pathing_host->setVisible(true);
+		ui->ribbon->terrain_palette->setChecked(true);
+		activate_palette(terrain_palette);
+		update_palette_sidebar_layout();
+		return;
+	}
+
+	const bool visible = !sidebar_visible;
 	terrain_palette->setVisible(visible);
 	pathing_palette->setVisible(visible);
 	terrain_host->setVisible(visible);
@@ -877,7 +891,19 @@ void HiveWE::toggle_doodad_palette() {
 		connect(this, &HiveWE::palette_changed, doodad_palette, &Palette::deactivate);
 	}
 
-	const bool visible = doodad_host->isHidden();
+	const bool sidebar_visible = !doodad_host->isHidden();
+	const bool doodad_active = map->brush == &doodad_palette->current_brush();
+
+	if (sidebar_visible && !doodad_active) {
+		doodad_palette->setVisible(true);
+		doodad_host->setVisible(true);
+		ui->ribbon->doodad_palette->setChecked(true);
+		activate_palette(doodad_palette);
+		update_palette_sidebar_layout();
+		return;
+	}
+
+	const bool visible = !sidebar_visible;
 	doodad_palette->setVisible(visible);
 	doodad_host->setVisible(visible);
 	ui->ribbon->doodad_palette->setChecked(visible);
@@ -904,7 +930,19 @@ void HiveWE::toggle_unit_palette() {
 		connect(this, &HiveWE::palette_changed, unit_palette, &Palette::deactivate);
 	}
 
-	const bool visible = unit_host->isHidden();
+	const bool sidebar_visible = !unit_host->isHidden();
+	const bool unit_active = map->brush == &unit_palette->current_brush();
+
+	if (sidebar_visible && !unit_active) {
+		unit_palette->setVisible(true);
+		unit_host->setVisible(true);
+		ui->ribbon->unit_palette->setChecked(true);
+		activate_palette(unit_palette);
+		update_palette_sidebar_layout();
+		return;
+	}
+
+	const bool visible = !sidebar_visible;
 	unit_palette->setVisible(visible);
 	unit_host->setVisible(visible);
 	ui->ribbon->unit_palette->setChecked(visible);
@@ -931,7 +969,19 @@ void HiveWE::toggle_region_palette() {
 		connect(this, &HiveWE::palette_changed, region_palette, &Palette::deactivate);
 	}
 
-	const bool visible = region_host->isHidden();
+	const bool sidebar_visible = !region_host->isHidden();
+	const bool region_active = map->brush == &region_palette->current_brush();
+
+	if (sidebar_visible && !region_active) {
+		region_palette->setVisible(true);
+		region_host->setVisible(true);
+		ui->ribbon->region_palette->setChecked(true);
+		activate_palette(region_palette);
+		update_palette_sidebar_layout();
+		return;
+	}
+
+	const bool visible = !sidebar_visible;
 	region_palette->setVisible(visible);
 	region_host->setVisible(visible);
 	ui->ribbon->region_palette->setChecked(visible);
