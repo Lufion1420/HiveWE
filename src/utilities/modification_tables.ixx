@@ -137,22 +137,34 @@ export void save_modification_table(BinaryWriter& writer, const slk::SLK& slk, c
 			int variation = 0;
 			int data_pointer = 0;
 
-			size_t nr_position = property_id.find_first_of("0123456789");
-			if (nr_position != std::string::npos) {
-				variation = std::stoi(property_id.substr(nr_position));
-			}
-
-			// If it is a data field then it will contain a data_pointer/column at the end
-			if (property_id.starts_with("data")) {
-				data_pointer = property_id[4] - 'a' + 1;
-			}
-
 			const auto meta_id2 = slk.field_to_meta_id(meta_slk, property_id, id);
 			if (!meta_id2) {
 				std::println("Meta data key not found for id {} property {}", id, property_id);
 				exit(0);
 			}
 			const std::string meta_data_key = std::string(meta_id2.value());
+
+			if (optional_ints) {
+				// Only repeated metadata fields should serialize a level/variation suffix.
+				// Synthetic helper columns like buttonpos2 store the Y coordinate and are
+				// not true repeat variants, so treating their trailing '2' as a variation
+				// corrupts the saved button positions.
+				const bool has_repeat = meta_slk.data<std::string_view>("repeat", meta_data_key) != "0";
+				const bool append_index =
+					meta_slk.column_headers.contains("appendindex") && meta_slk.data<int>("appendindex", meta_data_key) > 0;
+
+				if (has_repeat && !append_index) {
+					size_t nr_position = property_id.find_first_of("0123456789");
+					if (nr_position != std::string::npos) {
+						variation = std::stoi(property_id.substr(nr_position));
+					}
+				}
+
+				// Data fields encode the sub-field pointer in the suffix letter, e.g. dataa/datab.
+				if (property_id.starts_with("data") && property_id.size() > 4 && std::isalpha(static_cast<unsigned char>(property_id[4]))) {
+					data_pointer = property_id[4] - 'a' + 1;
+				}
+			}
 
 			sub_writer.write_string(meta_data_key);
 			// There's an error in AbilityMetaData.slk where Crs1 instead uses Crs so we need to pad till 4 characters
