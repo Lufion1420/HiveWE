@@ -338,7 +338,7 @@ void generate_destructables(
 	});
 }
 
-void generate_regions(MapScriptWriter& script, const Regions& regions) {
+void generate_regions(MapScriptWriter& script, const Regions& regions, const Terrain& terrain) {
 	script.function("CreateRegions", [&]() {
 		script.local("weathereffect", "we", script.null());
 		for (const auto& i : regions.regions) {
@@ -346,14 +346,22 @@ void generate_regions(MapScriptWriter& script, const Regions& regions) {
 			trim(region_name);
 			std::ranges::replace(region_name, ' ', '_');
 
+			const auto to_wc3_x = [&](float x) {
+				return x * 128.f + terrain.offset.x;
+			};
+
+			const auto to_wc3_y = [&](float y) {
+				return y * 128.f + terrain.offset.y;
+			};
+
 			script.set_variable(
 				region_name,
 				std::format(
 					"Rect({}, {}, {}, {})",
-					std::min(i.left, i.right),
-					std::min(i.bottom, i.top),
-					std::max(i.left, i.right),
-					std::max(i.bottom, i.top)
+					to_wc3_x(std::min(i.left, i.right)),
+					to_wc3_y(std::min(i.bottom, i.top)),
+					to_wc3_x(std::max(i.left, i.right)),
+					to_wc3_y(std::max(i.bottom, i.top))
 				)
 			);
 
@@ -832,7 +840,7 @@ std::expected<void, std::string> Triggers::generate_map_script(
 	generate_destructables(script_writer, destructable_variables, terrain, doodads);
 	generate_items(script_writer, terrain, units);
 	generate_units(script_writer, unit_variables, terrain, units);
-	generate_regions(script_writer, regions);
+	generate_regions(script_writer, regions, terrain);
 	generate_cameras(script_writer, cameras);
 
 	script_writer.write_ln(global_jass);
