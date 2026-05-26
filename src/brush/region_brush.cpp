@@ -91,6 +91,39 @@ void RegionBrush::set_selected_color(const QColor& color) {
 	}
 }
 
+Qt::CursorShape RegionBrush::cursor_shape() const {
+	if (mode != Mode::selection) {
+		return Qt::ArrowCursor;
+	}
+
+	const glm::vec2 mouse = mouse_world_xy();
+	const int hovered_index = region_at_point(mouse);
+	if (hovered_index < 0) {
+		return Qt::ArrowCursor;
+	}
+
+	const DragHandle handle = resolve_drag_handle(map->regions.regions[hovered_index], mouse);
+	switch (handle) {
+		case DragHandle::move:
+			return Qt::SizeAllCursor;
+		case DragHandle::left:
+		case DragHandle::right:
+			return Qt::SizeHorCursor;
+		case DragHandle::top:
+		case DragHandle::bottom:
+			return Qt::SizeVerCursor;
+		case DragHandle::top_left:
+		case DragHandle::bottom_right:
+			return Qt::SizeFDiagCursor;
+		case DragHandle::top_right:
+		case DragHandle::bottom_left:
+			return Qt::SizeBDiagCursor;
+		case DragHandle::none:
+		default:
+			return Qt::ArrowCursor;
+	}
+}
+
 void RegionBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 	if (event->button() != Qt::LeftButton) {
 		return;
@@ -107,20 +140,7 @@ void RegionBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 	}
 
 	const glm::vec2 mouse = mouse_world_xy();
-	int hit_index = -1;
-
-	float smallest_area = std::numeric_limits<float>::max();
-	for (int i = 0; i < static_cast<int>(map->regions.regions.size()); ++i) {
-		if (!contains(map->regions.regions[i], mouse)) {
-			continue;
-		}
-
-		const float area = region_area(map->regions.regions[i]);
-		if (area < smallest_area) {
-			smallest_area = area;
-			hit_index = i;
-		}
-	}
+	const int hit_index = region_at_point(mouse);
 
 	if (hit_index < 0) {
 		clear_selection();
@@ -377,6 +397,23 @@ int RegionBrush::next_creation_number() const {
 
 bool RegionBrush::region_geometry_changed(const Region& lhs, const Region& rhs) const {
 	return lhs.left != rhs.left || lhs.right != rhs.right || lhs.top != rhs.top || lhs.bottom != rhs.bottom;
+}
+
+int RegionBrush::region_at_point(const glm::vec2& point) const {
+	int hit_index = -1;
+	float smallest_area = std::numeric_limits<float>::max();
+	for (int i = 0; i < static_cast<int>(map->regions.regions.size()); ++i) {
+		if (!contains(map->regions.regions[i], point)) {
+			continue;
+		}
+
+		const float area = region_area(map->regions.regions[i]);
+		if (area < smallest_area) {
+			smallest_area = area;
+			hit_index = i;
+		}
+	}
+	return hit_index;
 }
 
 void RegionBrush::emit_selection_change() {

@@ -43,6 +43,7 @@ class RegionBrush : public Brush {
 	void set_selected_weather_id(const QString& weather_id);
 	void set_selected_ambient_id(const QString& ambient_id);
 	void set_selected_color(const QColor& color);
+	Qt::CursorShape cursor_shape() const;
 
   private:
 	int selection_index = -1;
@@ -50,6 +51,7 @@ class RegionBrush : public Brush {
 	glm::vec2 drag_start_mouse = glm::vec2(0.f);
 	Region drag_start_region;
 	bool region_geometry_changed(const Region& lhs, const Region& rhs) const;
+	int region_at_point(const glm::vec2& point) const;
 
 	bool contains(const Region& region, const glm::vec2& point) const;
 	DragHandle resolve_drag_handle(const Region& region, const glm::vec2& point) const;

@@ -1,6 +1,7 @@
 #include "glwidget.h"
 #include "doodad_brush.h"
 #include "pathing_brush.h"
+#include "region_brush.h"
 #include "terrain_brush.h"
 
 #include <QTimer>
@@ -276,6 +277,12 @@ void GLWidget::mouseMoveEvent(QMouseEvent* event) {
 	if (map->brush) {
 		map->brush->mouse_move_event(event, delta);
 	}
+
+	if (auto* region_brush = dynamic_cast<RegionBrush*>(map->brush)) {
+		setCursor(region_brush->cursor_shape());
+	} else {
+		unsetCursor();
+	}
 }
 
 void GLWidget::mousePressEvent(QMouseEvent* event) {
@@ -297,6 +304,12 @@ void GLWidget::mouseReleaseEvent(QMouseEvent* event) {
 	camera.mouse_release_event(event);
 	if (map->brush) {
 		map->brush->mouse_release_event(event);
+	}
+
+	if (auto* region_brush = dynamic_cast<RegionBrush*>(map->brush)) {
+		setCursor(region_brush->cursor_shape());
+	} else {
+		unsetCursor();
 	}
 }
 
