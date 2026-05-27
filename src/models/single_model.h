@@ -80,6 +80,7 @@ class SingleModelFilter : public QSortFilterProxyModel {
 	Q_OBJECT
 
 	QString field_search;
+	QString category_filter;
 	bool modified_only = false;
 	bool core_only = false;
 
@@ -91,6 +92,7 @@ class SingleModelFilter : public QSortFilterProxyModel {
 
 	QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 	void set_field_search(const QString& search);
+	void set_category_filter(const QString& category);
 	void set_modified_only(bool enabled);
 	void set_core_only(bool enabled);
 };

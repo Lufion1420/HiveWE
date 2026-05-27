@@ -395,6 +395,10 @@ bool SingleModelFilter::filterAcceptsRow(const int source_row, const QModelIndex
 		return true;
 	}
 
+	if (!category_filter.isEmpty() && model->category_label(source_row) != category_filter) {
+		return false;
+	}
+
 	if (modified_only && !model->is_modified_row(source_row)) {
 		return false;
 	}
@@ -429,6 +433,12 @@ QVariant SingleModelFilter::headerData(const int section, const Qt::Orientation 
 void SingleModelFilter::set_field_search(const QString& search) {
 	beginFilterChange();
 	field_search = search.trimmed().toLower();
+	endFilterChange(Direction::Rows);
+}
+
+void SingleModelFilter::set_category_filter(const QString& category) {
+	beginFilterChange();
+	category_filter = category.trimmed();
 	endFilterChange(Direction::Rows);
 }
 

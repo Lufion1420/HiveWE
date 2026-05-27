@@ -64,6 +64,7 @@ private:
 	int current_detail_level = -1;
 	int current_details_scroll_y = 0;
 	QString current_field_search;
+	QString current_field_category;
 	bool current_modified_only = false;
 	bool current_core_only = false;
 

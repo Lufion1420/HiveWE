@@ -22,6 +22,7 @@
 #include <QSettings>
 #include <QSet>
 #include <QButtonGroup>
+#include <QComboBox>
 #include <QFrame>
 #include <QStyledItemDelegate>
 #include <QStyle>
@@ -292,6 +293,7 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorSummaryMeta { color: rgb(182, 188, 198); }"
 		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
 		"#objectEditorFieldSearch { padding: 4px 8px; }"
+		"#objectEditorSectionFilter { padding: 4px 8px; min-width: 150px; }"
 		"QLineEdit[class='fieldSearch'] { padding: 4px 8px; }"
 		"#objectEditorBrowserBar { background: rgba(255,255,255,0.03); border-bottom: 1px solid palette(mid); }"
 		"#objectEditorBrowserTitle { font-size: 14px; font-weight: 600; }"
@@ -536,6 +538,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	SingleModelFilter* filter_model = new SingleModelFilter(this);
 	filter_model->setSourceModel(single_model);
 	filter_model->set_field_search(current_field_search);
+	filter_model->set_category_filter(current_field_category);
 	filter_model->set_modified_only(current_modified_only);
 	filter_model->set_core_only(current_core_only);
 
@@ -633,6 +636,26 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	field_search->setClearButtonEnabled(true);
 	field_search->setText(current_field_search);
 
+	QComboBox* section_filter = new QComboBox;
+	section_filter->setObjectName("objectEditorSectionFilter");
+	section_filter->addItem("All sections", QString());
+	{
+		QStringList categories;
+		for (int row = 0; row < single_model->rowCount(); ++row) {
+			const QString category = single_model->category_label(row);
+			if (!category.isEmpty() && !categories.contains(category)) {
+				categories.push_back(category);
+			}
+		}
+		for (const auto& category : categories) {
+			section_filter->addItem(category, category);
+		}
+	}
+	{
+		const int category_index = section_filter->findData(current_field_category);
+		section_filter->setCurrentIndex(category_index >= 0 ? category_index : 0);
+	}
+
 	QToolButton* modified_chip = new QToolButton;
 	modified_chip->setObjectName("objectEditorChip");
 	modified_chip->setText("Modified");
@@ -649,6 +672,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	inspector_meta->setObjectName("objectEditorInspectorMeta");
 
 	inspector_bar_layout->addWidget(field_search, 1);
+	inspector_bar_layout->addWidget(section_filter);
 	inspector_bar_layout->addWidget(inspector_meta);
 	inspector_bar_layout->addWidget(modified_chip);
 	inspector_bar_layout->addWidget(core_chip);
@@ -690,6 +714,10 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		current_field_search = text;
 		filter_model->set_field_search(text);
 	});
+	connect(section_filter, &QComboBox::currentIndexChanged, this, [this, filter_model, section_filter](int) {
+		current_field_category = section_filter->currentData().toString();
+		filter_model->set_category_filter(current_field_category);
+	});
 	connect(modified_chip, &QToolButton::toggled, this, [this, filter_model](const bool checked) {
 		current_modified_only = checked;
 		filter_model->set_modified_only(checked);
@@ -707,6 +735,9 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	});
 	connect(filter_model, &QAbstractItemModel::layoutChanged, inspector_meta, update_inspector_meta);
 	connect(field_search, &QLineEdit::textChanged, inspector_meta, [update_inspector_meta](const QString&) {
+		update_inspector_meta();
+	});
+	connect(section_filter, &QComboBox::currentIndexChanged, inspector_meta, [update_inspector_meta](int) {
 		update_inspector_meta();
 	});
 	connect(modified_chip, &QToolButton::toggled, inspector_meta, [update_inspector_meta](bool) {
