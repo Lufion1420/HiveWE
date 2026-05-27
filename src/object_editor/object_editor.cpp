@@ -7,6 +7,7 @@
 #include <QSortFilterProxyModel>
 #include <QAbstractProxyModel>
 #include <QApplication>
+#include <QClipboard>
 #include <QPushButton>
 #include <QItemSelection>
 #include <QTimer>
@@ -20,6 +21,7 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QSet>
+#include <QFrame>
 
 import std;
 import UnitSelector;
@@ -107,6 +109,55 @@ void expand_saved_paths(QTreeView* view, const QModelIndex& parent, const QSet<Q
 bool is_focus_within(QWidget* focus_widget, QWidget* container) {
 	return focus_widget && container && (focus_widget == container || container->isAncestorOf(focus_widget));
 }
+
+std::string primary_name_field(TableModel* table) {
+	if (table->slk->column_headers.contains("name")) {
+		return "name";
+	} else if (table->slk->column_headers.contains("name1")) {
+		return "name1";
+	} else if (table->slk->column_headers.contains("editorname")) {
+		return "editorname";
+	} else if (table->slk->column_headers.contains("bufftip")) {
+		return "bufftip";
+	}
+
+	return {};
+}
+
+QString object_display_name(TableModel* table, const std::string& id) {
+	const std::string field = primary_name_field(table);
+	if (field.empty() || !table->slk->row_headers.contains(id)) {
+		return {};
+	}
+
+	QString name = table->data(id, field, Qt::DisplayRole).toString();
+	if (name.isEmpty() && field == "editorname") {
+		name = table->data(id, "bufftip", Qt::DisplayRole).toString();
+	}
+	return name;
+}
+
+std::string base_object_id(TableModel* table, const std::string& id) {
+	if (table->slk->shadow_data.contains(id) && table->slk->shadow_data.at(id).contains("oldid")) {
+		return table->slk->shadow_data.at(id).at("oldid");
+	}
+
+	return {};
+}
+
+int modified_field_count(TableModel* table, const std::string& id) {
+	if (!table->slk->shadow_data.contains(id)) {
+		return 0;
+	}
+
+	int count = 0;
+	for (const auto& [field, value] : table->slk->shadow_data.at(id)) {
+		if (field != "oldid") {
+			++count;
+		}
+	}
+	return count;
+}
 }
 
 ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
@@ -127,6 +178,17 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	dock_manager = new ads::CDockManager;
 	dock_manager->setStyleSheet("");
 	setCentralWidget(dock_manager);
+	setStyleSheet(
+		"#objectEditorSummary { border: 1px solid palette(mid); border-radius: 8px; background: rgba(255,255,255,0.03); }"
+		"#objectEditorSummaryTitle { font-size: 16px; font-weight: 600; }"
+		"#objectEditorSummaryMeta { color: rgb(182, 188, 198); }"
+		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
+		"#objectEditorFieldSearch { padding: 4px 8px; }"
+		"QLineEdit[class='fieldSearch'] { padding: 4px 8px; }"
+		"QToolButton#objectEditorChip { border: 1px solid palette(mid); border-radius: 11px; padding: 3px 10px; background: rgba(255,255,255,0.03); }"
+		"QToolButton#objectEditorChip:checked { background: palette(highlight); color: palette(highlighted-text); border-color: palette(highlight); }"
+		"QTreeView { outline: 0; }"
+	);
 
 	details_dock = new ads::CDockWidget(dock_manager, "Object Data");
 	details_dock->setFeature(ads::CDockWidget::NoTab, true);
@@ -271,6 +333,14 @@ void ObjectEditor::itemClicked(QTreeView* view, const QSortFilterProxyModel* mod
 	}
 
 	current_explorer_view = view;
+	current_category =
+		view == unit_explorer		 ? Category::unit
+		: view == item_explorer		 ? Category::item
+		: view == doodad_explorer	 ? Category::doodad
+		: view == destructible_explorer ? Category::destructible
+		: view == ability_explorer	 ? Category::ability
+		: view == upgrade_explorer	 ? Category::upgrade
+									 : Category::buff;
 	open_by_id(table, item->id, index.data(Qt::DisplayRole).toString(), index.data(Qt::DecorationRole).value<QIcon>());
 	view->setFocus(Qt::FocusReason::OtherFocusReason);
 }
@@ -346,8 +416,119 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	SingleModel* single_model = new SingleModel(table, this);
 	single_model->setID(id);
+	SingleModelFilter* filter_model = new SingleModelFilter(this);
+	filter_model->setSourceModel(single_model);
+	filter_model->set_field_search(current_field_search);
+	filter_model->set_modified_only(current_modified_only);
+	filter_model->set_core_only(current_core_only);
 
 	TableDelegate* delegate = new TableDelegate(single_model);
+
+	QFrame* summary = new QFrame;
+	summary->setObjectName("objectEditorSummary");
+	QHBoxLayout* summary_layout = new QHBoxLayout(summary);
+	summary_layout->setContentsMargins(12, 10, 12, 10);
+	summary_layout->setSpacing(10);
+
+	QLabel* summary_icon = new QLabel;
+	summary_icon->setPixmap(icon.pixmap(32, 32));
+	summary_icon->setFixedSize(36, 36);
+	summary_icon->setAlignment(Qt::AlignCenter);
+
+	QVBoxLayout* summary_text_layout = new QVBoxLayout;
+	summary_text_layout->setContentsMargins(0, 0, 0, 0);
+	summary_text_layout->setSpacing(3);
+
+	QLabel* summary_title = new QLabel(name);
+	summary_title->setObjectName("objectEditorSummaryTitle");
+	summary_title->setWordWrap(true);
+
+	const std::string base_id = base_object_id(table, id);
+	const QString base_name = base_id.empty() ? QString() : object_display_name(table, base_id);
+	const int modified_count = modified_field_count(table, id);
+	QString summary_meta_text = QString::fromStdString(id);
+	if (!base_id.empty()) {
+		const QString base_label = base_name.isEmpty() ? QString::fromStdString(base_id) : base_name + " (" + QString::fromStdString(base_id) + ")";
+		summary_meta_text += "  |  Base: " + base_label;
+	}
+	QLabel* summary_meta = new QLabel(summary_meta_text);
+	summary_meta->setObjectName("objectEditorSummaryMeta");
+	summary_meta->setWordWrap(true);
+
+	QHBoxLayout* summary_badges = new QHBoxLayout;
+	summary_badges->setContentsMargins(0, 0, 0, 0);
+	summary_badges->setSpacing(6);
+
+	QLabel* modified_badge = new QLabel(QString::number(modified_count) + " modified");
+	modified_badge->setObjectName("objectEditorPill");
+	summary_badges->addWidget(modified_badge);
+
+	if (!base_id.empty()) {
+		QLabel* derived_badge = new QLabel("Derived");
+		derived_badge->setObjectName("objectEditorPill");
+		summary_badges->addWidget(derived_badge);
+	}
+	summary_badges->addStretch();
+
+	summary_text_layout->addWidget(summary_title);
+	summary_text_layout->addWidget(summary_meta);
+	summary_text_layout->addLayout(summary_badges);
+
+	QVBoxLayout* summary_actions = new QVBoxLayout;
+	summary_actions->setContentsMargins(0, 0, 0, 0);
+	summary_actions->setSpacing(6);
+
+	QToolButton* copy_id = new QToolButton;
+	copy_id->setText("Copy ID");
+	copy_id->setAutoRaise(true);
+	connect(copy_id, &QToolButton::clicked, this, [id]() {
+		QApplication::clipboard()->setText(QString::fromStdString(id));
+	});
+
+	QToolButton* open_parent = new QToolButton;
+	open_parent->setText("Open Parent");
+	open_parent->setAutoRaise(true);
+	open_parent->setEnabled(!base_id.empty());
+	connect(open_parent, &QToolButton::clicked, this, [this, base_id]() {
+		if (!base_id.empty()) {
+			select_id(current_category, base_id);
+		}
+	});
+
+	summary_actions->addWidget(copy_id);
+	summary_actions->addWidget(open_parent);
+	summary_actions->addStretch();
+
+	summary_layout->addWidget(summary_icon);
+	summary_layout->addLayout(summary_text_layout, 1);
+	summary_layout->addLayout(summary_actions);
+
+	QWidget* inspector_bar = new QWidget;
+	QHBoxLayout* inspector_bar_layout = new QHBoxLayout(inspector_bar);
+	inspector_bar_layout->setContentsMargins(0, 0, 0, 0);
+	inspector_bar_layout->setSpacing(8);
+
+	QLineEdit* field_search = new QLineEdit;
+	field_search->setObjectName("objectEditorFieldSearch");
+	field_search->setPlaceholderText("Search fields, ids, or descriptions");
+	field_search->setClearButtonEnabled(true);
+	field_search->setText(current_field_search);
+
+	QToolButton* modified_chip = new QToolButton;
+	modified_chip->setObjectName("objectEditorChip");
+	modified_chip->setText("Modified");
+	modified_chip->setCheckable(true);
+	modified_chip->setChecked(current_modified_only);
+
+	QToolButton* core_chip = new QToolButton;
+	core_chip->setObjectName("objectEditorChip");
+	core_chip->setText("Core");
+	core_chip->setCheckable(true);
+	core_chip->setChecked(current_core_only);
+
+	inspector_bar_layout->addWidget(field_search, 1);
+	inspector_bar_layout->addWidget(modified_chip);
+	inspector_bar_layout->addWidget(core_chip);
 
 	QTableView* view = new QTableView;
 	view->setItemDelegate(delegate);
@@ -359,11 +540,12 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	view->setTabKeyNavigation(false);
 	view->verticalHeader()->setSectionsClickable(true);
 	view->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeMode::ResizeToContents);
-	view->verticalHeader()->setMinimumSectionSize(28);
+	view->verticalHeader()->setMinimumSectionSize(46);
 	view->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeMode::Stretch);
 	view->setIconSize({24, 24});
 	view->setWordWrap(true);
 	view->setSizeAdjustPolicy(QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents);
+	view->setStyleSheet("QTableView::item { padding-left: 8px; padding-right: 8px; }");
 	{
 		QPalette palette = view->palette();
 		palette.setColor(QPalette::Inactive, QPalette::Highlight, palette.color(QPalette::Midlight));
@@ -371,34 +553,58 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		view->setPalette(palette);
 		view->verticalHeader()->setPalette(palette);
 	}
-	view->setModel(single_model);
+	view->setModel(filter_model);
 	current_details_view = view;
-	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, this, [this, single_model](const QModelIndex& current, const QModelIndex&) {
+	connect(field_search, &QLineEdit::textChanged, this, [this, filter_model](const QString& text) {
+		current_field_search = text;
+		filter_model->set_field_search(text);
+	});
+	connect(modified_chip, &QToolButton::toggled, this, [this, filter_model](const bool checked) {
+		current_modified_only = checked;
+		filter_model->set_modified_only(checked);
+	});
+	connect(core_chip, &QToolButton::toggled, this, [this, filter_model](const bool checked) {
+		current_core_only = checked;
+		filter_model->set_core_only(checked);
+	});
+
+	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, this, [this, filter_model, single_model](const QModelIndex& current, const QModelIndex&) {
 		if (!current.isValid()) {
 			current_detail_key.clear();
 			current_detail_level = -1;
 			return;
 		}
 
+		const QModelIndex source_index = filter_model->mapToSource(current);
+		if (!source_index.isValid()) {
+			return;
+		}
+
 		const auto& mapping = single_model->getMapping();
-		current_detail_key = mapping[current.row()].key;
-		current_detail_level = mapping[current.row()].level;
+		current_detail_key = mapping[source_index.row()].key;
+		current_detail_level = mapping[source_index.row()].level;
 	});
 	connect(view, &QTableView::pressed, this, [this](const QModelIndex&) {
 		refresh_details_focus_visuals();
 	});
 
 	if (!current_detail_key.empty()) {
-		const int row = single_model->find_mapping_row(current_detail_key, current_detail_level);
-		if (row >= 0) {
-			const QModelIndex detail_index = single_model->index(row, 0);
-			view->setCurrentIndex(detail_index);
-			view->selectionModel()->select(detail_index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+		const int source_row = single_model->find_mapping_row(current_detail_key, current_detail_level);
+		if (source_row >= 0) {
+			const QModelIndex filtered_index = filter_model->mapFromSource(single_model->index(source_row, 0));
+			if (filtered_index.isValid()) {
+				view->setCurrentIndex(filtered_index);
+				view->selectionModel()->select(filtered_index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+			}
 		}
+	} else if (filter_model->rowCount() > 0) {
+		const QModelIndex first_index = filter_model->index(0, 0);
+		view->setCurrentIndex(first_index);
+		view->selectionModel()->select(first_index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
 	}
 
-	connect(view->verticalHeader(), &QHeaderView::sectionPressed, view, [view, single_model](int section) {
-		const QModelIndex index = single_model->index(section, 0);
+	connect(view->verticalHeader(), &QHeaderView::sectionPressed, view, [view, filter_model](int section) {
+		const QModelIndex index = filter_model->index(section, 0);
 		view->setCurrentIndex(index);
 		view->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
 		view->setFocus(Qt::FocusReason::MouseFocusReason);
@@ -416,7 +622,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	column_header_layout->setContentsMargins(0, 0, 0, 0);
 	column_header_layout->setSpacing(0);
 
-	QLabel* name_header = new QLabel("Name");
+	QLabel* name_header = new QLabel("Field");
 	name_header->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 	name_header->setContentsMargins(8, 4, 8, 4);
 
@@ -438,6 +644,8 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	connect(view->verticalHeader(), &QHeaderView::geometriesChanged, column_header, sync_column_header);
 	sync_column_header();
 
+	layout->addWidget(summary);
+	layout->addWidget(inspector_bar);
 	layout->addWidget(column_header);
 	layout->addWidget(view);
 
@@ -771,6 +979,7 @@ void ObjectEditor::addTypeTreeView(
 
 	QLineEdit* search = new QLineEdit;
 	search->setObjectName("search");
+	search->setProperty("class", "fieldSearch");
 	search->setClearButtonEnabled(true);
 	search->setPlaceholderText("Search " + name);
 	connect(search, &QLineEdit::textChanged, [=](const QString& string) {
@@ -779,8 +988,9 @@ void ObjectEditor::addTypeTreeView(
 	});
 
 	QToolButton* hideDefault = new QToolButton;
-	hideDefault->setIcon(icon);
-	hideDefault->setToolTip("Hide default " + name);
+	hideDefault->setObjectName("objectEditorChip");
+	hideDefault->setText("Custom only");
+	hideDefault->setToolTip("Show only custom " + name.toLower());
 	hideDefault->setCheckable(true);
 	connect(hideDefault, &QToolButton::toggled, [=](bool checked) {
 		filter->setFilterCustom(checked);
@@ -790,6 +1000,7 @@ void ObjectEditor::addTypeTreeView(
 	});
 
 	QToolBar* bar = new QToolBar;
+	bar->setMovable(false);
 	bar->addWidget(search);
 	bar->addWidget(hideDefault);
 
@@ -808,6 +1019,7 @@ void ObjectEditor::addTypeTreeView(
 
 void ObjectEditor::select_id(Category category, const std::string& id) const {
 	explorer_area->setCurrentIndex(static_cast<int>(category));
+	const_cast<ObjectEditor*>(this)->current_category = category;
 	const auto edit = explorer_area->currentDockWidget()->findChild<QLineEdit*>("search");
 	edit->clear();
 
@@ -893,3 +1105,4 @@ bool ObjectEditor::focusNextPrevChild(const bool next) {
 
 	return QMainWindow::focusNextPrevChild(next);
 }
+

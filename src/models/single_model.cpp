@@ -117,36 +117,31 @@ QVariant SingleModel::data(const QModelIndex& index, int role) const {
 }
 
 QVariant SingleModel::headerData(int section, Qt::Orientation orientation, int role) const {
-	if (role == Qt::DisplayRole) {
-		if (orientation == Qt::Orientation::Vertical) {
-			const std::string_view category = world_edit_data.data<std::string_view>(
-				"ObjectEditorCategories",
-				meta_slk->data<std::string_view>("category", id_mapping[section].key)
-			);
-			const auto category2 = string_replaced(category, "&", "");
-			const std::string_view display_name = meta_slk->data<std::string_view>("displayname", id_mapping[section].key);
-
-			if (id_mapping[section].level > 0) {
-				return QString::fromStdString(
-					std::format("{} - {} - Level {} ({})", category2, display_name, id_mapping[section].level, id_mapping[section].key)
-				);
-			} else {
-				if (category2.empty()) {
-					return QString::fromStdString(std::format("{} ({})", display_name, id_mapping[section].key));
-				} else {
-					return QString::fromStdString(std::format("{} - {} ({})", category2, display_name, id_mapping[section].key));
-				}
-			}
-		} else {
-			return "UnitID";
-		}
-	} else if (role == Qt::ForegroundRole) {
-		if (orientation == Qt::Orientation::Vertical) {
-			if (slk->shadow_data.contains(id) && slk->shadow_data.at(id).contains(id_mapping[section].field)) {
+	if (orientation == Qt::Orientation::Vertical) {
+		if (role == Qt::DisplayRole || role == DisplayNameRole) {
+			return display_label(section);
+		} else if (role == CategoryRole) {
+			return category_label(section);
+		} else if (role == MetaRole) {
+			return meta_label(section);
+		} else if (role == ModifiedRole) {
+			return is_modified_row(section);
+		} else if (role == CategoryStartRole) {
+			return starts_new_category(section);
+		} else if (role == CommonRole) {
+			return is_common_row(section);
+		} else if (role == Qt::ForegroundRole) {
+			if (is_modified_row(section)) {
 				return QColor("violet");
 			} else {
 				return QColor("white");
 			}
+		}
+	} else if (role == Qt::DisplayRole) {
+		return "Value";
+	} else if (role == Qt::ForegroundRole) {
+		if (orientation == Qt::Orientation::Vertical) {
+			return is_modified_row(section) ? QColor("violet") : QColor("white");
 		}
 	}
 	return QAbstractProxyModel::headerData(section, orientation, role);
@@ -209,6 +204,59 @@ int SingleModel::find_mapping_row(const std::string& key, const int level) const
 	}
 
 	return -1;
+}
+
+QString SingleModel::category_label(const int row) const {
+	const std::string_view category = world_edit_data.data<std::string_view>(
+		"ObjectEditorCategories",
+		meta_slk->data<std::string_view>("category", id_mapping[row].key)
+	);
+	return QString::fromStdString(string_replaced(category, "&", ""));
+}
+
+QString SingleModel::display_label(const int row) const {
+	QString label = QString::fromUtf8(meta_slk->data<std::string_view>("displayname", id_mapping[row].key));
+	if (label.isEmpty()) {
+		label = QString::fromStdString(id_mapping[row].field);
+	}
+	return label;
+}
+
+QString SingleModel::meta_label(const int row) const {
+	QStringList parts;
+	const QString category = category_label(row);
+	if (!category.isEmpty()) {
+		parts.push_back(category);
+	}
+	if (id_mapping[row].level > 0) {
+		parts.push_back("Level " + QString::number(id_mapping[row].level));
+	}
+	parts.push_back(QString::fromStdString(id_mapping[row].key));
+	return parts.join("  •  ");
+}
+
+bool SingleModel::is_modified_row(const int row) const {
+	return slk->shadow_data.contains(id) && slk->shadow_data.at(id).contains(id_mapping[row].field);
+}
+
+bool SingleModel::starts_new_category(const int row) const {
+	return row == 0 || category_label(row - 1) != category_label(row);
+}
+
+bool SingleModel::is_common_row(const int row) const {
+	const QString category = category_label(row);
+	const QString display = display_label(row).toLower();
+
+	if (is_modified_row(row)) {
+		return true;
+	}
+
+	if (category == "Stats" || category == "Text" || category == "Techtree" || category == "Art") {
+		return true;
+	}
+
+	return display.contains("name") || display.contains("tooltip") || display.contains("hotkey") || display.contains("mana")
+		|| display.contains("cooldown") || display.contains("icon") || display.contains("requirements");
 }
 
 void SingleModel::buildMapping() {
@@ -337,9 +385,67 @@ void SingleModel::sourceDataChanged(const QModelIndex& topLeft, const QModelInde
 	}
 }
 
+const SingleModel* SingleModelFilter::single_model() const {
+	return qobject_cast<const SingleModel*>(sourceModel());
+}
+
+bool SingleModelFilter::filterAcceptsRow(const int source_row, const QModelIndex& source_parent) const {
+	const auto* model = single_model();
+	if (!model) {
+		return true;
+	}
+
+	if (modified_only && !model->is_modified_row(source_row)) {
+		return false;
+	}
+
+	if (core_only && !model->is_common_row(source_row)) {
+		return false;
+	}
+
+	if (field_search.isEmpty()) {
+		return true;
+	}
+
+	const QString haystack = (model->display_label(source_row) + " " + model->meta_label(source_row) + " "
+		+ model->data(model->index(source_row, 0), Qt::DisplayRole).toString())
+							   .toLower();
+	return haystack.contains(field_search);
+}
+
+QVariant SingleModelFilter::headerData(const int section, const Qt::Orientation orientation, const int role) const {
+	if (orientation == Qt::Vertical) {
+		if (const auto* model = single_model()) {
+			const QModelIndex source_index = mapToSource(index(section, 0));
+			if (source_index.isValid()) {
+				return model->headerData(source_index.row(), orientation, role);
+			}
+		}
+	}
+
+	return QSortFilterProxyModel::headerData(section, orientation, role);
+}
+
+void SingleModelFilter::set_field_search(const QString& search) {
+	beginFilterChange();
+	field_search = search.trimmed().toLower();
+	endFilterChange(Direction::Rows);
+}
+
+void SingleModelFilter::set_modified_only(const bool enabled) {
+	beginFilterChange();
+	modified_only = enabled;
+	endFilterChange(Direction::Rows);
+}
+
+void SingleModelFilter::set_core_only(const bool enabled) {
+	beginFilterChange();
+	core_only = enabled;
+	endFilterChange(Direction::Rows);
+}
+
 /// Manually color the headers because the default QHeaderView will only alternatively color the items
 void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logicalIndex) const {
-	const Qt::Alignment align = (Qt::AlignLeft | Qt::AlignTop);
 	bool is_selected = false;
 	bool has_focus = false;
 
@@ -355,19 +461,76 @@ void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logical
 	const QPalette::ColorGroup color_group = has_focus ? QPalette::Active : QPalette::Inactive;
 	painter->fillRect(rect, palette().color(color_group, is_selected ? QPalette::Highlight : QPalette::Base));
 
+	const QString title = model()->headerData(logicalIndex, orientation(), SingleModel::DisplayNameRole).toString();
+	const QString meta = model()->headerData(logicalIndex, orientation(), SingleModel::MetaRole).toString();
+	const bool category_start = model()->headerData(logicalIndex, orientation(), SingleModel::CategoryStartRole).toBool();
 	const QColor text_color = is_selected ? palette().color(color_group, QPalette::HighlightedText)
 										  : model()->headerData(logicalIndex, orientation(), Qt::ForegroundRole).value<QColor>();
+	const QColor meta_color = is_selected ? palette().color(color_group, QPalette::HighlightedText).lighter(120)
+										  : palette().color(QPalette::Disabled, QPalette::Text);
+	const int margin = 2 * style()->pixelMetric(QStyle::PM_HeaderMargin, nullptr, this);
+	const QRect content_rect = rect.adjusted(margin, category_start ? 18 : 8, -8, -4);
+
+	if (category_start) {
+		const QString category = model()->headerData(logicalIndex, orientation(), SingleModel::CategoryRole).toString().toUpper();
+		QFont category_font = font();
+		category_font.setBold(true);
+		category_font.setPointSize(std::max(7, category_font.pointSize() - 1));
+		painter->setFont(category_font);
+		painter->setPen(QPen(palette().color(QPalette::Disabled, QPalette::Text)));
+		painter->drawText(rect.adjusted(margin, 3, -8, 0), Qt::AlignLeft | Qt::AlignTop, category);
+		painter->setPen(QPen(QColor(255, 255, 255, 30)));
+		painter->drawLine(rect.left(), rect.top() + 1, rect.right() + 1, rect.top() + 1);
+	}
+
+	QFont title_font = font();
+	title_font.setBold(is_selected);
+	painter->setFont(title_font);
 	painter->setPen(QPen(text_color));
-	painter->drawText(
-		rect.adjusted(2 * style()->pixelMetric(QStyle::PM_HeaderMargin, nullptr, this), 5, 0, 0),
-		align,
-		model()->headerData(logicalIndex, orientation(), Qt::DisplayRole).toString()
-	);
+	painter->drawText(content_rect, Qt::AlignLeft | Qt::AlignTop, title);
+
+	QFont meta_font = font();
+	meta_font.setPointSize(std::max(7, meta_font.pointSize() - 1));
+	painter->setFont(meta_font);
+	painter->setPen(QPen(meta_color));
+	painter->drawText(content_rect.adjusted(0, 20, 0, 0), Qt::AlignLeft | Qt::AlignTop, meta);
 	painter->setPen(QPen(palette().color(QPalette::Mid)));
 	painter->drawLine(rect.x(), rect.bottom(), rect.right(), rect.bottom());
 }
 
+QSize AlterHeader::sectionSizeFromContents(const int logicalIndex) const {
+	QSize size = QHeaderView::sectionSizeFromContents(logicalIndex);
+	size.setHeight(std::max(size.height(), 54));
+	return size;
+}
+
 TableDelegate::TableDelegate(SingleModel* single_model, QWidget* parent) : QStyledItemDelegate(parent), single_model(single_model) {}
+
+void TableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
+	QStyleOptionViewItem opt(option);
+	initStyleOption(&opt, index);
+
+	const bool is_modified = index.model()->headerData(index.row(), Qt::Vertical, SingleModel::ModifiedRole).toBool();
+	const bool category_start = index.model()->headerData(index.row(), Qt::Vertical, SingleModel::CategoryStartRole).toBool();
+	const bool selected = opt.state.testFlag(QStyle::State_Selected);
+
+	if (is_modified && !selected) {
+		opt.backgroundBrush = QColor(84, 39, 96, 55);
+	}
+
+	QStyledItemDelegate::paint(painter, opt, index);
+
+	painter->save();
+	if (is_modified) {
+		painter->fillRect(QRect(opt.rect.left(), opt.rect.top(), 3, opt.rect.height()), selected ? QColor(255, 255, 255, 180) : QColor(214, 112, 255, 180));
+	}
+
+	if (category_start) {
+		painter->setPen(QPen(QColor(255, 255, 255, 30)));
+		painter->drawLine(opt.rect.topLeft(), opt.rect.topRight());
+	}
+	painter->restore();
+}
 
 QWidget* TableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex& index) const {
 	auto transformed_index = index;

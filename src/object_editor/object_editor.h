@@ -59,9 +59,13 @@ private:
 	std::string current_details_id;
 	QTreeView* current_explorer_view = nullptr;
 	QTableView* current_details_view = nullptr;
+	Category current_category = Category::unit;
 	std::string current_detail_key;
 	int current_detail_level = -1;
 	int current_details_scroll_y = 0;
+	QString current_field_search;
+	bool current_modified_only = false;
+	bool current_core_only = false;
 
 	QTreeView* unit_explorer = new QTreeView;
 	QTreeView* doodad_explorer = new QTreeView;

@@ -3,6 +3,7 @@
 #include <QAbstractProxyModel>
 #include <QIdentityProxyModel>
 #include <QHeaderView>
+#include <QSortFilterProxyModel>
 #include <QStyledItemDelegate>
 
 #include <string>
@@ -15,6 +16,15 @@ class SingleModel : public QAbstractProxyModel {
 	Q_OBJECT
 		
 public:
+	enum HeaderRole {
+		DisplayNameRole = Qt::UserRole + 1,
+		CategoryRole,
+		MetaRole,
+		ModifiedRole,
+		CategoryStartRole,
+		CommonRole,
+	};
+
 	QModelIndex mapFromSource(const QModelIndex& sourceIndex) const override;
 	QModelIndex mapToSource(const QModelIndex& proxyIndex) const override;
 	
@@ -46,6 +56,12 @@ public:
 	}
 
 	int find_mapping_row(const std::string& key, int level) const;
+	QString category_label(int row) const;
+	QString display_label(int row) const;
+	QString meta_label(int row) const;
+	bool is_modified_row(int row) const;
+	bool starts_new_category(int row) const;
+	bool is_common_row(int row) const;
 
 	slk::SLK* meta_slk;
 private:
@@ -60,6 +76,25 @@ private:
 
 };
 
+class SingleModelFilter : public QSortFilterProxyModel {
+	Q_OBJECT
+
+	QString field_search;
+	bool modified_only = false;
+	bool core_only = false;
+
+	[[nodiscard]] const SingleModel* single_model() const;
+	[[nodiscard]] bool filterAcceptsRow(int source_row, const QModelIndex& source_parent) const override;
+
+  public:
+	using QSortFilterProxyModel::QSortFilterProxyModel;
+
+	QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
+	void set_field_search(const QString& search);
+	void set_modified_only(bool enabled);
+	void set_core_only(bool enabled);
+};
+
 // Provides row headers that have alternate colors
 class AlterHeader : public QHeaderView {
 	Q_OBJECT
@@ -68,6 +103,7 @@ public:
 	using QHeaderView::QHeaderView;
 protected:
 	void paintSection(QPainter* painter, const QRect& rect, int logicalIndex) const;
+	QSize sectionSizeFromContents(int logicalIndex) const override;
 };
 
 
@@ -78,6 +114,7 @@ class TableDelegate : public QStyledItemDelegate {
 
 public:
 	TableDelegate(SingleModel* single_model, QWidget* parent = nullptr);
+	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 
 	QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 
