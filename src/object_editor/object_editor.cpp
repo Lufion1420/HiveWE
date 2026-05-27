@@ -181,25 +181,25 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	dock_manager->setSplitterSizes(explorer_area, {645, 9999});
 
 	connect(unit_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
-		itemClicked(unitTreeFilter, units_table, index);
+		itemClicked(unit_explorer, unitTreeFilter, units_table, index);
 	});
 	connect(item_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
-		itemClicked(itemTreeFilter, items_table, index);
+		itemClicked(item_explorer, itemTreeFilter, items_table, index);
 	});
 	connect(doodad_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
-		itemClicked(doodadTreeFilter, doodads_table, index);
+		itemClicked(doodad_explorer, doodadTreeFilter, doodads_table, index);
 	});
 	connect(destructible_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
-		itemClicked(destructibleTreeFilter, destructibles_table, index);
+		itemClicked(destructible_explorer, destructibleTreeFilter, destructibles_table, index);
 	});
 	connect(ability_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
-		itemClicked(abilityTreeFilter, abilities_table, index);
+		itemClicked(ability_explorer, abilityTreeFilter, abilities_table, index);
 	});
 	connect(upgrade_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
-		itemClicked(upgradeTreeFilter, upgrade_table, index);
+		itemClicked(upgrade_explorer, upgradeTreeFilter, upgrade_table, index);
 	});
 	connect(buff_explorer, &QTreeView::clicked, [&](const QModelIndex& index) {
-		itemClicked(buffTreeFilter, buff_table, index);
+		itemClicked(buff_explorer, buffTreeFilter, buff_table, index);
 	});
 
 	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), this), &QShortcut::activated, [&]() {
@@ -251,13 +251,14 @@ void ObjectEditor::closeEvent(QCloseEvent* event) {
 	QMainWindow::closeEvent(event);
 }
 
-void ObjectEditor::itemClicked(const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index) {
+void ObjectEditor::itemClicked(QTreeView* view, const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index) {
 	const BaseTreeItem* item = static_cast<BaseTreeItem*>(model->mapToSource(index).internalPointer());
 	if (item->baseCategory || item->subCategory) {
 		return;
 	}
 
 	open_by_id(table, item->id, index.data(Qt::DisplayRole).toString(), index.data(Qt::DecorationRole).value<QIcon>());
+	view->setFocus(Qt::FocusReason::OtherFocusReason);
 }
 
 void ObjectEditor::reset_details_panel() {
@@ -422,6 +423,14 @@ void ObjectEditor::addTypeTreeView(
 	view->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	view->setUniformRowHeights(true);
 	view->collapseAll();
+	connect(view->selectionModel(), &QItemSelectionModel::selectionChanged, [=, this](const QItemSelection&, const QItemSelection&) {
+		const QModelIndex current = view->selectionModel()->currentIndex();
+		if (!current.isValid()) {
+			return;
+		}
+
+		itemClicked(view, filter, table, current);
+	});
 
 	const std::function<bool(const QModelIndex&)> expand_custom_branch = [&](const QModelIndex& parent) -> bool {
 		bool subtree_has_custom = false;
@@ -492,7 +501,7 @@ void ObjectEditor::addTypeTreeView(
 					const auto index = destructibles_table->rowIDToIndex(new_id);
 					const auto index2 = destructibleTreeModel->mapFromSource(index);
 					const auto index3 = destructibleTreeFilter->mapFromSource(index2);
-					itemClicked(destructibleTreeFilter, destructibles_table, index3);
+					itemClicked(destructible_explorer, destructibleTreeFilter, destructibles_table, index3);
 				}
 			});
 		}

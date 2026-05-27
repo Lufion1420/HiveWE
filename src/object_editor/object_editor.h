@@ -90,7 +90,7 @@ private:
 
 	nlohmann::json ability_insights;
 
-	void itemClicked(const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index);
+	void itemClicked(QTreeView* view, const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index);
 	void addTypeTreeView(BaseTreeModel* treeModel, BaseFilter*& filter, TableModel* table, QTreeView* view, QIcon icon, QString name, Category category);
 	void reset_details_panel();
 	bool restore_tree_state(const QString& key, QTreeView* view) const;
