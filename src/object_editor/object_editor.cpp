@@ -21,6 +21,7 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QSet>
+#include <QButtonGroup>
 #include <QFrame>
 #include <QStyledItemDelegate>
 #include <QStyle>
@@ -251,6 +252,20 @@ int modified_field_count(TableModel* table, const std::string& id) {
 	}
 	return count;
 }
+
+int custom_object_count(TableModel* table) {
+	int count = 0;
+	for (const auto& [id, values] : table->slk->shadow_data) {
+		if (values.contains("oldid")) {
+			++count;
+		}
+	}
+	return count;
+}
+
+QString object_count_label(TableModel* table) {
+	return QString::number(table->rowCount()) + " total  ·  " + QString::number(custom_object_count(table)) + " custom";
+}
 }
 
 ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
@@ -278,7 +293,11 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
 		"#objectEditorFieldSearch { padding: 4px 8px; }"
 		"QLineEdit[class='fieldSearch'] { padding: 4px 8px; }"
-		"QToolBar { border: 0; spacing: 8px; padding: 4px 6px; background: rgba(255,255,255,0.02); }"
+		"#objectEditorBrowserBar { background: rgba(255,255,255,0.03); border-bottom: 1px solid palette(mid); }"
+		"#objectEditorBrowserTitle { font-size: 14px; font-weight: 600; }"
+		"#objectEditorBrowserMeta { color: rgb(168, 174, 184); }"
+		"#objectEditorInspectorMeta { color: rgb(168, 174, 184); }"
+		"QToolBar { border: 0; spacing: 8px; padding: 0; background: rgba(255,255,255,0.02); }"
 		"ads--CDockAreaTitleBar { background: rgba(255,255,255,0.02); border-bottom: 1px solid palette(mid); }"
 		"ads--CDockWidgetTab { background: transparent; border: 0; border-radius: 6px; margin: 4px 2px; padding: 4px 10px; }"
 		"ads--CDockWidgetTab:hover { background: rgba(255,255,255,0.05); }"
@@ -626,7 +645,11 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	core_chip->setCheckable(true);
 	core_chip->setChecked(current_core_only);
 
+	QLabel* inspector_meta = new QLabel;
+	inspector_meta->setObjectName("objectEditorInspectorMeta");
+
 	inspector_bar_layout->addWidget(field_search, 1);
+	inspector_bar_layout->addWidget(inspector_meta);
 	inspector_bar_layout->addWidget(modified_chip);
 	inspector_bar_layout->addWidget(core_chip);
 
@@ -659,6 +682,10 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	}
 	view->setModel(filter_model);
 	current_details_view = view;
+	const auto update_inspector_meta = [filter_model, single_model, inspector_meta]() {
+		inspector_meta->setText(QString::number(filter_model->rowCount()) + " of " + QString::number(single_model->rowCount()) + " fields");
+	};
+	update_inspector_meta();
 	connect(field_search, &QLineEdit::textChanged, this, [this, filter_model](const QString& text) {
 		current_field_search = text;
 		filter_model->set_field_search(text);
@@ -670,6 +697,23 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	connect(core_chip, &QToolButton::toggled, this, [this, filter_model](const bool checked) {
 		current_core_only = checked;
 		filter_model->set_core_only(checked);
+	});
+	connect(filter_model, &QAbstractItemModel::modelReset, inspector_meta, update_inspector_meta);
+	connect(filter_model, &QAbstractItemModel::rowsInserted, inspector_meta, [update_inspector_meta](const QModelIndex&, int, int) {
+		update_inspector_meta();
+	});
+	connect(filter_model, &QAbstractItemModel::rowsRemoved, inspector_meta, [update_inspector_meta](const QModelIndex&, int, int) {
+		update_inspector_meta();
+	});
+	connect(filter_model, &QAbstractItemModel::layoutChanged, inspector_meta, update_inspector_meta);
+	connect(field_search, &QLineEdit::textChanged, inspector_meta, [update_inspector_meta](const QString&) {
+		update_inspector_meta();
+	});
+	connect(modified_chip, &QToolButton::toggled, inspector_meta, [update_inspector_meta](bool) {
+		update_inspector_meta();
+	});
+	connect(core_chip, &QToolButton::toggled, inspector_meta, [update_inspector_meta](bool) {
+		update_inspector_meta();
 	});
 
 	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, this, [this, filter_model, single_model](const QModelIndex& current, const QModelIndex&) {
@@ -1105,22 +1149,78 @@ void ObjectEditor::addTypeTreeView(
 		view->expandAll();
 	});
 
-	QToolButton* hideDefault = new QToolButton;
-	hideDefault->setObjectName("objectEditorChip");
-	hideDefault->setText("Custom only");
-	hideDefault->setToolTip("Show only custom " + name.toLower());
-	hideDefault->setCheckable(true);
-	connect(hideDefault, &QToolButton::toggled, [=](bool checked) {
+	QToolButton* all_objects = new QToolButton;
+	all_objects->setObjectName("objectEditorChip");
+	all_objects->setText("All");
+	all_objects->setCheckable(true);
+	all_objects->setChecked(true);
+
+	QToolButton* custom_objects = new QToolButton;
+	custom_objects->setObjectName("objectEditorChip");
+	custom_objects->setText("Custom");
+	custom_objects->setToolTip("Show only custom " + name.toLower());
+	custom_objects->setCheckable(true);
+
+	QButtonGroup* mode_group = new QButtonGroup(view);
+	mode_group->setExclusive(true);
+	mode_group->addButton(all_objects);
+	mode_group->addButton(custom_objects);
+	connect(custom_objects, &QToolButton::toggled, [=](bool checked) {
 		filter->setFilterCustom(checked);
 		if (!checked) {
 			view->expandAll();
 		}
 	});
 
+	QLabel* browser_meta = new QLabel(object_count_label(table));
+	browser_meta->setObjectName("objectEditorBrowserMeta");
+	const auto update_browser_meta = [table, browser_meta]() {
+		browser_meta->setText(object_count_label(table));
+	};
+	connect(table, &QAbstractItemModel::modelReset, browser_meta, update_browser_meta);
+	connect(table, &QAbstractItemModel::rowsInserted, browser_meta, [update_browser_meta](const QModelIndex&, int, int) {
+		update_browser_meta();
+	});
+	connect(table, &QAbstractItemModel::rowsRemoved, browser_meta, [update_browser_meta](const QModelIndex&, int, int) {
+		update_browser_meta();
+	});
+
+	QWidget* browser_bar = new QWidget;
+	browser_bar->setObjectName("objectEditorBrowserBar");
+	QVBoxLayout* browser_layout = new QVBoxLayout(browser_bar);
+	browser_layout->setContentsMargins(10, 10, 10, 8);
+	browser_layout->setSpacing(8);
+
+	QHBoxLayout* browser_title_row = new QHBoxLayout;
+	browser_title_row->setContentsMargins(0, 0, 0, 0);
+	browser_title_row->setSpacing(8);
+
+	QLabel* browser_icon = new QLabel;
+	browser_icon->setPixmap(icon.pixmap(18, 18));
+	browser_icon->setFixedSize(20, 20);
+	browser_icon->setAlignment(Qt::AlignCenter);
+
+	QLabel* browser_title = new QLabel(name);
+	browser_title->setObjectName("objectEditorBrowserTitle");
+
+	browser_title_row->addWidget(browser_icon);
+	browser_title_row->addWidget(browser_title);
+	browser_title_row->addStretch();
+	browser_title_row->addWidget(browser_meta);
+
+	QHBoxLayout* browser_controls_row = new QHBoxLayout;
+	browser_controls_row->setContentsMargins(0, 0, 0, 0);
+	browser_controls_row->setSpacing(8);
+	browser_controls_row->addWidget(search, 1);
+	browser_controls_row->addWidget(all_objects);
+	browser_controls_row->addWidget(custom_objects);
+
+	browser_layout->addLayout(browser_title_row);
+	browser_layout->addLayout(browser_controls_row);
+
 	QToolBar* bar = new QToolBar;
 	bar->setMovable(false);
-	bar->addWidget(search);
-	bar->addWidget(hideDefault);
+	bar->addWidget(browser_bar);
 
 	ads::CDockWidget* tab = new ads::CDockWidget(dock_manager, name);
 	tab->setToolBar(bar);
