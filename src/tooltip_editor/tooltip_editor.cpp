@@ -14,6 +14,10 @@ import Utilities;
 #include <QToolBar>
 #include <QColorDialog>
 #include <QPushButton>
+#include <QSettings>
+#include <QSyntaxHighlighter>
+#include <QTextCharFormat>
+#include <QTextCursor>
 
 namespace {
 	struct ColorPreset {
@@ -35,10 +39,61 @@ namespace {
 		ColorPreset{"Cyan",       "|cff00ffff", "#00ffff", "black"},
 		ColorPreset{"Dark Green", "|cff008000", "#008000", "white"},
 	};
+
+	// Highlights WC3 color sequences: mutes |c..|r codes in gray, colors the text between them.
+	class WC3ColorHighlighter : public QSyntaxHighlighter {
+	public:
+		using QSyntaxHighlighter::QSyntaxHighlighter;
+
+	protected:
+		void highlightBlock(const QString& text) override {
+			QTextCharFormat code_fmt;
+			code_fmt.setForeground(QColor(130, 130, 130));
+
+			int i = 0;
+			QColor active_color;
+			bool in_color = false;
+
+			while (i < text.size()) {
+				if (text[i] == '|' && i + 1 < text.size()) {
+					const char next = text[i + 1].toLatin1();
+
+					if (next == 'c' && i + 10 <= text.size()) {
+						const QString hex = text.mid(i + 2, 8);
+						bool ok1, ok2, ok3;
+						const int rr = hex.mid(2, 2).toInt(&ok1, 16);
+						const int gg = hex.mid(4, 2).toInt(&ok2, 16);
+						const int bb = hex.mid(6, 2).toInt(&ok3, 16);
+						if (ok1 && ok2 && ok3) {
+							setFormat(i, 10, code_fmt);
+							active_color = QColor(rr, gg, bb);
+							in_color = true;
+							i += 10;
+							continue;
+						}
+					} else if (next == 'r') {
+						setFormat(i, 2, code_fmt);
+						in_color = false;
+						i += 2;
+						continue;
+					} else if (next == 'n') {
+						setFormat(i, 2, code_fmt);
+						i += 2;
+						continue;
+					}
+				}
+
+				if (in_color) {
+					QTextCharFormat text_fmt;
+					text_fmt.setForeground(active_color);
+					setFormat(i, 1, text_fmt);
+				}
+				++i;
+			}
+		}
+	};
 } // namespace
 
-// Resolves the SLK column name for a modification code by looking up the meta SLK.
-// E.g. meta_field_name(abilities_meta_slk, "atp1") -> "tip"
 std::string TooltipEditor::meta_field_name(const slk::SLK& meta_slk, const std::string& code) {
 	std::string field = to_lowercase_copy(meta_slk.data<std::string>("field", code));
 	const int data_val = meta_slk.data<int>("data", code);
@@ -48,8 +103,6 @@ std::string TooltipEditor::meta_field_name(const slk::SLK& meta_slk, const std::
 	return field;
 }
 
-// Reads a field from the SLK, resolving any TRIGSTR_ reference via the trigger strings table.
-// Returns empty if the field column does not exist.
 QString TooltipEditor::read_field(const TabData& tab, const std::string& field) const {
 	if (!tab.slk->column_headers.contains(field)) {
 		return {};
@@ -108,7 +161,9 @@ QString TooltipEditor::wc3_to_html(const QString& text) {
 			}
 		}
 
-		if (text[i] == '<') {
+		if (text[i] == '\n') {
+			html += "<br>";
+		} else if (text[i] == '<') {
 			html += "&lt;";
 		} else if (text[i] == '>') {
 			html += "&gt;";
@@ -120,6 +175,143 @@ QString TooltipEditor::wc3_to_html(const QString& text) {
 		++i;
 	}
 	return html;
+}
+
+void TooltipEditor::insert_color_code(const QString& code) {
+	if (!active_edit || !active_edit->isEnabled()) {
+		return;
+	}
+	QTextCursor cursor = active_edit->textCursor();
+	if (cursor.hasSelection()) {
+		const QString selected = cursor.selectedText();
+		cursor.insertText(code + selected + "|r");
+	} else {
+		cursor.insertText(code);
+	}
+	active_edit->setFocus();
+}
+
+void TooltipEditor::add_custom_color(const QColor& color) {
+	// Avoid duplicates
+	for (const auto& c : custom_colors) {
+		if (c == color) {
+			return;
+		}
+	}
+	// Keep at most 8 custom colors
+	if (custom_colors.size() >= 8) {
+		custom_colors.erase(custom_colors.begin());
+	}
+	custom_colors.push_back(color);
+
+	// Persist
+	QSettings settings;
+	settings.beginGroup("TooltipEditor");
+	QStringList list;
+	for (const auto& c : custom_colors) {
+		list.append(c.name());
+	}
+	settings.setValue("custom_colors", list);
+	settings.endGroup();
+
+	rebuild_custom_colors();
+}
+
+void TooltipEditor::rebuild_custom_colors() {
+	if (!custom_color_widget) {
+		return;
+	}
+	auto* layout = qobject_cast<QHBoxLayout*>(custom_color_widget->layout());
+	if (!layout) {
+		return;
+	}
+
+	// Clear existing custom color buttons
+	while (layout->count() > 0) {
+		auto* item = layout->takeAt(0);
+		if (auto* w = item->widget()) {
+			w->deleteLater();
+		}
+		delete item;
+	}
+
+	// Add a button for each stored custom color
+	for (const QColor& color : custom_colors) {
+		auto* btn = new QPushButton(custom_color_widget);
+		btn->setFixedSize(26, 22);
+		btn->setToolTip(QString("Custom: %1").arg(color.name().toUpper().replace('#', "|cff")));
+		const QString bg = color.name();
+		const QString fg = (color.lightness() > 128) ? "black" : "white";
+		btn->setStyleSheet(
+			QString("QPushButton{background:%1;border-radius:3px;border:1px solid rgba(255,255,255,80);}"
+			        "QPushButton:hover{border:1px solid rgba(255,255,255,180);}")
+				.arg(bg));
+		const QString code = QString("|cff%1%2%3")
+		                         .arg(color.red(), 2, 16, QChar('0'))
+		                         .arg(color.green(), 2, 16, QChar('0'))
+		                         .arg(color.blue(), 2, 16, QChar('0'));
+		connect(btn, &QPushButton::clicked, this, [this, code]() { insert_color_code(code); });
+		layout->addWidget(btn);
+	}
+}
+
+void TooltipEditor::rebuild_favorite_buttons() {
+	// Read favorites directly from QSettings so this works before TemplateManager is opened
+	QSettings settings;
+	settings.beginGroup("TooltipEditor");
+	const int count = settings.beginReadArray("templates");
+
+	struct FavInfo {
+		QString name;
+		QString tip_text;
+		QString text;
+	};
+	std::vector<FavInfo> favs;
+	for (int i = 0; i < count; ++i) {
+		settings.setArrayIndex(i);
+		if (settings.value("favorite", false).toBool()) {
+			favs.push_back({
+				settings.value("name").toString(),
+				settings.value("tip_text").toString(),
+				settings.value("text").toString()
+			});
+		}
+	}
+	settings.endArray();
+	settings.endGroup();
+
+	for (TabData* tab : {&unit_tab, &item_tab, &ability_tab}) {
+		if (!tab->fav_container) {
+			continue;
+		}
+		auto* layout = qobject_cast<QHBoxLayout*>(tab->fav_container->layout());
+		if (!layout) {
+			continue;
+		}
+		// Clear
+		while (layout->count() > 0) {
+			auto* item = layout->takeAt(0);
+			if (auto* w = item->widget()) {
+				w->deleteLater();
+			}
+			delete item;
+		}
+		// Add
+		for (const auto& fav : favs) {
+			auto* btn = new QPushButton(fav.name, tab->fav_container);
+			btn->setFlat(true);
+			btn->setToolTip(QString("Apply template: %1").arg(fav.name));
+			btn->setStyleSheet(
+				"QPushButton { color: #4a90d9; text-decoration: underline; border: none; padding: 0 2px; }"
+				"QPushButton:hover { color: #6ab0f9; }");
+			const QString tip = fav.tip_text;
+			const QString ubertip = fav.text;
+			connect(btn, &QPushButton::clicked, this, [this, tip, ubertip]() {
+				apply_template(tip, ubertip);
+			});
+			layout->addWidget(btn);
+		}
+	}
 }
 
 QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractTableModel* table,
@@ -188,13 +380,27 @@ QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractTableMod
 	tab->tip_edit->setEnabled(false);
 	tab->tip_edit->setMaximumHeight(60);
 	right_layout->addWidget(tab->tip_edit);
+	new WC3ColorHighlighter(tab->tip_edit->document());
 
-	// Second tooltip field
+	// Second tooltip field header (label + favorite quick-apply buttons)
+	auto* utip_header = new QWidget;
+	auto* utip_header_layout = new QHBoxLayout(utip_header);
+	utip_header_layout->setContentsMargins(0, 0, 0, 0);
+	utip_header_layout->setSpacing(6);
 	tab->utip_label = new QLabel(utip_label_text);
-	right_layout->addWidget(tab->utip_label);
+	utip_header_layout->addWidget(tab->utip_label);
+	tab->fav_container = new QWidget;
+	auto* fav_layout = new QHBoxLayout(tab->fav_container);
+	fav_layout->setContentsMargins(0, 0, 0, 0);
+	fav_layout->setSpacing(4);
+	utip_header_layout->addWidget(tab->fav_container);
+	utip_header_layout->addStretch();
+	right_layout->addWidget(utip_header);
+
 	tab->ubertip_edit = new QPlainTextEdit;
 	tab->ubertip_edit->setEnabled(false);
 	right_layout->addWidget(tab->ubertip_edit);
+	new WC3ColorHighlighter(tab->ubertip_edit->document());
 
 	// Preview
 	right_layout->addWidget(new QLabel("Preview:"));
@@ -317,16 +523,18 @@ void TooltipEditor::update_preview(TabData& tab) {
 	tab.preview->setHtml(html);
 }
 
-void TooltipEditor::insert_at_cursor(const QString& text) {
-	if (!active_edit || !active_edit->isEnabled()) {
+void TooltipEditor::apply_template(const QString& tip_text, const QString& ubertip_text) {
+	const int index = tab_widget->currentIndex();
+	TabData* tab = (index == 0) ? &unit_tab : (index == 1) ? &item_tab : &ability_tab;
+	if (tab->current_id.empty()) {
 		return;
 	}
-	active_edit->insertPlainText(text);
-	active_edit->setFocus();
-}
-
-void TooltipEditor::insert_template_text(const QString& text) {
-	insert_at_cursor(text);
+	if (!tip_text.isEmpty() && tab->tip_edit->isEnabled()) {
+		tab->tip_edit->setPlainText(tip_text);
+	}
+	if (!ubertip_text.isEmpty() && tab->ubertip_edit->isEnabled()) {
+		tab->ubertip_edit->setPlainText(ubertip_text);
+	}
 }
 
 TooltipEditor::TooltipEditor(QWidget* parent)
@@ -334,6 +542,20 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 	setAttribute(Qt::WA_DeleteOnClose);
 	setWindowTitle("Tooltip Editor");
 	setMinimumSize(860, 600);
+
+	// Load persisted custom colors
+	{
+		QSettings settings;
+		settings.beginGroup("TooltipEditor");
+		const QStringList saved = settings.value("custom_colors").toStringList();
+		settings.endGroup();
+		for (const auto& s : saved) {
+			QColor c(s);
+			if (c.isValid()) {
+				custom_colors.push_back(c);
+			}
+		}
+	}
 
 	// ── Formatting toolbar ─────────────────────────────────────────────────
 	auto* toolbar = new QToolBar("Tooltip Formatting", this);
@@ -349,14 +571,15 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 			        "QPushButton:hover{border:1px solid rgba(255,255,255,140);}")
 				.arg(p.bg, p.fg));
 		const QString code = QString::fromUtf8(p.code);
-		connect(btn, &QPushButton::clicked, this, [this, code]() { insert_at_cursor(code); });
+		connect(btn, &QPushButton::clicked, this, [this, code]() { insert_color_code(code); });
 		toolbar->addWidget(btn);
 	}
 
 	toolbar->addSeparator();
 
+	// Custom color picker
 	auto* custom_btn = new QPushButton("Custom...");
-	custom_btn->setToolTip("Pick a custom color");
+	custom_btn->setToolTip("Pick a custom color (added to toolbar)");
 	connect(custom_btn, &QPushButton::clicked, this, [this]() {
 		const QColor color = QColorDialog::getColor(Qt::white, this, "Pick Color");
 		if (!color.isValid()) {
@@ -366,21 +589,18 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 		                         .arg(color.red(), 2, 16, QChar('0'))
 		                         .arg(color.green(), 2, 16, QChar('0'))
 		                         .arg(color.blue(), 2, 16, QChar('0'));
-		insert_at_cursor(code);
+		add_custom_color(color);
+		insert_color_code(code);
 	});
 	toolbar->addWidget(custom_btn);
 
-	auto* end_color_btn = new QPushButton("|r");
-	end_color_btn->setToolTip("End color sequence");
-	connect(end_color_btn, &QPushButton::clicked, this, [this]() { insert_at_cursor("|r"); });
-	toolbar->addWidget(end_color_btn);
-
-	toolbar->addSeparator();
-
-	auto* newline_btn = new QPushButton("|n  New Line");
-	newline_btn->setToolTip("Insert WC3 line break (|n)");
-	connect(newline_btn, &QPushButton::clicked, this, [this]() { insert_at_cursor("|n"); });
-	toolbar->addWidget(newline_btn);
+	// Custom color buttons container (filled by rebuild_custom_colors)
+	custom_color_widget = new QWidget;
+	custom_color_widget->setLayout(new QHBoxLayout);
+	custom_color_widget->layout()->setContentsMargins(0, 0, 0, 0);
+	qobject_cast<QHBoxLayout*>(custom_color_widget->layout())->setSpacing(3);
+	toolbar->addWidget(custom_color_widget);
+	rebuild_custom_colors();  // Populate from loaded custom_colors
 
 	toolbar->addSeparator();
 
@@ -389,8 +609,10 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 	connect(templates_btn, &QPushButton::clicked, this, [this]() {
 		if (!template_mgr) {
 			template_mgr = new TemplateManager(this);
-			connect(template_mgr, &TemplateManager::template_insert_requested,
-			        this, &TooltipEditor::insert_template_text);
+			connect(template_mgr, &TemplateManager::template_apply_requested,
+			        this, &TooltipEditor::apply_template);
+			connect(template_mgr, &TemplateManager::favorites_changed,
+			        this, &TooltipEditor::rebuild_favorite_buttons);
 		}
 		template_mgr->show();
 		template_mgr->raise();
@@ -444,6 +666,9 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 		build_tab(&ability_tab, abilities_slk, abilities_table, ability_list, true,
 		          "Tooltip Normal:", "Tooltip Extended:"),
 		"Abilities");
+
+	// Populate favorite buttons from QSettings (no need to open TemplateManager first)
+	rebuild_favorite_buttons();
 
 	show();
 }

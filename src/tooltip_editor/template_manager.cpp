@@ -7,11 +7,34 @@
 #include <QLabel>
 #include <QSettings>
 #include <QMessageBox>
+#include <QColorDialog>
+#include <QToolBar>
+
+namespace {
+	struct ColorPreset {
+		const char* label;
+		const char* code;
+		const char* bg;
+		const char* fg;
+	};
+
+	constexpr std::array COLOR_PRESETS = {
+		ColorPreset{"Gold",       "|cffffcc00", "#ffcc00", "black"},
+		ColorPreset{"White",      "|cffffffff", "#e8e8e8", "black"},
+		ColorPreset{"Red",        "|cffff0303", "#ff0303", "white"},
+		ColorPreset{"Green",      "|cff1ce6b9", "#1ce6b9", "black"},
+		ColorPreset{"Blue",       "|cff0042ff", "#0042ff", "white"},
+		ColorPreset{"Orange",     "|cffff8000", "#ff8000", "black"},
+		ColorPreset{"Purple",     "|cff9b00ff", "#9b00ff", "white"},
+		ColorPreset{"Dark Red",   "|cff9b0000", "#9b0000", "white"},
+		ColorPreset{"Cyan",       "|cff00ffff", "#00ffff", "black"},
+		ColorPreset{"Dark Green", "|cff008000", "#008000", "white"},
+	};
+} // namespace
 
 QString TemplateManager::wc3_to_html(const QString& text) {
 	QString html;
 	html.reserve(text.size() * 2);
-
 	int i = 0;
 	while (i < text.size()) {
 		if (text[i] == '|' && i + 1 < text.size()) {
@@ -19,10 +42,7 @@ QString TemplateManager::wc3_to_html(const QString& text) {
 			if (next == 'c' && i + 10 <= text.size()) {
 				const QString hex = text.mid(i + 2, 8);
 				if (hex.size() == 8) {
-					const QString rr = hex.mid(2, 2);
-					const QString gg = hex.mid(4, 2);
-					const QString bb = hex.mid(6, 2);
-					html += "<span style=\"color:#" + rr + gg + bb + "\">";
+					html += "<span style=\"color:#" + hex.mid(2, 2) + hex.mid(4, 2) + hex.mid(6, 2) + "\">";
 					i += 10;
 					continue;
 				}
@@ -36,8 +56,9 @@ QString TemplateManager::wc3_to_html(const QString& text) {
 				continue;
 			}
 		}
-
-		if (text[i] == '<') {
+		if (text[i] == '\n') {
+			html += "<br>";
+		} else if (text[i] == '<') {
 			html += "&lt;";
 		} else if (text[i] == '>') {
 			html += "&gt;";
@@ -51,6 +72,41 @@ QString TemplateManager::wc3_to_html(const QString& text) {
 	return html;
 }
 
+void TemplateManager::insert_color_code(const QString& code) {
+	if (!active_field) {
+		return;
+	}
+	QTextCursor cursor = active_field->textCursor();
+	if (cursor.hasSelection()) {
+		const QString selected = cursor.selectedText();
+		cursor.insertText(code + selected + "|r");
+	} else {
+		cursor.insertText(code);
+	}
+	active_field->setFocus();
+}
+
+int TemplateManager::favorite_count() const {
+	int count = 0;
+	for (const auto& t : templates) {
+		if (t.favorite) {
+			++count;
+		}
+	}
+	return count;
+}
+
+void TemplateManager::update_fav_ui() {
+	const int count = favorite_count();
+	fav_count_label->setText(QString("Favorites: %1/5").arg(count));
+	if (current_index >= 0 && current_index < static_cast<int>(templates.size())) {
+		const bool is_fav = templates[current_index].favorite;
+		const QSignalBlocker b(fav_btn);
+		fav_btn->setChecked(is_fav);
+		fav_btn->setText(is_fav ? "★ Favorite" : "☆ Favorite");
+	}
+}
+
 void TemplateManager::load_from_settings() {
 	QSettings settings;
 	settings.beginGroup("TooltipEditor");
@@ -59,7 +115,12 @@ void TemplateManager::load_from_settings() {
 	templates.reserve(count);
 	for (int i = 0; i < count; ++i) {
 		settings.setArrayIndex(i);
-		templates.push_back({settings.value("name").toString(), settings.value("text").toString()});
+		templates.push_back({
+			settings.value("name").toString(),
+			settings.value("tip_text").toString(),
+			settings.value("text").toString(),
+			settings.value("favorite", false).toBool()
+		});
 	}
 	settings.endArray();
 	settings.endGroup();
@@ -72,7 +133,9 @@ void TemplateManager::save_to_settings() const {
 	for (int i = 0; i < static_cast<int>(templates.size()); ++i) {
 		settings.setArrayIndex(i);
 		settings.setValue("name", templates[i].name);
+		settings.setValue("tip_text", templates[i].tip_text);
 		settings.setValue("text", templates[i].text);
+		settings.setValue("favorite", templates[i].favorite);
 	}
 	settings.endArray();
 	settings.endGroup();
@@ -82,7 +145,7 @@ void TemplateManager::refresh_list() {
 	const QSignalBlocker blocker(template_list);
 	template_list->clear();
 	for (const auto& t : templates) {
-		template_list->addItem(t.name);
+		template_list->addItem((t.favorite ? "★ " : "") + t.name);
 	}
 }
 
@@ -93,9 +156,11 @@ void TemplateManager::load_template(int index) {
 	current_index = index;
 	loading = true;
 	name_edit->setText(templates[index].name);
+	tip_edit->setPlainText(templates[index].tip_text);
 	text_edit->setPlainText(templates[index].text);
-	preview->setHtml(wc3_to_html(templates[index].text));
 	loading = false;
+	update_preview();
+	update_fav_ui();
 }
 
 void TemplateManager::commit_current() {
@@ -103,26 +168,90 @@ void TemplateManager::commit_current() {
 		return;
 	}
 	templates[current_index].name = name_edit->text().trimmed();
+	templates[current_index].tip_text = tip_edit->toPlainText();
 	templates[current_index].text = text_edit->toPlainText();
 
 	if (auto* item = template_list->item(current_index)) {
 		const QSignalBlocker blocker(template_list);
-		item->setText(templates[current_index].name);
+		const bool is_fav = templates[current_index].favorite;
+		item->setText((is_fav ? "★ " : "") + templates[current_index].name);
 	}
 	save_to_settings();
+}
+
+void TemplateManager::update_preview() {
+	const QString tip = tip_edit->toPlainText();
+	const QString ubertip = text_edit->toPlainText();
+
+	QString html;
+	if (!tip.isEmpty()) {
+		html += "<b>" + wc3_to_html(tip) + "</b>";
+		if (!ubertip.isEmpty()) {
+			html += "<hr style='border:0; border-top:1px solid #444; margin:4px 0;'/>";
+		}
+	}
+	if (!ubertip.isEmpty()) {
+		html += wc3_to_html(ubertip);
+	}
+	preview->setHtml(html);
 }
 
 TemplateManager::TemplateManager(QWidget* parent)
 	: QWidget(parent) {
 	setWindowTitle("Template Manager");
 	setWindowFlags(Qt::Window);
-	setMinimumSize(620, 440);
+	setMinimumSize(700, 520);
 
 	load_from_settings();
 
-	auto* main_layout = new QHBoxLayout(this);
+	auto* root_layout = new QVBoxLayout(this);
+	root_layout->setContentsMargins(4, 4, 4, 4);
+	root_layout->setSpacing(4);
+
+	// ── Color toolbar ──────────────────────────────────────────────────────
+	auto* color_bar = new QWidget;
+	auto* color_bar_layout = new QHBoxLayout(color_bar);
+	color_bar_layout->setContentsMargins(0, 0, 0, 0);
+	color_bar_layout->setSpacing(3);
+
+	for (const auto& p : COLOR_PRESETS) {
+		auto* btn = new QPushButton(QString::fromUtf8(p.label));
+		btn->setFixedWidth(72);
+		btn->setFixedHeight(22);
+		btn->setToolTip(QString("Insert %1 color code (%2)").arg(p.label, p.code));
+		btn->setStyleSheet(
+			QString("QPushButton{background:%1;color:%2;border-radius:3px;padding:1px 4px;font-size:11px;}"
+			        "QPushButton:hover{border:1px solid rgba(255,255,255,140);}")
+				.arg(p.bg, p.fg));
+		const QString code = QString::fromUtf8(p.code);
+		connect(btn, &QPushButton::clicked, this, [this, code]() { insert_color_code(code); });
+		color_bar_layout->addWidget(btn);
+	}
+
+	color_bar_layout->addSpacing(6);
+
+	auto* custom_btn = new QPushButton("Custom...");
+	custom_btn->setFixedHeight(22);
+	custom_btn->setToolTip("Pick a custom color");
+	connect(custom_btn, &QPushButton::clicked, this, [this]() {
+		const QColor color = QColorDialog::getColor(Qt::white, this, "Pick Color");
+		if (!color.isValid()) {
+			return;
+		}
+		const QString code = QString("|cff%1%2%3")
+		                         .arg(color.red(), 2, 16, QChar('0'))
+		                         .arg(color.green(), 2, 16, QChar('0'))
+		                         .arg(color.blue(), 2, 16, QChar('0'));
+		insert_color_code(code);
+	});
+	color_bar_layout->addWidget(custom_btn);
+	color_bar_layout->addStretch();
+
+	root_layout->addWidget(color_bar);
+
+	// ── Main splitter ──────────────────────────────────────────────────────
 	auto* splitter = new QSplitter(Qt::Horizontal);
-	main_layout->addWidget(splitter);
+	root_layout->addWidget(splitter);
 
 	// Left panel: list + action buttons
 	auto* left_panel = new QWidget;
@@ -141,15 +270,19 @@ TemplateManager::TemplateManager(QWidget* parent)
 	btn_row->addWidget(del_btn);
 	left_layout->addLayout(btn_row);
 
-	auto* insert_btn = new QPushButton("Insert into Tooltip Editor");
-	insert_btn->setStyleSheet("QPushButton { background-color: #3a6ba0; color: white; padding: 5px; border-radius: 3px; }"
-	                          "QPushButton:hover { background-color: #4a7bb0; }");
-	left_layout->addWidget(insert_btn);
+	fav_count_label = new QLabel("Favorites: 0/5");
+	fav_count_label->setStyleSheet("color: gray; font-size: 11px;");
+	left_layout->addWidget(fav_count_label);
+
+	auto* apply_btn = new QPushButton("Apply Template");
+	apply_btn->setStyleSheet("QPushButton { background-color: #3a6ba0; color: white; padding: 5px; border-radius: 3px; }"
+	                         "QPushButton:hover { background-color: #4a7bb0; }");
+	left_layout->addWidget(apply_btn);
 
 	left_panel->setMinimumWidth(160);
 	left_panel->setMaximumWidth(220);
 
-	// Right panel: name + text editor + preview
+	// Right panel: name + favorite + tip + ubertip + preview
 	auto* right_panel = new QWidget;
 	auto* right_layout = new QVBoxLayout(right_panel);
 	right_layout->setContentsMargins(4, 4, 4, 4);
@@ -160,9 +293,20 @@ TemplateManager::TemplateManager(QWidget* parent)
 	name_edit->setPlaceholderText("Template name...");
 	right_layout->addWidget(name_edit);
 
-	right_layout->addWidget(new QLabel("Template Text (supports WC3 color codes and |n line breaks):"));
+	fav_btn = new QPushButton("☆ Favorite");
+	fav_btn->setCheckable(true);
+	fav_btn->setToolTip("Mark this template as a favorite (max 5). Favorites appear as quick-apply buttons in the Tooltip Editor.");
+	right_layout->addWidget(fav_btn);
+
+	right_layout->addWidget(new QLabel("Tooltip Normal:"));
+	tip_edit = new QPlainTextEdit;
+	tip_edit->setPlaceholderText("Optional title/name text (supports WC3 color codes)...");
+	tip_edit->setMaximumHeight(60);
+	right_layout->addWidget(tip_edit);
+
+	right_layout->addWidget(new QLabel("Tooltip Extended:"));
 	text_edit = new QPlainTextEdit;
-	text_edit->setPlaceholderText("Enter template text here. Use |cFFRRGGBB for colors and |r to end color. Use |n for line breaks.");
+	text_edit->setPlaceholderText("Body text (supports WC3 color codes)...");
 	right_layout->addWidget(text_edit);
 
 	right_layout->addWidget(new QLabel("Preview:"));
@@ -177,16 +321,26 @@ TemplateManager::TemplateManager(QWidget* parent)
 	splitter->setStretchFactor(1, 1);
 
 	refresh_list();
+	update_fav_ui();
 
-	// Signals
+	// ── Signals ────────────────────────────────────────────────────────────
+
 	connect(template_list, &QListWidget::currentRowChanged, this, [this](int row) {
 		commit_current();
 		load_template(row);
 	});
 
 	connect(add_btn, &QPushButton::clicked, this, [this]() {
+		// If nothing is selected, seed the new template with whatever is in the fields
+		QString initial_name = (current_index < 0) ? name_edit->text().trimmed() : "";
+		QString initial_tip = (current_index < 0) ? tip_edit->toPlainText() : "";
+		QString initial_text = (current_index < 0) ? text_edit->toPlainText() : "";
+		if (initial_name.isEmpty()) {
+			initial_name = "New Template";
+		}
+
 		commit_current();
-		templates.push_back({"New Template", ""});
+		templates.push_back({initial_name, initial_tip, initial_text, false});
 		save_to_settings();
 		refresh_list();
 		template_list->setCurrentRow(static_cast<int>(templates.size()) - 1);
@@ -202,33 +356,73 @@ TemplateManager::TemplateManager(QWidget* parent)
 		    != QMessageBox::Yes) {
 			return;
 		}
+		const bool was_fav = templates[row].favorite;
 		templates.erase(templates.begin() + row);
 		current_index = -1;
 		save_to_settings();
 		refresh_list();
 		name_edit->clear();
+		tip_edit->clear();
 		text_edit->clear();
 		preview->clear();
+		update_fav_ui();
+		if (was_fav) {
+			emit favorites_changed();
+		}
+	});
+
+	connect(fav_btn, &QPushButton::clicked, this, [this](bool checked) {
+		if (current_index < 0 || current_index >= static_cast<int>(templates.size())) {
+			return;
+		}
+		if (checked && favorite_count() >= 5) {
+			const QSignalBlocker b(fav_btn);
+			fav_btn->setChecked(false);
+			fav_btn->setText("☆ Favorite");
+			QMessageBox::information(this, "Favorites Full",
+			                         "You can have at most 5 favorite templates.\nRemove a favorite first.");
+			return;
+		}
+		templates[current_index].favorite = checked;
+		fav_btn->setText(checked ? "★ Favorite" : "☆ Favorite");
+		if (auto* item = template_list->item(current_index)) {
+			const QSignalBlocker b(template_list);
+			item->setText((checked ? "★ " : "") + templates[current_index].name);
+		}
+		update_fav_ui();
+		save_to_settings();
+		emit favorites_changed();
 	});
 
 	connect(name_edit, &QLineEdit::textEdited, this, [this]() {
 		commit_current();
 	});
 
-	connect(text_edit, &QPlainTextEdit::textChanged, this, [this]() {
+	auto on_field_changed = [this]() {
 		if (loading) {
 			return;
 		}
-		if (current_index >= 0 && current_index < static_cast<int>(templates.size())) {
-			templates[current_index].text = text_edit->toPlainText();
-			preview->setHtml(wc3_to_html(text_edit->toPlainText()));
-		}
-		save_to_settings();
+		commit_current();
+		update_preview();
+	};
+
+	connect(tip_edit, &QPlainTextEdit::textChanged, this, on_field_changed);
+	connect(text_edit, &QPlainTextEdit::textChanged, this, on_field_changed);
+
+	// Track which field is focused for color button insertion
+	connect(tip_edit, &QPlainTextEdit::cursorPositionChanged, this, [this]() {
+		active_field = tip_edit;
+	});
+	connect(text_edit, &QPlainTextEdit::cursorPositionChanged, this, [this]() {
+		active_field = text_edit;
 	});
 
-	connect(insert_btn, &QPushButton::clicked, this, [this]() {
+	connect(apply_btn, &QPushButton::clicked, this, [this]() {
 		if (current_index >= 0 && current_index < static_cast<int>(templates.size())) {
-			emit template_insert_requested(templates[current_index].text);
+			emit template_apply_requested(
+				templates[current_index].tip_text,
+				templates[current_index].text
+			);
 		}
 	});
 

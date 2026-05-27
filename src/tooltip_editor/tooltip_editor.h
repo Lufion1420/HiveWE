@@ -11,7 +11,9 @@
 #include <QLabel>
 #include <QAbstractTableModel>
 #include <QWidget>
+#include <QColor>
 #include <string>
+#include <vector>
 
 import SLK;
 import UnitListModel;
@@ -37,6 +39,7 @@ class TooltipEditor : public QMainWindow {
 		QTextBrowser* preview = nullptr;
 		QWidget* level_row = nullptr;            // Shown only for abilities
 		QSpinBox* level_spin = nullptr;
+		QWidget* fav_container = nullptr;        // Favorite template buttons next to utip label
 		std::string current_id;
 		int current_level = 1;
 		bool leveled = false;
@@ -51,6 +54,8 @@ class TooltipEditor : public QMainWindow {
 
 	QPlainTextEdit* active_edit = nullptr;
 	TemplateManager* template_mgr = nullptr;
+	std::vector<QColor> custom_colors;
+	QWidget* custom_color_widget = nullptr;  // Toolbar section for custom color buttons
 
 	QWidget* build_tab(TabData* tab, slk::SLK& slk, QAbstractTableModel* table,
 	                   QAbstractItemModel* list_model, bool leveled,
@@ -59,7 +64,10 @@ class TooltipEditor : public QMainWindow {
 	void load_level(TabData& tab);
 	void save_current(TabData& tab);
 	void update_preview(TabData& tab);
-	void insert_at_cursor(const QString& text);
+	void insert_color_code(const QString& code);  // wraps selection or inserts at cursor
+	void add_custom_color(const QColor& color);
+	void rebuild_custom_colors();
+	void rebuild_favorite_buttons();
 
 	std::string resolve_tip_field(const TabData& tab) const;
 	std::string resolve_utip_field(const TabData& tab) const;
@@ -72,5 +80,5 @@ public:
 	explicit TooltipEditor(QWidget* parent = nullptr);
 
 public slots:
-	void insert_template_text(const QString& text);
+	void apply_template(const QString& tip_text, const QString& ubertip_text);
 };
