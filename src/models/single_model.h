@@ -45,6 +45,8 @@ public:
 		return id_mapping;
 	}
 
+	int find_mapping_row(const std::string& key, int level) const;
+
 	slk::SLK* meta_slk;
 private:
 	void buildMapping();

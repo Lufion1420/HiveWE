@@ -8,8 +8,10 @@
 #include "DockAreaWidget.h"
 #include <QCloseEvent>
 #include <QElapsedTimer>
+#include <QKeyEvent>
 #include <QSortFilterProxyModel>
 #include <QTreeView>
+#include <QTableView>
 
 #include "global_search.h"
 #include "nlohmann/json.hpp"
@@ -55,6 +57,11 @@ private:
 	ads::CDockAreaWidget* explorer_area = nullptr;
 	ads::CDockWidget* details_dock = nullptr;
 	std::string current_details_id;
+	QTreeView* current_explorer_view = nullptr;
+	QTableView* current_details_view = nullptr;
+	std::string current_detail_key;
+	int current_detail_level = -1;
+	int current_details_scroll_y = 0;
 
 	QTreeView* unit_explorer = new QTreeView;
 	QTreeView* doodad_explorer = new QTreeView;
@@ -93,24 +100,14 @@ private:
 	void itemClicked(QTreeView* view, const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index);
 	void addTypeTreeView(BaseTreeModel* treeModel, BaseFilter*& filter, TableModel* table, QTreeView* view, QIcon icon, QString name, Category category);
 	void reset_details_panel();
+	void refresh_details_focus_visuals() const;
 	bool restore_tree_state(const QString& key, QTreeView* view) const;
 	void save_tree_state(const QString& key, const QTreeView* view) const;
 protected:
 	void closeEvent(QCloseEvent* event) override;
+	bool focusNextPrevChild(bool next) override;
+	void keyPressEvent(QKeyEvent* event) override;
 
 private:
 	QElapsedTimer double_shift_timer;
-
-	void keyPressEvent(QKeyEvent* event) override {
-		if (event->key() == Qt::Key_Shift && !event->isAutoRepeat()) {
-			if (double_shift_timer.isValid() && double_shift_timer.elapsed() < 400) {
-
-				GlobalSearchWidget search_widget = new GlobalSearchWidget(this);
-				double_shift_timer.invalidate();
-			} else {
-				double_shift_timer.start();
-			}
-		}
-		QMainWindow::keyPressEvent(event);
-	}
 };

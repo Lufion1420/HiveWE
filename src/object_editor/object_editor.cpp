@@ -6,7 +6,9 @@
 #include <QDialogButtonBox>
 #include <QSortFilterProxyModel>
 #include <QAbstractProxyModel>
+#include <QApplication>
 #include <QPushButton>
+#include <QItemSelection>
 #include <QTimer>
 #include <QLabel>
 #include <QShortcut>
@@ -100,6 +102,10 @@ void expand_saved_paths(QTreeView* view, const QModelIndex& parent, const QSet<Q
 
 		expand_saved_paths(view, child, paths);
 	}
+}
+
+bool is_focus_within(QWidget* focus_widget, QWidget* container) {
+	return focus_widget && container && (focus_widget == container || container->isAncestorOf(focus_widget));
 }
 }
 
@@ -208,6 +214,9 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		edit->selectAll();
 	});
 	connect(new QShortcut(QKeySequence(Qt::Key_O), this), &QShortcut::activated, this, &QWidget::close);
+	connect(qApp, &QApplication::focusChanged, this, [this](QWidget*, QWidget*) {
+		refresh_details_focus_visuals();
+	});
 
 	show();
 }
@@ -257,6 +266,11 @@ void ObjectEditor::itemClicked(QTreeView* view, const QSortFilterProxyModel* mod
 		return;
 	}
 
+	if (auto* area = qobject_cast<QScrollArea*>(details_dock->widget())) {
+		current_details_scroll_y = area->verticalScrollBar()->value();
+	}
+
+	current_explorer_view = view;
 	open_by_id(table, item->id, index.data(Qt::DisplayRole).toString(), index.data(Qt::DecorationRole).value<QIcon>());
 	view->setFocus(Qt::FocusReason::OtherFocusReason);
 }
@@ -269,6 +283,19 @@ void ObjectEditor::reset_details_panel() {
 	details_dock->setWindowTitle("Object Data");
 	details_dock->setIcon(QIcon());
 	current_details_id.clear();
+	current_details_view = nullptr;
+	current_details_scroll_y = 0;
+}
+
+void ObjectEditor::refresh_details_focus_visuals() const {
+	if (!current_details_view) {
+		return;
+	}
+
+	current_details_view->viewport()->update();
+	if (auto* header = current_details_view->verticalHeader()) {
+		header->viewport()->update();
+	}
 }
 
 void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon) {
@@ -329,6 +356,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	view->setVerticalHeader(new AlterHeader(Qt::Vertical, view));
 	view->setSelectionBehavior(QAbstractItemView::SelectRows);
 	view->setSelectionMode(QAbstractItemView::SingleSelection);
+	view->setTabKeyNavigation(false);
 	view->verticalHeader()->setSectionsClickable(true);
 	view->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeMode::ResizeToContents);
 	view->verticalHeader()->setMinimumSectionSize(28);
@@ -336,13 +364,44 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	view->setIconSize({24, 24});
 	view->setWordWrap(true);
 	view->setSizeAdjustPolicy(QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents);
+	{
+		QPalette palette = view->palette();
+		palette.setColor(QPalette::Inactive, QPalette::Highlight, palette.color(QPalette::Midlight));
+		palette.setColor(QPalette::Inactive, QPalette::HighlightedText, palette.color(QPalette::Text));
+		view->setPalette(palette);
+		view->verticalHeader()->setPalette(palette);
+	}
 	view->setModel(single_model);
+	current_details_view = view;
+	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, this, [this, single_model](const QModelIndex& current, const QModelIndex&) {
+		if (!current.isValid()) {
+			current_detail_key.clear();
+			current_detail_level = -1;
+			return;
+		}
+
+		const auto& mapping = single_model->getMapping();
+		current_detail_key = mapping[current.row()].key;
+		current_detail_level = mapping[current.row()].level;
+	});
+	connect(view, &QTableView::pressed, this, [this](const QModelIndex&) {
+		refresh_details_focus_visuals();
+	});
+
+	if (!current_detail_key.empty()) {
+		const int row = single_model->find_mapping_row(current_detail_key, current_detail_level);
+		if (row >= 0) {
+			const QModelIndex detail_index = single_model->index(row, 0);
+			view->setCurrentIndex(detail_index);
+			view->selectionModel()->select(detail_index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+		}
+	}
+
 	connect(view->verticalHeader(), &QHeaderView::sectionPressed, view, [view, single_model](int section) {
 		const QModelIndex index = single_model->index(section, 0);
 		view->setCurrentIndex(index);
 		view->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-		view->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-		view->edit(index);
+		view->setFocus(Qt::FocusReason::MouseFocusReason);
 	});
 
 	QWidget* column_header = new QWidget;
@@ -394,9 +453,14 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	details_dock->setIcon(icon);
 	current_details_id = id;
 
-	// Scroll just past the ability insights
-	const int y = view->mapTo(area->widget(), QPoint(0, 0)).y();
-	area->verticalScrollBar()->setValue(y);
+	// Keep the user's current details scroll position when switching objects.
+	// On first open, scroll past the ability insights section.
+	if (current_details_scroll_y > 0) {
+		area->verticalScrollBar()->setValue(current_details_scroll_y);
+	} else {
+		const int y = view->mapTo(area->widget(), QPoint(0, 0)).y();
+		area->verticalScrollBar()->setValue(y);
+	}
 }
 
 void ObjectEditor::addTypeTreeView(
@@ -798,4 +862,34 @@ void ObjectEditor::select_id(Category category, const std::string& id) const {
 			break;
 		}
 	}
+}
+
+void ObjectEditor::keyPressEvent(QKeyEvent* event) {
+	if (event->key() == Qt::Key_Shift && !event->isAutoRepeat()) {
+		if (double_shift_timer.isValid() && double_shift_timer.elapsed() < 400) {
+			new GlobalSearchWidget(this);
+			double_shift_timer.invalidate();
+		} else {
+			double_shift_timer.start();
+		}
+	}
+
+	QMainWindow::keyPressEvent(event);
+}
+
+bool ObjectEditor::focusNextPrevChild(const bool next) {
+	QWidget* focus_widget = QApplication::focusWidget();
+	if (current_explorer_view && current_details_view) {
+		if (is_focus_within(focus_widget, current_explorer_view)) {
+			current_details_view->setFocus(next ? Qt::TabFocusReason : Qt::BacktabFocusReason);
+			return true;
+		}
+
+		if (is_focus_within(focus_widget, current_details_view)) {
+			current_explorer_view->setFocus(next ? Qt::TabFocusReason : Qt::BacktabFocusReason);
+			return true;
+		}
+	}
+
+	return QMainWindow::focusNextPrevChild(next);
 }

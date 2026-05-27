@@ -16,6 +16,7 @@
 #include <QSortFilterProxyModel>
 #include <QMouseEvent>
 #include <QTimer>
+#include <QApplication>
 
 #include "object_editor/icon_view.h"
 
@@ -200,6 +201,16 @@ void SingleModel::setID(const std::string newID) {
 	buildMapping();
 }
 
+int SingleModel::find_mapping_row(const std::string& key, const int level) const {
+	for (int i = 0; i < id_mapping.size(); ++i) {
+		if (id_mapping[i].key == key && id_mapping[i].level == level) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
 void SingleModel::buildMapping() {
 	beginResetModel();
 	id_mapping.clear();
@@ -330,16 +341,21 @@ void SingleModel::sourceDataChanged(const QModelIndex& topLeft, const QModelInde
 void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logicalIndex) const {
 	const Qt::Alignment align = (Qt::AlignLeft | Qt::AlignTop);
 	bool is_selected = false;
+	bool has_focus = false;
 
 	if (const auto* item_view = qobject_cast<const QAbstractItemView*>(parentWidget())) {
 		if (const auto* selection_model = item_view->selectionModel()) {
 			is_selected = selection_model->isRowSelected(logicalIndex, QModelIndex()) || selection_model->currentIndex().row() == logicalIndex;
 		}
+		if (QWidget* focus_widget = QApplication::focusWidget()) {
+			has_focus = focus_widget == item_view || item_view->isAncestorOf(focus_widget);
+		}
 	}
 
-	painter->fillRect(rect, palette().color(is_selected ? QPalette::Highlight : QPalette::Base));
+	const QPalette::ColorGroup color_group = has_focus ? QPalette::Active : QPalette::Inactive;
+	painter->fillRect(rect, palette().color(color_group, is_selected ? QPalette::Highlight : QPalette::Base));
 
-	const QColor text_color = is_selected ? palette().color(QPalette::HighlightedText)
+	const QColor text_color = is_selected ? palette().color(color_group, QPalette::HighlightedText)
 										  : model()->headerData(logicalIndex, orientation(), Qt::ForegroundRole).value<QColor>();
 	painter->setPen(QPen(text_color));
 	painter->drawText(
