@@ -40,6 +40,11 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	asset_manager->setText("Asset\nManager");
 	editor_section->addWidget(asset_manager);
 
+	tooltip_editor->setIcon(QIcon("data/icons/ribbon/objecteditor.png"));
+	tooltip_editor->setText("Tooltip\nEditor");
+	set_tooltip(tooltip_editor, "Open the Tooltip Editor to edit unit, item, and ability tooltips.");
+	editor_section->addWidget(tooltip_editor);
+
 	QRibbonSection* palette_section = new QRibbonSection;
 	palette_section->setText("Palette");
 

@@ -55,6 +55,7 @@ target_include_directories(HiveWE_lib PUBLIC
 	"src/models"
 	"src/model_editor"
 	"src/object_editor"
+	"src/tooltip_editor"
 	"src/trigger_editor"
 	"src/resources"
 	"src/resources/skinned_mesh"

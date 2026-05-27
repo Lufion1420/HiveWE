@@ -46,6 +46,7 @@ public:
 	QRibbonButton* object_editor = new QRibbonButton;
 	QRibbonButton* model_editor = new QRibbonButton;
 	QRibbonButton* asset_manager = new QRibbonButton;
+	QRibbonButton* tooltip_editor = new QRibbonButton;
 	QRibbonButton* config = new QRibbonButton;
 
 	QRibbonButton* terrain_palette = new QRibbonButton;

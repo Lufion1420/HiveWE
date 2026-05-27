@@ -43,6 +43,7 @@ import "trigger_editor.h";
 #include <QStringList>
 import "menus/gameplay_constants_editor.h";
 import "asset_manager/asset_manager.h";
+import "tooltip_editor/tooltip_editor.h";
 
 namespace fs = std::filesystem;
 
@@ -233,6 +234,11 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->asset_manager, &QRibbonButton::clicked, [this]() {
 		bool created = false;
 		window_handler.create_or_raise<AssetManager>(nullptr, created);
+	});
+
+	connect(ui->ribbon->tooltip_editor, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<TooltipEditor>(nullptr, created);
 	});
 
 	restore_window_state();

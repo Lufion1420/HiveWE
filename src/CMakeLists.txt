@@ -197,6 +197,11 @@ target_sources(HiveWE_lib PRIVATE
 	"object_editor/object_editor.cpp"
 	"object_editor/global_search.cpp"
 
+	"tooltip_editor/tooltip_editor.cpp"
+	"tooltip_editor/tooltip_editor.h"
+	"tooltip_editor/template_manager.cpp"
+	"tooltip_editor/template_manager.h"
+
 	"qt_imgui/imgui_renderer.cpp"
 	"qt_imgui/qt_imgui.cpp"
 
