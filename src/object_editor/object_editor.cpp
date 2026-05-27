@@ -22,6 +22,8 @@
 #include <QSettings>
 #include <QSet>
 #include <QFrame>
+#include <QStyledItemDelegate>
+#include <QStyle>
 
 import std;
 import UnitSelector;
@@ -110,6 +112,97 @@ bool is_focus_within(QWidget* focus_widget, QWidget* container) {
 	return focus_widget && container && (focus_widget == container || container->isAncestorOf(focus_widget));
 }
 
+class ObjectTreeDelegate : public QStyledItemDelegate {
+  public:
+	using QStyledItemDelegate::QStyledItemDelegate;
+
+	QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+		QSize size = QStyledItemDelegate::sizeHint(option, index);
+		size.setHeight(std::max(size.height(), 24));
+		return size;
+	}
+
+	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+		QStyleOptionViewItem opt(option);
+		initStyleOption(&opt, index);
+
+		const QModelIndex source_index = [&]() -> QModelIndex {
+			if (const auto* proxy = qobject_cast<const QAbstractProxyModel*>(index.model())) {
+				return proxy->mapToSource(index);
+			}
+			return index;
+		}();
+
+		const auto* item = source_index.isValid() ? static_cast<const BaseTreeItem*>(source_index.internalPointer()) : nullptr;
+		const bool is_folder = item && (item->baseCategory || item->subCategory);
+		const bool is_custom = item && !is_folder && index.data(Qt::ForegroundRole).value<QColor>() == QColor("violet");
+		const bool selected = opt.state.testFlag(QStyle::State_Selected);
+
+		painter->save();
+		if (selected) {
+			painter->fillRect(opt.rect, opt.palette.highlight());
+		} else if (opt.state.testFlag(QStyle::State_MouseOver)) {
+			painter->fillRect(opt.rect, QColor(255, 255, 255, 10));
+		}
+
+		const QRect content_rect = opt.rect.adjusted(6, 0, -8, 0);
+		QRect icon_rect(content_rect.left(), content_rect.top() + (content_rect.height() - 18) / 2, 18, 18);
+		const QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+		icon.paint(painter, icon_rect);
+
+		QString full_text = opt.text;
+		QString main_text = full_text;
+		QString id_text;
+		if (!is_folder && full_text.endsWith(')')) {
+			const int id_start = full_text.lastIndexOf(" (");
+			if (id_start > 0) {
+				main_text = full_text.first(id_start);
+				id_text = full_text.mid(id_start + 1);
+			}
+		}
+
+		int text_left = icon_rect.right() + 8;
+		QRect text_rect = content_rect.adjusted(text_left - content_rect.left(), 0, 0, 0);
+		QFont main_font = opt.font;
+		if (is_folder && item->baseCategory) {
+			main_font.setBold(true);
+		}
+		painter->setFont(main_font);
+		painter->setPen(selected ? opt.palette.highlightedText().color() : opt.palette.text().color());
+
+		if (id_text.isEmpty()) {
+			painter->drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft, main_text);
+		} else {
+			QFontMetrics fm(main_font);
+			const int main_width = fm.horizontalAdvance(main_text);
+			const int gap = 6;
+			painter->drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft, main_text);
+
+			QRect id_rect = text_rect.adjusted(main_width + gap, 0, 0, 0);
+			QColor id_color = selected ? opt.palette.highlightedText().color().lighter(115) : QColor(152, 158, 168);
+			painter->setPen(id_color);
+			painter->drawText(id_rect, Qt::AlignVCenter | Qt::AlignLeft, id_text);
+		}
+
+		if (is_custom && !selected) {
+			QFont badge_font = opt.font;
+			badge_font.setPointSize(std::max(7, badge_font.pointSize() - 1));
+			painter->setFont(badge_font);
+			const QString badge = "Custom";
+			QFontMetrics badge_metrics(badge_font);
+			const int badge_width = badge_metrics.horizontalAdvance(badge) + 12;
+			QRect badge_rect(opt.rect.right() - badge_width - 8, opt.rect.top() + (opt.rect.height() - 16) / 2, badge_width, 16);
+			painter->setPen(Qt::NoPen);
+			painter->setBrush(QColor(214, 112, 255, 38));
+			painter->drawRoundedRect(badge_rect, 8, 8);
+			painter->setPen(QColor(224, 160, 255));
+			painter->drawText(badge_rect, Qt::AlignCenter, badge);
+		}
+
+		painter->restore();
+	}
+};
+
 std::string primary_name_field(TableModel* table) {
 	if (table->slk->column_headers.contains("name")) {
 		return "name";
@@ -185,6 +278,11 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
 		"#objectEditorFieldSearch { padding: 4px 8px; }"
 		"QLineEdit[class='fieldSearch'] { padding: 4px 8px; }"
+		"QToolBar { border: 0; spacing: 8px; padding: 4px 6px; background: rgba(255,255,255,0.02); }"
+		"ads--CDockAreaTitleBar { background: rgba(255,255,255,0.02); border-bottom: 1px solid palette(mid); }"
+		"ads--CDockWidgetTab { background: transparent; border: 0; border-radius: 6px; margin: 4px 2px; padding: 4px 10px; }"
+		"ads--CDockWidgetTab:hover { background: rgba(255,255,255,0.05); }"
+		"ads--CDockWidgetTab[activeTab=\"true\"] { background: palette(highlight); color: palette(highlighted-text); }"
 		"QToolButton#objectEditorChip { border: 1px solid palette(mid); border-radius: 11px; padding: 3px 10px; background: rgba(255,255,255,0.03); }"
 		"QToolButton#objectEditorChip:checked { background: palette(highlight); color: palette(highlighted-text); border-color: palette(highlight); }"
 		"QTreeView { outline: 0; }"
@@ -426,6 +524,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QFrame* summary = new QFrame;
 	summary->setObjectName("objectEditorSummary");
+	summary->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	QHBoxLayout* summary_layout = new QHBoxLayout(summary);
 	summary_layout->setContentsMargins(12, 10, 12, 10);
 	summary_layout->setSpacing(10);
@@ -504,6 +603,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	summary_layout->addLayout(summary_actions);
 
 	QWidget* inspector_bar = new QWidget;
+	inspector_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	QHBoxLayout* inspector_bar_layout = new QHBoxLayout(inspector_bar);
 	inspector_bar_layout->setContentsMargins(0, 0, 0, 0);
 	inspector_bar_layout->setSpacing(8);
@@ -552,6 +652,10 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		palette.setColor(QPalette::Inactive, QPalette::HighlightedText, palette.color(QPalette::Text));
 		view->setPalette(palette);
 		view->verticalHeader()->setPalette(palette);
+		view->verticalHeader()->viewport()->setAutoFillBackground(true);
+		QPalette header_palette = view->verticalHeader()->viewport()->palette();
+		header_palette.setColor(QPalette::Window, palette.color(QPalette::Base));
+		view->verticalHeader()->viewport()->setPalette(header_palette);
 	}
 	view->setModel(filter_model);
 	current_details_view = view;
@@ -612,6 +716,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QWidget* column_header = new QWidget;
 	column_header->setObjectName("objectEditorColumnHeader");
+	column_header->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	column_header->setStyleSheet(
 		"#objectEditorColumnHeader {"
 		"border-bottom: 1px solid palette(mid);"
@@ -648,6 +753,10 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	layout->addWidget(inspector_bar);
 	layout->addWidget(column_header);
 	layout->addWidget(view);
+	layout->setStretch(0, 0);
+	layout->setStretch(1, 0);
+	layout->setStretch(2, 0);
+	layout->setStretch(3, 1);
 
 	QWidget* container = new QWidget;
 	container->setLayout(layout);
@@ -691,9 +800,18 @@ void ObjectEditor::addTypeTreeView(
 	view->setModel(filter);
 	view->header()->hide();
 	view->setContextMenuPolicy(Qt::CustomContextMenu);
+	view->setItemDelegate(new ObjectTreeDelegate(view));
 	view->setSelectionBehavior(QAbstractItemView::SelectRows);
 	view->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	view->setUniformRowHeights(true);
+	view->setIndentation(18);
+	view->setIconSize({18, 18});
+	view->setAnimated(true);
+	view->setAllColumnsShowFocus(true);
+	view->setStyleSheet(
+		"QTreeView { border: 0; padding: 4px 0; }"
+		"QTreeView::item { padding: 2px 4px; }"
+	);
 	view->collapseAll();
 	connect(view->selectionModel(), &QItemSelectionModel::selectionChanged, [=, this](const QItemSelection&, const QItemSelection&) {
 		const QModelIndex current = view->selectionModel()->currentIndex();

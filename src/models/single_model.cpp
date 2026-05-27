@@ -469,7 +469,7 @@ void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logical
 	const QColor meta_color = is_selected ? palette().color(color_group, QPalette::HighlightedText).lighter(120)
 										  : palette().color(QPalette::Disabled, QPalette::Text);
 	const int margin = 2 * style()->pixelMetric(QStyle::PM_HeaderMargin, nullptr, this);
-	const QRect content_rect = rect.adjusted(margin, category_start ? 18 : 8, -8, -4);
+	const QRect content_rect = rect.adjusted(margin, category_start ? 28 : 8, -8, -4);
 
 	if (category_start) {
 		const QString category = model()->headerData(logicalIndex, orientation(), SingleModel::CategoryRole).toString().toUpper();
@@ -478,7 +478,7 @@ void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logical
 		category_font.setPointSize(std::max(7, category_font.pointSize() - 1));
 		painter->setFont(category_font);
 		painter->setPen(QPen(palette().color(QPalette::Disabled, QPalette::Text)));
-		painter->drawText(rect.adjusted(margin, 3, -8, 0), Qt::AlignLeft | Qt::AlignTop, category);
+		painter->drawText(rect.adjusted(margin, 4, -8, 0), Qt::AlignLeft | Qt::AlignTop, category);
 		painter->setPen(QPen(QColor(255, 255, 255, 30)));
 		painter->drawLine(rect.left(), rect.top() + 1, rect.right() + 1, rect.top() + 1);
 	}
@@ -493,14 +493,14 @@ void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logical
 	meta_font.setPointSize(std::max(7, meta_font.pointSize() - 1));
 	painter->setFont(meta_font);
 	painter->setPen(QPen(meta_color));
-	painter->drawText(content_rect.adjusted(0, 20, 0, 0), Qt::AlignLeft | Qt::AlignTop, meta);
+	painter->drawText(content_rect.adjusted(0, 22, 0, 0), Qt::AlignLeft | Qt::AlignTop, meta);
 	painter->setPen(QPen(palette().color(QPalette::Mid)));
 	painter->drawLine(rect.x(), rect.bottom(), rect.right(), rect.bottom());
 }
 
 QSize AlterHeader::sectionSizeFromContents(const int logicalIndex) const {
 	QSize size = QHeaderView::sectionSizeFromContents(logicalIndex);
-	size.setHeight(std::max(size.height(), 54));
+	size.setHeight(68);
 	return size;
 }
 
@@ -513,23 +513,43 @@ void TableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
 	const bool is_modified = index.model()->headerData(index.row(), Qt::Vertical, SingleModel::ModifiedRole).toBool();
 	const bool category_start = index.model()->headerData(index.row(), Qt::Vertical, SingleModel::CategoryStartRole).toBool();
 	const bool selected = opt.state.testFlag(QStyle::State_Selected);
+	const QRect full_rect = opt.rect;
 
 	if (is_modified && !selected) {
 		opt.backgroundBrush = QColor(84, 39, 96, 55);
+	}
+
+	if (category_start) {
+		opt.rect.adjust(0, 28, 0, 0);
 	}
 
 	QStyledItemDelegate::paint(painter, opt, index);
 
 	painter->save();
 	if (is_modified) {
-		painter->fillRect(QRect(opt.rect.left(), opt.rect.top(), 3, opt.rect.height()), selected ? QColor(255, 255, 255, 180) : QColor(214, 112, 255, 180));
+		painter->fillRect(QRect(full_rect.left(), full_rect.top(), 3, full_rect.height()), selected ? QColor(255, 255, 255, 180) : QColor(214, 112, 255, 180));
 	}
 
 	if (category_start) {
 		painter->setPen(QPen(QColor(255, 255, 255, 30)));
-		painter->drawLine(opt.rect.topLeft(), opt.rect.topRight());
+		painter->drawLine(full_rect.topLeft(), full_rect.topRight());
 	}
 	painter->restore();
+}
+
+QSize TableDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
+	QSize size = QStyledItemDelegate::sizeHint(option, index);
+	QVariant decoration = index.data(Qt::DecorationRole);
+	const bool has_icon = decoration.canConvert<QIcon>();
+	const bool category_start = index.model()->headerData(index.row(), Qt::Vertical, SingleModel::CategoryStartRole).toBool();
+
+	if (!has_icon) {
+		size.rheight() += category_start ? 38 : 8;
+	} else {
+		size.rheight() += category_start ? 28 : 2;
+	}
+
+	return size;
 }
 
 QWidget* TableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex& index) const {
