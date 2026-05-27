@@ -64,7 +64,7 @@ export class AbilityTreeModel : public BaseTreeModel {
 				} else if (item->subCategory) {
 					return QString::fromStdString(item->label);
 				} else {
-					return QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString();
+					return append_id_label(QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
 				}
 			default:
 				return BaseTreeModel::data(index, role);

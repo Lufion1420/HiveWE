@@ -193,7 +193,7 @@ export class BaseTreeModel : public QAbstractProxyModel {
 		return nullptr;
 	};
 
-  public:
+ public:
 	explicit BaseTreeModel(QObject* parent = nullptr)
 		: QAbstractProxyModel(parent) {
 		rootItem = new BaseTreeItem();
@@ -306,6 +306,10 @@ export class BaseTreeModel : public QAbstractProxyModel {
 	std::vector<std::string> categoryChangeFields;
 
   protected:
+	[[nodiscard]] QString append_id_label(const QString& label, const std::string& id) const {
+		return label + " (" + QString::fromStdString(id) + ")";
+	}
+
 	slk::SLK* slk;
 	std::unordered_map<std::string, BaseTreeItem*> items;
 };

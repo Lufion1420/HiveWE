@@ -33,7 +33,7 @@ export class BuffListModel: public BaseListModel {
 				const QString editorname = sourceModel()->index(index.row(), buff_slk.column_headers.at("editorname")).data(role).toString();
 				const QString editorsuffix = QString::fromUtf8(buff_slk.data<std::string_view>("editorsuffix", index.row()));
 				if (editorname.isEmpty()) {
-					return sourceModel()->index(index.row(), buff_slk.column_headers.at("bufftip")).data(role).toString() + " " + editorsuffix;;
+					return sourceModel()->index(index.row(), buff_slk.column_headers.at("bufftip")).data(role).toString() + " " + editorsuffix;
 				} else {
 					return editorname + " " + editorsuffix;
 				}

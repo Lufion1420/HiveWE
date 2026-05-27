@@ -65,7 +65,7 @@ export class UpgradeTreeModel : public BaseTreeModel {
 				if (item->baseCategory) {
 					return QString::fromStdString(item->label);
 				} else {
-					return QAbstractProxyModel::data(index, role).toString() + " " + QString::fromUtf8(upgrade_slk.data<std::string_view>("editorsuffix", item->id));
+					return append_id_label(QAbstractProxyModel::data(index, role).toString() + " " + QString::fromUtf8(upgrade_slk.data<std::string_view>("editorsuffix", item->id)), item->id);
 				}
 			default:
 				return BaseTreeModel::data(index, role);

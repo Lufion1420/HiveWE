@@ -55,7 +55,7 @@ export class DoodadTreeModel : public BaseTreeModel {
 				if (item->baseCategory) {
 					return QString::fromStdString(item->label);
 				} else {
-					return QAbstractProxyModel::data(index, role).toString();
+					return append_id_label(QAbstractProxyModel::data(index, role).toString(), item->id);
 				}
 			case Qt::DecorationRole:
 				if (item->baseCategory || item->subCategory) {

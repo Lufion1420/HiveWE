@@ -48,7 +48,7 @@ export class DestructibleTreeModel : public BaseTreeModel {
 				if (item->baseCategory) {
 					return QString::fromStdString(item->label);
 				} else {
-					return QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString();
+					return append_id_label(QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
 				}
 			case Qt::DecorationRole:
 				if (item->baseCategory || item->subCategory) {

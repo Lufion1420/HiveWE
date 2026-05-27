@@ -48,7 +48,7 @@ export class ItemTreeModel : public BaseTreeModel {
 				if (item->baseCategory) {
 					return QString::fromStdString(item->label);
 				} else {
-					return QAbstractProxyModel::data(index, role);
+					return append_id_label(QAbstractProxyModel::data(index, role).toString(), item->id);
 				}
 			default:
 				return BaseTreeModel::data(index, role);

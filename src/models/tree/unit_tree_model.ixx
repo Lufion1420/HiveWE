@@ -75,11 +75,11 @@ export class UnitTreeModel : public BaseTreeModel {
 						const std::string_view properNames = units_slk.data<std::string_view>("propernames", item->id);
 
 						if (!properNames.empty()) {
-							return QString::fromUtf8(properNames).split(',').first();
+							return append_id_label(QString::fromUtf8(properNames).split(',').first(), item->id);
 						}
 					}
 
-					return QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString();
+					return append_id_label(QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
 				}
 			default:
 				return BaseTreeModel::data(index, role);

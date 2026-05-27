@@ -57,9 +57,9 @@ export class BuffTreeModel : public BaseTreeModel {
 				} else {
 					const QString editorname = sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorname")), role).toString();
 					if (editorname.isEmpty()) {
-						return QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString();
+						return append_id_label(QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
 					} else {
-						return editorname + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString();
+						return append_id_label(editorname + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
 					}
 				}
 			default:
