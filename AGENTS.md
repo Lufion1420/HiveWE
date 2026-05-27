@@ -9,6 +9,7 @@
 - Required toolchain: Visual Studio 2022 17.14+ on Windows. The README explicitly calls out C++20 modules support; the current CMake files request `cxx_std_23`.
 - Dependency management: `vcpkg` via `VCPKG_ROOT`, with custom overlay ports in `overlay-ports/`.
 - User preference: do not run `cmake --build ...` from Codex unless the user explicitly asks to re-enable that. Leave build/debug execution manual.
+- User preference: prefer fixing compile issues from pasted build errors first, and only run build commands when the user explicitly re-allows it for that case.
 - Configure/build:
 ```powershell
 cmake --preset Release
@@ -102,10 +103,16 @@ ctest --preset Release
 - Common patterns:
   - `window_handler.create_or_raise<T>()` for singleton-like tool windows.
   - `Palette` subclasses for context-specific editing panels.
+  - The main editing palettes now live in a right-hand sidebar managed from `src/main_window/hivewe.cpp`; visibility and active brush context are related but separate concerns.
   - Qt model/view classes in `src/models/` and editor-specific tree/list models.
   - `QShortcut` wiring close to the owning window/dialog.
 - Avoid pushing heavy data parsing or resource loading logic down into widgets when a base/resource/file-format subsystem already owns it.
 - Respect `.ui` files where they already define layout structure.
+- When adjusting editor UX, prefer clear active-state feedback, predictable toggle behavior, and low-noise transient feedback over adding more controls.
+
+## Debug/view guidance
+- The debug overlay in `src/main_window/glwidget.cpp` now distinguishes HiveWE-internal terrain-space coordinates from Warcraft III world-space coordinates; user-facing coordinate readouts should prefer Warcraft coordinates.
+- Treat debug overlays as user-facing tools in this fork, not just developer diagnostics. Trim low-signal entries rather than expanding them casually.
 
 ## Performance-sensitive areas
 - Map loading in `src/base/map/map.ixx` uses `std::async` and staged timing output.
@@ -120,6 +127,7 @@ ctest --preset Release
 - Run `ctest --preset Release` when parser/serializer or other tested code changes.
 - For MDL/MDX work, confirm round-trip tests still pass.
 - For UI changes, manually open the affected editor/palette/window and verify shortcuts, docking, and persistence behavior.
+- For this fork specifically, many changes are workflow/UI heavy. Expect user-driven manual verification for palettes, object editor behavior, regions, and debug overlays when builds are not being run by Codex.
 - For map load/save changes, open the bundled `data/test map/`, save it, and verify no obvious regressions in terrain, objects, triggers, or generated outputs.
 - For rendering/resource changes, verify map open, camera movement, minimap, and the affected render toggles.
 - For Warcraft III launch/test-map changes, verify paths and external tool assumptions locally if possible.
@@ -134,6 +142,7 @@ ctest --preset Release
 - Do not add broad abstractions for one-off editor behavior. This repo tends to prefer direct subsystem-local code.
 - Be careful with raw `new` in Qt code: some objects intentionally rely on Qt parent ownership, but some long-lived objects are manually deleted or recreated.
 - Watch for memory/resource leaks around `QProcess`, image buffers, GL resources, and map reload paths. Verify ownership and cleanup instead of assuming.
+- Region support, player starts, and several palette flows in this fork are recent additions. When modifying them, check both viewport behavior and save/script generation paths instead of assuming they are mature subsystems.
 
 ## Keeping this file current
 - Update `AGENTS.md` when you learn a repo-specific rule that is consistently true and useful for future work.

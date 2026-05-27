@@ -29,16 +29,23 @@ Use this skill when changing HiveWE editor windows, palettes, docking, shortcuts
 3. Reuse existing patterns:
    - `window_handler.create_or_raise<T>()` for reusable windows.
    - `Palette` subclasses for brush/context tools.
+   - Sidebar palette orchestration in `src/main_window/hivewe.cpp` for terrain/pathing/doodad/unit/region flows.
    - `QShortcut` setup close to the owning widget.
    - Dock widgets via `ads::CDockManager`.
 4. If the UI reflects map/object data, trace the connected `TableModel` or tree/list model before adding local widget state.
 5. Keep user-facing errors in Qt dialogs where the surrounding code already does that.
+6. For this fork, prefer user-facing QoL polish patterns that came up repeatedly:
+   - active-state clarity over extra controls
+   - sidebar visibility separate from active tool/brush context
+   - concise tooltips and transient notices
+   - Warcraft-facing values instead of internal engine-facing values where users see them
 
 ## Coding rules
 - Respect existing Qt ownership patterns. If you allocate with `new`, verify parent ownership or explicit cleanup.
 - Do not move parsing or resource loading logic into widgets unless the repo already does so in that exact area.
 - Keep keyboard shortcuts and signal wiring near the owning UI class.
 - Prefer extending current models over building duplicate view-specific state.
+- Avoid noisy UI feedback. If a notice/toast is useful, trigger it on real state changes, not every click.
 
 ## Verification
 - Open the affected window/palette/editor.
