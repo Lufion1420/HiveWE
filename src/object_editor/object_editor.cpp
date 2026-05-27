@@ -267,6 +267,35 @@ int custom_object_count(TableModel* table) {
 QString object_count_label(TableModel* table) {
 	return QString::number(table->rowCount()) + " total  ·  " + QString::number(custom_object_count(table)) + " custom";
 }
+
+int details_header_width(const SingleModel* model, const QHeaderView* header) {
+	if (!model || !header) {
+		return 260;
+	}
+
+	QFont title_font = header->font();
+	QFont meta_font = title_font;
+	meta_font.setPointSize(std::max(7, meta_font.pointSize() - 1));
+	QFont category_font = title_font;
+	category_font.setBold(true);
+	category_font.setPointSize(std::max(7, category_font.pointSize() - 1));
+
+	const QFontMetrics title_metrics(title_font);
+	const QFontMetrics meta_metrics(meta_font);
+	const QFontMetrics category_metrics(category_font);
+	const int margin = 2 * header->style()->pixelMetric(QStyle::PM_HeaderMargin, nullptr, header);
+	int width = 260;
+
+	for (int row = 0; row < model->rowCount(); ++row) {
+		const int title_width = title_metrics.horizontalAdvance(model->display_label(row));
+		const int meta_width = meta_metrics.horizontalAdvance(model->meta_label(row));
+		const int category_width =
+			model->starts_new_category(row) ? category_metrics.horizontalAdvance(model->category_label(row).toUpper()) : 0;
+		width = std::max(width, std::max({title_width, meta_width, category_width}) + margin * 2 + 20);
+	}
+
+	return width;
+}
 }
 
 ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
@@ -291,6 +320,9 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorSummary { border: 1px solid palette(mid); border-radius: 8px; background: rgba(255,255,255,0.03); }"
 		"#objectEditorSummaryTitle { font-size: 16px; font-weight: 600; }"
 		"#objectEditorSummaryMeta { color: rgb(182, 188, 198); }"
+		"#objectEditorInsights { border: 1px solid palette(mid); border-radius: 8px; background: rgba(116, 169, 255, 0.05); }"
+		"#objectEditorInsightsTitle { font-size: 13px; font-weight: 600; }"
+		"#objectEditorInsightsMeta { color: rgb(168, 174, 184); }"
 		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
 		"#objectEditorFieldSearch { padding: 4px 8px; }"
 		"#objectEditorSectionFilter { padding: 4px 8px; min-width: 150px; }"
@@ -497,41 +529,49 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QVBoxLayout* layout = new QVBoxLayout;
 	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(8);
 
 	const auto found = ability_insights.find(id);
 	if (found != ability_insights.end()) {
+		QFrame* insights = new QFrame;
+		insights->setObjectName("objectEditorInsights");
+		QVBoxLayout* insights_layout = new QVBoxLayout(insights);
+		insights_layout->setContentsMargins(12, 10, 12, 10);
+		insights_layout->setSpacing(8);
+
 		QLabel* title = new QLabel(QString::fromUtf8((*found)["name"].get<std::string_view>()));
-		QFont font1 = title->font();
-		font1.setBold(true);
-		font1.setPointSize(15);
-		title->setFont(font1);
+		title->setObjectName("objectEditorInsightsTitle");
 
-		std::string all_tags = "Tags: ";
+		QWidget* tags_wrap = new QWidget;
+		QHBoxLayout* tags_layout = new QHBoxLayout(tags_wrap);
+		tags_layout->setContentsMargins(0, 0, 0, 0);
+		tags_layout->setSpacing(6);
 		for (const auto& tag : (*found)["tags"]) {
-			all_tags += tag.get<std::string_view>() + " ";
+			QLabel* tag_label = new QLabel(QString::fromUtf8(tag.get<std::string_view>()));
+			tag_label->setObjectName("objectEditorPill");
+			tags_layout->addWidget(tag_label);
 		}
-
-		QLabel* tags = new QLabel(QString::fromStdString(all_tags));
-		QFont font2 = tags->font();
-		font2.setBold(true);
-		tags->setFont(font2);
+		tags_layout->addStretch();
 
 		QLabel* label = new QLabel(QString::fromUtf8((*found)["raw_text"].get<std::string_view>()));
+		label->setWordWrap(true);
+
 		QLabel* latest_tested_version =
 			new QLabel("Latest tested version: " + QString::fromUtf8((*found)["latest_tested_version"].get<std::string_view>()));
-		latest_tested_version->setFont(font2);
+		latest_tested_version->setObjectName("objectEditorInsightsMeta");
 
 		QLabel* link = new QLabel(
-			"Fix mistakes or add info directly in <a href=\"https://docs.google.com/document/d/1z17FTnhyfVL87tJgLmwWks3Low6TuQ0tjfKHXBELWpo/edit\">the Google Docs</a>!"
+			"Fix mistakes or add info directly in <a href=\"https://docs.google.com/document/d/1z17FTnhyfVL87tJgLmwWks3Low6TuQ0tjfKHXBELWpo/edit\">the Google Docs</a>."
 		);
 		link->setOpenExternalLinks(true);
 
-		layout->addWidget(title);
-		layout->addWidget(tags);
-		layout->addWidget(label);
-		layout->addWidget(latest_tested_version);
-		layout->addWidget(link);
-		label->setWordWrap(true);
+		insights_layout->addWidget(title);
+		insights_layout->addWidget(tags_wrap);
+		insights_layout->addWidget(label);
+		insights_layout->addWidget(latest_tested_version);
+		insights_layout->addWidget(link);
+
+		layout->addWidget(insights);
 	}
 
 	SingleModel* single_model = new SingleModel(table, this);
@@ -735,6 +775,8 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		view->verticalHeader()->viewport()->setPalette(header_palette);
 	}
 	view->setModel(filter_model);
+	const int field_column_width = details_header_width(single_model, view->verticalHeader());
+	view->verticalHeader()->setFixedWidth(field_column_width);
 	current_details_view = view;
 	const auto update_inspector_meta = [filter_model, single_model, inspector_meta]() {
 		inspector_meta->setText(QString::number(filter_model->rowCount()) + " of " + QString::number(single_model->rowCount()) + " fields");
