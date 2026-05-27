@@ -4,6 +4,8 @@
 import std;
 import Globals;
 import TableModel;
+import TriggerStrings;
+import Utilities;
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -34,6 +36,48 @@ namespace {
 		ColorPreset{"Dark Green", "|cff008000", "#008000", "white"},
 	};
 } // namespace
+
+// Resolves the SLK column name for a modification code by looking up the meta SLK.
+// E.g. meta_field_name(abilities_meta_slk, "atp1") -> "tip"
+std::string TooltipEditor::meta_field_name(const slk::SLK& meta_slk, const std::string& code) {
+	std::string field = to_lowercase_copy(meta_slk.data<std::string>("field", code));
+	const int data_val = meta_slk.data<int>("data", code);
+	if (data_val > 0) {
+		field += static_cast<char>('a' + data_val - 1);
+	}
+	return field;
+}
+
+// Reads a field from the SLK, resolving any TRIGSTR_ reference via the trigger strings table.
+// Returns empty if the field column does not exist.
+QString TooltipEditor::read_field(const TabData& tab, const std::string& field) const {
+	if (!tab.slk->column_headers.contains(field)) {
+		return {};
+	}
+	auto raw = tab.slk->data<std::string>(field, tab.current_id);
+	if (raw.starts_with("TRIGSTR_")) {
+		auto* tm = static_cast<TableModel*>(tab.table);
+		if (tm && tm->trigger_strings) {
+			return QString::fromUtf8(tm->trigger_strings->string(raw));
+		}
+		return {};
+	}
+	return QString::fromStdString(raw);
+}
+
+std::string TooltipEditor::resolve_tip_field(const TabData& tab) const {
+	if (tab.leveled) {
+		return tab.tip_field_name + std::to_string(tab.current_level);
+	}
+	return tab.tip_field_name;
+}
+
+std::string TooltipEditor::resolve_utip_field(const TabData& tab) const {
+	if (tab.leveled) {
+		return tab.utip_field_name + std::to_string(tab.current_level);
+	}
+	return tab.utip_field_name;
+}
 
 QString TooltipEditor::wc3_to_html(const QString& text) {
 	QString html;
@@ -78,15 +122,17 @@ QString TooltipEditor::wc3_to_html(const QString& text) {
 	return html;
 }
 
-QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractItemModel* list_model,
-                                   const char* tip_field, const char* ubertip_field) {
+QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractTableModel* table,
+                                   QAbstractItemModel* list_model, bool leveled,
+                                   const char* tip_label_text, const char* utip_label_text) {
 	tab->slk = &slk;
-	tab->tip_field = tip_field;
-	tab->ubertip_field = ubertip_field;
+	tab->table = table;
+	tab->leveled = leveled;
+	tab->current_level = 1;
 
 	auto* splitter = new QSplitter(Qt::Horizontal);
 
-	// Left panel: search + list
+	// ── Left panel: search + list ──────────────────────────────────────────
 	auto* left_panel = new QWidget;
 	auto* left_layout = new QVBoxLayout(left_panel);
 	left_layout->setContentsMargins(4, 4, 4, 4);
@@ -113,25 +159,45 @@ QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractItemMode
 	left_panel->setMinimumWidth(160);
 	left_panel->setMaximumWidth(260);
 
-	// Right panel: editor fields + preview
+	// ── Right panel: editor fields + preview ───────────────────────────────
 	auto* right_panel = new QWidget;
 	auto* right_layout = new QVBoxLayout(right_panel);
 	right_layout->setContentsMargins(8, 4, 4, 4);
 	right_layout->setSpacing(6);
 
-	auto add_field = [&](const QString& label, QPlainTextEdit*& edit_out, int max_height) {
-		right_layout->addWidget(new QLabel(label));
-		edit_out = new QPlainTextEdit;
-		edit_out->setEnabled(false);
-		edit_out->setMaximumHeight(max_height);
-		right_layout->addWidget(edit_out);
-	};
+	// Level row (visible only for leveled tabs)
+	tab->level_row = new QWidget;
+	auto* level_row_layout = new QHBoxLayout(tab->level_row);
+	level_row_layout->setContentsMargins(0, 0, 0, 0);
+	level_row_layout->setSpacing(6);
+	level_row_layout->addWidget(new QLabel("Level:"));
+	tab->level_spin = new QSpinBox;
+	tab->level_spin->setMinimum(1);
+	tab->level_spin->setMaximum(4);
+	tab->level_spin->setValue(1);
+	tab->level_spin->setFixedWidth(60);
+	level_row_layout->addWidget(tab->level_spin);
+	level_row_layout->addStretch();
+	tab->level_row->setVisible(leveled);
+	right_layout->addWidget(tab->level_row);
 
-	add_field("Name:", tab->name_edit, 40);
-	add_field("Tooltip (Tip):", tab->tip_edit, 60);
-	add_field("Description (Ubertip):", tab->ubertip_edit, 120);
+	// First tooltip field
+	tab->tip_label = new QLabel(tip_label_text);
+	right_layout->addWidget(tab->tip_label);
+	tab->tip_edit = new QPlainTextEdit;
+	tab->tip_edit->setEnabled(false);
+	tab->tip_edit->setMaximumHeight(60);
+	right_layout->addWidget(tab->tip_edit);
 
-	right_layout->addWidget(new QLabel("Preview (Ubertip):"));
+	// Second tooltip field
+	tab->utip_label = new QLabel(utip_label_text);
+	right_layout->addWidget(tab->utip_label);
+	tab->ubertip_edit = new QPlainTextEdit;
+	tab->ubertip_edit->setEnabled(false);
+	right_layout->addWidget(tab->ubertip_edit);
+
+	// Preview
+	right_layout->addWidget(new QLabel("Preview:"));
 	tab->preview = new QTextBrowser;
 	tab->preview->setMinimumHeight(80);
 	tab->preview->setMaximumHeight(150);
@@ -139,8 +205,8 @@ QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractItemMode
 	right_layout->addWidget(tab->preview);
 	right_layout->addStretch();
 
-	// Wire up editor signals
-	auto connect_edit = [&](QPlainTextEdit* edit) {
+	// Wire editor signals
+	auto connect_edit = [this, tab](QPlainTextEdit* edit) {
 		connect(edit, &QPlainTextEdit::textChanged, this, [this, tab]() {
 			save_current(*tab);
 			update_preview(*tab);
@@ -149,11 +215,15 @@ QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractItemMode
 			active_edit = edit;
 		});
 	};
-	connect_edit(tab->name_edit);
 	connect_edit(tab->tip_edit);
 	connect_edit(tab->ubertip_edit);
 
-	// Entry selection from list
+	connect(tab->level_spin, &QSpinBox::valueChanged, this, [this, tab](int level) {
+		save_current(*tab);
+		tab->current_level = level;
+		load_level(*tab);
+	});
+
 	connect(tab->list_view->selectionModel(), &QItemSelectionModel::currentChanged,
 	        this, [this, tab](const QModelIndex& current) {
 		if (!current.isValid()) {
@@ -178,23 +248,39 @@ QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractItemMode
 void TooltipEditor::load_entry(TabData& tab, const std::string& id) {
 	tab.current_id = id;
 
-	auto read = [&](const char* field) -> QString {
-		if (!tab.slk->column_headers.contains(field)) {
-			return {};
+	if (tab.leveled) {
+		int max_level = 4;
+		if (tab.slk->column_headers.contains("levels")) {
+			const int slk_levels = tab.slk->data<int>("levels", id);
+			if (slk_levels > 0) {
+				max_level = slk_levels;
+			}
 		}
-		return QString::fromStdString(tab.slk->data<std::string>(field, id));
-	};
-
-	{
-		const QSignalBlocker b1(tab.name_edit), b2(tab.tip_edit), b3(tab.ubertip_edit);
-		tab.name_edit->setPlainText(read("name"));
-		tab.tip_edit->setPlainText(read(tab.tip_field));
-		tab.ubertip_edit->setPlainText(read(tab.ubertip_field));
+		const QSignalBlocker sb(tab.level_spin);
+		tab.level_spin->setMaximum(max_level);
+		tab.level_spin->setValue(1);
+		tab.current_level = 1;
 	}
 
-	tab.name_edit->setEnabled(true);
-	tab.tip_edit->setEnabled(tab.slk->column_headers.contains(tab.tip_field));
-	tab.ubertip_edit->setEnabled(tab.slk->column_headers.contains(tab.ubertip_field));
+	load_level(tab);
+}
+
+void TooltipEditor::load_level(TabData& tab) {
+	if (tab.current_id.empty()) {
+		return;
+	}
+
+	const std::string tf = resolve_tip_field(tab);
+	const std::string uf = resolve_utip_field(tab);
+
+	{
+		const QSignalBlocker b1(tab.tip_edit), b2(tab.ubertip_edit);
+		tab.tip_edit->setPlainText(read_field(tab, tf));
+		tab.ubertip_edit->setPlainText(read_field(tab, uf));
+	}
+
+	tab.tip_edit->setEnabled(tab.slk->column_headers.contains(tf));
+	tab.ubertip_edit->setEnabled(tab.slk->column_headers.contains(uf));
 
 	update_preview(tab);
 }
@@ -203,17 +289,32 @@ void TooltipEditor::save_current(TabData& tab) {
 	if (tab.current_id.empty()) {
 		return;
 	}
-	tab.slk->set_shadow_data("name", tab.current_id, tab.name_edit->toPlainText().toStdString());
-	if (tab.slk->column_headers.contains(tab.tip_field)) {
-		tab.slk->set_shadow_data(tab.tip_field, tab.current_id, tab.tip_edit->toPlainText().toStdString());
+	const std::string tf = resolve_tip_field(tab);
+	const std::string uf = resolve_utip_field(tab);
+
+	if (tab.slk->column_headers.contains(tf)) {
+		tab.slk->set_shadow_data(tf, tab.current_id, tab.tip_edit->toPlainText().toStdString());
 	}
-	if (tab.slk->column_headers.contains(tab.ubertip_field)) {
-		tab.slk->set_shadow_data(tab.ubertip_field, tab.current_id, tab.ubertip_edit->toPlainText().toStdString());
+	if (tab.slk->column_headers.contains(uf)) {
+		tab.slk->set_shadow_data(uf, tab.current_id, tab.ubertip_edit->toPlainText().toStdString());
 	}
 }
 
 void TooltipEditor::update_preview(TabData& tab) {
-	tab.preview->setHtml(wc3_to_html(tab.ubertip_edit->toPlainText()));
+	const QString tip = tab.tip_edit->toPlainText();
+	const QString ubertip = tab.ubertip_edit->toPlainText();
+
+	QString html;
+	if (!tip.isEmpty()) {
+		html += "<b>" + wc3_to_html(tip) + "</b>";
+		if (!ubertip.isEmpty()) {
+			html += "<hr style='border:0; border-top:1px solid #444; margin:4px 0;'/>";
+		}
+	}
+	if (!ubertip.isEmpty()) {
+		html += wc3_to_html(ubertip);
+	}
+	tab.preview->setHtml(html);
 }
 
 void TooltipEditor::insert_at_cursor(const QString& text) {
@@ -234,7 +335,7 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 	setWindowTitle("Tooltip Editor");
 	setMinimumSize(860, 600);
 
-	// Formatting toolbar
+	// ── Formatting toolbar ─────────────────────────────────────────────────
 	auto* toolbar = new QToolBar("Tooltip Formatting", this);
 	toolbar->setMovable(false);
 	addToolBar(toolbar);
@@ -242,12 +343,11 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 	for (const auto& p : COLOR_PRESETS) {
 		auto* btn = new QPushButton(QString::fromUtf8(p.label));
 		btn->setFixedWidth(72);
-		btn->setToolTip(QString("Insert %1 color code (%2)").arg(p.label).arg(p.code));
+		btn->setToolTip(QString("Insert %1 color code (%2)").arg(p.label, p.code));
 		btn->setStyleSheet(
 			QString("QPushButton{background:%1;color:%2;border-radius:3px;padding:2px 4px;font-size:11px;}"
 			        "QPushButton:hover{border:1px solid rgba(255,255,255,140);}")
-				.arg(p.bg)
-				.arg(p.fg));
+				.arg(p.bg, p.fg));
 		const QString code = QString::fromUtf8(p.code);
 		connect(btn, &QPushButton::clicked, this, [this, code]() { insert_at_cursor(code); });
 		toolbar->addWidget(btn);
@@ -298,7 +398,7 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 	});
 	toolbar->addWidget(templates_btn);
 
-	// Central area with tabs
+	// ── Central area: tabs ─────────────────────────────────────────────────
 	auto* central = new QWidget(this);
 	auto* main_layout = new QVBoxLayout(central);
 	main_layout->setContentsMargins(0, 0, 0, 0);
@@ -311,8 +411,17 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 		auto* label = new QLabel("No map loaded. Please open a map first.");
 		label->setAlignment(Qt::AlignCenter);
 		tab_widget->addTab(label, "No Map");
+		show();
 		return;
 	}
+
+	// Resolve SLK column names from modification codes via meta SLKs
+	unit_tab.tip_field_name = meta_field_name(units_meta_slk, "unam");
+	unit_tab.utip_field_name = meta_field_name(units_meta_slk, "ides");
+	item_tab.tip_field_name = meta_field_name(items_meta_slk, "utip");
+	item_tab.utip_field_name = meta_field_name(items_meta_slk, "utub");
+	ability_tab.tip_field_name = meta_field_name(abilities_meta_slk, "atp1");
+	ability_tab.utip_field_name = meta_field_name(abilities_meta_slk, "aub1");
 
 	auto* unit_list = new UnitListModel(this);
 	unit_list->setSourceModel(units_table);
@@ -323,13 +432,20 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 	auto* ability_list = new AbilityListModel(this);
 	ability_list->setSourceModel(abilities_table);
 
-	// Abilities use level-based tip fields (tip1/ubertip1) if non-leveled ones are absent
-	const char* ability_tip = abilities_slk.column_headers.contains("tip") ? "tip" : "tip1";
-	const char* ability_ubertip = abilities_slk.column_headers.contains("ubertip") ? "ubertip" : "ubertip1";
+	tab_widget->addTab(
+		build_tab(&unit_tab, units_slk, units_table, unit_list, false,
+		          "Text - Name:", "Text - Description:"),
+		"Units");
+	tab_widget->addTab(
+		build_tab(&item_tab, items_slk, items_table, item_list, false,
+		          "Text - Tooltip - Basic:", "Text - Tooltip - Extended:"),
+		"Items");
+	tab_widget->addTab(
+		build_tab(&ability_tab, abilities_slk, abilities_table, ability_list, true,
+		          "Tooltip Normal:", "Tooltip Extended:"),
+		"Abilities");
 
-	tab_widget->addTab(build_tab(&unit_tab, units_slk, unit_list), "Units");
-	tab_widget->addTab(build_tab(&item_tab, items_slk, item_list), "Items");
-	tab_widget->addTab(build_tab(&ability_tab, abilities_slk, ability_list, ability_tip, ability_ubertip), "Abilities");
+	show();
 }
 
 #include "tooltip_editor.moc"
