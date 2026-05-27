@@ -23,6 +23,7 @@
 #include <QSet>
 #include <QButtonGroup>
 #include <QComboBox>
+#include <QStackedWidget>
 #include <QFrame>
 #include <QStyledItemDelegate>
 #include <QStyle>
@@ -323,6 +324,9 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorInsights { border: 1px solid palette(mid); border-radius: 8px; background: rgba(116, 169, 255, 0.05); }"
 		"#objectEditorInsightsTitle { font-size: 13px; font-weight: 600; }"
 		"#objectEditorInsightsMeta { color: rgb(168, 174, 184); }"
+		"#objectEditorEmptyState { border: 1px dashed palette(mid); border-radius: 10px; background: rgba(255,255,255,0.02); }"
+		"#objectEditorEmptyTitle { font-size: 14px; font-weight: 600; }"
+		"#objectEditorEmptyMeta { color: rgb(168, 174, 184); }"
 		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
 		"#objectEditorFieldSearch { padding: 4px 8px; }"
 		"#objectEditorSectionFilter { padding: 4px 8px; min-width: 150px; }"
@@ -920,16 +924,78 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	connect(view->verticalHeader(), &QHeaderView::geometriesChanged, column_header, sync_column_header);
 	sync_column_header();
 
+	QWidget* table_panel = new QWidget;
+	QVBoxLayout* table_panel_layout = new QVBoxLayout(table_panel);
+	table_panel_layout->setContentsMargins(0, 0, 0, 0);
+	table_panel_layout->setSpacing(0);
+	table_panel_layout->addWidget(column_header);
+	table_panel_layout->addWidget(view, 1);
+
+	QFrame* empty_state = new QFrame;
+	empty_state->setObjectName("objectEditorEmptyState");
+	QVBoxLayout* empty_state_layout = new QVBoxLayout(empty_state);
+	empty_state_layout->setContentsMargins(24, 24, 24, 24);
+	empty_state_layout->setSpacing(10);
+
+	QLabel* empty_title = new QLabel("No fields match the current filters");
+	empty_title->setObjectName("objectEditorEmptyTitle");
+
+	QLabel* empty_meta = new QLabel("Try a broader search, switch sections, or clear the active filter chips.");
+	empty_meta->setObjectName("objectEditorEmptyMeta");
+	empty_meta->setWordWrap(true);
+
+	QPushButton* clear_filters = new QPushButton("Clear Filters");
+	connect(clear_filters, &QPushButton::clicked, this, [field_search, section_filter, modified_chip, core_chip]() {
+		field_search->clear();
+		section_filter->setCurrentIndex(0);
+		modified_chip->setChecked(false);
+		core_chip->setChecked(false);
+	});
+
+	empty_state_layout->addStretch();
+	empty_state_layout->addWidget(empty_title, 0, Qt::AlignHCenter);
+	empty_state_layout->addWidget(empty_meta, 0, Qt::AlignHCenter);
+	empty_state_layout->addWidget(clear_filters, 0, Qt::AlignHCenter);
+	empty_state_layout->addStretch();
+
+	QStackedWidget* inspector_stack = new QStackedWidget;
+	inspector_stack->addWidget(table_panel);
+	inspector_stack->addWidget(empty_state);
+	inspector_stack->setCurrentWidget(table_panel);
+
+	const auto update_inspector_state = [filter_model, inspector_stack, table_panel, empty_state]() {
+		inspector_stack->setCurrentWidget(filter_model->rowCount() > 0 ? table_panel : empty_state);
+	};
+	update_inspector_state();
+	connect(filter_model, &QAbstractItemModel::modelReset, inspector_stack, update_inspector_state);
+	connect(filter_model, &QAbstractItemModel::rowsInserted, inspector_stack, [update_inspector_state](const QModelIndex&, int, int) {
+		update_inspector_state();
+	});
+	connect(filter_model, &QAbstractItemModel::rowsRemoved, inspector_stack, [update_inspector_state](const QModelIndex&, int, int) {
+		update_inspector_state();
+	});
+	connect(filter_model, &QAbstractItemModel::layoutChanged, inspector_stack, update_inspector_state);
+	connect(field_search, &QLineEdit::textChanged, inspector_stack, [update_inspector_state](const QString&) {
+		update_inspector_state();
+	});
+	connect(section_filter, &QComboBox::currentIndexChanged, inspector_stack, [update_inspector_state](int) {
+		update_inspector_state();
+	});
+	connect(modified_chip, &QToolButton::toggled, inspector_stack, [update_inspector_state](bool) {
+		update_inspector_state();
+	});
+	connect(core_chip, &QToolButton::toggled, inspector_stack, [update_inspector_state](bool) {
+		update_inspector_state();
+	});
+
 	layout->addWidget(summary);
 	layout->addWidget(inspector_bar);
 	layout->addWidget(section_strip);
-	layout->addWidget(column_header);
-	layout->addWidget(view);
+	layout->addWidget(inspector_stack);
 	layout->setStretch(0, 0);
 	layout->setStretch(1, 0);
 	layout->setStretch(2, 0);
-	layout->setStretch(3, 0);
-	layout->setStretch(4, 1);
+	layout->setStretch(3, 1);
 
 	QWidget* container = new QWidget;
 	container->setLayout(layout);
