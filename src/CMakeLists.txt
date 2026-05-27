@@ -201,6 +201,8 @@ target_sources(HiveWE_lib PRIVATE
 	"tooltip_editor/tooltip_editor.h"
 	"tooltip_editor/template_manager.cpp"
 	"tooltip_editor/template_manager.h"
+	"tooltip_editor/wc3_color_dialog.cpp"
+	"tooltip_editor/wc3_color_dialog.h"
 
 	"qt_imgui/imgui_renderer.cpp"
 	"qt_imgui/qt_imgui.cpp"

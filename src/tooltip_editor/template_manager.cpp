@@ -1,4 +1,5 @@
 #include "template_manager.h"
+#include "wc3_color_dialog.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -7,8 +8,10 @@
 #include <QLabel>
 #include <QSettings>
 #include <QMessageBox>
-#include <QColorDialog>
 #include <QToolBar>
+#include <QTextEdit>
+#include <QTextCharFormat>
+#include <QTextCursor>
 
 namespace {
 	struct ColorPreset {
@@ -76,12 +79,22 @@ void TemplateManager::insert_color_code(const QString& code) {
 	if (!active_field) {
 		return;
 	}
+	const QColor color = parse_wc3_color(code);
 	QTextCursor cursor = active_field->textCursor();
 	if (cursor.hasSelection()) {
-		const QString selected = cursor.selectedText();
-		cursor.insertText(code + selected + "|r");
+		QTextCharFormat fmt;
+		if (color.isValid()) {
+			fmt.setForeground(color);
+		} else {
+			fmt.setForeground(QBrush(Qt::NoBrush));
+		}
+		cursor.mergeCharFormat(fmt);
 	} else {
-		cursor.insertText(code);
+		if (color.isValid()) {
+			QTextCharFormat fmt;
+			fmt.setForeground(color);
+			active_field->setCurrentCharFormat(fmt);
+		}
 	}
 	active_field->setFocus();
 }
@@ -156,8 +169,8 @@ void TemplateManager::load_template(int index) {
 	current_index = index;
 	loading = true;
 	name_edit->setText(templates[index].name);
-	tip_edit->setPlainText(templates[index].tip_text);
-	text_edit->setPlainText(templates[index].text);
+	parse_wc3_to_doc(templates[index].tip_text, tip_edit);
+	parse_wc3_to_doc(templates[index].text, text_edit);
 	loading = false;
 	update_preview();
 	update_fav_ui();
@@ -168,8 +181,8 @@ void TemplateManager::commit_current() {
 		return;
 	}
 	templates[current_index].name = name_edit->text().trimmed();
-	templates[current_index].tip_text = tip_edit->toPlainText();
-	templates[current_index].text = text_edit->toPlainText();
+	templates[current_index].tip_text = doc_to_wc3(tip_edit);
+	templates[current_index].text = doc_to_wc3(text_edit);
 
 	if (auto* item = template_list->item(current_index)) {
 		const QSignalBlocker blocker(template_list);
@@ -180,8 +193,8 @@ void TemplateManager::commit_current() {
 }
 
 void TemplateManager::update_preview() {
-	const QString tip = tip_edit->toPlainText();
-	const QString ubertip = text_edit->toPlainText();
+	const QString tip = doc_to_wc3(tip_edit);
+	const QString ubertip = doc_to_wc3(text_edit);
 
 	QString html;
 	if (!tip.isEmpty()) {
@@ -234,7 +247,7 @@ TemplateManager::TemplateManager(QWidget* parent)
 	custom_btn->setFixedHeight(22);
 	custom_btn->setToolTip("Pick a custom color");
 	connect(custom_btn, &QPushButton::clicked, this, [this]() {
-		const QColor color = QColorDialog::getColor(Qt::white, this, "Pick Color");
+		const QColor color = pick_wc3_color(this);
 		if (!color.isValid()) {
 			return;
 		}
@@ -299,14 +312,14 @@ TemplateManager::TemplateManager(QWidget* parent)
 	right_layout->addWidget(fav_btn);
 
 	right_layout->addWidget(new QLabel("Tooltip Normal:"));
-	tip_edit = new QPlainTextEdit;
-	tip_edit->setPlaceholderText("Optional title/name text (supports WC3 color codes)...");
+	tip_edit = new QTextEdit;
+	tip_edit->setPlaceholderText("Optional title/name text...");
 	tip_edit->setMaximumHeight(60);
 	right_layout->addWidget(tip_edit);
 
 	right_layout->addWidget(new QLabel("Tooltip Extended:"));
-	text_edit = new QPlainTextEdit;
-	text_edit->setPlaceholderText("Body text (supports WC3 color codes)...");
+	text_edit = new QTextEdit;
+	text_edit->setPlaceholderText("Body text...");
 	right_layout->addWidget(text_edit);
 
 	right_layout->addWidget(new QLabel("Preview:"));
@@ -333,8 +346,8 @@ TemplateManager::TemplateManager(QWidget* parent)
 	connect(add_btn, &QPushButton::clicked, this, [this]() {
 		// If nothing is selected, seed the new template with whatever is in the fields
 		QString initial_name = (current_index < 0) ? name_edit->text().trimmed() : "";
-		QString initial_tip = (current_index < 0) ? tip_edit->toPlainText() : "";
-		QString initial_text = (current_index < 0) ? text_edit->toPlainText() : "";
+		QString initial_tip = (current_index < 0) ? doc_to_wc3(tip_edit) : "";
+		QString initial_text = (current_index < 0) ? doc_to_wc3(text_edit) : "";
 		if (initial_name.isEmpty()) {
 			initial_name = "New Template";
 		}
@@ -406,14 +419,14 @@ TemplateManager::TemplateManager(QWidget* parent)
 		update_preview();
 	};
 
-	connect(tip_edit, &QPlainTextEdit::textChanged, this, on_field_changed);
-	connect(text_edit, &QPlainTextEdit::textChanged, this, on_field_changed);
+	connect(tip_edit, &QTextEdit::textChanged, this, on_field_changed);
+	connect(text_edit, &QTextEdit::textChanged, this, on_field_changed);
 
 	// Track which field is focused for color button insertion
-	connect(tip_edit, &QPlainTextEdit::cursorPositionChanged, this, [this]() {
+	connect(tip_edit, &QTextEdit::cursorPositionChanged, this, [this]() {
 		active_field = tip_edit;
 	});
-	connect(text_edit, &QPlainTextEdit::cursorPositionChanged, this, [this]() {
+	connect(text_edit, &QTextEdit::cursorPositionChanged, this, [this]() {
 		active_field = text_edit;
 	});
 

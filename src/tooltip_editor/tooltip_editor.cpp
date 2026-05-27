@@ -1,5 +1,6 @@
 #include "tooltip_editor.h"
 #include "template_manager.h"
+#include "wc3_color_dialog.h"
 
 import std;
 import Globals;
@@ -12,10 +13,9 @@ import Utilities;
 #include <QSplitter>
 #include <QLabel>
 #include <QToolBar>
-#include <QColorDialog>
 #include <QPushButton>
 #include <QSettings>
-#include <QSyntaxHighlighter>
+#include <QTextEdit>
 #include <QTextCharFormat>
 #include <QTextCursor>
 
@@ -40,58 +40,6 @@ namespace {
 		ColorPreset{"Dark Green", "|cff008000", "#008000", "white"},
 	};
 
-	// Highlights WC3 color sequences: mutes |c..|r codes in gray, colors the text between them.
-	class WC3ColorHighlighter : public QSyntaxHighlighter {
-	public:
-		using QSyntaxHighlighter::QSyntaxHighlighter;
-
-	protected:
-		void highlightBlock(const QString& text) override {
-			QTextCharFormat code_fmt;
-			code_fmt.setForeground(QColor(130, 130, 130));
-
-			int i = 0;
-			QColor active_color;
-			bool in_color = false;
-
-			while (i < text.size()) {
-				if (text[i] == '|' && i + 1 < text.size()) {
-					const char next = text[i + 1].toLatin1();
-
-					if (next == 'c' && i + 10 <= text.size()) {
-						const QString hex = text.mid(i + 2, 8);
-						bool ok1, ok2, ok3;
-						const int rr = hex.mid(2, 2).toInt(&ok1, 16);
-						const int gg = hex.mid(4, 2).toInt(&ok2, 16);
-						const int bb = hex.mid(6, 2).toInt(&ok3, 16);
-						if (ok1 && ok2 && ok3) {
-							setFormat(i, 10, code_fmt);
-							active_color = QColor(rr, gg, bb);
-							in_color = true;
-							i += 10;
-							continue;
-						}
-					} else if (next == 'r') {
-						setFormat(i, 2, code_fmt);
-						in_color = false;
-						i += 2;
-						continue;
-					} else if (next == 'n') {
-						setFormat(i, 2, code_fmt);
-						i += 2;
-						continue;
-					}
-				}
-
-				if (in_color) {
-					QTextCharFormat text_fmt;
-					text_fmt.setForeground(active_color);
-					setFormat(i, 1, text_fmt);
-				}
-				++i;
-			}
-		}
-	};
 } // namespace
 
 std::string TooltipEditor::meta_field_name(const slk::SLK& meta_slk, const std::string& code) {
@@ -181,12 +129,22 @@ void TooltipEditor::insert_color_code(const QString& code) {
 	if (!active_edit || !active_edit->isEnabled()) {
 		return;
 	}
+	const QColor color = parse_wc3_color(code);
 	QTextCursor cursor = active_edit->textCursor();
 	if (cursor.hasSelection()) {
-		const QString selected = cursor.selectedText();
-		cursor.insertText(code + selected + "|r");
+		QTextCharFormat fmt;
+		if (color.isValid()) {
+			fmt.setForeground(color);
+		} else {
+			fmt.setForeground(QBrush(Qt::NoBrush));
+		}
+		cursor.mergeCharFormat(fmt);
 	} else {
-		cursor.insertText(code);
+		if (color.isValid()) {
+			QTextCharFormat fmt;
+			fmt.setForeground(color);
+			active_edit->setCurrentCharFormat(fmt);
+		}
 	}
 	active_edit->setFocus();
 }
@@ -376,11 +334,10 @@ QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractTableMod
 	// First tooltip field
 	tab->tip_label = new QLabel(tip_label_text);
 	right_layout->addWidget(tab->tip_label);
-	tab->tip_edit = new QPlainTextEdit;
+	tab->tip_edit = new QTextEdit;
 	tab->tip_edit->setEnabled(false);
 	tab->tip_edit->setMaximumHeight(60);
 	right_layout->addWidget(tab->tip_edit);
-	new WC3ColorHighlighter(tab->tip_edit->document());
 
 	// Second tooltip field header (label + favorite quick-apply buttons)
 	auto* utip_header = new QWidget;
@@ -397,10 +354,9 @@ QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractTableMod
 	utip_header_layout->addStretch();
 	right_layout->addWidget(utip_header);
 
-	tab->ubertip_edit = new QPlainTextEdit;
+	tab->ubertip_edit = new QTextEdit;
 	tab->ubertip_edit->setEnabled(false);
 	right_layout->addWidget(tab->ubertip_edit);
-	new WC3ColorHighlighter(tab->ubertip_edit->document());
 
 	// Preview
 	right_layout->addWidget(new QLabel("Preview:"));
@@ -412,12 +368,12 @@ QWidget* TooltipEditor::build_tab(TabData* tab, slk::SLK& slk, QAbstractTableMod
 	right_layout->addStretch();
 
 	// Wire editor signals
-	auto connect_edit = [this, tab](QPlainTextEdit* edit) {
-		connect(edit, &QPlainTextEdit::textChanged, this, [this, tab]() {
+	auto connect_edit = [this, tab](QTextEdit* edit) {
+		connect(edit, &QTextEdit::textChanged, this, [this, tab]() {
 			save_current(*tab);
 			update_preview(*tab);
 		});
-		connect(edit, &QPlainTextEdit::cursorPositionChanged, this, [this, edit]() {
+		connect(edit, &QTextEdit::cursorPositionChanged, this, [this, edit]() {
 			active_edit = edit;
 		});
 	};
@@ -481,8 +437,8 @@ void TooltipEditor::load_level(TabData& tab) {
 
 	{
 		const QSignalBlocker b1(tab.tip_edit), b2(tab.ubertip_edit);
-		tab.tip_edit->setPlainText(read_field(tab, tf));
-		tab.ubertip_edit->setPlainText(read_field(tab, uf));
+		parse_wc3_to_doc(read_field(tab, tf), tab.tip_edit);
+		parse_wc3_to_doc(read_field(tab, uf), tab.ubertip_edit);
 	}
 
 	tab.tip_edit->setEnabled(tab.slk->column_headers.contains(tf));
@@ -499,16 +455,16 @@ void TooltipEditor::save_current(TabData& tab) {
 	const std::string uf = resolve_utip_field(tab);
 
 	if (tab.slk->column_headers.contains(tf)) {
-		tab.slk->set_shadow_data(tf, tab.current_id, tab.tip_edit->toPlainText().toStdString());
+		tab.slk->set_shadow_data(tf, tab.current_id, doc_to_wc3(tab.tip_edit).toStdString());
 	}
 	if (tab.slk->column_headers.contains(uf)) {
-		tab.slk->set_shadow_data(uf, tab.current_id, tab.ubertip_edit->toPlainText().toStdString());
+		tab.slk->set_shadow_data(uf, tab.current_id, doc_to_wc3(tab.ubertip_edit).toStdString());
 	}
 }
 
 void TooltipEditor::update_preview(TabData& tab) {
-	const QString tip = tab.tip_edit->toPlainText();
-	const QString ubertip = tab.ubertip_edit->toPlainText();
+	const QString tip = doc_to_wc3(tab.tip_edit);
+	const QString ubertip = doc_to_wc3(tab.ubertip_edit);
 
 	QString html;
 	if (!tip.isEmpty()) {
@@ -530,10 +486,10 @@ void TooltipEditor::apply_template(const QString& tip_text, const QString& ubert
 		return;
 	}
 	if (!tip_text.isEmpty() && tab->tip_edit->isEnabled()) {
-		tab->tip_edit->setPlainText(tip_text);
+		parse_wc3_to_doc(tip_text, tab->tip_edit);
 	}
 	if (!ubertip_text.isEmpty() && tab->ubertip_edit->isEnabled()) {
-		tab->ubertip_edit->setPlainText(ubertip_text);
+		parse_wc3_to_doc(ubertip_text, tab->ubertip_edit);
 	}
 }
 
@@ -577,11 +533,11 @@ TooltipEditor::TooltipEditor(QWidget* parent)
 
 	toolbar->addSeparator();
 
-	// Custom color picker
+	// Custom color picker — supports both WC3 hex input and visual selection
 	auto* custom_btn = new QPushButton("Custom...");
-	custom_btn->setToolTip("Pick a custom color (added to toolbar)");
+	custom_btn->setToolTip("Pick a custom color using WC3 code or visual picker (added to toolbar)");
 	connect(custom_btn, &QPushButton::clicked, this, [this]() {
-		const QColor color = QColorDialog::getColor(Qt::white, this, "Pick Color");
+		const QColor color = pick_wc3_color(this);
 		if (!color.isValid()) {
 			return;
 		}

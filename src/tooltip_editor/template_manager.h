@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <QListWidget>
 #include <QLineEdit>
-#include <QPlainTextEdit>
+#include <QTextEdit>
 #include <QTextBrowser>
 #include <QLabel>
 #include <QPushButton>
@@ -21,12 +21,12 @@ class TemplateManager : public QWidget {
 
 	QListWidget* template_list;
 	QLineEdit* name_edit;
-	QPlainTextEdit* tip_edit;    // Tooltip Normal input
-	QPlainTextEdit* text_edit;   // Tooltip Extended input
+	QTextEdit* tip_edit;    // Tooltip Normal input
+	QTextEdit* text_edit;   // Tooltip Extended input
 	QTextBrowser* preview;
 	QPushButton* fav_btn;
 	QLabel* fav_count_label;
-	QPlainTextEdit* active_field = nullptr;  // which field currently has cursor focus
+	QTextEdit* active_field = nullptr;  // which field currently has cursor focus
 
 	std::vector<Template> templates;
 	int current_index = -1;

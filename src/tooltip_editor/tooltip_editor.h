@@ -2,7 +2,7 @@
 
 #include <QMainWindow>
 #include <QListView>
-#include <QPlainTextEdit>
+#include <QTextEdit>
 #include <QTextBrowser>
 #include <QTabWidget>
 #include <QSortFilterProxyModel>
@@ -34,8 +34,8 @@ class TooltipEditor : public QMainWindow {
 		QLineEdit* search_bar = nullptr;
 		QLabel* tip_label = nullptr;
 		QLabel* utip_label = nullptr;
-		QPlainTextEdit* tip_edit = nullptr;      // First tooltip field
-		QPlainTextEdit* ubertip_edit = nullptr;  // Second tooltip field
+		QTextEdit* tip_edit = nullptr;      // First tooltip field
+		QTextEdit* ubertip_edit = nullptr;  // Second tooltip field
 		QTextBrowser* preview = nullptr;
 		QWidget* level_row = nullptr;            // Shown only for abilities
 		QSpinBox* level_spin = nullptr;
@@ -52,7 +52,7 @@ class TooltipEditor : public QMainWindow {
 	TabData item_tab;
 	TabData ability_tab;
 
-	QPlainTextEdit* active_edit = nullptr;
+	QTextEdit* active_edit = nullptr;
 	TemplateManager* template_mgr = nullptr;
 	std::vector<QColor> custom_colors;
 	QWidget* custom_color_widget = nullptr;  // Toolbar section for custom color buttons
