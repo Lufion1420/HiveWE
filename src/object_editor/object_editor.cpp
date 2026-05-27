@@ -294,6 +294,7 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
 		"#objectEditorFieldSearch { padding: 4px 8px; }"
 		"#objectEditorSectionFilter { padding: 4px 8px; min-width: 150px; }"
+		"#objectEditorSectionStrip { background: rgba(255,255,255,0.02); border-radius: 8px; }"
 		"QLineEdit[class='fieldSearch'] { padding: 4px 8px; }"
 		"#objectEditorBrowserBar { background: rgba(255,255,255,0.03); border-bottom: 1px solid palette(mid); }"
 		"#objectEditorBrowserTitle { font-size: 14px; font-weight: 600; }"
@@ -677,6 +678,35 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	inspector_bar_layout->addWidget(modified_chip);
 	inspector_bar_layout->addWidget(core_chip);
 
+	QWidget* section_strip = new QWidget;
+	section_strip->setObjectName("objectEditorSectionStrip");
+	section_strip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+	QHBoxLayout* section_strip_layout = new QHBoxLayout(section_strip);
+	section_strip_layout->setContentsMargins(8, 6, 8, 6);
+	section_strip_layout->setSpacing(6);
+
+	QButtonGroup* section_group = new QButtonGroup(section_strip);
+	section_group->setExclusive(true);
+	QList<QToolButton*> section_buttons;
+
+	const auto add_section_button = [&](const QString& label, const QString& value) {
+		QToolButton* button = new QToolButton;
+		button->setObjectName("objectEditorChip");
+		button->setText(label);
+		button->setCheckable(true);
+		button->setProperty("sectionValue", value);
+		section_group->addButton(button);
+		section_strip_layout->addWidget(button);
+		section_buttons.push_back(button);
+		return button;
+	};
+
+	add_section_button("All", QString());
+	for (int i = 1; i < section_filter->count(); ++i) {
+		add_section_button(section_filter->itemText(i), section_filter->itemData(i).toString());
+	}
+	section_strip_layout->addStretch();
+
 	QTableView* view = new QTableView;
 	view->setItemDelegate(delegate);
 	view->horizontalHeader()->hide();
@@ -718,6 +748,23 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		current_field_category = section_filter->currentData().toString();
 		filter_model->set_category_filter(current_field_category);
 	});
+	connect(section_filter, &QComboBox::currentIndexChanged, section_strip, [section_buttons, section_filter](int) {
+		const QString value = section_filter->currentData().toString();
+		for (auto* button : section_buttons) {
+			button->setChecked(button->property("sectionValue").toString() == value);
+		}
+	});
+	connect(section_group, &QButtonGroup::buttonToggled, section_strip, [section_filter](QAbstractButton* button, bool checked) {
+		if (!checked) {
+			return;
+		}
+
+		const QString value = button->property("sectionValue").toString();
+		const int index = section_filter->findData(value);
+		if (index >= 0 && section_filter->currentIndex() != index) {
+			section_filter->setCurrentIndex(index);
+		}
+	});
 	connect(modified_chip, &QToolButton::toggled, this, [this, filter_model](const bool checked) {
 		current_modified_only = checked;
 		filter_model->set_modified_only(checked);
@@ -746,6 +793,13 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	connect(core_chip, &QToolButton::toggled, inspector_meta, [update_inspector_meta](bool) {
 		update_inspector_meta();
 	});
+	{
+		const int category_index = section_filter->currentIndex();
+		const QString value = section_filter->itemData(category_index).toString();
+		for (auto* button : section_buttons) {
+			button->setChecked(button->property("sectionValue").toString() == value);
+		}
+	}
 
 	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, this, [this, filter_model, single_model](const QModelIndex& current, const QModelIndex&) {
 		if (!current.isValid()) {
@@ -826,12 +880,14 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	layout->addWidget(summary);
 	layout->addWidget(inspector_bar);
+	layout->addWidget(section_strip);
 	layout->addWidget(column_header);
 	layout->addWidget(view);
 	layout->setStretch(0, 0);
 	layout->setStretch(1, 0);
 	layout->setStretch(2, 0);
-	layout->setStretch(3, 1);
+	layout->setStretch(3, 0);
+	layout->setStretch(4, 1);
 
 	QWidget* container = new QWidget;
 	container->setLayout(layout);
