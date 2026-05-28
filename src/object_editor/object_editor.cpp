@@ -628,7 +628,7 @@ void ObjectEditor::itemClicked(QTreeView* view, const QSortFilterProxyModel* mod
 		return;
 	}
 
-	if (auto* area = qobject_cast<QScrollArea*>(details_dock->widget())) {
+	if (auto* area = details_dock->widget() ? details_dock->widget()->findChild<QScrollArea*>("objectEditorDetailsScrollArea") : nullptr) {
 		current_details_scroll_y = area->verticalScrollBar()->value();
 	}
 
@@ -737,9 +737,13 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	push_object_history(current_category, id, name);
 
-	QVBoxLayout* layout = new QVBoxLayout;
-	layout->setContentsMargins(0, 0, 0, 0);
-	layout->setSpacing(8);
+	QVBoxLayout* top_layout = new QVBoxLayout;
+	top_layout->setContentsMargins(0, 0, 0, 0);
+	top_layout->setSpacing(8);
+
+	QVBoxLayout* scroll_layout = new QVBoxLayout;
+	scroll_layout->setContentsMargins(0, 0, 0, 0);
+	scroll_layout->setSpacing(8);
 
 	const auto found = ability_insights.find(id);
 	if (found != ability_insights.end()) {
@@ -781,7 +785,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		insights_layout->addWidget(latest_tested_version);
 		insights_layout->addWidget(link);
 
-		layout->addWidget(insights);
+		scroll_layout->addWidget(insights);
 	}
 
 	SingleModel* single_model = new SingleModel(table, this);
@@ -1405,29 +1409,33 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	connect(filter_model, &QAbstractItemModel::modelReset, field_selection_strip, update_field_selection_strip);
 	connect(filter_model, &QAbstractItemModel::layoutChanged, field_selection_strip, update_field_selection_strip);
 
-	layout->addWidget(summary);
-	layout->addWidget(bookmark_objects_bar);
-	layout->addWidget(inspector_bar);
-	layout->addWidget(section_strip);
-	layout->addWidget(filter_state_bar);
-	layout->addWidget(inspector_stack);
-	layout->addWidget(field_selection_strip);
-	layout->setStretch(0, 0);
-	layout->setStretch(1, 0);
-	layout->setStretch(2, 0);
-	layout->setStretch(3, 0);
-	layout->setStretch(4, 0);
-	layout->setStretch(5, 1);
-	layout->setStretch(6, 0);
+	top_layout->addWidget(summary);
+	top_layout->addWidget(bookmark_objects_bar);
+	top_layout->addWidget(inspector_bar);
+	top_layout->addWidget(section_strip);
+	top_layout->addWidget(filter_state_bar);
 
-	QWidget* container = new QWidget;
-	container->setLayout(layout);
+	scroll_layout->addWidget(inspector_stack);
+	scroll_layout->addWidget(field_selection_strip);
+	scroll_layout->setStretch(0, 1);
+	scroll_layout->setStretch(1, 0);
+
+	QWidget* scroll_container = new QWidget;
+	scroll_container->setLayout(scroll_layout);
 
 	QScrollArea* area = new QScrollArea;
-	area->setWidget(container);
+	area->setObjectName("objectEditorDetailsScrollArea");
+	area->setWidget(scroll_container);
 	area->setWidgetResizable(true);
 
-	details_dock->setWidget(area);
+	QWidget* root = new QWidget;
+	QVBoxLayout* root_layout = new QVBoxLayout(root);
+	root_layout->setContentsMargins(0, 0, 0, 0);
+	root_layout->setSpacing(8);
+	root_layout->addLayout(top_layout);
+	root_layout->addWidget(area, 1);
+
+	details_dock->setWidget(root);
 	details_dock->setWindowTitle(name);
 	details_dock->setIcon(icon);
 	current_details_id = id;
@@ -1437,7 +1445,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	if (current_details_scroll_y > 0) {
 		area->verticalScrollBar()->setValue(current_details_scroll_y);
 	} else {
-		const int y = view->mapTo(area->widget(), QPoint(0, 0)).y();
+		const int y = view->mapTo(scroll_container, QPoint(0, 0)).y();
 		area->verticalScrollBar()->setValue(y);
 	}
 }
