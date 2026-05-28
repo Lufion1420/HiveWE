@@ -12,9 +12,10 @@ import ResourceManager;
 
 TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 	ui.setupUi(this);
+	setObjectName("terrainPalette");
 	ui.verticalLayout->setAlignment(Qt::AlignTop);
 	ui.verticalLayout->setContentsMargins(0, 0, 0, 0);
-	ui.verticalLayout->setSpacing(6);
+	ui.verticalLayout->setSpacing(10);
 	ui.verticalLayout->removeItem(ui.horizontalLayout_2);
 	ui.brushSize1->hide();
 	ui.brushSize3->hide();
@@ -22,6 +23,33 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 	ui.brushSize7->hide();
 	ui.brushSize9->hide();
 	ui.brushSize11->hide();
+	ui.textureCheckbox->setText("Texture Paint");
+	ui.cliffCheckbox->setText("Cliff Tools");
+	ui.deformationCheckbox->setText("Height Tools");
+	ui.cellCheckbox->setText("Water / Boundaries");
+	ui.label_2->setText("Brush Size");
+	ui.label->setText("Brush Shape");
+	setStyleSheet(
+		"QCheckBox { font-size: 14px; font-weight: 700; color: rgb(232, 236, 241); spacing: 8px; padding-top: 4px; }"
+		"QLabel { color: rgb(212, 219, 227); }"
+		"QLabel#label, QLabel#label_2 { font-size: 11px; font-weight: 600; color: rgb(140, 149, 162); padding-top: 2px; }"
+		"QPushButton {"
+		"background: rgba(24, 27, 31, 205);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 10px;"
+		"}"
+		"QPushButton:hover { background: rgba(34, 38, 44, 220); }"
+		"QPushButton:checked { background: rgba(95, 164, 255, 200); border: 1px solid rgba(95, 164, 255, 235); }"
+		"QSpinBox {"
+		"background: rgba(24, 27, 31, 235);"
+		"border: 1px solid rgba(255, 255, 255, 18);"
+		"border-radius: 10px;"
+		"padding: 6px 10px;"
+		"color: rgb(232, 236, 241);"
+		"}"
+		"QSlider::groove:horizontal { height: 6px; background: rgba(255, 255, 255, 20); border-radius: 999px; }"
+		"QSlider::handle:horizontal { width: 16px; margin: -5px 0; background: rgb(95, 164, 255); border-radius: 8px; }"
+	);
 	monitor_activation();
 
 	brush.texture_operator.tile_id = map->terrain.tileset_ids.front();

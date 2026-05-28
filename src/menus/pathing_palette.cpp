@@ -12,14 +12,18 @@ namespace fs = std::filesystem;
 
 PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 	ui.setupUi(this);
+	setObjectName("pathingPalette");
 	monitor_activation();
 	ui.verticalLayout->setContentsMargins(0, 0, 0, 0);
-	ui.verticalLayout->setSpacing(7);
+	ui.verticalLayout->setSpacing(10);
 	ui.verticalLayout->setAlignment(Qt::AlignTop);
 	ui.ToolTypeLayout->setSpacing(5);
 	ui.horizontalLayout->setSpacing(5);
 	ui.brushOperationLabel->setContentsMargins(0, 3, 0, 3);
 	ui.brushTypeLabel->setContentsMargins(0, 5, 0, 3);
+	ui.brushOperationLabel->setText("Operation");
+	ui.brushTypeLabel->setText("Pathing Mask");
+	ui.brushSizeLabel->setText("Brush Size");
 	ui.verticalLayout->removeItem(ui.horizontalLayout_2);
 	ui.verticalLayout->removeItem(ui.brushShapeLayout);
 	ui.brushSize1->hide();
@@ -33,6 +37,31 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 	ui.brushShapeDiamond->hide();
 	ui.brushSize->setReadOnly(true);
 	ui.brushSize->setButtonSymbols(QAbstractSpinBox::NoButtons);
+	setStyleSheet(
+		"QLabel { color: rgb(212, 219, 227); }"
+		"QLabel#brushOperationLabel, QLabel#brushTypeLabel, QLabel#brushSizeLabel {"
+		"font-size: 11px;"
+		"font-weight: 600;"
+		"color: rgb(140, 149, 162);"
+		"}"
+		"QPushButton, QRadioButton { color: rgb(232, 236, 241); }"
+		"QPushButton {"
+		"background: rgba(24, 27, 31, 205);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 10px;"
+		"}"
+		"QPushButton:hover { background: rgba(34, 38, 44, 220); }"
+		"QPushButton:checked { background: rgba(95, 164, 255, 200); border: 1px solid rgba(95, 164, 255, 235); }"
+		"QSpinBox {"
+		"background: rgba(24, 27, 31, 235);"
+		"border: 1px solid rgba(255, 255, 255, 18);"
+		"border-radius: 10px;"
+		"padding: 6px 10px;"
+		"color: rgb(232, 236, 241);"
+		"}"
+		"QSlider::groove:horizontal { height: 6px; background: rgba(255, 255, 255, 20); border-radius: 999px; }"
+		"QSlider::handle:horizontal { width: 16px; margin: -5px 0; background: rgb(95, 164, 255); border-radius: 8px; }"
+	);
 
 	QRibbonSection* selection_section = new QRibbonSection;
 	selection_section->setText("Selection");
