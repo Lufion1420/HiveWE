@@ -344,6 +344,20 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	custom_buff_icon = resource_manager.load<QIconResource>(world_edit_data.data("WorldEditArt", "ToolBarIcon_OE_NewBuff")).value();
 	custom_upgrade_icon = resource_manager.load<QIconResource>(world_edit_data.data("WorldEditArt", "ToolBarIcon_OE_NewUpgr")).value();
 
+	{
+		QSettings settings;
+		current_field_search = settings.value("ObjectEditor/fieldSearch").toString();
+		current_field_category = settings.value("ObjectEditor/fieldCategory").toString();
+		current_modified_only = settings.value("ObjectEditor/modifiedOnly", false).toBool();
+		current_core_only = settings.value("ObjectEditor/coreOnly", false).toBool();
+
+		const std::array<QString, 7> category_keys = {"units", "items", "doodads", "destructibles", "abilities", "upgrades", "buffs"};
+		for (int i = 0; i < category_keys.size(); ++i) {
+			browser_searches[i] = settings.value("ObjectEditor/browser/" + category_keys[i] + "/search").toString();
+			browser_custom_only[i] = settings.value("ObjectEditor/browser/" + category_keys[i] + "/customOnly", false).toBool();
+		}
+	}
+
 	dock_manager = new ads::CDockManager;
 	dock_manager->setStyleSheet("");
 	setCentralWidget(dock_manager);
@@ -504,6 +518,15 @@ void ObjectEditor::save_tree_state(const QString& key, const QTreeView* view) co
 void ObjectEditor::closeEvent(QCloseEvent* event) {
 	QSettings settings;
 	settings.setValue("ObjectEditor/currentTab", explorer_area ? explorer_area->currentIndex() : 0);
+	settings.setValue("ObjectEditor/fieldSearch", current_field_search);
+	settings.setValue("ObjectEditor/fieldCategory", current_field_category);
+	settings.setValue("ObjectEditor/modifiedOnly", current_modified_only);
+	settings.setValue("ObjectEditor/coreOnly", current_core_only);
+	const std::array<QString, 7> category_keys = {"units", "items", "doodads", "destructibles", "abilities", "upgrades", "buffs"};
+	for (int i = 0; i < category_keys.size(); ++i) {
+		settings.setValue("ObjectEditor/browser/" + category_keys[i] + "/search", browser_searches[i]);
+		settings.setValue("ObjectEditor/browser/" + category_keys[i] + "/customOnly", browser_custom_only[i]);
+	}
 	save_tree_state("units", unit_explorer);
 	save_tree_state("items", item_explorer);
 	save_tree_state("doodads", doodad_explorer);
@@ -1493,8 +1516,30 @@ void ObjectEditor::addTypeTreeView(
 	browser_controls_row->addWidget(all_objects);
 	browser_controls_row->addWidget(custom_objects);
 
+	QWidget* browser_filter_state_bar = new QWidget;
+	QHBoxLayout* browser_filter_state_layout = new QHBoxLayout(browser_filter_state_bar);
+	browser_filter_state_layout->setContentsMargins(0, 0, 0, 0);
+	browser_filter_state_layout->setSpacing(8);
+
+	QLabel* browser_filter_state = new QLabel;
+	browser_filter_state->setObjectName("objectEditorFilterState");
+
+	QToolButton* clear_browser_state = new QToolButton;
+	clear_browser_state->setText("Reset");
+	clear_browser_state->setAutoRaise(true);
+	connect(clear_browser_state, &QToolButton::clicked, this, [search, all_objects, custom_objects]() {
+		search->clear();
+		custom_objects->setChecked(false);
+		all_objects->setChecked(true);
+	});
+
+	browser_filter_state_layout->addWidget(browser_filter_state);
+	browser_filter_state_layout->addStretch();
+	browser_filter_state_layout->addWidget(clear_browser_state);
+
 	browser_layout->addLayout(browser_title_row);
 	browser_layout->addLayout(browser_controls_row);
+	browser_layout->addWidget(browser_filter_state_bar);
 
 	QFrame* browser_empty = new QFrame;
 	browser_empty->setObjectName("objectEditorEmptyState");
@@ -1532,6 +1577,19 @@ void ObjectEditor::addTypeTreeView(
 	const auto update_browser_state = [filter, browser_stack, view, browser_empty]() {
 		browser_stack->setCurrentWidget(visible_object_count(filter) > 0 ? view : browser_empty);
 	};
+	const auto update_browser_filter_state = [search, custom_objects, browser_filter_state, clear_browser_state]() {
+		QStringList parts;
+		if (!search->text().trimmed().isEmpty()) {
+			parts.push_back("Search: " + search->text().trimmed());
+		}
+		if (custom_objects->isChecked()) {
+			parts.push_back("Custom only");
+		}
+
+		const bool has_filters = !parts.isEmpty();
+		browser_filter_state->setText(has_filters ? parts.join("  ·  ") : "No active browser filters");
+		clear_browser_state->setVisible(has_filters);
+	};
 
 	connect(search, &QLineEdit::textChanged, [=, this](const QString& string) {
 		browser_searches[static_cast<int>(category)] = string;
@@ -1559,6 +1617,7 @@ void ObjectEditor::addTypeTreeView(
 	filter->setFilterFixedString(search->text());
 	update_browser_meta();
 	update_browser_state();
+	update_browser_filter_state();
 	connect(filter, &QAbstractItemModel::modelReset, browser_meta, update_browser_meta);
 	connect(filter, &QAbstractItemModel::modelReset, browser_stack, update_browser_state);
 	connect(filter, &QAbstractItemModel::rowsInserted, browser_meta, [update_browser_meta](const QModelIndex&, int, int) {
@@ -1581,11 +1640,17 @@ void ObjectEditor::addTypeTreeView(
 	connect(search, &QLineEdit::textChanged, browser_stack, [update_browser_state](const QString&) {
 		update_browser_state();
 	});
+	connect(search, &QLineEdit::textChanged, browser_filter_state_bar, [update_browser_filter_state](const QString&) {
+		update_browser_filter_state();
+	});
 	connect(custom_objects, &QToolButton::toggled, browser_meta, [update_browser_meta](bool) {
 		update_browser_meta();
 	});
 	connect(custom_objects, &QToolButton::toggled, browser_stack, [update_browser_state](bool) {
 		update_browser_state();
+	});
+	connect(custom_objects, &QToolButton::toggled, browser_filter_state_bar, [update_browser_filter_state](bool) {
+		update_browser_filter_state();
 	});
 }
 
