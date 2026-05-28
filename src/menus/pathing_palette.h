@@ -15,6 +15,7 @@ public:
 	~PathingPalette();
 	void activate_palette();
 	PathingBrush& current_brush() { return brush; }
+	void sync_brush_controls();
 
 private:
 	Ui::PathingPalette ui;

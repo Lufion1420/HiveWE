@@ -15,6 +15,13 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 	ui.verticalLayout->setAlignment(Qt::AlignTop);
 	ui.verticalLayout->setContentsMargins(0, 0, 0, 0);
 	ui.verticalLayout->setSpacing(6);
+	ui.verticalLayout->removeItem(ui.horizontalLayout_2);
+	ui.brushSize1->hide();
+	ui.brushSize3->hide();
+	ui.brushSize5->hide();
+	ui.brushSize7->hide();
+	ui.brushSize9->hide();
+	ui.brushSize11->hide();
 	monitor_activation();
 
 	brush.texture_operator.tile_id = map->terrain.tileset_ids.front();
@@ -78,9 +85,6 @@ void TerrainPalette::sync_brush_controls(Brush* active_brush) {
 	ui.brushSize->setSingleStep(use_odd_steps ? 4 : 1);
 	ui.brushSizeSlider->setValue(size.x);
 	ui.brushSize->setValue(size.x);
-	for (auto* button : ui.brushSizeButtonGroup->buttons()) {
-		button->setChecked(button->text().toInt() == size.x);
-	}
 }
 
 void TerrainPalette::deactivate(QRibbonTab* tab) {
@@ -535,9 +539,6 @@ void TerrainPalette::create_ribbon() {
 }
 
 void TerrainPalette::setup_brush_menu() {
-	connect(ui.brushSizeButtonGroup, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked), [&](QAbstractButton* button) {
-		ui.brushSizeSlider->setValue(button->text().toInt());
-	});
 	connect(ui.brushSizeSlider, &QSlider::valueChanged, [&](int value) {
 		Brush* target = map && map->brush ? map->brush : &brush;
 		target->set_size(glm::ivec2(value));

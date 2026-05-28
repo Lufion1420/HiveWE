@@ -20,22 +20,19 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 	ui.horizontalLayout->setSpacing(5);
 	ui.brushOperationLabel->setContentsMargins(0, 3, 0, 3);
 	ui.brushTypeLabel->setContentsMargins(0, 5, 0, 3);
-	ui.verticalLayout->removeWidget(ui.brushSizeLabel);
 	ui.verticalLayout->removeItem(ui.horizontalLayout_2);
-	ui.verticalLayout->removeItem(ui.horizontalLayout_3);
 	ui.verticalLayout->removeItem(ui.brushShapeLayout);
-	ui.brushSizeLabel->hide();
 	ui.brushSize1->hide();
 	ui.brushSize3->hide();
 	ui.brushSize5->hide();
 	ui.brushSize7->hide();
 	ui.brushSize9->hide();
 	ui.brushSize11->hide();
-	ui.brushSize->hide();
-	ui.brushSizeSlider->hide();
 	ui.brushShapeCircle->hide();
 	ui.brushShapeSquare->hide();
 	ui.brushShapeDiamond->hide();
+	ui.brushSize->setReadOnly(true);
+	ui.brushSize->setButtonSymbols(QAbstractSpinBox::NoButtons);
 
 	QRibbonSection* selection_section = new QRibbonSection;
 	selection_section->setText("Selection");
@@ -63,6 +60,15 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 	connect(ui.replaceType, &QPushButton::clicked, [&]() { brush.operation = PathingBrush::Operation::replace; });
 	connect(ui.addType, &QPushButton::clicked, [&]() { brush.operation = PathingBrush::Operation::add; });
 	connect(ui.removeType, &QPushButton::clicked, [&]() { brush.operation = PathingBrush::Operation::remove; });
+
+	connect(ui.brushSizeSlider, &QSlider::valueChanged, [&](int value) {
+		brush.set_size(glm::ivec2(value));
+		ui.brushSize->setValue(value);
+	});
+
+	connect(&brush, &Brush::size_changed, this, [&](glm::ivec2) {
+		sync_brush_controls();
+	});
 
 	connect(ui.brushTypeGroup, &QButtonGroup::buttonToggled, [&]() {
 		brush.brush_mask = 0;
@@ -126,6 +132,7 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 		}
 	});
 
+	sync_brush_controls();
 	monitor_activation();
 }
 
@@ -137,6 +144,7 @@ PathingPalette::~PathingPalette() {
 void PathingPalette::activate_palette() {
 	selection_mode->enableShortcuts();
 	map->brush = &brush;
+	sync_brush_controls();
 }
 
 void PathingPalette::deactivate(QRibbonTab* tab) {
@@ -144,4 +152,15 @@ void PathingPalette::deactivate(QRibbonTab* tab) {
 		brush.clear_selection();
 		selection_mode->disableShortcuts();
 	}
+}
+
+void PathingPalette::sync_brush_controls() {
+	const QSignalBlocker slider_blocker(ui.brushSizeSlider);
+	const QSignalBlocker spinbox_blocker(ui.brushSize);
+	const auto size = brush.get_size();
+
+	ui.brushSizeSlider->setSingleStep(4);
+	ui.brushSize->setSingleStep(4);
+	ui.brushSizeSlider->setValue(size.x);
+	ui.brushSize->setValue(size.x);
 }
