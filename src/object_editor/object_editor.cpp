@@ -309,7 +309,7 @@ int custom_object_count(TableModel* table) {
 }
 
 QString object_count_label(TableModel* table) {
-	return QString::number(table->rowCount()) + " total  ·  " + QString::number(custom_object_count(table)) + " custom";
+	return QString::number(table->rowCount()) + " total - " + QString::number(custom_object_count(table)) + " custom";
 }
 
 int visible_object_count(const QAbstractItemModel* model, const QModelIndex& parent = QModelIndex()) {
@@ -335,9 +335,9 @@ int visible_object_count(const QAbstractItemModel* model, const QModelIndex& par
 }
 
 QString filtered_object_count_label(TableModel* table, const QAbstractItemModel* model, bool custom_only) {
-	QString text = QString::number(visible_object_count(model)) + " shown  ·  " + QString::number(table->rowCount()) + " total";
+	QString text = QString::number(visible_object_count(model)) + " shown - " + QString::number(table->rowCount()) + " total";
 	if (custom_only) {
-		text += "  ·  custom only";
+		text += " - custom only";
 	}
 	return text;
 }
@@ -1172,7 +1172,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		}
 
 		const bool has_filters = !parts.isEmpty();
-		filter_state->setText(has_filters ? parts.join("  ·  ") : "No active field filters");
+		filter_state->setText(has_filters ? parts.join(" - ") : "No active field filters");
 		clear_filter_state->setVisible(has_filters);
 	};
 	update_filter_state();
@@ -1831,22 +1831,6 @@ void ObjectEditor::addTypeTreeView(
 	browser_controls_row->addWidget(all_objects);
 	browser_controls_row->addWidget(custom_objects);
 
-	QToolButton* expand_browser = new QToolButton;
-	expand_browser->setText("Expand");
-	expand_browser->setToolTip("Expand all visible folders in the browser tree.");
-	expand_browser->setAutoRaise(true);
-	connect(expand_browser, &QToolButton::clicked, view, [view]() {
-		view->expandAll();
-	});
-
-	QToolButton* collapse_browser = new QToolButton;
-	collapse_browser->setText("Collapse");
-	collapse_browser->setToolTip("Collapse all folders in the browser tree.");
-	collapse_browser->setAutoRaise(true);
-	connect(collapse_browser, &QToolButton::clicked, view, [view]() {
-		view->collapseAll();
-	});
-
 	QToolButton* focus_current = new QToolButton;
 	focus_current->setText("Reveal");
 	focus_current->setToolTip("Scroll the tree to the current selection and focus it.");
@@ -1859,14 +1843,11 @@ void ObjectEditor::addTypeTreeView(
 		}
 	});
 
-	browser_controls_row->addWidget(expand_browser);
-	browser_controls_row->addWidget(collapse_browser);
-	browser_controls_row->addWidget(focus_current);
-
-	QWidget* browser_filter_state_bar = new QWidget;
+	QWidget* browser_filter_state_bar = new QWidget(browser_bar);
 	QHBoxLayout* browser_filter_state_layout = new QHBoxLayout(browser_filter_state_bar);
 	browser_filter_state_layout->setContentsMargins(0, 0, 0, 0);
 	browser_filter_state_layout->setSpacing(8);
+	browser_filter_state_bar->hide();
 
 	QLabel* browser_filter_state = new QLabel;
 	browser_filter_state->setObjectName("objectEditorFilterState");
@@ -1885,9 +1866,12 @@ void ObjectEditor::addTypeTreeView(
 	browser_filter_state_layout->addStretch();
 	browser_filter_state_layout->addWidget(clear_browser_state);
 
+	browser_title_row->addWidget(focus_current);
+
+	browser_controls_row->addWidget(clear_browser_state);
+
 	browser_layout->addLayout(browser_title_row);
 	browser_layout->addLayout(browser_controls_row);
-	browser_layout->addWidget(browser_filter_state_bar);
 
 	QFrame* browser_empty = new QFrame;
 	browser_empty->setObjectName("objectEditorEmptyState");
