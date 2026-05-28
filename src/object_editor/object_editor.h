@@ -18,6 +18,7 @@
 
 #include <string>
 #include <memory>
+#include <array>
 
 import BaseTreeModel;
 import AbilityTreeModel;
@@ -67,6 +68,8 @@ private:
 	QString current_field_category;
 	bool current_modified_only = false;
 	bool current_core_only = false;
+	std::array<QString, 7> browser_searches;
+	std::array<bool, 7> browser_custom_only {};
 
 	QTreeView* unit_explorer = new QTreeView;
 	QTreeView* doodad_explorer = new QTreeView;

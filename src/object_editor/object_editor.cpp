@@ -269,6 +269,36 @@ QString object_count_label(TableModel* table) {
 	return QString::number(table->rowCount()) + " total  ·  " + QString::number(custom_object_count(table)) + " custom";
 }
 
+int visible_object_count(const QAbstractItemModel* model, const QModelIndex& parent = QModelIndex()) {
+	int count = 0;
+	for (int row = 0; row < model->rowCount(parent); ++row) {
+		const QModelIndex child = model->index(row, 0, parent);
+		if (!child.isValid()) {
+			continue;
+		}
+
+		const auto* item = tree_item_from_index(child);
+		if (!item) {
+			continue;
+		}
+
+		if (item->baseCategory || item->subCategory) {
+			count += visible_object_count(model, child);
+		} else {
+			++count;
+		}
+	}
+	return count;
+}
+
+QString filtered_object_count_label(TableModel* table, const QAbstractItemModel* model, bool custom_only) {
+	QString text = QString::number(visible_object_count(model)) + " shown  ·  " + QString::number(table->rowCount()) + " total";
+	if (custom_only) {
+		text += "  ·  custom only";
+	}
+	return text;
+}
+
 int details_header_width(const SingleModel* model, const QHeaderView* header) {
 	if (!model || !header) {
 		return 260;
@@ -327,6 +357,7 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorEmptyState { border: 1px dashed palette(mid); border-radius: 10px; background: rgba(255,255,255,0.02); }"
 		"#objectEditorEmptyTitle { font-size: 14px; font-weight: 600; }"
 		"#objectEditorEmptyMeta { color: rgb(168, 174, 184); }"
+		"#objectEditorFilterState { color: rgb(168, 174, 184); }"
 		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
 		"#objectEditorFieldSearch { padding: 4px 8px; }"
 		"#objectEditorSectionFilter { padding: 4px 8px; min-width: 150px; }"
@@ -430,6 +461,12 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		auto edit = explorer_area->currentDockWidget()->findChild<QLineEdit*>("search");
 		edit->setFocus();
 		edit->selectAll();
+	});
+	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F), this), &QShortcut::activated, [this]() {
+		if (auto* edit = details_dock->widget() ? details_dock->widget()->findChild<QLineEdit*>("objectEditorFieldSearch") : nullptr) {
+			edit->setFocus();
+			edit->selectAll();
+		}
 	});
 	connect(new QShortcut(QKeySequence(Qt::Key_O), this), &QShortcut::activated, this, &QWidget::close);
 	connect(qApp, &QApplication::focusChanged, this, [this](QWidget*, QWidget*) {
@@ -751,6 +788,23 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	}
 	section_strip_layout->addStretch();
 
+	QWidget* filter_state_bar = new QWidget;
+	filter_state_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+	QHBoxLayout* filter_state_layout = new QHBoxLayout(filter_state_bar);
+	filter_state_layout->setContentsMargins(2, 0, 2, 0);
+	filter_state_layout->setSpacing(8);
+
+	QLabel* filter_state = new QLabel;
+	filter_state->setObjectName("objectEditorFilterState");
+
+	QToolButton* clear_filter_state = new QToolButton;
+	clear_filter_state->setText("Reset Filters");
+	clear_filter_state->setAutoRaise(true);
+
+	filter_state_layout->addWidget(filter_state);
+	filter_state_layout->addStretch();
+	filter_state_layout->addWidget(clear_filter_state);
+
 	QTableView* view = new QTableView;
 	view->setItemDelegate(delegate);
 	view->horizontalHeader()->hide();
@@ -819,6 +873,12 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		current_core_only = checked;
 		filter_model->set_core_only(checked);
 	});
+	connect(clear_filter_state, &QToolButton::clicked, this, [field_search, section_filter, modified_chip, core_chip]() {
+		field_search->clear();
+		section_filter->setCurrentIndex(0);
+		modified_chip->setChecked(false);
+		core_chip->setChecked(false);
+	});
 	connect(filter_model, &QAbstractItemModel::modelReset, inspector_meta, update_inspector_meta);
 	connect(filter_model, &QAbstractItemModel::rowsInserted, inspector_meta, [update_inspector_meta](const QModelIndex&, int, int) {
 		update_inspector_meta();
@@ -838,6 +898,38 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	});
 	connect(core_chip, &QToolButton::toggled, inspector_meta, [update_inspector_meta](bool) {
 		update_inspector_meta();
+	});
+	const auto update_filter_state = [field_search, section_filter, modified_chip, core_chip, filter_state, clear_filter_state]() {
+		QStringList parts;
+		if (!field_search->text().trimmed().isEmpty()) {
+			parts.push_back("Search: " + field_search->text().trimmed());
+		}
+		if (!section_filter->currentData().toString().isEmpty()) {
+			parts.push_back("Section: " + section_filter->currentText());
+		}
+		if (modified_chip->isChecked()) {
+			parts.push_back("Modified");
+		}
+		if (core_chip->isChecked()) {
+			parts.push_back("Core");
+		}
+
+		const bool has_filters = !parts.isEmpty();
+		filter_state->setText(has_filters ? parts.join("  ·  ") : "No active field filters");
+		clear_filter_state->setVisible(has_filters);
+	};
+	update_filter_state();
+	connect(field_search, &QLineEdit::textChanged, filter_state_bar, [update_filter_state](const QString&) {
+		update_filter_state();
+	});
+	connect(section_filter, &QComboBox::currentIndexChanged, filter_state_bar, [update_filter_state](int) {
+		update_filter_state();
+	});
+	connect(modified_chip, &QToolButton::toggled, filter_state_bar, [update_filter_state](bool) {
+		update_filter_state();
+	});
+	connect(core_chip, &QToolButton::toggled, filter_state_bar, [update_filter_state](bool) {
+		update_filter_state();
 	});
 	{
 		const int category_index = section_filter->currentIndex();
@@ -991,11 +1083,13 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	layout->addWidget(summary);
 	layout->addWidget(inspector_bar);
 	layout->addWidget(section_strip);
+	layout->addWidget(filter_state_bar);
 	layout->addWidget(inspector_stack);
 	layout->setStretch(0, 0);
 	layout->setStretch(1, 0);
 	layout->setStretch(2, 0);
-	layout->setStretch(3, 1);
+	layout->setStretch(3, 0);
+	layout->setStretch(4, 1);
 
 	QWidget* container = new QWidget;
 	container->setLayout(layout);
@@ -1339,28 +1433,27 @@ void ObjectEditor::addTypeTreeView(
 	search->setProperty("class", "fieldSearch");
 	search->setClearButtonEnabled(true);
 	search->setPlaceholderText("Search " + name);
-	connect(search, &QLineEdit::textChanged, [=](const QString& string) {
-		filter->setFilterFixedString(string);
-		view->expandAll();
-	});
+	search->setText(browser_searches[static_cast<int>(category)]);
 
 	QToolButton* all_objects = new QToolButton;
 	all_objects->setObjectName("objectEditorChip");
 	all_objects->setText("All");
 	all_objects->setCheckable(true);
-	all_objects->setChecked(true);
 
 	QToolButton* custom_objects = new QToolButton;
 	custom_objects->setObjectName("objectEditorChip");
 	custom_objects->setText("Custom");
 	custom_objects->setToolTip("Show only custom " + name.toLower());
 	custom_objects->setCheckable(true);
+	custom_objects->setChecked(browser_custom_only[static_cast<int>(category)]);
+	all_objects->setChecked(!browser_custom_only[static_cast<int>(category)]);
 
 	QButtonGroup* mode_group = new QButtonGroup(view);
 	mode_group->setExclusive(true);
 	mode_group->addButton(all_objects);
 	mode_group->addButton(custom_objects);
-	connect(custom_objects, &QToolButton::toggled, [=](bool checked) {
+	connect(custom_objects, &QToolButton::toggled, [=, this](bool checked) {
+		browser_custom_only[static_cast<int>(category)] = checked;
 		filter->setFilterCustom(checked);
 		if (!checked) {
 			view->expandAll();
@@ -1369,16 +1462,6 @@ void ObjectEditor::addTypeTreeView(
 
 	QLabel* browser_meta = new QLabel(object_count_label(table));
 	browser_meta->setObjectName("objectEditorBrowserMeta");
-	const auto update_browser_meta = [table, browser_meta]() {
-		browser_meta->setText(object_count_label(table));
-	};
-	connect(table, &QAbstractItemModel::modelReset, browser_meta, update_browser_meta);
-	connect(table, &QAbstractItemModel::rowsInserted, browser_meta, [update_browser_meta](const QModelIndex&, int, int) {
-		update_browser_meta();
-	});
-	connect(table, &QAbstractItemModel::rowsRemoved, browser_meta, [update_browser_meta](const QModelIndex&, int, int) {
-		update_browser_meta();
-	});
 
 	QWidget* browser_bar = new QWidget;
 	browser_bar->setObjectName("objectEditorBrowserBar");
@@ -1413,13 +1496,56 @@ void ObjectEditor::addTypeTreeView(
 	browser_layout->addLayout(browser_title_row);
 	browser_layout->addLayout(browser_controls_row);
 
+	QFrame* browser_empty = new QFrame;
+	browser_empty->setObjectName("objectEditorEmptyState");
+	QVBoxLayout* browser_empty_layout = new QVBoxLayout(browser_empty);
+	browser_empty_layout->setContentsMargins(24, 24, 24, 24);
+	browser_empty_layout->setSpacing(10);
+
+	QLabel* browser_empty_title = new QLabel("No objects match the current browser filters");
+	browser_empty_title->setObjectName("objectEditorEmptyTitle");
+
+	QLabel* browser_empty_meta = new QLabel("Try a broader search or switch back from custom-only mode.");
+	browser_empty_meta->setObjectName("objectEditorEmptyMeta");
+	browser_empty_meta->setWordWrap(true);
+
+	QPushButton* clear_browser_filters = new QPushButton("Clear Browser Filters");
+	connect(clear_browser_filters, &QPushButton::clicked, this, [search, all_objects, custom_objects]() {
+		search->clear();
+		custom_objects->setChecked(false);
+		all_objects->setChecked(true);
+	});
+
+	browser_empty_layout->addStretch();
+	browser_empty_layout->addWidget(browser_empty_title, 0, Qt::AlignHCenter);
+	browser_empty_layout->addWidget(browser_empty_meta, 0, Qt::AlignHCenter);
+	browser_empty_layout->addWidget(clear_browser_filters, 0, Qt::AlignHCenter);
+	browser_empty_layout->addStretch();
+
+	QStackedWidget* browser_stack = new QStackedWidget;
+	browser_stack->addWidget(view);
+	browser_stack->addWidget(browser_empty);
+
+	const auto update_browser_meta = [table, filter, browser_meta, custom_objects]() {
+		browser_meta->setText(filtered_object_count_label(table, filter, custom_objects->isChecked()));
+	};
+	const auto update_browser_state = [filter, browser_stack, view, browser_empty]() {
+		browser_stack->setCurrentWidget(visible_object_count(filter) > 0 ? view : browser_empty);
+	};
+
+	connect(search, &QLineEdit::textChanged, [=, this](const QString& string) {
+		browser_searches[static_cast<int>(category)] = string;
+		filter->setFilterFixedString(string);
+		view->expandAll();
+	});
+
 	QToolBar* bar = new QToolBar;
 	bar->setMovable(false);
 	bar->addWidget(browser_bar);
 
 	ads::CDockWidget* tab = new ads::CDockWidget(dock_manager, name);
 	tab->setToolBar(bar);
-	tab->setWidget(view);
+	tab->setWidget(browser_stack);
 	tab->setFeature(ads::CDockWidget::DockWidgetClosable, false);
 	tab->setFeature(ads::CDockWidget::DockWidgetAlwaysCloseAndDelete, false);
 	tab->setIcon(icon);
@@ -1428,6 +1554,39 @@ void ObjectEditor::addTypeTreeView(
 	} else {
 		dock_manager->addDockWidget(ads::CenterDockWidgetArea, tab, explorer_area);
 	}
+
+	filter->setFilterCustom(custom_objects->isChecked());
+	filter->setFilterFixedString(search->text());
+	update_browser_meta();
+	update_browser_state();
+	connect(filter, &QAbstractItemModel::modelReset, browser_meta, update_browser_meta);
+	connect(filter, &QAbstractItemModel::modelReset, browser_stack, update_browser_state);
+	connect(filter, &QAbstractItemModel::rowsInserted, browser_meta, [update_browser_meta](const QModelIndex&, int, int) {
+		update_browser_meta();
+	});
+	connect(filter, &QAbstractItemModel::rowsInserted, browser_stack, [update_browser_state](const QModelIndex&, int, int) {
+		update_browser_state();
+	});
+	connect(filter, &QAbstractItemModel::rowsRemoved, browser_meta, [update_browser_meta](const QModelIndex&, int, int) {
+		update_browser_meta();
+	});
+	connect(filter, &QAbstractItemModel::rowsRemoved, browser_stack, [update_browser_state](const QModelIndex&, int, int) {
+		update_browser_state();
+	});
+	connect(filter, &QAbstractItemModel::layoutChanged, browser_meta, update_browser_meta);
+	connect(filter, &QAbstractItemModel::layoutChanged, browser_stack, update_browser_state);
+	connect(search, &QLineEdit::textChanged, browser_meta, [update_browser_meta](const QString&) {
+		update_browser_meta();
+	});
+	connect(search, &QLineEdit::textChanged, browser_stack, [update_browser_state](const QString&) {
+		update_browser_state();
+	});
+	connect(custom_objects, &QToolButton::toggled, browser_meta, [update_browser_meta](bool) {
+		update_browser_meta();
+	});
+	connect(custom_objects, &QToolButton::toggled, browser_stack, [update_browser_state](bool) {
+		update_browser_state();
+	});
 }
 
 void ObjectEditor::select_id(Category category, const std::string& id) const {
