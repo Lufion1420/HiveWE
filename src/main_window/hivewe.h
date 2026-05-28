@@ -15,6 +15,8 @@ namespace fs = std::filesystem;
 #include <QMenu>
 #include <QPainter>
 #include <QKeyEvent>
+#include <QStackedWidget>
+#include <QToolButton>
 #include <memory>
 
 #include "global_search.h"
@@ -54,6 +56,15 @@ public:
 	void play_test();
 
 private:
+	enum class SidebarPaletteView {
+		none,
+		terrain,
+		doodad,
+		unit,
+		pathing,
+		region,
+	};
+
 	std::unique_ptr<Ui::HiveWEClass> ui;
 	QRibbonTab* current_custom_tab = nullptr;
 	Minimap* minimap = new Minimap(this);
@@ -87,11 +98,19 @@ private:
 	void show_transient_notice(const QString& text, int timeout_ms = 1800);
 	void position_transient_notice();
 	void setup_palette_sidebar();
-	void update_palette_sidebar_layout();
 	void update_active_palette_visuals();
-	void set_sidebar_section_state(QWidget* host, QLabel* header, bool visible, bool active);
+	void hide_palette_sidebar();
+	void show_palette_view(SidebarPaletteView view, bool show_feedback = true);
+	void ensure_palette_view(SidebarPaletteView view);
+	Palette* palette_for_view(SidebarPaletteView view) const;
+	QWidget* host_for_view(SidebarPaletteView view) const;
+	QString sidebar_title_for_view(SidebarPaletteView view) const;
+	QString sidebar_description_for_view(SidebarPaletteView view) const;
+	QString sidebar_hint_for_view(SidebarPaletteView view) const;
+	QString sidebar_feedback_label(SidebarPaletteView view) const;
 	void activate_palette(Palette* palette, bool show_feedback = true);
 	void toggle_terrain_sidebar();
+	void toggle_pathing_sidebar();
 	void toggle_doodad_palette();
 	void toggle_unit_palette();
 	void toggle_region_palette();
@@ -103,20 +122,23 @@ private:
 	QLabel* transient_notice = nullptr;
 	QTimer transient_notice_timer;
 	QWidget* sidebar_root = nullptr;
-	QWidget* object_column = nullptr;
-	QWidget* terrain_column = nullptr;
+	QWidget* sidebar_header = nullptr;
+	QWidget* sidebar_mode_bar = nullptr;
+	QLabel* sidebar_title = nullptr;
+	QLabel* sidebar_description = nullptr;
+	QLabel* sidebar_hint = nullptr;
+	QStackedWidget* sidebar_stack = nullptr;
+	QToolButton* terrain_mode_button = nullptr;
+	QToolButton* doodad_mode_button = nullptr;
+	QToolButton* unit_mode_button = nullptr;
+	QToolButton* pathing_mode_button = nullptr;
+	QToolButton* region_mode_button = nullptr;
 	QFrame* doodad_host = nullptr;
 	QFrame* unit_host = nullptr;
 	QFrame* terrain_host = nullptr;
 	QFrame* pathing_host = nullptr;
 	QFrame* region_host = nullptr;
-	QLabel* doodad_header = nullptr;
-	QLabel* unit_header = nullptr;
-	QLabel* terrain_header = nullptr;
-	QLabel* pathing_header = nullptr;
-	QLabel* region_header = nullptr;
-	QVBoxLayout* object_column_layout = nullptr;
-	QVBoxLayout* terrain_column_layout = nullptr;
+	SidebarPaletteView current_sidebar_view = SidebarPaletteView::none;
 	TerrainPalette* terrain_palette = nullptr;
 	PathingPalette* pathing_palette = nullptr;
 	DoodadPalette* doodad_palette = nullptr;
