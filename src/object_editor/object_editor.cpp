@@ -937,7 +937,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		}
 	}
 	if (bookmark_count == 0) {
-		QLabel* no_bookmarks = new QLabel("No bookmarks for this tab");
+		QLabel* no_bookmarks = new QLabel("No bookmarks yet");
 		no_bookmarks->setObjectName("objectEditorFilterState");
 		bookmark_objects_layout->addWidget(no_bookmarks);
 	}
@@ -1843,15 +1843,6 @@ void ObjectEditor::addTypeTreeView(
 		}
 	});
 
-	QWidget* browser_filter_state_bar = new QWidget(browser_bar);
-	QHBoxLayout* browser_filter_state_layout = new QHBoxLayout(browser_filter_state_bar);
-	browser_filter_state_layout->setContentsMargins(0, 0, 0, 0);
-	browser_filter_state_layout->setSpacing(8);
-	browser_filter_state_bar->hide();
-
-	QLabel* browser_filter_state = new QLabel;
-	browser_filter_state->setObjectName("objectEditorFilterState");
-
 	QToolButton* clear_browser_state = new QToolButton;
 	clear_browser_state->setText("Reset");
 	clear_browser_state->setToolTip("Clear the current browser search and custom-only filter.");
@@ -1861,10 +1852,6 @@ void ObjectEditor::addTypeTreeView(
 		custom_objects->setChecked(false);
 		all_objects->setChecked(true);
 	});
-
-	browser_filter_state_layout->addWidget(browser_filter_state);
-	browser_filter_state_layout->addStretch();
-	browser_filter_state_layout->addWidget(clear_browser_state);
 
 	browser_title_row->addWidget(focus_current);
 
@@ -1882,7 +1869,7 @@ void ObjectEditor::addTypeTreeView(
 	QLabel* browser_empty_title = new QLabel("No objects match the current browser filters");
 	browser_empty_title->setObjectName("objectEditorEmptyTitle");
 
-	QLabel* browser_empty_meta = new QLabel("Try a broader search or switch back from custom-only mode.");
+	QLabel* browser_empty_meta = new QLabel("Try a broader search or disable the custom-only filter.");
 	browser_empty_meta->setObjectName("objectEditorEmptyMeta");
 	browser_empty_meta->setWordWrap(true);
 
@@ -1922,7 +1909,7 @@ void ObjectEditor::addTypeTreeView(
 	QLabel* browser_selection_title = new QLabel("No object selected");
 	browser_selection_title->setObjectName("objectEditorSelectionTitle");
 
-	QLabel* browser_selection_meta = new QLabel("Select an object to preview its raw id and editor state.");
+	QLabel* browser_selection_meta = new QLabel("Select an object to preview its raw ID and editor state.");
 	browser_selection_meta->setObjectName("objectEditorSelectionMeta");
 	browser_selection_meta->setWordWrap(true);
 
@@ -1949,20 +1936,6 @@ void ObjectEditor::addTypeTreeView(
 	const auto update_browser_state = [filter, browser_stack, view, browser_empty]() {
 		browser_stack->setCurrentWidget(visible_object_count(filter) > 0 ? view : browser_empty);
 	};
-	const auto update_browser_filter_state = [search, custom_objects, browser_filter_state, clear_browser_state]() {
-		QStringList parts;
-		if (!search->text().trimmed().isEmpty()) {
-			parts.push_back("Search: " + search->text().trimmed());
-		}
-		if (custom_objects->isChecked()) {
-			parts.push_back("Custom only");
-		}
-
-		const bool has_filters = !parts.isEmpty();
-		browser_filter_state->setText(has_filters ? parts.join("  ·  ") : "No active browser filters");
-		clear_browser_state->setVisible(has_filters);
-	};
-
 	connect(search, &QLineEdit::textChanged, [=, this](const QString& string) {
 		browser_searches[static_cast<int>(category)] = string;
 		filter->setFilterFixedString(string);
@@ -1974,7 +1947,7 @@ void ObjectEditor::addTypeTreeView(
 		if (!current.isValid()) {
 			browser_selection_icon->clear();
 			browser_selection_title->setText("No object selected");
-			browser_selection_meta->setText("Select an object to preview its raw id and editor state.");
+			browser_selection_meta->setText("Select an object to preview its raw ID and editor state.");
 			browser_selection_badge->setText("Base");
 			copy_object_id->setEnabled(false);
 			copy_object_id->disconnect();
@@ -2032,7 +2005,6 @@ void ObjectEditor::addTypeTreeView(
 	filter->setFilterFixedString(search->text());
 	update_browser_meta();
 	update_browser_state();
-	update_browser_filter_state();
 	update_browser_selection_strip();
 	connect(filter, &QAbstractItemModel::modelReset, browser_meta, update_browser_meta);
 	connect(filter, &QAbstractItemModel::modelReset, browser_stack, update_browser_state);
@@ -2061,9 +2033,6 @@ void ObjectEditor::addTypeTreeView(
 	connect(search, &QLineEdit::textChanged, browser_selection_strip, [update_browser_selection_strip](const QString&) {
 		update_browser_selection_strip();
 	});
-	connect(search, &QLineEdit::textChanged, browser_filter_state_bar, [update_browser_filter_state](const QString&) {
-		update_browser_filter_state();
-	});
 	connect(custom_objects, &QToolButton::toggled, browser_meta, [update_browser_meta](bool) {
 		update_browser_meta();
 	});
@@ -2072,9 +2041,6 @@ void ObjectEditor::addTypeTreeView(
 	});
 	connect(custom_objects, &QToolButton::toggled, browser_selection_strip, [update_browser_selection_strip](bool) {
 		update_browser_selection_strip();
-	});
-	connect(custom_objects, &QToolButton::toggled, browser_filter_state_bar, [update_browser_filter_state](bool) {
-		update_browser_filter_state();
 	});
 	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, browser_selection_strip, [update_browser_selection_strip](const QModelIndex&, const QModelIndex&) {
 		update_browser_selection_strip();
