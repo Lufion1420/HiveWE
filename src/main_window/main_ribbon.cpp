@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QStyle>
 #include <QTabBar>
+#include <QTimer>
 #include <QVBoxLayout>
 
 MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
@@ -15,7 +16,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	auto style_ribbon_button = [](QToolButton* button, const Qt::ToolButtonStyle style = Qt::ToolButtonTextUnderIcon) {
 		button->setToolButtonStyle(style);
 		button->setIconSize({ 24, 24 });
-		button->setMinimumSize(76, 68);
+		button->setMinimumSize(88, 68);
 		button->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 	};
 
@@ -45,18 +46,23 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	setDocumentMode(true);
 	tabBar()->setExpanding(false);
 	tabBar()->setUsesScrollButtons(true);
+	tabBar()->setDrawBase(false);
 	setMovable(false);
 
 	setStyleSheet(
 		"MainRibbon {"
-		"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(19, 23, 28, 244), stop:1 rgba(15, 18, 22, 244));"
+		"background: rgb(33, 39, 47);"
+		"border: none;"
 		"border-bottom: 1px solid rgba(255, 255, 255, 16);"
 		"}"
+		"MainRibbon::pane { border: none; }"
+		"MainRibbon QTabBar { background: rgb(33, 39, 47); border: none; color: rgb(180, 188, 198); }"
 		"MainRibbon QTabBar::tab {"
 		"background: transparent;"
 		"color: rgb(180, 188, 198);"
 		"padding: 10px 16px;"
 		"margin: 6px 4px 0 0;"
+		"border: none;"
 		"border-top-left-radius: 10px;"
 		"border-top-right-radius: 10px;"
 		"font-size: 12px;"
@@ -65,11 +71,12 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 		"MainRibbon QTabBar::tab:selected {"
 		"background: rgba(52, 60, 72, 220);"
 		"color: rgb(245, 248, 252);"
+		"border: none;"
 		"}"
 		"MainRibbon QTabBar::tab:hover:!selected { color: rgb(224, 229, 235); }"
 		"QRibbonTab { background: rgba(33, 39, 47, 224); }"
 		"QFrame#seperator { background: rgba(255, 255, 255, 16); max-width: 1px; margin: 10px 0 8px 0; }"
-		"QRibbonSection QLabel { color: rgb(154, 164, 176); font-size: 11px; font-weight: 700; padding-bottom: 1px; }"
+		"QRibbonSection QLabel { max-height: 0px; min-height: 0px; padding: 0px; margin: 0px; font-size: 0px; }"
 		"MainRibbon QToolButton {"
 		"background: transparent;"
 		"border: 1px solid transparent;"
@@ -95,6 +102,19 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 		"color: rgb(205, 214, 224);"
 		"text-align: left;"
 		"}"
+		"QWidget#ribbonHeaderCorner { background: rgba(33, 39, 47, 224); }"
+		"#ribbonFileButton {"
+		"background: rgb(33, 39, 47);"
+		"border: none;"
+		"border-radius: 6px;"
+		"color: rgb(200, 210, 220);"
+		"padding: 8px 14px;"
+		"font-size: 12px;"
+		"font-weight: 700;"
+		"}"
+		"#ribbonFileButton:hover { background: rgb(52, 60, 72); }"
+		"#ribbonFileButton:pressed { background: rgb(40, 48, 58); }"
+		"#ribbonFileButton::menu-indicator { image: none; }"
 		"QWidget#ribbonMapContext { background: transparent; }"
 		"QLabel#ribbonMapTitle { color: rgb(245, 248, 252); font-size: 15px; font-weight: 800; }"
 		"QLabel#ribbonMapMeta { color: rgb(156, 166, 178); font-size: 11px; }"
@@ -108,6 +128,30 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 		"font-weight: 700;"
 		"}"
 	);
+
+	if (auto* file_btn = qobject_cast<QRibbonFileButton*>(cornerWidget(Qt::TopLeftCorner))) {
+		file_btn->setPopupMode(QToolButton::InstantPopup);
+		file_btn->setStyleSheet(
+			"#ribbonFileButton {"
+			"background: rgb(33, 39, 47);"
+			"border: none;"
+			"border-radius: 6px;"
+			"color: rgb(200, 210, 220);"
+			"padding: 8px 14px;"
+			"font-size: 12px;"
+			"font-weight: 700;"
+			"}"
+			"#ribbonFileButton:hover { background: rgb(52, 60, 72); }"
+			"#ribbonFileButton:pressed { background: rgb(40, 48, 58); }"
+			"#ribbonFileButton::menu-indicator { image: none; width: 0; }"
+		);
+		// Match the button height to the tab bar after layout is finalised
+		QTimer::singleShot(0, this, [this]() {
+			if (auto* btn = qobject_cast<QRibbonFileButton*>(cornerWidget(Qt::TopLeftCorner))) {
+				btn->setFixedHeight(tabBar()->height());
+			}
+		});
+	}
 
 	auto* top_right = new QWidget(this);
 	top_right->setObjectName("ribbonHeaderCorner");

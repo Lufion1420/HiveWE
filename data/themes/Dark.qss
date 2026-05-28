@@ -5,7 +5,7 @@
 /* QRibbon */
 
 QRibbon {
-	max-height: 121px;
+	max-height: 135px;
 }
 
 QRibbon QWidget {
@@ -50,21 +50,9 @@ QRibbon QTabBar::tab::selected {
 
 /******************************************************/
 .QRibbonFileButton {
-	border: 1px solid transparent;
-	background-color: rgb(38, 109, 132);
-	height: 24px;
-	color: white;
-	padding-left: 14px;
-	padding-right: 13px;
+	border: none;
+	background-color: transparent;
 	qproperty-popupMode: InstantPopup;
-}
-
-QRibbonFileButton::hover {
-	background-color: rgb(41, 140, 225);
-}
-
-QRibbonFileButton::pressed {
-	background-color: rgb(18, 104, 179);
 }
 
 QRibbonFileButton::menu-indicator { 

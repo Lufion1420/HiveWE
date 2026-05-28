@@ -113,7 +113,7 @@ export class QRibbonSection : public QWidget {
 		setLayout(section_inner);
 
 		section_inner->setContentsMargins(0, 0, 0, 0);
-		section_inner->setSpacing(5);
+		section_inner->setSpacing(0);
 		section_inner->setContentsMargins(0, 0, 0, 0);
 
 		section_outer->setContentsMargins(0, 0, 0, 0);
@@ -267,6 +267,7 @@ export class QRibbon : public QTabWidget {
   public:
 	explicit QRibbon(QWidget* parent = nullptr)
 		: QTabWidget(parent) {
+		file->setObjectName("ribbonFileButton");
 		setCornerWidget(file, Qt::TopLeftCorner);
 	}
 
