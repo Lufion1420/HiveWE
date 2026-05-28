@@ -170,6 +170,7 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->save_map_as, &QPushButton::clicked, this, &HiveWE::save_as);
 	connect(ui->ribbon->export_mpq, &QPushButton::clicked, this, &HiveWE::export_mpq);
 	connect(ui->ribbon->test_map, &QPushButton::clicked, this, &HiveWE::play_test);
+	connect(ui->ribbon->quick_search, &QToolButton::clicked, this, [this]() { new GlobalSearchWidget(this); });
 	connect(ui->ribbon->settings, &QPushButton::clicked, [&]() { new SettingsEditor(this); });
 	connect(ui->ribbon->config, &QPushButton::clicked, [&]() { new ShortcutConfigDialog(this); });
 	connect(ui->ribbon->switch_warcraft, &QPushButton::clicked, this, &HiveWE::switch_warcraft);
@@ -495,6 +496,11 @@ void HiveWE::load_map(const fs::path& directory) {
 
 	map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
 	setWindowTitle("HiveWE 0.11 - " + QString::fromStdString(map->filesystem_path.string()));
+	{
+		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
+		const QString map_title = map_info.fileName().isEmpty() ? QString::fromStdString(map->name) : map_info.fileName();
+		ui->ribbon->set_map_context(map_title, map_info.absoluteFilePath(), "Loaded");
+	}
 }
 
 void HiveWE::add_recent_map(const fs::path& directory) {
@@ -646,6 +652,9 @@ void HiveWE::save() {
 	emit saving_initiated();
 	if (map->save(map->filesystem_path)) {
 		show_transient_notice("Map saved");
+		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
+		const QString map_title = map_info.fileName().isEmpty() ? QString::fromStdString(map->name) : map_info.fileName();
+		ui->ribbon->set_map_context(map_title, map_info.absoluteFilePath(), "Saved");
 	}
 };
 
@@ -677,6 +686,11 @@ void HiveWE::save_as() {
 	}
 
 	setWindowTitle("HiveWE 0.11 - " + QString::fromStdString(map->filesystem_path.string()));
+	{
+		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
+		const QString map_title = map_info.fileName().isEmpty() ? QString::fromStdString(map->name) : map_info.fileName();
+		ui->ribbon->set_map_context(map_title, map_info.absoluteFilePath(), "Saved");
+	}
 }
 
 void HiveWE::export_mpq() {
@@ -1093,6 +1107,25 @@ void HiveWE::show_palette_view(const SidebarPaletteView view, const bool show_fe
 	current_sidebar_view = view;
 	sidebar_stack->setCurrentWidget(host);
 	sidebar_root->show();
+	switch (view) {
+	case SidebarPaletteView::terrain:
+		ui->ribbon->show_tab(MainRibbon::HeaderTab::terrain);
+		break;
+	case SidebarPaletteView::doodad:
+		ui->ribbon->show_tab(MainRibbon::HeaderTab::doodads);
+		break;
+	case SidebarPaletteView::unit:
+		ui->ribbon->show_tab(MainRibbon::HeaderTab::units);
+		break;
+	case SidebarPaletteView::pathing:
+		ui->ribbon->show_tab(MainRibbon::HeaderTab::pathing);
+		break;
+	case SidebarPaletteView::region:
+		ui->ribbon->show_tab(MainRibbon::HeaderTab::regions);
+		break;
+	case SidebarPaletteView::none:
+		break;
+	}
 	update_active_palette_visuals();
 	activate_palette(palette, false);
 
