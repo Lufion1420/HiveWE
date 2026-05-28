@@ -485,6 +485,12 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 			edit->selectAll();
 		}
 	});
+	connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Left), this), &QShortcut::activated, this, [this]() {
+		navigate_object_history(-1);
+	});
+	connect(new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Right), this), &QShortcut::activated, this, [this]() {
+		navigate_object_history(1);
+	});
 	connect(new QShortcut(QKeySequence(Qt::Key_O), this), &QShortcut::activated, this, &QWidget::close);
 	connect(qApp, &QApplication::focusChanged, this, [this](QWidget*, QWidget*) {
 		refresh_details_focus_visuals();
@@ -587,12 +593,54 @@ void ObjectEditor::refresh_details_focus_visuals() const {
 	}
 }
 
+void ObjectEditor::push_object_history(const Category category, const std::string& id, const QString& name) {
+	if (history_navigation) {
+		return;
+	}
+
+	if (object_history_index >= 0 && object_history_index < object_history.size()) {
+		const auto& current = object_history[object_history_index];
+		if (current.category == category && current.id == id) {
+			return;
+		}
+	}
+
+	if (object_history_index + 1 < object_history.size()) {
+		object_history.erase(object_history.begin() + object_history_index + 1, object_history.end());
+	}
+
+	object_history.push_back({category, id, name});
+	if (object_history.size() > 12) {
+		object_history.erase(object_history.begin());
+	}
+	object_history_index = static_cast<int>(object_history.size()) - 1;
+}
+
+void ObjectEditor::navigate_object_history(const int delta) {
+	if (object_history.empty()) {
+		return;
+	}
+
+	const int next_index = object_history_index + delta;
+	if (next_index < 0 || next_index >= object_history.size()) {
+		return;
+	}
+
+	history_navigation = true;
+	object_history_index = next_index;
+	const auto entry = object_history[object_history_index];
+	select_id(entry.category, entry.id);
+	history_navigation = false;
+}
+
 void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon) {
 	if (current_details_id == id) {
 		details_dock->setFocus();
 		details_dock->raise();
 		return;
 	}
+
+	push_object_history(current_category, id, name);
 
 	QVBoxLayout* layout = new QVBoxLayout;
 	layout->setContentsMargins(0, 0, 0, 0);
@@ -709,6 +757,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QToolButton* copy_id = new QToolButton;
 	copy_id->setText("Copy ID");
+	copy_id->setToolTip("Copy this object's raw ID to the clipboard.");
 	copy_id->setAutoRaise(true);
 	connect(copy_id, &QToolButton::clicked, this, [id]() {
 		QApplication::clipboard()->setText(QString::fromStdString(id));
@@ -716,6 +765,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QToolButton* copy_name = new QToolButton;
 	copy_name->setText("Copy Name");
+	copy_name->setToolTip("Copy this object's display name to the clipboard.");
 	copy_name->setAutoRaise(true);
 	connect(copy_name, &QToolButton::clicked, this, [name]() {
 		QApplication::clipboard()->setText(name);
@@ -723,6 +773,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QToolButton* open_parent = new QToolButton;
 	open_parent->setText("Open Parent");
+	open_parent->setToolTip("Open the base object this custom object is derived from.");
 	open_parent->setAutoRaise(true);
 	open_parent->setEnabled(!base_id.empty());
 	connect(open_parent, &QToolButton::clicked, this, [this, base_id]() {
@@ -733,17 +784,74 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QToolButton* show_modified_fields = new QToolButton;
 	show_modified_fields->setText("Modified Fields");
+	show_modified_fields->setToolTip("Filter the inspector to fields changed on this object.");
 	show_modified_fields->setAutoRaise(true);
+
+	QToolButton* history_back = new QToolButton;
+	history_back->setText("Back");
+	history_back->setToolTip("Go to the previously opened object.");
+	history_back->setAutoRaise(true);
+	history_back->setEnabled(object_history_index > 0);
+	connect(history_back, &QToolButton::clicked, this, [this]() {
+		navigate_object_history(-1);
+	});
+
+	QToolButton* history_forward = new QToolButton;
+	history_forward->setText("Forward");
+	history_forward->setToolTip("Go to the next object in navigation history.");
+	history_forward->setAutoRaise(true);
+	history_forward->setEnabled(object_history_index >= 0 && object_history_index + 1 < object_history.size());
+	connect(history_forward, &QToolButton::clicked, this, [this]() {
+		navigate_object_history(1);
+	});
+
+	QToolButton* reveal_in_browser = new QToolButton;
+	reveal_in_browser->setText("Reveal In Browser");
+	reveal_in_browser->setToolTip("Focus and center this object in the left browser tree.");
+	reveal_in_browser->setAutoRaise(true);
+	connect(reveal_in_browser, &QToolButton::clicked, this, [this, id]() {
+		select_id(current_category, id);
+		if (current_explorer_view) {
+			current_explorer_view->setFocus(Qt::FocusReason::OtherFocusReason);
+		}
+	});
 
 	summary_actions->addWidget(copy_id);
 	summary_actions->addWidget(copy_name);
 	summary_actions->addWidget(open_parent);
 	summary_actions->addWidget(show_modified_fields);
+	summary_actions->addWidget(history_back);
+	summary_actions->addWidget(history_forward);
+	summary_actions->addWidget(reveal_in_browser);
 	summary_actions->addStretch();
 
 	summary_layout->addWidget(summary_icon);
 	summary_layout->addLayout(summary_text_layout, 1);
 	summary_layout->addLayout(summary_actions);
+
+	QWidget* recent_objects_bar = new QWidget;
+	QHBoxLayout* recent_objects_layout = new QHBoxLayout(recent_objects_bar);
+	recent_objects_layout->setContentsMargins(2, 0, 2, 0);
+	recent_objects_layout->setSpacing(6);
+
+	QLabel* recent_objects_label = new QLabel("Recent");
+	recent_objects_label->setObjectName("objectEditorFilterState");
+	recent_objects_layout->addWidget(recent_objects_label);
+
+	const int history_end = std::min<int>(object_history.size(), 6);
+	for (int i = 0; i < history_end; ++i) {
+		const auto& entry = object_history[object_history.size() - history_end + i];
+		QToolButton* recent_button = new QToolButton;
+		recent_button->setObjectName("objectEditorChip");
+		recent_button->setText(entry.name.isEmpty() ? QString::fromStdString(entry.id) : entry.name);
+		recent_button->setToolTip("Reopen recent object: " + QString::fromStdString(entry.id));
+		recent_button->setCheckable(false);
+		recent_objects_layout->addWidget(recent_button);
+		connect(recent_button, &QToolButton::clicked, this, [this, entry]() {
+			select_id(entry.category, entry.id);
+		});
+	}
+	recent_objects_layout->addStretch();
 
 	QWidget* inspector_bar = new QWidget;
 	inspector_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -780,12 +888,14 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	QToolButton* modified_chip = new QToolButton;
 	modified_chip->setObjectName("objectEditorChip");
 	modified_chip->setText("Modified");
+	modified_chip->setToolTip("Show only fields that differ from the base object.");
 	modified_chip->setCheckable(true);
 	modified_chip->setChecked(current_modified_only);
 
 	QToolButton* core_chip = new QToolButton;
 	core_chip->setObjectName("objectEditorChip");
 	core_chip->setText("Core");
+	core_chip->setToolTip("Show a reduced set of commonly edited fields.");
 	core_chip->setCheckable(true);
 	core_chip->setChecked(current_core_only);
 
@@ -813,6 +923,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		QToolButton* button = new QToolButton;
 		button->setObjectName("objectEditorChip");
 		button->setText(label);
+		button->setToolTip(value.isEmpty() ? "Show fields from all sections." : "Show only fields from the " + label + " section.");
 		button->setCheckable(true);
 		button->setProperty("sectionValue", value);
 		section_group->addButton(button);
@@ -838,6 +949,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QToolButton* clear_filter_state = new QToolButton;
 	clear_filter_state->setText("Reset Filters");
+	clear_filter_state->setToolTip("Clear the current field search, section filter, and filter chips.");
 	clear_filter_state->setAutoRaise(true);
 
 	filter_state_layout->addWidget(filter_state);
@@ -1080,6 +1192,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	empty_meta->setWordWrap(true);
 
 	QPushButton* clear_filters = new QPushButton("Clear Filters");
+	clear_filters->setToolTip("Clear the current field search, section filter, and filter chips.");
 	connect(clear_filters, &QPushButton::clicked, this, [field_search, section_filter, modified_chip, core_chip]() {
 		field_search->clear();
 		section_filter->setCurrentIndex(0);
@@ -1149,6 +1262,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QToolButton* copy_field_id = new QToolButton;
 	copy_field_id->setText("Copy Field ID");
+	copy_field_id->setToolTip("Copy the selected field's raw metadata ID.");
 	copy_field_id->setAutoRaise(true);
 	copy_field_id->setEnabled(false);
 
@@ -1194,6 +1308,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	connect(filter_model, &QAbstractItemModel::layoutChanged, field_selection_strip, update_field_selection_strip);
 
 	layout->addWidget(summary);
+	layout->addWidget(recent_objects_bar);
 	layout->addWidget(inspector_bar);
 	layout->addWidget(section_strip);
 	layout->addWidget(filter_state_bar);
@@ -1203,8 +1318,9 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	layout->setStretch(1, 0);
 	layout->setStretch(2, 0);
 	layout->setStretch(3, 0);
-	layout->setStretch(4, 1);
-	layout->setStretch(5, 0);
+	layout->setStretch(4, 0);
+	layout->setStretch(5, 1);
+	layout->setStretch(6, 0);
 
 	QWidget* container = new QWidget;
 	container->setLayout(layout);
@@ -1553,12 +1669,13 @@ void ObjectEditor::addTypeTreeView(
 	QToolButton* all_objects = new QToolButton;
 	all_objects->setObjectName("objectEditorChip");
 	all_objects->setText("All");
+	all_objects->setToolTip("Show all objects in this browser.");
 	all_objects->setCheckable(true);
 
 	QToolButton* custom_objects = new QToolButton;
 	custom_objects->setObjectName("objectEditorChip");
 	custom_objects->setText("Custom");
-	custom_objects->setToolTip("Show only custom " + name.toLower());
+	custom_objects->setToolTip("Show only custom " + name.toLower() + " objects.");
 	custom_objects->setCheckable(true);
 	custom_objects->setChecked(browser_custom_only[static_cast<int>(category)]);
 	all_objects->setChecked(!browser_custom_only[static_cast<int>(category)]);
@@ -1610,6 +1727,7 @@ void ObjectEditor::addTypeTreeView(
 
 	QToolButton* expand_browser = new QToolButton;
 	expand_browser->setText("Expand");
+	expand_browser->setToolTip("Expand all visible folders in the browser tree.");
 	expand_browser->setAutoRaise(true);
 	connect(expand_browser, &QToolButton::clicked, view, [view]() {
 		view->expandAll();
@@ -1617,6 +1735,7 @@ void ObjectEditor::addTypeTreeView(
 
 	QToolButton* collapse_browser = new QToolButton;
 	collapse_browser->setText("Collapse");
+	collapse_browser->setToolTip("Collapse all folders in the browser tree.");
 	collapse_browser->setAutoRaise(true);
 	connect(collapse_browser, &QToolButton::clicked, view, [view]() {
 		view->collapseAll();
@@ -1624,6 +1743,7 @@ void ObjectEditor::addTypeTreeView(
 
 	QToolButton* focus_current = new QToolButton;
 	focus_current->setText("Reveal");
+	focus_current->setToolTip("Scroll the tree to the current selection and focus it.");
 	focus_current->setAutoRaise(true);
 	connect(focus_current, &QToolButton::clicked, view, [view]() {
 		const QModelIndex current = view->currentIndex();
@@ -1647,6 +1767,7 @@ void ObjectEditor::addTypeTreeView(
 
 	QToolButton* clear_browser_state = new QToolButton;
 	clear_browser_state->setText("Reset");
+	clear_browser_state->setToolTip("Clear the current browser search and custom-only filter.");
 	clear_browser_state->setAutoRaise(true);
 	connect(clear_browser_state, &QToolButton::clicked, this, [search, all_objects, custom_objects]() {
 		search->clear();
@@ -1676,6 +1797,7 @@ void ObjectEditor::addTypeTreeView(
 	browser_empty_meta->setWordWrap(true);
 
 	QPushButton* clear_browser_filters = new QPushButton("Clear Browser Filters");
+	clear_browser_filters->setToolTip("Clear the current browser search and custom-only filter.");
 	connect(clear_browser_filters, &QPushButton::clicked, this, [search, all_objects, custom_objects]() {
 		search->clear();
 		custom_objects->setChecked(false);
@@ -1722,6 +1844,7 @@ void ObjectEditor::addTypeTreeView(
 
 	QToolButton* copy_object_id = new QToolButton;
 	copy_object_id->setText("Copy ID");
+	copy_object_id->setToolTip("Copy the selected object's raw ID to the clipboard.");
 	copy_object_id->setAutoRaise(true);
 	copy_object_id->setEnabled(false);
 
@@ -1868,9 +1991,9 @@ void ObjectEditor::addTypeTreeView(
 	});
 }
 
-void ObjectEditor::select_id(Category category, const std::string& id) const {
+void ObjectEditor::select_id(Category category, const std::string& id) {
 	explorer_area->setCurrentIndex(static_cast<int>(category));
-	const_cast<ObjectEditor*>(this)->current_category = category;
+	current_category = category;
 	const auto edit = explorer_area->currentDockWidget()->findChild<QLineEdit*>("search");
 	edit->clear();
 

@@ -16,6 +16,7 @@
 #include "global_search.h"
 #include "nlohmann/json.hpp"
 
+#include <vector>
 #include <string>
 #include <memory>
 #include <array>
@@ -47,7 +48,7 @@ public:
 		buff
 	};
 
-	void select_id(Category category, const std::string& id) const;
+	void select_id(Category category, const std::string& id);
 	void open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon);
 
 private:
@@ -70,6 +71,14 @@ private:
 	bool current_core_only = false;
 	std::array<QString, 7> browser_searches;
 	std::array<bool, 7> browser_custom_only {};
+	struct ObjectHistoryEntry {
+		Category category;
+		std::string id;
+		QString name;
+	};
+	std::vector<ObjectHistoryEntry> object_history;
+	int object_history_index = -1;
+	bool history_navigation = false;
 
 	QTreeView* unit_explorer = new QTreeView;
 	QTreeView* doodad_explorer = new QTreeView;
@@ -111,6 +120,8 @@ private:
 	void refresh_details_focus_visuals() const;
 	bool restore_tree_state(const QString& key, QTreeView* view) const;
 	void save_tree_state(const QString& key, const QTreeView* view) const;
+	void push_object_history(Category category, const std::string& id, const QString& name);
+	void navigate_object_history(int delta);
 protected:
 	void closeEvent(QCloseEvent* event) override;
 	bool focusNextPrevChild(bool next) override;
