@@ -365,6 +365,9 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorSummary { border: 1px solid palette(mid); border-radius: 8px; background: rgba(255,255,255,0.03); }"
 		"#objectEditorSummaryTitle { font-size: 16px; font-weight: 600; }"
 		"#objectEditorSummaryMeta { color: rgb(182, 188, 198); }"
+		"#objectEditorSelectionStrip { border: 1px solid palette(mid); border-radius: 8px; background: rgba(255,255,255,0.025); }"
+		"#objectEditorSelectionTitle { font-size: 13px; font-weight: 600; }"
+		"#objectEditorSelectionMeta { color: rgb(168, 174, 184); }"
 		"#objectEditorInsights { border: 1px solid palette(mid); border-radius: 8px; background: rgba(116, 169, 255, 0.05); }"
 		"#objectEditorInsightsTitle { font-size: 13px; font-weight: 600; }"
 		"#objectEditorInsightsMeta { color: rgb(168, 174, 184); }"
@@ -1103,16 +1106,88 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		update_inspector_state();
 	});
 
+	QFrame* field_selection_strip = new QFrame;
+	field_selection_strip->setObjectName("objectEditorSelectionStrip");
+	field_selection_strip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+	QHBoxLayout* field_selection_layout = new QHBoxLayout(field_selection_strip);
+	field_selection_layout->setContentsMargins(10, 8, 10, 8);
+	field_selection_layout->setSpacing(10);
+
+	QVBoxLayout* field_selection_text = new QVBoxLayout;
+	field_selection_text->setContentsMargins(0, 0, 0, 0);
+	field_selection_text->setSpacing(2);
+
+	QLabel* field_selection_title = new QLabel("No field selected");
+	field_selection_title->setObjectName("objectEditorSelectionTitle");
+
+	QLabel* field_selection_meta = new QLabel("Select a field to see its raw id and state.");
+	field_selection_meta->setObjectName("objectEditorSelectionMeta");
+	field_selection_meta->setWordWrap(true);
+
+	field_selection_text->addWidget(field_selection_title);
+	field_selection_text->addWidget(field_selection_meta);
+
+	QLabel* field_state_badge = new QLabel("Base");
+	field_state_badge->setObjectName("objectEditorPill");
+
+	QToolButton* copy_field_id = new QToolButton;
+	copy_field_id->setText("Copy Field ID");
+	copy_field_id->setAutoRaise(true);
+	copy_field_id->setEnabled(false);
+
+	field_selection_layout->addLayout(field_selection_text, 1);
+	field_selection_layout->addWidget(field_state_badge);
+	field_selection_layout->addWidget(copy_field_id);
+
+	const auto update_field_selection_strip = [filter_model, single_model, view, field_selection_title, field_selection_meta, field_state_badge, copy_field_id]() {
+		const QModelIndex current = view->currentIndex();
+		if (!current.isValid()) {
+			field_selection_title->setText("No field selected");
+			field_selection_meta->setText("Select a field to see its raw id and state.");
+			field_state_badge->setText("Base");
+			copy_field_id->setEnabled(false);
+			copy_field_id->disconnect();
+			return;
+		}
+
+		const QModelIndex source_index = filter_model->mapToSource(current);
+		if (!source_index.isValid()) {
+			return;
+		}
+
+		const QString title = single_model->display_label(source_index.row());
+		const QString meta = single_model->meta_label(source_index.row());
+		const bool modified = single_model->is_modified_row(source_index.row());
+		const QString field_id = QString::fromStdString(single_model->getMapping()[source_index.row()].key);
+
+		field_selection_title->setText(title);
+		field_selection_meta->setText(meta);
+		field_state_badge->setText(modified ? "Modified" : "Base");
+		copy_field_id->setEnabled(true);
+		copy_field_id->disconnect();
+		QObject::connect(copy_field_id, &QToolButton::clicked, copy_field_id, [field_id]() {
+			QApplication::clipboard()->setText(field_id);
+		});
+	};
+	update_field_selection_strip();
+	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, field_selection_strip, [update_field_selection_strip](const QModelIndex&, const QModelIndex&) {
+		update_field_selection_strip();
+	});
+	connect(filter_model, &QAbstractItemModel::modelReset, field_selection_strip, update_field_selection_strip);
+	connect(filter_model, &QAbstractItemModel::layoutChanged, field_selection_strip, update_field_selection_strip);
+
 	layout->addWidget(summary);
 	layout->addWidget(inspector_bar);
 	layout->addWidget(section_strip);
 	layout->addWidget(filter_state_bar);
 	layout->addWidget(inspector_stack);
+	layout->addWidget(field_selection_strip);
 	layout->setStretch(0, 0);
 	layout->setStretch(1, 0);
 	layout->setStretch(2, 0);
 	layout->setStretch(3, 0);
 	layout->setStretch(4, 1);
+	layout->setStretch(5, 0);
 
 	QWidget* container = new QWidget;
 	container->setLayout(layout);
@@ -1571,6 +1646,44 @@ void ObjectEditor::addTypeTreeView(
 	browser_stack->addWidget(view);
 	browser_stack->addWidget(browser_empty);
 
+	QFrame* browser_selection_strip = new QFrame;
+	browser_selection_strip->setObjectName("objectEditorSelectionStrip");
+	browser_selection_strip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+	QHBoxLayout* browser_selection_layout = new QHBoxLayout(browser_selection_strip);
+	browser_selection_layout->setContentsMargins(10, 8, 10, 8);
+	browser_selection_layout->setSpacing(10);
+
+	QLabel* browser_selection_icon = new QLabel;
+	browser_selection_icon->setFixedSize(24, 24);
+	browser_selection_icon->setAlignment(Qt::AlignCenter);
+
+	QVBoxLayout* browser_selection_text = new QVBoxLayout;
+	browser_selection_text->setContentsMargins(0, 0, 0, 0);
+	browser_selection_text->setSpacing(2);
+
+	QLabel* browser_selection_title = new QLabel("No object selected");
+	browser_selection_title->setObjectName("objectEditorSelectionTitle");
+
+	QLabel* browser_selection_meta = new QLabel("Select an object to preview its raw id and editor state.");
+	browser_selection_meta->setObjectName("objectEditorSelectionMeta");
+	browser_selection_meta->setWordWrap(true);
+
+	browser_selection_text->addWidget(browser_selection_title);
+	browser_selection_text->addWidget(browser_selection_meta);
+
+	QLabel* browser_selection_badge = new QLabel("Base");
+	browser_selection_badge->setObjectName("objectEditorPill");
+
+	QToolButton* copy_object_id = new QToolButton;
+	copy_object_id->setText("Copy ID");
+	copy_object_id->setAutoRaise(true);
+	copy_object_id->setEnabled(false);
+
+	browser_selection_layout->addWidget(browser_selection_icon);
+	browser_selection_layout->addLayout(browser_selection_text, 1);
+	browser_selection_layout->addWidget(browser_selection_badge);
+	browser_selection_layout->addWidget(copy_object_id);
+
 	const auto update_browser_meta = [table, filter, browser_meta, custom_objects]() {
 		browser_meta->setText(filtered_object_count_label(table, filter, custom_objects->isChecked()));
 	};
@@ -1597,13 +1710,56 @@ void ObjectEditor::addTypeTreeView(
 		view->expandAll();
 	});
 
+	const auto update_browser_selection_strip = [view, filter, table, browser_selection_icon, browser_selection_title, browser_selection_meta, browser_selection_badge, copy_object_id]() {
+		const QModelIndex current = view->currentIndex();
+		if (!current.isValid()) {
+			browser_selection_icon->clear();
+			browser_selection_title->setText("No object selected");
+			browser_selection_meta->setText("Select an object to preview its raw id and editor state.");
+			browser_selection_badge->setText("Base");
+			copy_object_id->setEnabled(false);
+			copy_object_id->disconnect();
+			return;
+		}
+
+		const auto* tree_item = static_cast<const BaseTreeItem*>(filter->mapToSource(current).internalPointer());
+		if (!tree_item || tree_item->baseCategory || tree_item->subCategory) {
+			browser_selection_icon->clear();
+			browser_selection_title->setText("Folder selected");
+			browser_selection_meta->setText("Choose an object row to preview its id and status.");
+			browser_selection_badge->setText("Folder");
+			copy_object_id->setEnabled(false);
+			copy_object_id->disconnect();
+			return;
+		}
+
+		const QString raw_id = QString::fromStdString(tree_item->id);
+		const bool custom = table->slk->shadow_data.contains(tree_item->id) && table->slk->shadow_data.at(tree_item->id).contains("oldid");
+		browser_selection_icon->setPixmap(current.data(Qt::DecorationRole).value<QIcon>().pixmap(22, 22));
+		browser_selection_title->setText(current.data(Qt::DisplayRole).toString());
+		browser_selection_meta->setText(raw_id + (custom ? "  -  Custom object" : "  -  Base object"));
+		browser_selection_badge->setText(custom ? "Custom" : "Base");
+		copy_object_id->setEnabled(true);
+		copy_object_id->disconnect();
+		QObject::connect(copy_object_id, &QToolButton::clicked, copy_object_id, [raw_id]() {
+			QApplication::clipboard()->setText(raw_id);
+		});
+	};
+
 	QToolBar* bar = new QToolBar;
 	bar->setMovable(false);
 	bar->addWidget(browser_bar);
 
+	QWidget* browser_container = new QWidget;
+	QVBoxLayout* browser_container_layout = new QVBoxLayout(browser_container);
+	browser_container_layout->setContentsMargins(0, 0, 0, 0);
+	browser_container_layout->setSpacing(8);
+	browser_container_layout->addWidget(browser_selection_strip);
+	browser_container_layout->addWidget(browser_stack, 1);
+
 	ads::CDockWidget* tab = new ads::CDockWidget(dock_manager, name);
 	tab->setToolBar(bar);
-	tab->setWidget(browser_stack);
+	tab->setWidget(browser_container);
 	tab->setFeature(ads::CDockWidget::DockWidgetClosable, false);
 	tab->setFeature(ads::CDockWidget::DockWidgetAlwaysCloseAndDelete, false);
 	tab->setIcon(icon);
@@ -1618,8 +1774,10 @@ void ObjectEditor::addTypeTreeView(
 	update_browser_meta();
 	update_browser_state();
 	update_browser_filter_state();
+	update_browser_selection_strip();
 	connect(filter, &QAbstractItemModel::modelReset, browser_meta, update_browser_meta);
 	connect(filter, &QAbstractItemModel::modelReset, browser_stack, update_browser_state);
+	connect(filter, &QAbstractItemModel::modelReset, browser_selection_strip, update_browser_selection_strip);
 	connect(filter, &QAbstractItemModel::rowsInserted, browser_meta, [update_browser_meta](const QModelIndex&, int, int) {
 		update_browser_meta();
 	});
@@ -1634,11 +1792,15 @@ void ObjectEditor::addTypeTreeView(
 	});
 	connect(filter, &QAbstractItemModel::layoutChanged, browser_meta, update_browser_meta);
 	connect(filter, &QAbstractItemModel::layoutChanged, browser_stack, update_browser_state);
+	connect(filter, &QAbstractItemModel::layoutChanged, browser_selection_strip, update_browser_selection_strip);
 	connect(search, &QLineEdit::textChanged, browser_meta, [update_browser_meta](const QString&) {
 		update_browser_meta();
 	});
 	connect(search, &QLineEdit::textChanged, browser_stack, [update_browser_state](const QString&) {
 		update_browser_state();
+	});
+	connect(search, &QLineEdit::textChanged, browser_selection_strip, [update_browser_selection_strip](const QString&) {
+		update_browser_selection_strip();
 	});
 	connect(search, &QLineEdit::textChanged, browser_filter_state_bar, [update_browser_filter_state](const QString&) {
 		update_browser_filter_state();
@@ -1649,8 +1811,14 @@ void ObjectEditor::addTypeTreeView(
 	connect(custom_objects, &QToolButton::toggled, browser_stack, [update_browser_state](bool) {
 		update_browser_state();
 	});
+	connect(custom_objects, &QToolButton::toggled, browser_selection_strip, [update_browser_selection_strip](bool) {
+		update_browser_selection_strip();
+	});
 	connect(custom_objects, &QToolButton::toggled, browser_filter_state_bar, [update_browser_filter_state](bool) {
 		update_browser_filter_state();
+	});
+	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, browser_selection_strip, [update_browser_selection_strip](const QModelIndex&, const QModelIndex&) {
+		update_browser_selection_strip();
 	});
 }
 
