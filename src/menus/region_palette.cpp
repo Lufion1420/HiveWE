@@ -10,13 +10,47 @@ import Camera;
 import MapGlobal;
 
 RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
+	setObjectName("regionPalette");
 	monitor_activation();
 
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
-	layout->setSpacing(6);
+	layout->setSpacing(10);
+	setStyleSheet(
+		"QPushButton { color: rgb(229, 233, 239); }"
+		"QLabel { color: rgb(214, 221, 229); }"
+	);
 
 	region_list->setSelectionMode(QAbstractItemView::SingleSelection);
+	region_list->setObjectName("regionList");
+	region_list->setSpacing(4);
+	region_list->setUniformItemSizes(true);
+	name->setObjectName("regionNameField");
+	color->setObjectName("regionColorButton");
+	new_region->setText("New");
+	delete_region->setText("Delete");
+
+	selection_summary = new QFrame(this);
+	selection_summary->setObjectName("regionSelectionSummary");
+	selection_summary->setStyleSheet(
+		"QFrame#regionSelectionSummary { background: rgba(24, 27, 31, 200); border: 1px solid rgba(255, 255, 255, 14); border-radius: 12px; }"
+		"QLabel#regionSelectionSummaryLabel { color: rgb(140, 149, 162); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }"
+		"QLabel#regionSelectionSummaryTitle { color: rgb(241, 244, 247); font-size: 14px; font-weight: 700; }"
+		"QLabel#regionSelectionSummaryMeta { color: rgb(176, 185, 196); font-size: 12px; }"
+	);
+	auto* selection_summary_layout = new QVBoxLayout(selection_summary);
+	selection_summary_layout->setContentsMargins(12, 12, 12, 12);
+	selection_summary_layout->setSpacing(4);
+	auto* selection_summary_label = new QLabel("ACTIVE REGION", selection_summary);
+	selection_summary_label->setObjectName("regionSelectionSummaryLabel");
+	selection_summary_title = new QLabel("No region selected", selection_summary);
+	selection_summary_title->setObjectName("regionSelectionSummaryTitle");
+	selection_summary_meta = new QLabel("Create a region or select one from the list to edit its properties.", selection_summary);
+	selection_summary_meta->setObjectName("regionSelectionSummaryMeta");
+	selection_summary_meta->setWordWrap(true);
+	selection_summary_layout->addWidget(selection_summary_label);
+	selection_summary_layout->addWidget(selection_summary_title);
+	selection_summary_layout->addWidget(selection_summary_meta);
 
 	auto* button_row = new QHBoxLayout;
 	button_row->setContentsMargins(0, 0, 0, 0);
@@ -25,10 +59,13 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 
 	auto* form = new QFormLayout;
 	form->setContentsMargins(0, 0, 0, 0);
+	form->setVerticalSpacing(8);
+	form->setHorizontalSpacing(10);
 	form->addRow("Name", name);
 	form->addRow("Color", color);
 
 	layout->addWidget(region_list, 1);
+	layout->addWidget(selection_summary);
 	layout->addLayout(button_row);
 	layout->addLayout(form);
 
@@ -170,11 +207,21 @@ void RegionPalette::sync_region_fields() {
 	if (!selected) {
 		name->clear();
 		update_color_button(QColor(80, 80, 80));
+		selection_summary_title->setText("No region selected");
+		selection_summary_meta->setText("Create a region or select one from the list to edit its properties.");
 		return;
 	}
 
 	name->setText(QString::fromStdString(selected->name));
 	update_color_button(QColor(static_cast<int>(selected->color.r), static_cast<int>(selected->color.g), static_cast<int>(selected->color.b)));
+	selection_summary_title->setText(QString::fromStdString(selected->name));
+	selection_summary_meta->setText(
+		QString("Bounds: %1, %2 to %3, %4")
+			.arg(selected->left)
+			.arg(selected->bottom)
+			.arg(selected->right)
+			.arg(selected->top)
+	);
 }
 
 void RegionPalette::update_color_button(const QColor& new_color) {

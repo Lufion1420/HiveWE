@@ -28,6 +28,9 @@ class RegionPalette : public Palette {
 	QPushButton* delete_region = new QPushButton("Delete Region", this);
 	QLineEdit* name = new QLineEdit(this);
 	QPushButton* color = new QPushButton("Choose Color", this);
+	QFrame* selection_summary = nullptr;
+	QLabel* selection_summary_title = nullptr;
+	QLabel* selection_summary_meta = nullptr;
 
 	QRibbonTab* ribbon_tab = new QRibbonTab;
 	QRibbonButton* selection_mode = new QRibbonButton;
