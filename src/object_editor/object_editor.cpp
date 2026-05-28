@@ -714,6 +714,13 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		QApplication::clipboard()->setText(QString::fromStdString(id));
 	});
 
+	QToolButton* copy_name = new QToolButton;
+	copy_name->setText("Copy Name");
+	copy_name->setAutoRaise(true);
+	connect(copy_name, &QToolButton::clicked, this, [name]() {
+		QApplication::clipboard()->setText(name);
+	});
+
 	QToolButton* open_parent = new QToolButton;
 	open_parent->setText("Open Parent");
 	open_parent->setAutoRaise(true);
@@ -724,8 +731,14 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		}
 	});
 
+	QToolButton* show_modified_fields = new QToolButton;
+	show_modified_fields->setText("Modified Fields");
+	show_modified_fields->setAutoRaise(true);
+
 	summary_actions->addWidget(copy_id);
+	summary_actions->addWidget(copy_name);
 	summary_actions->addWidget(open_parent);
+	summary_actions->addWidget(show_modified_fields);
 	summary_actions->addStretch();
 
 	summary_layout->addWidget(summary_icon);
@@ -898,6 +911,10 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	connect(core_chip, &QToolButton::toggled, this, [this, filter_model](const bool checked) {
 		current_core_only = checked;
 		filter_model->set_core_only(checked);
+	});
+	connect(show_modified_fields, &QToolButton::clicked, this, [modified_chip, field_search]() {
+		field_search->clear();
+		modified_chip->setChecked(true);
 	});
 	connect(clear_filter_state, &QToolButton::clicked, this, [field_search, section_filter, modified_chip, core_chip]() {
 		field_search->clear();
@@ -1590,6 +1607,35 @@ void ObjectEditor::addTypeTreeView(
 	browser_controls_row->addWidget(search, 1);
 	browser_controls_row->addWidget(all_objects);
 	browser_controls_row->addWidget(custom_objects);
+
+	QToolButton* expand_browser = new QToolButton;
+	expand_browser->setText("Expand");
+	expand_browser->setAutoRaise(true);
+	connect(expand_browser, &QToolButton::clicked, view, [view]() {
+		view->expandAll();
+	});
+
+	QToolButton* collapse_browser = new QToolButton;
+	collapse_browser->setText("Collapse");
+	collapse_browser->setAutoRaise(true);
+	connect(collapse_browser, &QToolButton::clicked, view, [view]() {
+		view->collapseAll();
+	});
+
+	QToolButton* focus_current = new QToolButton;
+	focus_current->setText("Reveal");
+	focus_current->setAutoRaise(true);
+	connect(focus_current, &QToolButton::clicked, view, [view]() {
+		const QModelIndex current = view->currentIndex();
+		if (current.isValid()) {
+			view->scrollTo(current, QAbstractItemView::ScrollHint::PositionAtCenter);
+			view->setFocus(Qt::FocusReason::OtherFocusReason);
+		}
+	});
+
+	browser_controls_row->addWidget(expand_browser);
+	browser_controls_row->addWidget(collapse_browser);
+	browser_controls_row->addWidget(focus_current);
 
 	QWidget* browser_filter_state_bar = new QWidget;
 	QHBoxLayout* browser_filter_state_layout = new QHBoxLayout(browser_filter_state_bar);
