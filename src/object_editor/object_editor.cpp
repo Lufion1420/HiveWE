@@ -23,6 +23,7 @@
 #include <QSet>
 #include <QButtonGroup>
 #include <QComboBox>
+#include <QGridLayout>
 #include <QStackedWidget>
 #include <QFrame>
 #include <QStyledItemDelegate>
@@ -113,6 +114,48 @@ void expand_saved_paths(QTreeView* view, const QModelIndex& parent, const QSet<Q
 
 bool is_focus_within(QWidget* focus_widget, QWidget* container) {
 	return focus_widget && container && (focus_widget == container || container->isAncestorOf(focus_widget));
+}
+
+	QString category_key(const ObjectEditor::Category category) {
+	switch (category) {
+		case ObjectEditor::Category::unit:
+			return "units";
+		case ObjectEditor::Category::item:
+			return "items";
+		case ObjectEditor::Category::doodad:
+			return "doodads";
+		case ObjectEditor::Category::destructible:
+			return "destructibles";
+		case ObjectEditor::Category::ability:
+			return "abilities";
+		case ObjectEditor::Category::upgrade:
+			return "upgrades";
+		case ObjectEditor::Category::buff:
+			return "buffs";
+	}
+
+	return "units";
+}
+
+QString category_label(const ObjectEditor::Category category) {
+	switch (category) {
+		case ObjectEditor::Category::unit:
+			return "Units";
+		case ObjectEditor::Category::item:
+			return "Items";
+		case ObjectEditor::Category::doodad:
+			return "Doodads";
+		case ObjectEditor::Category::destructible:
+			return "Destructibles";
+		case ObjectEditor::Category::ability:
+			return "Abilities";
+		case ObjectEditor::Category::upgrade:
+			return "Upgrades";
+		case ObjectEditor::Category::buff:
+			return "Buffs";
+	}
+
+	return "Units";
 }
 
 class ObjectTreeDelegate : public QStyledItemDelegate {
@@ -356,6 +399,26 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 			browser_searches[i] = settings.value("ObjectEditor/browser/" + category_keys[i] + "/search").toString();
 			browser_custom_only[i] = settings.value("ObjectEditor/browser/" + category_keys[i] + "/customOnly", false).toBool();
 		}
+
+		const int bookmark_count = settings.beginReadArray("ObjectEditor/bookmarks");
+		for (int i = 0; i < bookmark_count; ++i) {
+			settings.setArrayIndex(i);
+			const QString category = settings.value("category").toString();
+			const std::string id = settings.value("id").toString().toStdString();
+			const QString name = settings.value("name").toString();
+			if (!id.empty()) {
+				const auto parsed_category =
+					category == "items"		 ? Category::item
+					: category == "doodads"	 ? Category::doodad
+					: category == "destructibles" ? Category::destructible
+					: category == "abilities"	 ? Category::ability
+					: category == "upgrades"	 ? Category::upgrade
+					: category == "buffs"		 ? Category::buff
+											 : Category::unit;
+				object_bookmarks.push_back({parsed_category, id, name});
+			}
+		}
+		settings.endArray();
 	}
 
 	dock_manager = new ads::CDockManager;
@@ -365,6 +428,10 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 		"#objectEditorSummary { border: 1px solid palette(mid); border-radius: 8px; background: rgba(255,255,255,0.03); }"
 		"#objectEditorSummaryTitle { font-size: 16px; font-weight: 600; }"
 		"#objectEditorSummaryMeta { color: rgb(182, 188, 198); }"
+		"#objectEditorSummaryKey { color: rgb(154, 160, 170); }"
+		"#objectEditorSummaryValue { color: rgb(216, 220, 226); }"
+		"QToolButton#objectEditorSummaryAction { border: 1px solid palette(mid); border-radius: 8px; padding: 8px 12px; background: rgba(255,255,255,0.03); min-width: 128px; }"
+		"QToolButton#objectEditorSummaryAction:checked { background: palette(highlight); color: palette(highlighted-text); border-color: palette(highlight); }"
 		"#objectEditorSelectionStrip { border: 1px solid palette(mid); border-radius: 8px; background: rgba(255,255,255,0.025); }"
 		"#objectEditorSelectionTitle { font-size: 13px; font-weight: 600; }"
 		"#objectEditorSelectionMeta { color: rgb(168, 174, 184); }"
@@ -536,6 +603,14 @@ void ObjectEditor::closeEvent(QCloseEvent* event) {
 		settings.setValue("ObjectEditor/browser/" + category_keys[i] + "/search", browser_searches[i]);
 		settings.setValue("ObjectEditor/browser/" + category_keys[i] + "/customOnly", browser_custom_only[i]);
 	}
+	settings.beginWriteArray("ObjectEditor/bookmarks");
+	for (int i = 0; i < object_bookmarks.size(); ++i) {
+		settings.setArrayIndex(i);
+		settings.setValue("category", category_key(object_bookmarks[i].category));
+		settings.setValue("id", QString::fromStdString(object_bookmarks[i].id));
+		settings.setValue("name", object_bookmarks[i].name);
+	}
+	settings.endArray();
 	save_tree_state("units", unit_explorer);
 	save_tree_state("items", item_explorer);
 	save_tree_state("doodads", doodad_explorer);
@@ -633,6 +708,26 @@ void ObjectEditor::navigate_object_history(const int delta) {
 	history_navigation = false;
 }
 
+bool ObjectEditor::is_object_bookmarked(const Category category, const std::string& id) const {
+	return std::ranges::any_of(object_bookmarks, [&](const auto& bookmark) {
+		return bookmark.category == category && bookmark.id == id;
+	});
+}
+
+void ObjectEditor::toggle_object_bookmark(const Category category, const std::string& id, const QString& name) {
+	if (const auto it = std::ranges::find_if(object_bookmarks, [&](const auto& bookmark) {
+			return bookmark.category == category && bookmark.id == id;
+		});
+		it != object_bookmarks.end()) {
+		object_bookmarks.erase(it);
+	} else {
+		object_bookmarks.push_back({category, id, name});
+		if (object_bookmarks.size() > 16) {
+			object_bookmarks.erase(object_bookmarks.begin());
+		}
+	}
+}
+
 void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon) {
 	if (current_details_id == id) {
 		details_dock->setFocus();
@@ -708,8 +803,8 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	summary_layout->setSpacing(10);
 
 	QLabel* summary_icon = new QLabel;
-	summary_icon->setPixmap(icon.pixmap(32, 32));
-	summary_icon->setFixedSize(36, 36);
+	summary_icon->setPixmap(icon.pixmap(56, 56));
+	summary_icon->setFixedSize(64, 64);
 	summary_icon->setAlignment(Qt::AlignCenter);
 
 	QVBoxLayout* summary_text_layout = new QVBoxLayout;
@@ -723,39 +818,47 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	const std::string base_id = base_object_id(table, id);
 	const QString base_name = base_id.empty() ? QString() : object_display_name(table, base_id);
 	const int modified_count = modified_field_count(table, id);
-	QString summary_meta_text = QString::fromStdString(id);
-	if (!base_id.empty()) {
-		const QString base_label = base_name.isEmpty() ? QString::fromStdString(base_id) : base_name + " (" + QString::fromStdString(base_id) + ")";
-		summary_meta_text += "  |  Base: " + base_label;
+	QHBoxLayout* title_row = new QHBoxLayout;
+	title_row->setContentsMargins(0, 0, 0, 0);
+	title_row->setSpacing(8);
+	title_row->addWidget(summary_title);
+	if (modified_count > 0) {
+		QLabel* modified_badge = new QLabel("Modified");
+		modified_badge->setObjectName("objectEditorPill");
+		title_row->addWidget(modified_badge, 0, Qt::AlignVCenter);
 	}
-	QLabel* summary_meta = new QLabel(summary_meta_text);
-	summary_meta->setObjectName("objectEditorSummaryMeta");
-	summary_meta->setWordWrap(true);
+	title_row->addStretch();
 
-	QHBoxLayout* summary_badges = new QHBoxLayout;
-	summary_badges->setContentsMargins(0, 0, 0, 0);
-	summary_badges->setSpacing(6);
+	const QString base_label = base_id.empty() ? "Base object" :
+		(base_name.isEmpty() ? QString::fromStdString(base_id) : base_name + " (" + QString::fromStdString(base_id) + ")");
 
-	QLabel* modified_badge = new QLabel(QString::number(modified_count) + " modified");
-	modified_badge->setObjectName("objectEditorPill");
-	summary_badges->addWidget(modified_badge);
+	auto make_summary_row = [](const QString& key, const QString& value) {
+		QHBoxLayout* row = new QHBoxLayout;
+		row->setContentsMargins(0, 0, 0, 0);
+		row->setSpacing(10);
+		QLabel* key_label = new QLabel(key);
+		key_label->setObjectName("objectEditorSummaryKey");
+		key_label->setMinimumWidth(68);
+		QLabel* value_label = new QLabel(value);
+		value_label->setObjectName("objectEditorSummaryValue");
+		value_label->setWordWrap(true);
+		row->addWidget(key_label, 0, Qt::AlignTop);
+		row->addWidget(value_label, 1);
+		return row;
+	};
 
-	if (!base_id.empty()) {
-		QLabel* derived_badge = new QLabel("Derived");
-		derived_badge->setObjectName("objectEditorPill");
-		summary_badges->addWidget(derived_badge);
-	}
-	summary_badges->addStretch();
+	summary_text_layout->addLayout(title_row);
+	summary_text_layout->addLayout(make_summary_row("Raw ID", QString::fromStdString(id)));
+	summary_text_layout->addLayout(make_summary_row("Parent", category_label(current_category)));
+	summary_text_layout->addLayout(make_summary_row("Base Object", base_label));
 
-	summary_text_layout->addWidget(summary_title);
-	summary_text_layout->addWidget(summary_meta);
-	summary_text_layout->addLayout(summary_badges);
-
-	QVBoxLayout* summary_actions = new QVBoxLayout;
+	QGridLayout* summary_actions = new QGridLayout;
 	summary_actions->setContentsMargins(0, 0, 0, 0);
-	summary_actions->setSpacing(6);
+	summary_actions->setHorizontalSpacing(8);
+	summary_actions->setVerticalSpacing(8);
 
 	QToolButton* copy_id = new QToolButton;
+	copy_id->setObjectName("objectEditorSummaryAction");
 	copy_id->setText("Copy ID");
 	copy_id->setToolTip("Copy this object's raw ID to the clipboard.");
 	copy_id->setAutoRaise(true);
@@ -763,15 +866,8 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		QApplication::clipboard()->setText(QString::fromStdString(id));
 	});
 
-	QToolButton* copy_name = new QToolButton;
-	copy_name->setText("Copy Name");
-	copy_name->setToolTip("Copy this object's display name to the clipboard.");
-	copy_name->setAutoRaise(true);
-	connect(copy_name, &QToolButton::clicked, this, [name]() {
-		QApplication::clipboard()->setText(name);
-	});
-
 	QToolButton* open_parent = new QToolButton;
+	open_parent->setObjectName("objectEditorSummaryAction");
 	open_parent->setText("Open Parent");
 	open_parent->setToolTip("Open the base object this custom object is derived from.");
 	open_parent->setAutoRaise(true);
@@ -783,75 +879,65 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	});
 
 	QToolButton* show_modified_fields = new QToolButton;
+	show_modified_fields->setObjectName("objectEditorSummaryAction");
 	show_modified_fields->setText("Modified Fields");
 	show_modified_fields->setToolTip("Filter the inspector to fields changed on this object.");
-	show_modified_fields->setAutoRaise(true);
+	show_modified_fields->setCheckable(true);
+	show_modified_fields->setChecked(current_modified_only && !current_core_only);
 
-	QToolButton* history_back = new QToolButton;
-	history_back->setText("Back");
-	history_back->setToolTip("Go to the previously opened object.");
-	history_back->setAutoRaise(true);
-	history_back->setEnabled(object_history_index > 0);
-	connect(history_back, &QToolButton::clicked, this, [this]() {
-		navigate_object_history(-1);
-	});
-
-	QToolButton* history_forward = new QToolButton;
-	history_forward->setText("Forward");
-	history_forward->setToolTip("Go to the next object in navigation history.");
-	history_forward->setAutoRaise(true);
-	history_forward->setEnabled(object_history_index >= 0 && object_history_index + 1 < object_history.size());
-	connect(history_forward, &QToolButton::clicked, this, [this]() {
-		navigate_object_history(1);
-	});
-
-	QToolButton* reveal_in_browser = new QToolButton;
-	reveal_in_browser->setText("Reveal In Browser");
-	reveal_in_browser->setToolTip("Focus and center this object in the left browser tree.");
-	reveal_in_browser->setAutoRaise(true);
-	connect(reveal_in_browser, &QToolButton::clicked, this, [this, id]() {
+	QToolButton* bookmark_object = new QToolButton;
+	bookmark_object->setObjectName("objectEditorSummaryAction");
+	bookmark_object->setText(is_object_bookmarked(current_category, id) ? "Unbookmark" : "Bookmark");
+	bookmark_object->setToolTip("Add or remove this object from the quick bookmark list.");
+	connect(bookmark_object, &QToolButton::clicked, this, [this, id, name]() {
+		toggle_object_bookmark(current_category, id, name);
 		select_id(current_category, id);
-		if (current_explorer_view) {
-			current_explorer_view->setFocus(Qt::FocusReason::OtherFocusReason);
-		}
 	});
 
-	summary_actions->addWidget(copy_id);
-	summary_actions->addWidget(copy_name);
-	summary_actions->addWidget(open_parent);
-	summary_actions->addWidget(show_modified_fields);
-	summary_actions->addWidget(history_back);
-	summary_actions->addWidget(history_forward);
-	summary_actions->addWidget(reveal_in_browser);
-	summary_actions->addStretch();
+	summary_actions->addWidget(copy_id, 0, 0);
+	summary_actions->addWidget(open_parent, 0, 1);
+	summary_actions->addWidget(bookmark_object, 1, 0);
+	summary_actions->addWidget(show_modified_fields, 1, 1);
 
 	summary_layout->addWidget(summary_icon);
 	summary_layout->addLayout(summary_text_layout, 1);
 	summary_layout->addLayout(summary_actions);
 
-	QWidget* recent_objects_bar = new QWidget;
-	QHBoxLayout* recent_objects_layout = new QHBoxLayout(recent_objects_bar);
-	recent_objects_layout->setContentsMargins(2, 0, 2, 0);
-	recent_objects_layout->setSpacing(6);
+	QWidget* bookmark_objects_bar = new QWidget;
+	QHBoxLayout* bookmark_objects_layout = new QHBoxLayout(bookmark_objects_bar);
+	bookmark_objects_layout->setContentsMargins(2, 0, 2, 0);
+	bookmark_objects_layout->setSpacing(6);
 
-	QLabel* recent_objects_label = new QLabel("Recent");
-	recent_objects_label->setObjectName("objectEditorFilterState");
-	recent_objects_layout->addWidget(recent_objects_label);
+	QLabel* bookmark_objects_label = new QLabel("Bookmarks");
+	bookmark_objects_label->setObjectName("objectEditorFilterState");
+	bookmark_objects_layout->addWidget(bookmark_objects_label);
 
-	const int history_end = std::min<int>(object_history.size(), 6);
-	for (int i = 0; i < history_end; ++i) {
-		const auto& entry = object_history[object_history.size() - history_end + i];
-		QToolButton* recent_button = new QToolButton;
-		recent_button->setObjectName("objectEditorChip");
-		recent_button->setText(entry.name.isEmpty() ? QString::fromStdString(entry.id) : entry.name);
-		recent_button->setToolTip("Reopen recent object: " + QString::fromStdString(entry.id));
-		recent_button->setCheckable(false);
-		recent_objects_layout->addWidget(recent_button);
-		connect(recent_button, &QToolButton::clicked, this, [this, entry]() {
-			select_id(entry.category, entry.id);
+	int bookmark_count = 0;
+	for (const auto& bookmark : object_bookmarks) {
+		if (bookmark.category != current_category) {
+			continue;
+		}
+
+		QToolButton* bookmark_button = new QToolButton;
+		bookmark_button->setObjectName("objectEditorChip");
+		bookmark_button->setText(bookmark.name.isEmpty() ? QString::fromStdString(bookmark.id) : bookmark.name);
+		bookmark_button->setToolTip("Open bookmarked object: " + QString::fromStdString(bookmark.id));
+		bookmark_button->setCheckable(false);
+		bookmark_objects_layout->addWidget(bookmark_button);
+		connect(bookmark_button, &QToolButton::clicked, this, [this, bookmark]() {
+			select_id(bookmark.category, bookmark.id);
 		});
+
+		if (++bookmark_count >= 3) {
+			break;
+		}
 	}
-	recent_objects_layout->addStretch();
+	if (bookmark_count == 0) {
+		QLabel* no_bookmarks = new QLabel("No bookmarks for this tab");
+		no_bookmarks->setObjectName("objectEditorFilterState");
+		bookmark_objects_layout->addWidget(no_bookmarks);
+	}
+	bookmark_objects_layout->addStretch();
 
 	QWidget* inspector_bar = new QWidget;
 	inspector_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -1024,9 +1110,21 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 		current_core_only = checked;
 		filter_model->set_core_only(checked);
 	});
-	connect(show_modified_fields, &QToolButton::clicked, this, [modified_chip, field_search]() {
+	connect(show_modified_fields, &QToolButton::clicked, this, [modified_chip, core_chip, field_search, show_modified_fields]() {
 		field_search->clear();
-		modified_chip->setChecked(true);
+		if (modified_chip->isChecked() && !core_chip->isChecked()) {
+			modified_chip->setChecked(false);
+		} else {
+			core_chip->setChecked(false);
+			modified_chip->setChecked(true);
+		}
+		show_modified_fields->setChecked(modified_chip->isChecked() && !core_chip->isChecked());
+	});
+	connect(modified_chip, &QToolButton::toggled, show_modified_fields, [show_modified_fields, modified_chip, core_chip](bool) {
+		show_modified_fields->setChecked(modified_chip->isChecked() && !core_chip->isChecked());
+	});
+	connect(core_chip, &QToolButton::toggled, show_modified_fields, [show_modified_fields, modified_chip, core_chip](bool) {
+		show_modified_fields->setChecked(modified_chip->isChecked() && !core_chip->isChecked());
 	});
 	connect(clear_filter_state, &QToolButton::clicked, this, [field_search, section_filter, modified_chip, core_chip]() {
 		field_search->clear();
@@ -1308,7 +1406,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	connect(filter_model, &QAbstractItemModel::layoutChanged, field_selection_strip, update_field_selection_strip);
 
 	layout->addWidget(summary);
-	layout->addWidget(recent_objects_bar);
+	layout->addWidget(bookmark_objects_bar);
 	layout->addWidget(inspector_bar);
 	layout->addWidget(section_strip);
 	layout->addWidget(filter_state_bar);

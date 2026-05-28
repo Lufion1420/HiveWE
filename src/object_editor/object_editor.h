@@ -77,6 +77,7 @@ private:
 		QString name;
 	};
 	std::vector<ObjectHistoryEntry> object_history;
+	std::vector<ObjectHistoryEntry> object_bookmarks;
 	int object_history_index = -1;
 	bool history_navigation = false;
 
@@ -122,6 +123,8 @@ private:
 	void save_tree_state(const QString& key, const QTreeView* view) const;
 	void push_object_history(Category category, const std::string& id, const QString& name);
 	void navigate_object_history(int delta);
+	bool is_object_bookmarked(Category category, const std::string& id) const;
+	void toggle_object_bookmark(Category category, const std::string& id, const QString& name);
 protected:
 	void closeEvent(QCloseEvent* event) override;
 	bool focusNextPrevChild(bool next) override;
