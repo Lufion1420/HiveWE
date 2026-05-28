@@ -19,6 +19,11 @@ import Globals;
 UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 	ui.setupUi(this);
 	monitor_activation();
+	setObjectName("unitPalette");
+	ui.verticalLayout->setSpacing(10);
+	ui.label->setText("Owner");
+	ui.label->setObjectName("unitOwnerLabel");
+	ui.player->setObjectName("unitPlayerFilter");
 
 	for (const auto& player : map->info.players) {
 		std::string color_lookup = std::to_string(player.internal_number);
@@ -44,6 +49,30 @@ UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 	selector = new UnitSelector(this);
 	selector->setObjectName("selector");
 	ui.verticalLayout->addWidget(selector);
+
+	selection_summary = new QFrame(this);
+	selection_summary->setObjectName("unitSelectionSummary");
+	selection_summary->setStyleSheet(
+		"QFrame#unitSelectionSummary { background: rgba(24, 27, 31, 200); border: 1px solid rgba(255, 255, 255, 14); border-radius: 12px; }"
+		"QLabel#unitSelectionSummaryLabel { color: rgb(140, 149, 162); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }"
+		"QLabel#unitSelectionSummaryTitle { color: rgb(241, 244, 247); font-size: 14px; font-weight: 700; }"
+		"QLabel#unitSelectionSummaryMeta { color: rgb(176, 185, 196); font-size: 12px; }"
+	);
+	auto* selection_summary_layout = new QVBoxLayout(selection_summary);
+	selection_summary_layout->setContentsMargins(12, 12, 12, 12);
+	selection_summary_layout->setSpacing(4);
+	auto* selection_summary_label = new QLabel("ACTIVE SELECTION", selection_summary);
+	selection_summary_label->setObjectName("unitSelectionSummaryLabel");
+	selection_summary_title = new QLabel("No unit selected", selection_summary);
+	selection_summary_title->setObjectName("unitSelectionSummaryTitle");
+	selection_summary_meta = new QLabel("Choose a unit from the list to set the current placement target.", selection_summary);
+	selection_summary_meta->setObjectName("unitSelectionSummaryMeta");
+	selection_summary_meta->setWordWrap(true);
+	selection_summary_layout->addWidget(selection_summary_label);
+	selection_summary_layout->addWidget(selection_summary_title);
+	selection_summary_layout->addWidget(selection_summary_meta);
+	ui.verticalLayout->addWidget(selection_summary);
+	selection_summary->show();
 
 	find_this = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), this, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
 	find_parent = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), parent, nullptr, nullptr, Qt::ShortcutContext::WindowShortcut);
@@ -161,6 +190,8 @@ void UnitPalette::update_selection_info() {
 			current_selection_section->setEnabled(false);
 		}
 		selection_name->setText("");
+		selection_summary_title->setText("No unit selected");
+		selection_summary_meta->setText("Choose a unit from the list to set the current placement target.");
 	} else {
 		if (!current_selection_section->isEnabled()) {
 			current_selection_section->setEnabled(true);
@@ -176,12 +207,20 @@ void UnitPalette::update_selection_info() {
 		if (same_object) {
 			if (unit.id == "sloc") {
 				selection_name->setText(QString("Player Start Location (%1)").arg(unit.player + 1));
+				selection_summary_title->setText(selection_name->text());
+				selection_summary_meta->setText("Special map start location | Selection-only entity");
 			} else {
 				auto index = units_table->index(units_slk.row_headers.at(unit.id), units_slk.column_headers.at("name"));
 				selection_name->setText(units_table->data(index).toString());
+				selection_summary_title->setText(selection_name->text());
+				selection_summary_meta->setText(
+					QString("%1 | %2 selected").arg(QString::fromStdString(unit.id)).arg(brush.selections.size())
+				);
 			}
 		} else {
 			selection_name->setText("Various");
+			selection_summary_title->setText("Mixed selection");
+			selection_summary_meta->setText(QString("%1 units selected").arg(brush.selections.size()));
 		}
 	}
 }

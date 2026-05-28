@@ -32,15 +32,23 @@ export class UnitSelector : public QWidget {
 		search = new QLineEdit(this);
 		units = new QListView(this);
 
-		search->setPlaceholderText("Search");
+		race->setObjectName("unitSelectorRace");
+		race->setMaxVisibleItems(16);
+		search->setObjectName("unitSelectorSearch");
+		search->setPlaceholderText("Search units");
 		search->setClearButtonEnabled(true);
+		units->setObjectName("unitSelectorList");
 
 		units->setUniformItemSizes(true);
 		units->setIconSize(QSize(24, 24));
+		units->setSpacing(4);
+		units->setSelectionMode(QAbstractItemView::SingleSelection);
+		units->setAlternatingRowColors(false);
 		units->setModel(filter_model);
 
 		QVBoxLayout* layout = new QVBoxLayout;
 		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(8);
 		layout->addWidget(race);
 		layout->addWidget(search);
 		layout->addWidget(units);

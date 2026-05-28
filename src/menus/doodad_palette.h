@@ -93,6 +93,9 @@ private:
 	QAction* group_height_maximum = new QAction("Maximum");
 
 	QLabel* selection_name = new QLabel;
+	QFrame* selection_summary = nullptr;
+	QLabel* selection_summary_title = nullptr;
+	QLabel* selection_summary_meta = nullptr;
 
 	QShortcut* find_this;
 	QShortcut* find_parent;

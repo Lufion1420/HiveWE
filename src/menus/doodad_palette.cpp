@@ -51,6 +51,45 @@ namespace fs = std::filesystem;
 DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	ui.setupUi(this);
 	monitor_activation();
+	setObjectName("doodadPalette");
+	ui.verticalLayout->setSpacing(10);
+	ui.tileset->setObjectName("doodadTilesetFilter");
+	ui.type->setObjectName("doodadTypeFilter");
+	ui.search->setObjectName("doodadSearch");
+	ui.search->setPlaceholderText("Search doodads");
+	ui.doodads->setObjectName("doodadList");
+	ui.doodads->setUniformItemSizes(true);
+	ui.doodads->setSpacing(4);
+	ui.doodads->setIconSize(QSize(24, 24));
+	ui.brushGroupBox->setTitle("Placement");
+	ui.brushGroupBox->setObjectName("doodadPlacementGroup");
+	ui.brushGroupBox->setStyleSheet(
+		"QGroupBox#doodadPlacementGroup { margin-top: 12px; padding-top: 6px; }"
+		"QGroupBox#doodadPlacementGroup::title { subcontrol-origin: margin; left: 0px; padding: 0 0 6px 0; }"
+	);
+
+	selection_summary = new QFrame(this);
+	selection_summary->setObjectName("doodadSelectionSummary");
+	selection_summary->setStyleSheet(
+		"QFrame#doodadSelectionSummary { background: rgba(24, 27, 31, 200); border: 1px solid rgba(255, 255, 255, 14); border-radius: 12px; }"
+		"QLabel#doodadSelectionSummaryLabel { color: rgb(140, 149, 162); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }"
+		"QLabel#doodadSelectionSummaryTitle { color: rgb(241, 244, 247); font-size: 14px; font-weight: 700; }"
+		"QLabel#doodadSelectionSummaryMeta { color: rgb(176, 185, 196); font-size: 12px; }"
+	);
+	auto* selection_summary_layout = new QVBoxLayout(selection_summary);
+	selection_summary_layout->setContentsMargins(12, 12, 12, 12);
+	selection_summary_layout->setSpacing(4);
+	auto* selection_summary_label = new QLabel("ACTIVE SELECTION", selection_summary);
+	selection_summary_label->setObjectName("doodadSelectionSummaryLabel");
+	selection_summary_title = new QLabel("No doodad selected", selection_summary);
+	selection_summary_title->setObjectName("doodadSelectionSummaryTitle");
+	selection_summary_meta = new QLabel("Pick an entry from the list or sync from the map selection.", selection_summary);
+	selection_summary_meta->setObjectName("doodadSelectionSummaryMeta");
+	selection_summary_meta->setWordWrap(true);
+	selection_summary_layout->addWidget(selection_summary_label);
+	selection_summary_layout->addWidget(selection_summary_title);
+	selection_summary_layout->addWidget(selection_summary_meta);
+	ui.verticalLayout->insertWidget(4, selection_summary);
 
 	ui.tileset->addItem("All Tilesets", '*');
 	for (const auto& [key, value] : world_edit_data.section("TileSets")) {
@@ -554,6 +593,8 @@ void DoodadPalette::update_selection_info() {
 			current_selection_section->setEnabled(false);
 		}
 		selection_name->setText("");
+		selection_summary_title->setText("No doodad selected");
+		selection_summary_meta->setText("Pick an entry from the list or sync from the map selection.");
 	} else {
 		if (!current_selection_section->isEnabled()) {
 			current_selection_section->setEnabled(true);
@@ -617,12 +658,22 @@ void DoodadPalette::update_selection_info() {
 			if (doodads_slk.row_headers.contains(doodad.id)) {
 				const auto name = doodads_table->data(doodad.id, "name").toString();
 				selection_name->setText(name);
+				selection_summary_title->setText(name);
+				selection_summary_meta->setText(
+					QString("%1 | Doodad | %2 selected").arg(QString::fromStdString(doodad.id)).arg(brush.selections.size())
+				);
 			} else {
 				const auto name = destructibles_table->data(doodad.id, "name").toString();
 				selection_name->setText(name);
+				selection_summary_title->setText(name);
+				selection_summary_meta->setText(
+					QString("%1 | Destructible | %2 selected").arg(QString::fromStdString(doodad.id)).arg(brush.selections.size())
+				);
 			}
 		} else {
 			selection_name->setText("Various");
+			selection_summary_title->setText("Mixed selection");
+			selection_summary_meta->setText(QString("%1 doodads selected").arg(brush.selections.size()));
 		}
 	}
 }

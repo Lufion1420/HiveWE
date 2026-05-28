@@ -41,6 +41,7 @@ import "trigger_editor.h";
 #include <QStyle>
 #include <QFileInfo>
 #include <QStringList>
+#include <QTextDocument>
 import "menus/gameplay_constants_editor.h";
 import "asset_manager/asset_manager.h";
 import "tooltip_editor/tooltip_editor.h";
@@ -292,6 +293,7 @@ void HiveWE::setup_palette_sidebar() {
 		"font-size: 12px;"
 		"font-weight: 600;"
 		"padding: 7px 10px;"
+		"text-align: left;"
 		"}"
 		"QToolButton[sidebarMode=\"true\"]:checked {"
 		"background: rgba(70, 132, 214, 210);"
@@ -359,11 +361,13 @@ void HiveWE::setup_palette_sidebar() {
 
 	sidebar_mode_bar = new QWidget(sidebar_root);
 	sidebar_mode_bar->setObjectName("paletteSidebarModeBar");
-	auto* mode_layout = new QHBoxLayout(sidebar_mode_bar);
+	auto* mode_layout = new QGridLayout(sidebar_mode_bar);
 	mode_layout->setContentsMargins(0, 0, 0, 0);
 	mode_layout->setSpacing(8);
+	mode_layout->setHorizontalSpacing(8);
+	mode_layout->setVerticalSpacing(8);
 
-	auto create_mode_button = [this, mode_layout](const QString& text, const QIcon& icon, const auto slot) {
+	auto create_mode_button = [this, mode_layout](const QString& text, const QIcon& icon, const auto slot, const int row, const int column) {
 		auto* button = new QToolButton(sidebar_mode_bar);
 		button->setProperty("sidebarMode", true);
 		button->setCheckable(true);
@@ -371,16 +375,22 @@ void HiveWE::setup_palette_sidebar() {
 		button->setIcon(icon);
 		button->setText(text);
 		button->setAutoRaise(false);
-		mode_layout->addWidget(button);
+		button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+		button->setMinimumHeight(38);
+		button->setToolTip(text);
+		mode_layout->addWidget(button, row, column);
 		connect(button, &QToolButton::clicked, this, [this, slot]() { (this->*slot)(); });
 		return button;
 	};
 
-	terrain_mode_button = create_mode_button("Terrain", QIcon("data/icons/ribbon/heightmap.png"), &HiveWE::toggle_terrain_sidebar);
-	doodad_mode_button = create_mode_button("Doodads", QIcon("data/icons/ribbon/doodads.png"), &HiveWE::toggle_doodad_palette);
-	unit_mode_button = create_mode_button("Units", QIcon("data/icons/ribbon/units.png"), &HiveWE::toggle_unit_palette);
-	pathing_mode_button = create_mode_button("Pathing", QIcon("data/icons/ribbon/pathing.png"), &HiveWE::toggle_pathing_sidebar);
-	region_mode_button = create_mode_button("Regions", QIcon("data/icons/ribbon/select.png"), &HiveWE::toggle_region_palette);
+	terrain_mode_button = create_mode_button("Terrain", QIcon("data/icons/ribbon/heightmap.png"), &HiveWE::toggle_terrain_sidebar, 0, 0);
+	doodad_mode_button = create_mode_button("Doodads", QIcon("data/icons/ribbon/doodads.png"), &HiveWE::toggle_doodad_palette, 0, 1);
+	unit_mode_button = create_mode_button("Units", QIcon("data/icons/ribbon/units.png"), &HiveWE::toggle_unit_palette, 0, 2);
+	pathing_mode_button = create_mode_button("Pathing", QIcon("data/icons/ribbon/pathing.png"), &HiveWE::toggle_pathing_sidebar, 1, 0);
+	region_mode_button = create_mode_button("Regions", QIcon("data/icons/ribbon/select.png"), &HiveWE::toggle_region_palette, 1, 1);
+	mode_layout->setColumnStretch(0, 1);
+	mode_layout->setColumnStretch(1, 1);
+	mode_layout->setColumnStretch(2, 1);
 
 	sidebar_header = new QWidget(sidebar_root);
 	sidebar_header->setObjectName("paletteSidebarHeader");
