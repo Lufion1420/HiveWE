@@ -2,6 +2,11 @@
 
 #include <QTableView>
 #include <QLineEdit>
+#include <QScrollArea>
+#include <QPalette>
+
+#include "DockAreaTitleBar.h"
+#include "DockAreaTabBar.h"
 #include <QToolBar>
 #include <QDialogButtonBox>
 #include <QSortFilterProxyModel>
@@ -15,7 +20,6 @@
 #include <QShortcut>
 #include <QDialog>
 #include <QToolButton>
-#include <QScrollArea>
 #include <QScrollBar>
 #include <QMenu>
 #include <QMessageBox>
@@ -425,41 +429,119 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	dock_manager->setStyleSheet("");
 	setCentralWidget(dock_manager);
 	setStyleSheet(
-		"#objectEditorSummary { border: 1px solid palette(mid); border-radius: 8px; background: rgba(255,255,255,0.03); }"
+		"ObjectEditor { background: rgb(24, 29, 35); color: rgb(232, 236, 241); }"
+		"ObjectEditor QWidget { color: rgb(232, 236, 241); }"
+		"ObjectEditor QAbstractScrollArea, ObjectEditor QScrollArea, ObjectEditor QFrame { background: transparent; }"
+		"ObjectEditor QLineEdit, ObjectEditor QComboBox {"
+		"background: rgb(24, 29, 35);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 8px;"
+		"padding: 6px 10px;"
+		"color: rgb(232, 236, 241);"
+		"selection-background-color: rgb(92, 145, 224);"
+		"selection-color: rgb(245, 248, 252);"
+		"}"
+		"ObjectEditor QLineEdit:focus, ObjectEditor QComboBox:focus { border-color: rgba(130, 184, 255, 235); }"
+		"ObjectEditor QComboBox::drop-down { border: none; width: 22px; }"
+		"ObjectEditor QComboBox QAbstractItemView {"
+		"background: rgb(24, 29, 35);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"selection-background-color: rgb(52, 60, 72);"
+		"selection-color: rgb(245, 248, 252);"
+		"}"
+		"ObjectEditor QPushButton, ObjectEditor QToolButton { color: rgb(232, 236, 241); }"
+		"ObjectEditor QPushButton {"
+		"background: rgb(32, 38, 45);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 8px;"
+		"padding: 7px 12px;"
+		"}"
+		"ObjectEditor QPushButton:hover { background: rgb(52, 60, 72); border-color: rgba(255, 255, 255, 24); }"
+		"ObjectEditor QPushButton:pressed { background: rgb(40, 48, 58); }"
+		"ObjectEditor QTreeView, ObjectEditor QTableView {"
+		"background: rgb(24, 29, 35);"
+		"alternate-background-color: rgb(28, 34, 41);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 10px;"
+		"gridline-color: rgba(255, 255, 255, 10);"
+		"selection-background-color: rgb(52, 60, 72);"
+		"selection-color: rgb(245, 248, 252);"
+		"}"
+		"ObjectEditor QTreeView::item, ObjectEditor QTableView::item { padding: 2px 6px; }"
+		"ObjectEditor QTreeView::item:hover, ObjectEditor QTableView::item:hover { background: rgba(255, 255, 255, 8); }"
+		"ObjectEditor QHeaderView::section {"
+		"background: rgb(32, 38, 45);"
+		"border: none;"
+		"border-bottom: 1px solid rgba(255, 255, 255, 16);"
+		"padding: 6px 8px;"
+		"color: rgb(205, 214, 224);"
+		"}"
+		"ObjectEditor QScrollBar:vertical { background: rgb(24, 29, 35); width: 12px; margin: 4px 0; }"
+		"ObjectEditor QScrollBar::handle:vertical { background: rgba(255, 255, 255, 18); border-radius: 6px; min-height: 28px; }"
+		"ObjectEditor QScrollBar::handle:vertical:hover { background: rgba(255, 255, 255, 28); }"
+		"ObjectEditor QScrollBar:horizontal { background: rgb(24, 29, 35); height: 12px; margin: 0 4px; }"
+		"ObjectEditor QScrollBar::handle:horizontal { background: rgba(255, 255, 255, 18); border-radius: 6px; min-width: 28px; }"
+		"ObjectEditor QScrollBar::handle:horizontal:hover { background: rgba(255, 255, 255, 28); }"
+		"ObjectEditor QScrollBar::add-line, ObjectEditor QScrollBar::sub-line, ObjectEditor QScrollBar::add-page, ObjectEditor QScrollBar::sub-page { background: transparent; border: none; }"
+		"#objectEditorSummary { border: 1px solid rgba(255, 255, 255, 16); border-radius: 8px; background: rgb(32, 38, 45); }"
 		"#objectEditorSummaryTitle { font-size: 16px; font-weight: 600; }"
 		"#objectEditorSummaryMeta { color: rgb(182, 188, 198); }"
 		"#objectEditorSummaryKey { color: rgb(154, 160, 170); }"
 		"#objectEditorSummaryValue { color: rgb(216, 220, 226); }"
-		"QToolButton#objectEditorSummaryAction { border: 1px solid palette(mid); border-radius: 8px; padding: 8px 12px; background: rgba(255,255,255,0.03); min-width: 128px; }"
-		"QToolButton#objectEditorSummaryAction:checked { background: palette(highlight); color: palette(highlighted-text); border-color: palette(highlight); }"
-		"#objectEditorSelectionStrip { border: 1px solid palette(mid); border-radius: 8px; background: rgba(255,255,255,0.025); }"
+		"QToolButton#objectEditorSummaryAction { border: 1px solid rgba(255, 255, 255, 16); border-radius: 8px; padding: 8px 12px; background: rgb(32, 38, 45); min-width: 128px; }"
+		"QToolButton#objectEditorSummaryAction:hover { background: rgb(52, 60, 72); border-color: rgba(255, 255, 255, 24); }"
+		"QToolButton#objectEditorSummaryAction:checked { background: rgba(92, 145, 224, 188); color: rgb(245, 248, 252); border-color: rgba(130, 184, 255, 235); }"
+		"#objectEditorSelectionStrip { border: 1px solid rgba(255, 255, 255, 16); border-radius: 8px; background: rgb(32, 38, 45); }"
 		"#objectEditorSelectionTitle { font-size: 13px; font-weight: 600; }"
 		"#objectEditorSelectionMeta { color: rgb(168, 174, 184); }"
-		"#objectEditorInsights { border: 1px solid palette(mid); border-radius: 8px; background: rgba(116, 169, 255, 0.05); }"
+		"#objectEditorInsights { border: 1px solid rgba(130, 184, 255, 90); border-radius: 8px; background: rgba(92, 145, 224, 0.10); }"
 		"#objectEditorInsightsTitle { font-size: 13px; font-weight: 600; }"
 		"#objectEditorInsightsMeta { color: rgb(168, 174, 184); }"
-		"#objectEditorEmptyState { border: 1px dashed palette(mid); border-radius: 10px; background: rgba(255,255,255,0.02); }"
+		"#objectEditorEmptyState { border: 1px dashed rgba(255, 255, 255, 20); border-radius: 10px; background: rgb(28, 34, 41); }"
 		"#objectEditorEmptyTitle { font-size: 14px; font-weight: 600; }"
 		"#objectEditorEmptyMeta { color: rgb(168, 174, 184); }"
 		"#objectEditorFilterState { color: rgb(168, 174, 184); }"
-		"#objectEditorPill { border: 1px solid palette(mid); border-radius: 10px; padding: 2px 8px; background: rgba(255,255,255,0.04); }"
+		"#objectEditorFilterBar, #objectEditorBookmarksBar {"
+		"background: rgb(32, 38, 45);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 8px;"
+		"}"
+		"#objectEditorInspectorBar {"
+		"background: rgb(32, 38, 45);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 8px;"
+		"}"
+		"#objectEditorPill { border: 1px solid rgba(255, 255, 255, 16); border-radius: 10px; padding: 2px 8px; background: rgba(255, 255, 255, 0.04); }"
 		"#objectEditorFieldSearch { padding: 4px 8px; }"
 		"#objectEditorSectionFilter { padding: 4px 8px; min-width: 150px; }"
-		"#objectEditorSectionStrip { background: rgba(255,255,255,0.02); border-radius: 8px; }"
+		"#objectEditorSectionStrip { background: rgb(32, 38, 45); border: 1px solid rgba(255, 255, 255, 16); border-radius: 8px; }"
 		"QLineEdit[class='fieldSearch'] { padding: 4px 8px; }"
-		"#objectEditorBrowserBar { background: rgba(255,255,255,0.03); border-bottom: 1px solid palette(mid); }"
+		"#objectEditorBrowserBar { background: rgb(32, 38, 45); border-bottom: 1px solid rgba(255, 255, 255, 16); }"
+		"#objectEditorBrowserStack {"
+		"background: rgb(24, 29, 35);"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 10px;"
+		"}"
+		"#objectEditorBrowserContainer { background: rgb(24, 29, 35); }"
+		"#objectEditorDetailsRoot, #objectEditorDetailsScrollContainer { background: rgb(24, 29, 35); }"
 		"#objectEditorBrowserTitle { font-size: 14px; font-weight: 600; }"
 		"#objectEditorBrowserMeta { color: rgb(168, 174, 184); }"
 		"#objectEditorInspectorMeta { color: rgb(168, 174, 184); }"
-		"QToolBar { border: 0; spacing: 8px; padding: 0; background: rgba(255,255,255,0.02); }"
-		"ads--CDockAreaTitleBar { background: rgba(255,255,255,0.02); border-bottom: 1px solid palette(mid); }"
+		"QToolBar { border: 0; spacing: 8px; padding: 0; background: rgb(32, 38, 45); }"
+		"ads--CDockAreaWidget { background: rgb(24, 29, 35); }"
+		"ads--CDockAreaTitleBar { background: rgb(32, 38, 45); border-bottom: 1px solid rgba(255, 255, 255, 16); }"
+		"ads--CDockAreaTabBar { background: rgb(32, 38, 45); }"
+		"ads--CDockAreaWidget[focused=\"true\"] ads--CDockAreaTitleBar { background: rgb(32, 38, 45); border-bottom: 1px solid rgba(255, 255, 255, 16); }"
+		"ads--CDockAreaWidget[focused=\"true\"] ads--CDockAreaTabBar { background: rgb(32, 38, 45); }"
 		"ads--CDockWidgetTab { background: transparent; border: 0; border-radius: 6px; margin: 4px 2px; padding: 4px 10px; }"
-		"ads--CDockWidgetTab:hover { background: rgba(255,255,255,0.05); }"
-		"ads--CDockWidgetTab[activeTab=\"true\"] { background: palette(highlight); color: palette(highlighted-text); }"
-		"QToolButton#objectEditorChip { border: 1px solid palette(mid); border-radius: 11px; padding: 3px 10px; background: rgba(255,255,255,0.03); }"
-		"QToolButton#objectEditorChip:checked { background: palette(highlight); color: palette(highlighted-text); border-color: palette(highlight); }"
+		"ads--CDockWidgetTab:hover { background: rgba(255, 255, 255, 0.05); }"
+		"ads--CDockWidgetTab[activeTab=\"true\"] { background: rgba(92, 145, 224, 188); color: rgb(245, 248, 252); }"
+		"QToolButton#objectEditorChip { border: 1px solid rgba(255, 255, 255, 16); border-radius: 11px; padding: 3px 10px; background: rgb(32, 38, 45); }"
+		"QToolButton#objectEditorChip:hover { background: rgb(52, 60, 72); border-color: rgba(255, 255, 255, 24); }"
+		"QToolButton#objectEditorChip:checked { background: rgba(92, 145, 224, 188); color: rgb(245, 248, 252); border-color: rgba(130, 184, 255, 235); }"
 		"QTreeView { outline: 0; }"
 	);
+	dock_manager->setStyleSheet(styleSheet());
 
 	details_dock = new ads::CDockWidget(dock_manager, "Object Data");
 	details_dock->setFeature(ads::CDockWidget::NoTab, true);
@@ -908,8 +990,9 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	summary_layout->addLayout(summary_actions);
 
 	QWidget* bookmark_objects_bar = new QWidget;
+	bookmark_objects_bar->setObjectName("objectEditorBookmarksBar");
 	QHBoxLayout* bookmark_objects_layout = new QHBoxLayout(bookmark_objects_bar);
-	bookmark_objects_layout->setContentsMargins(2, 0, 2, 0);
+	bookmark_objects_layout->setContentsMargins(10, 8, 10, 8);
 	bookmark_objects_layout->setSpacing(6);
 
 	QLabel* bookmark_objects_label = new QLabel("Bookmarks");
@@ -944,9 +1027,10 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	bookmark_objects_layout->addStretch();
 
 	QWidget* inspector_bar = new QWidget;
+	inspector_bar->setObjectName("objectEditorInspectorBar");
 	inspector_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	QHBoxLayout* inspector_bar_layout = new QHBoxLayout(inspector_bar);
-	inspector_bar_layout->setContentsMargins(0, 0, 0, 0);
+	inspector_bar_layout->setContentsMargins(10, 8, 10, 8);
 	inspector_bar_layout->setSpacing(8);
 
 	QLineEdit* field_search = new QLineEdit;
@@ -1029,9 +1113,10 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	section_strip_layout->addStretch();
 
 	QWidget* filter_state_bar = new QWidget;
+	filter_state_bar->setObjectName("objectEditorFilterBar");
 	filter_state_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	QHBoxLayout* filter_state_layout = new QHBoxLayout(filter_state_bar);
-	filter_state_layout->setContentsMargins(2, 0, 2, 0);
+	filter_state_layout->setContentsMargins(10, 8, 10, 8);
 	filter_state_layout->setSpacing(8);
 
 	QLabel* filter_state = new QLabel;
@@ -1064,13 +1149,20 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	view->setStyleSheet("QTableView::item { padding-left: 8px; padding-right: 8px; }");
 	{
 		QPalette palette = view->palette();
-		palette.setColor(QPalette::Inactive, QPalette::Highlight, palette.color(QPalette::Midlight));
-		palette.setColor(QPalette::Inactive, QPalette::HighlightedText, palette.color(QPalette::Text));
+		palette.setColor(QPalette::Base, QColor(24, 29, 35));
+		palette.setColor(QPalette::AlternateBase, QColor(28, 34, 41));
+		palette.setColor(QPalette::Text, QColor(232, 236, 241));
+		palette.setColor(QPalette::WindowText, QColor(232, 236, 241));
+		palette.setColor(QPalette::Mid, QColor(70, 79, 92));
+		palette.setColor(QPalette::Highlight, QColor(52, 60, 72));
+		palette.setColor(QPalette::HighlightedText, QColor(245, 248, 252));
+		palette.setColor(QPalette::Inactive, QPalette::Highlight, QColor(52, 60, 72));
+		palette.setColor(QPalette::Inactive, QPalette::HighlightedText, QColor(232, 236, 241));
 		view->setPalette(palette);
 		view->verticalHeader()->setPalette(palette);
 		view->verticalHeader()->viewport()->setAutoFillBackground(true);
 		QPalette header_palette = view->verticalHeader()->viewport()->palette();
-		header_palette.setColor(QPalette::Window, palette.color(QPalette::Base));
+		header_palette.setColor(QPalette::Window, QColor(32, 38, 45));
 		view->verticalHeader()->viewport()->setPalette(header_palette);
 	}
 	view->setModel(filter_model);
@@ -1243,7 +1335,8 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	column_header->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	column_header->setStyleSheet(
 		"#objectEditorColumnHeader {"
-		"border-bottom: 1px solid palette(mid);"
+		"background: rgb(32, 38, 45);"
+		"border-bottom: 1px solid rgba(255, 255, 255, 16);"
 		"}"
 	);
 
@@ -1421,14 +1514,22 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	scroll_layout->setStretch(1, 0);
 
 	QWidget* scroll_container = new QWidget;
+	scroll_container->setObjectName("objectEditorDetailsScrollContainer");
+	scroll_container->setAttribute(Qt::WA_StyledBackground, true);
 	scroll_container->setLayout(scroll_layout);
 
 	QScrollArea* area = new QScrollArea;
 	area->setObjectName("objectEditorDetailsScrollArea");
+	area->setStyleSheet(
+		"QScrollArea#objectEditorDetailsScrollArea { background: rgb(24, 29, 35); border: none; }"
+		"QScrollArea#objectEditorDetailsScrollArea > QWidget > QWidget { background: rgb(24, 29, 35); }"
+	);
 	area->setWidget(scroll_container);
 	area->setWidgetResizable(true);
 
 	QWidget* root = new QWidget;
+	root->setObjectName("objectEditorDetailsRoot");
+	root->setAttribute(Qt::WA_StyledBackground, true);
 	QVBoxLayout* root_layout = new QVBoxLayout(root);
 	root_layout->setContentsMargins(0, 0, 0, 0);
 	root_layout->setSpacing(8);
@@ -1479,7 +1580,12 @@ void ObjectEditor::addTypeTreeView(
 	view->setAnimated(true);
 	view->setAllColumnsShowFocus(true);
 	view->setStyleSheet(
-		"QTreeView { border: 0; padding: 4px 0; }"
+		"QTreeView {"
+		"border: 1px solid rgba(255, 255, 255, 16);"
+		"border-radius: 10px;"
+		"background: rgb(24, 29, 35);"
+		"padding: 4px 0;"
+		"}"
 		"QTreeView::item { padding: 2px 4px; }"
 	);
 	view->collapseAll();
@@ -1888,6 +1994,7 @@ void ObjectEditor::addTypeTreeView(
 	browser_empty_layout->addStretch();
 
 	QStackedWidget* browser_stack = new QStackedWidget;
+	browser_stack->setObjectName("objectEditorBrowserStack");
 	browser_stack->addWidget(view);
 	browser_stack->addWidget(browser_empty);
 
@@ -1983,6 +2090,8 @@ void ObjectEditor::addTypeTreeView(
 	bar->addWidget(browser_bar);
 
 	QWidget* browser_container = new QWidget;
+	browser_container->setObjectName("objectEditorBrowserContainer");
+	browser_container->setAttribute(Qt::WA_StyledBackground, true);
 	QVBoxLayout* browser_container_layout = new QVBoxLayout(browser_container);
 	browser_container_layout->setContentsMargins(0, 0, 0, 0);
 	browser_container_layout->setSpacing(8);
@@ -1999,6 +2108,40 @@ void ObjectEditor::addTypeTreeView(
 		explorer_area = dock_manager->addDockWidget(ads::LeftDockWidgetArea, tab);
 	} else {
 		dock_manager->addDockWidget(ads::CenterDockWidgetArea, tab, explorer_area);
+	}
+
+	if (explorer_area != nullptr) {
+		if (auto* title_bar = explorer_area->titleBar()) {
+			title_bar->setAttribute(Qt::WA_StyledBackground, true);
+			title_bar->setStyleSheet(
+				"ads--CDockAreaTitleBar {"
+				"background: rgb(32, 38, 45);"
+				"border-bottom: 1px solid rgba(255, 255, 255, 16);"
+				"}"
+			);
+
+			if (auto* tab_bar = title_bar->tabBar()) {
+				tab_bar->setAttribute(Qt::WA_StyledBackground, true);
+				tab_bar->viewport()->setAutoFillBackground(true);
+
+				QPalette viewport_palette = tab_bar->viewport()->palette();
+				viewport_palette.setColor(QPalette::Window, QColor(32, 38, 45));
+				tab_bar->viewport()->setPalette(viewport_palette);
+
+				tab_bar->setStyleSheet(
+					"ads--CDockAreaTabBar {"
+					"background: rgb(32, 38, 45);"
+					"border: none;"
+					"}"
+					"ads--CDockAreaTabBar > QWidget {"
+					"background: rgb(32, 38, 45);"
+					"}"
+					"ads--CDockAreaTabBar > QWidget > QWidget {"
+					"background: rgb(32, 38, 45);"
+					"}"
+				);
+			}
+		}
 	}
 
 	filter->setFilterCustom(custom_objects->isChecked());
