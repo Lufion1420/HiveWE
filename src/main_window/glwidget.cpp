@@ -3,6 +3,8 @@
 #include "pathing_brush.h"
 #include "region_brush.h"
 #include "terrain_brush.h"
+#include "unit_brush.h"
+#include "unit_properties_dialog.h"
 
 #include <QTimer>
 #include <QPainter>
@@ -295,6 +297,30 @@ void GLWidget::mousePressEvent(QMouseEvent* event) {
 		makeCurrent();
 		map->brush->mouse_press_event(event, delta);
 	}
+}
+
+void GLWidget::mouseDoubleClickEvent(QMouseEvent* event) {
+	if (!map || event->button() != Qt::LeftButton) {
+		QOpenGLWidget::mouseDoubleClickEvent(event);
+		return;
+	}
+
+	if (auto* unit_brush = dynamic_cast<UnitBrush*>(map->brush);
+		unit_brush && unit_brush->get_mode() == Brush::Mode::selection && input_handler.mouse.y > 0.f) {
+		makeCurrent();
+		const auto id = map->render_manager.pick_unit_id_under_mouse(map->units, input_handler.mouse);
+		if (id.has_value()) {
+			Unit& unit = map->units.units[id.value()];
+			if (unit.id != "sloc") {
+				UnitPropertiesDialog dialog(&unit, this);
+				dialog.exec();
+			}
+			event->accept();
+			return;
+		}
+	}
+
+	QOpenGLWidget::mouseDoubleClickEvent(event);
 }
 
 void GLWidget::mouseReleaseEvent(QMouseEvent* event) {

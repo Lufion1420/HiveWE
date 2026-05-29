@@ -163,6 +163,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/settings_editor.cpp"
 	"menus/shortcut_config_dialog.cpp"
 	"menus/terrain_palette.cpp"
+	"menus/unit_properties_dialog.cpp"
 	"menus/unit_palette.cpp"
 	"menus/tile_pather.cpp"
 	"menus/tile_picker.cpp"
@@ -172,6 +173,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/region_palette.h"
 	"menus/new_map_dialog.h"
 	"menus/shortcut_config_dialog.h"
+	"menus/unit_properties_dialog.h"
 
 	"asset_manager/asset_manager.cpp"
 	"asset_manager/asset_manager.h"
