@@ -78,4 +78,9 @@ export class WorldUndoManager {
 		undo_actions.clear();
 		redo_actions.clear();
 	}
+
+	[[nodiscard]]
+	bool has_pending_changes() const {
+		return !undo_actions.empty() || !redo_actions.empty();
+	}
 };

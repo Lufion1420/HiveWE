@@ -17,6 +17,7 @@ namespace fs = std::filesystem;
 #include <QKeyEvent>
 #include <QStackedWidget>
 #include <QToolButton>
+#include <QString>
 #include <memory>
 
 #include "global_search.h"
@@ -90,6 +91,7 @@ private:
 
 	void switch_warcraft();
 	void import_heightmap();
+	void create_new_map();
 	void save_window_state();
 	void restore_window_state();
 	void add_recent_map(const fs::path& directory);
@@ -102,6 +104,12 @@ private:
 	void hide_palette_sidebar();
 	void show_palette_view(SidebarPaletteView view, bool show_feedback = true);
 	void ensure_palette_view(SidebarPaletteView view);
+	void reset_map_session();
+	void update_map_context(const QString& status, const QString& detail_override = {});
+	bool save_current_map();
+	bool save_current_map_as();
+	bool confirm_map_replacement(const QString& action);
+	static QString sanitized_folder_name(const QString& map_name);
 	Palette* palette_for_view(SidebarPaletteView view) const;
 	QWidget* host_for_view(SidebarPaletteView view) const;
 	QString sidebar_title_for_view(SidebarPaletteView view) const;

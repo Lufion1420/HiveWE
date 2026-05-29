@@ -1,5 +1,6 @@
 #include "HiveWE.h"
 #include "ui_HiveWE.h"
+#include "new_map_dialog.h"
 #include "shortcut_config_dialog.h"
 #define __STORMLIB_NO_STATIC_LINK__
 #include "StormLib.h"
@@ -40,6 +41,7 @@ import "trigger_editor.h";
 #include <QFrame>
 #include <QStyle>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QStringList>
 #include <QTextDocument>
 import "menus/gameplay_constants_editor.h";
@@ -155,26 +157,26 @@ HiveWE::HiveWE(QWidget* parent)
 
 	connect(ui->ribbon->import_heightmap, &QPushButton::clicked, this, &HiveWE::import_heightmap);
 
-	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_O), this, nullptr, nullptr, Qt::ApplicationShortcut), &QShortcut::activated, ui->ribbon->open_map_folder, &QPushButton::click);
+	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_O), this, nullptr, nullptr, Qt::ApplicationShortcut), &QShortcut::activated, ui->ribbon->open_map_folder, &QToolButton::click);
 	// connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_I), this, nullptr, nullptr, Qt::ApplicationShortcut), &QShortcut::activated, ui->ribbon->open_map_mpq, &QPushButton::click);
-	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, nullptr, nullptr, Qt::ApplicationShortcut), &QShortcut::activated, ui->ribbon->save_map, &QPushButton::click);
-	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S), this, nullptr, nullptr, Qt::ApplicationShortcut), &QShortcut::activated, ui->ribbon->save_map_as, &QPushButton::click);
+	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this, nullptr, nullptr, Qt::ApplicationShortcut), &QShortcut::activated, ui->ribbon->save_map, &QToolButton::click);
+	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S), this, nullptr, nullptr, Qt::ApplicationShortcut), &QShortcut::activated, ui->ribbon->save_map_as, &QToolButton::click);
 
-	// connect(ui.ribbon->new_map, &QAction::triggered, this, &HiveWE::load);
-	connect(ui->ribbon->open_map_folder, &QPushButton::clicked, this, &HiveWE::load_folder);
-	connect(ui->ribbon->open_map_mpq, &QPushButton::clicked, this, &HiveWE::load_mpq);
+	connect(ui->ribbon->new_map, &QToolButton::clicked, this, &HiveWE::create_new_map);
+	connect(ui->ribbon->open_map_folder, &QToolButton::clicked, this, &HiveWE::load_folder);
+	connect(ui->ribbon->open_map_mpq, &QToolButton::clicked, this, &HiveWE::load_mpq);
 	for (int i = 0; i < static_cast<int>(ui->ribbon->recent_maps.size()); ++i) {
-		connect(ui->ribbon->recent_maps[i], &QPushButton::clicked, this, [this, i]() { open_recent_map(i); });
+		connect(ui->ribbon->recent_maps[i], &QToolButton::clicked, this, [this, i]() { open_recent_map(i); });
 	}
-	connect(ui->ribbon->save_map, &QPushButton::clicked, this, &HiveWE::save);
-	connect(ui->ribbon->save_map_as, &QPushButton::clicked, this, &HiveWE::save_as);
-	connect(ui->ribbon->export_mpq, &QPushButton::clicked, this, &HiveWE::export_mpq);
-	connect(ui->ribbon->test_map, &QPushButton::clicked, this, &HiveWE::play_test);
+	connect(ui->ribbon->save_map, &QToolButton::clicked, this, &HiveWE::save);
+	connect(ui->ribbon->save_map_as, &QToolButton::clicked, this, &HiveWE::save_as);
+	connect(ui->ribbon->export_mpq, &QToolButton::clicked, this, &HiveWE::export_mpq);
+	connect(ui->ribbon->test_map, &QToolButton::clicked, this, &HiveWE::play_test);
 	connect(ui->ribbon->quick_search, &QToolButton::clicked, this, [this]() { new GlobalSearchWidget(this); });
-	connect(ui->ribbon->settings, &QPushButton::clicked, [&]() { new SettingsEditor(this); });
-	connect(ui->ribbon->config, &QPushButton::clicked, [&]() { new ShortcutConfigDialog(this); });
-	connect(ui->ribbon->switch_warcraft, &QPushButton::clicked, this, &HiveWE::switch_warcraft);
-	connect(ui->ribbon->exit, &QPushButton::clicked, [&]() { QApplication::exit(); });
+	connect(ui->ribbon->settings, &QToolButton::clicked, [&]() { new SettingsEditor(this); });
+	connect(ui->ribbon->config, &QToolButton::clicked, [&]() { new ShortcutConfigDialog(this); });
+	connect(ui->ribbon->switch_warcraft, &QToolButton::clicked, this, &HiveWE::switch_warcraft);
+	connect(ui->ribbon->exit, &QToolButton::clicked, [&]() { QApplication::exit(); });
 
 	connect(ui->ribbon->change_tileset, &QRibbonButton::clicked, [this]() { new TileSetter(this); });
 	connect(ui->ribbon->change_tile_pathing, &QRibbonButton::clicked, [this]() { new TilePather(this); });
@@ -458,49 +460,13 @@ void HiveWE::setup_palette_sidebar() {
 void HiveWE::load_map(const fs::path& directory) {
 	window_handler.close_all();
 	ui->widget->makeCurrent();
-
-	delete terrain_palette;
-	terrain_palette = nullptr;
-	delete pathing_palette;
-	pathing_palette = nullptr;
-	delete doodad_palette;
-	doodad_palette = nullptr;
-	delete unit_palette;
-	unit_palette = nullptr;
-	delete region_palette;
-	region_palette = nullptr;
-	remove_custom_tab();
-	current_sidebar_view = SidebarPaletteView::none;
-	sidebar_root->hide();
-	ui->ribbon->terrain_palette->setChecked(false);
-	ui->ribbon->doodad_palette->setChecked(false);
-	ui->ribbon->unit_palette->setChecked(false);
-	ui->ribbon->pathing_palette->setChecked(false);
-	ui->ribbon->region_palette->setChecked(false);
-	update_active_palette_visuals();
-
-	delete map;
-	resource_manager.clear();
-	skinned_mesh_globals.reset();
-	map = new Map();
-
-	connect(&map->terrain, &Terrain::minimap_changed, minimap, &Minimap::set_minimap);
-	connect(&map->terrain, &Terrain::tileset_changed, [&]() {
-		if (terrain_palette) {
-			terrain_palette->refresh();
-		}
-	});
+	reset_map_session();
 
 	map->load(directory);
 	add_recent_map(directory);
 
 	map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
-	setWindowTitle("HiveWE 0.11 - " + QString::fromStdString(map->filesystem_path.string()));
-	{
-		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
-		const QString map_title = map_info.fileName().isEmpty() ? QString::fromStdString(map->name) : map_info.fileName();
-		ui->ribbon->set_map_context(map_title, map_info.absoluteFilePath(), "Loaded");
-	}
+	update_map_context("Loaded");
 }
 
 void HiveWE::add_recent_map(const fs::path& directory) {
@@ -562,6 +528,10 @@ void HiveWE::open_recent_map(int index) {
 		return;
 	}
 
+	if (!confirm_map_replacement("open another map")) {
+		return;
+	}
+
 	load_map(directory);
 }
 
@@ -582,6 +552,10 @@ void HiveWE::load_folder() {
 
 	if (!fs::exists(directory / "war3map.w3i")) {
 		QMessageBox::information(this, "Opening map failed", "Opening the map failed. Select a map that is saved in folder mode or use the Open Map (MPQ) option");
+		return;
+	}
+
+	if (!confirm_map_replacement("open another map")) {
 		return;
 	}
 
@@ -610,6 +584,10 @@ void HiveWE::load_mpq() {
 	settings.setValue("openDirectory", file_name);
 
 	fs::path mpq_path = file_name.toStdWString();
+
+	if (!confirm_map_replacement("open another map")) {
+		return;
+	}
 
 	mpq::MPQ mpq;
 	bool opened = mpq.open(mpq_path);
@@ -649,51 +627,84 @@ void HiveWE::load_mpq() {
 }
 
 void HiveWE::save() {
-	emit saving_initiated();
-	if (map->save(map->filesystem_path)) {
-		show_transient_notice("Map saved");
-		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
-		const QString map_title = map_info.fileName().isEmpty() ? QString::fromStdString(map->name) : map_info.fileName();
-		ui->ribbon->set_map_context(map_title, map_info.absoluteFilePath(), "Saved");
-	}
+	save_current_map();
 };
 
 void HiveWE::save_as() {
-	QSettings settings;
-	const QString directory = settings.value("openDirectory", QDir::current().path()).toString() + "/" + QString::fromStdString(map->name);
+	save_current_map_as();
+}
 
+bool HiveWE::save_current_map() {
+	if (!map || !map->loaded) {
+		return false;
+	}
+
+	if (map->filesystem_path.empty()) {
+		return save_current_map_as();
+	}
+
+	emit saving_initiated();
+	if (!map->save(map->filesystem_path)) {
+		return false;
+	}
+
+	show_transient_notice("Map saved");
+	update_map_context("Saved");
+	return true;
+}
+
+bool HiveWE::save_current_map_as() {
+	if (!map || !map->loaded) {
+		return false;
+	}
+
+	QSettings settings;
 	fs::path file_name = QFileDialog::getExistingDirectory(this, "Choose Save Location",
 														   settings.value("openDirectory", QDir::current().path()).toString(),
 														   QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks)
 							 .toStdString();
 
 	if (file_name.empty()) {
-		return;
+		return false;
 	}
+
+	settings.setValue("openDirectory", QString::fromStdString(file_name.string()));
 
 	emit saving_initiated();
-	if (fs::exists(file_name) && fs::equivalent(file_name, map->filesystem_path)) {
-		if (map->save(map->filesystem_path)) {
-			show_transient_notice("Map saved");
+	if (!map->filesystem_path.empty() && fs::exists(file_name) && fs::equivalent(file_name, map->filesystem_path)) {
+		if (!map->save(map->filesystem_path)) {
+			return false;
 		}
 	} else {
-		fs::create_directories(file_name / map->name);
+		const QString fallback_name = sanitized_folder_name(QString::fromStdString(map->name));
+		const fs::path target_directory = file_name / fallback_name.toStdString();
+		fs::create_directories(target_directory);
 
-		hierarchy.map_directory = file_name / map->name;
-		if (map->save(file_name / map->name)) {
-			show_transient_notice("Map saved");
+		hierarchy.map_directory = target_directory;
+		if (map->filesystem_path.empty()) {
+			map->filesystem_path = fs::absolute(target_directory) / "";
+			map->name = (*--(--map->filesystem_path.end())).string();
+			hierarchy.map_directory = map->filesystem_path;
+			if (!map->save(map->filesystem_path)) {
+				return false;
+			}
+		} else {
+			if (!map->save(target_directory)) {
+				return false;
+			}
 		}
 	}
 
-	setWindowTitle("HiveWE 0.11 - " + QString::fromStdString(map->filesystem_path.string()));
-	{
-		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
-		const QString map_title = map_info.fileName().isEmpty() ? QString::fromStdString(map->name) : map_info.fileName();
-		ui->ribbon->set_map_context(map_title, map_info.absoluteFilePath(), "Saved");
-	}
+	show_transient_notice("Map saved");
+	update_map_context("Saved");
+	return true;
 }
 
 void HiveWE::export_mpq() {
+	if (!save_current_map()) {
+		return;
+	}
+
 	QSettings settings;
 	const QString directory = settings.value("openDirectory", QDir::current().path()).toString() + "/" + QString::fromStdString(map->filesystem_path.filename().string());
 	std::wstring file_name = QFileDialog::getSaveFileName(this, "Export Map to MPQ", directory, "Warcraft III Scenario (*.w3x)").toStdWString();
@@ -703,9 +714,6 @@ void HiveWE::export_mpq() {
 	}
 
 	fs::remove(file_name);
-
-	emit saving_initiated();
-	map->save(map->filesystem_path);
 
 	uint64_t file_count = std::distance(fs::recursive_directory_iterator{ map->filesystem_path }, {});
 
@@ -730,8 +738,7 @@ void HiveWE::export_mpq() {
 }
 
 void HiveWE::play_test() {
-	emit saving_initiated();
-	if (!map->save(map->filesystem_path)) {
+	if (!save_current_map()) {
 		return;
 	}
 	QProcess* warcraft = new QProcess;
@@ -747,15 +754,160 @@ void HiveWE::play_test() {
 	warcraft->start(warcraft_path, arguments);
 }
 
-void HiveWE::closeEvent(QCloseEvent* event) {
-	int choice = QMessageBox::question(this, "Do you want to quit?", "Are you sure you want to quit?", QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-	if (choice == QMessageBox::Yes) {
-		QApplication::closeAllWindows();
-		event->accept();
-	} else {
-		event->ignore();
+void HiveWE::create_new_map() {
+	if (!confirm_map_replacement("create a new map")) {
+		return;
 	}
+
+	NewMapDialog dialog(this);
+	if (dialog.exec() != QDialog::Accepted) {
+		return;
+	}
+
+	const fs::path template_directory = fs::path("data") / "test map";
+	if (!fs::exists(template_directory / "war3map.w3i")) {
+		QMessageBox::critical(this, "Template map missing", "The bundled blank map template could not be found in data/test map.");
+		return;
+	}
+
+	reset_map_session();
+	map->load(template_directory);
+
+	const NewMapDialog::Result settings = dialog.result();
+	const int desired_width = settings.width + 1;
+	const int desired_height = settings.height + 1;
+	const int width_delta = desired_width - map->terrain.width;
+	const int height_delta = desired_height - map->terrain.height;
+	const int delta_left = width_delta / 2;
+	const int delta_right = width_delta - delta_left;
+	const int delta_bottom = height_delta / 2;
+	const int delta_top = height_delta - delta_bottom;
+	if (width_delta != 0 || height_delta != 0) {
+		map->resize(delta_left, delta_right, delta_top, delta_bottom);
+	}
+
+	std::vector<std::string> tileset_ids;
+	for (const auto& [id, row] : map->terrain.terrain_slk.row_headers) {
+		if (!id.empty() && id.front() == settings.tileset) {
+			tileset_ids.push_back(id);
+		}
+	}
+	std::sort(tileset_ids.begin(), tileset_ids.end());
+
+	std::vector<std::string> cliffset_ids;
+	for (const auto& [id, row] : map->terrain.cliff_slk.row_headers) {
+		if (!id.empty() && id.front() == settings.tileset) {
+			cliffset_ids.push_back(id);
+		}
+	}
+	std::sort(cliffset_ids.begin(), cliffset_ids.end());
+
+	if (tileset_ids.empty()) {
+		QMessageBox::critical(this, "New map failed", "The selected tileset does not have valid terrain data.");
+		return;
+	}
+	if (cliffset_ids.empty()) {
+		cliffset_ids = map->terrain.cliffset_ids;
+	}
+
+	map->terrain.tileset = settings.tileset;
+	map->terrain.cliffset_ids = cliffset_ids;
+	map->terrain.change_tileset(tileset_ids, std::vector<int>(map->terrain.tileset_ids.size(), 0));
+
+	const int terrain_width = map->terrain.width;
+	const int terrain_height = map->terrain.height;
+	const size_t total_corners = static_cast<size_t>(terrain_width * terrain_height);
+	map->terrain.resize_corner_arrays(total_corners);
+
+	for (int y = 0; y < terrain_height; ++y) {
+		for (int x = 0; x < terrain_width; ++x) {
+			const size_t idx = map->terrain.ci(x, y);
+			map->terrain.corner_map_edge[idx] = x == 0 || y == 0 || x == terrain_width - 1 || y == terrain_height - 1;
+			map->terrain.corner_ground_texture[idx] = 0;
+			map->terrain.corner_ground_variation[idx] = 0;
+			map->terrain.corner_cliff_texture[idx] = 15;
+			map->terrain.corner_layer_height[idx] = 2;
+		}
+	}
+
+	map->terrain.update_cliff_meshes({0, 0, terrain_width, terrain_height});
+	map->terrain.update_ground_heights({0, 0, terrain_width, terrain_height});
+	map->terrain.update_ground_exists({0, 0, terrain_width - 1, terrain_height - 1});
+	map->terrain.update_ground_textures({0, 0, terrain_width, terrain_height});
+	map->terrain.update_water({0, 0, terrain_width, terrain_height});
+	map->terrain.update_minimap();
+
+	map->pathing_map.resize(terrain_width * 4, terrain_height * 4);
+	std::fill(map->pathing_map.pathing_cells_static.begin(), map->pathing_map.pathing_cells_static.end(), 0);
+	std::fill(map->pathing_map.pathing_cells_dynamic.begin(), map->pathing_map.pathing_cells_dynamic.end(), 0);
+	map->pathing_map.upload_static_pathing();
+	map->pathing_map.upload_dynamic_pathing();
+	map->shadow_map.resize((terrain_width - 1) * 4, (terrain_height - 1) * 4);
+
+	int unplayable_left = 6;
+	int unplayable_right = 6;
+	int unplayable_bottom = 4;
+	int unplayable_top = 8;
+	map->set_playable_area(unplayable_left, unplayable_right, unplayable_top, unplayable_bottom);
+
+	map->doodads.doodads.clear();
+	map->doodads.special_doodads.clear();
+	map->units.units.clear();
+	map->units.items.clear();
+	map->regions.regions.clear();
+	map->cameras.cameras.clear();
+	map->sounds.sounds.clear();
+
+	const int default_active_player_count = std::min(4, static_cast<int>(map->info.players.size()));
+	for (size_t i = 0; i < map->info.players.size(); ++i) {
+		auto& player = map->info.players[i];
+		player.internal_number = static_cast<int>(i);
+		player.type = static_cast<int>(i) < default_active_player_count ? PlayerType::human : PlayerType::neutral;
+		player.race = PlayerRace::selectable;
+		player.fixed_start_position = 1;
+	}
+
+	const float left = static_cast<float>(unplayable_left + 4);
+	const float bottom = static_cast<float>(unplayable_bottom + 4);
+	const float right = static_cast<float>(terrain_width - 1 - unplayable_right - 4);
+	const float top = static_cast<float>(terrain_height - 1 - unplayable_top - 4);
+	const glm::vec2 center((left + right) * 0.5f, (bottom + top) * 0.5f);
+	const float radius = std::max(6.f, std::min(right - left, top - bottom) * 0.38f);
+	for (int i = 0; i < default_active_player_count; ++i) {
+		const float angle = static_cast<float>(i) * static_cast<float>(std::numbers::pi_v<float> * 2.0) / default_active_player_count;
+		glm::vec2 start = center + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
+		start.x = std::clamp(start.x, left, right);
+		start.y = std::clamp(start.y, bottom, top);
+
+		map->info.players[i].starting_position = start * 128.f + map->terrain.offset;
+		[[maybe_unused]] Unit& start_location =
+			map->units.add_start_location(i, {start.x, start.y, map->terrain.interpolated_height(start.x, start.y, true)});
+	}
+
+	map->trigger_strings.set_string(map->info.name, settings.map_name.toStdString());
+	map->trigger_strings.set_string(map->info.description, "");
+	map->trigger_strings.set_string(map->info.author, "");
+	map->trigger_strings.set_string(map->info.suggested_players, "Custom");
+	map->info.melee_map = default_active_player_count >= 2;
+	map->filesystem_path.clear();
+	map->name = sanitized_folder_name(settings.map_name).toStdString();
+	map->world_undo.clear_all_undo();
+
+	camera.position = glm::vec3(terrain_width / 2.f, terrain_height / 2.f, 0.f);
+	camera.position.z = map->terrain.interpolated_height(camera.position.x, camera.position.y, true);
+	map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+	update_map_context("Draft", "Unsaved map");
+	show_transient_notice("New map created");
+}
+
+void HiveWE::closeEvent(QCloseEvent* event) {
+	if (!confirm_map_replacement("quit")) {
+		event->ignore();
+		return;
+	}
+
+	QApplication::closeAllWindows();
+	event->accept();
 }
 
 void HiveWE::resizeEvent(QResizeEvent* event) {
@@ -1039,6 +1191,105 @@ void HiveWE::ensure_palette_view(const SidebarPaletteView view) {
 		connect(region_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
 		connect(this, &HiveWE::palette_changed, region_palette, &Palette::deactivate);
 	}
+}
+
+void HiveWE::reset_map_session() {
+	delete terrain_palette;
+	terrain_palette = nullptr;
+	delete pathing_palette;
+	pathing_palette = nullptr;
+	delete doodad_palette;
+	doodad_palette = nullptr;
+	delete unit_palette;
+	unit_palette = nullptr;
+	delete region_palette;
+	region_palette = nullptr;
+	remove_custom_tab();
+	current_sidebar_view = SidebarPaletteView::none;
+	sidebar_root->hide();
+	ui->ribbon->terrain_palette->setChecked(false);
+	ui->ribbon->doodad_palette->setChecked(false);
+	ui->ribbon->unit_palette->setChecked(false);
+	ui->ribbon->pathing_palette->setChecked(false);
+	ui->ribbon->region_palette->setChecked(false);
+	update_active_palette_visuals();
+
+	delete map;
+	resource_manager.clear();
+	skinned_mesh_globals.reset();
+	map = new Map();
+
+	connect(&map->terrain, &Terrain::minimap_changed, minimap, &Minimap::set_minimap);
+	connect(&map->terrain, &Terrain::tileset_changed, [&]() {
+		if (terrain_palette) {
+			terrain_palette->refresh();
+		}
+	});
+}
+
+void HiveWE::update_map_context(const QString& status, const QString& detail_override) {
+	QString detail = detail_override;
+	QString map_title = QString::fromStdString(map->name);
+
+	if (!map->filesystem_path.empty()) {
+		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
+		setWindowTitle("HiveWE 0.11 - " + QString::fromStdString(map->filesystem_path.string()));
+		map_title = map_info.fileName().isEmpty() ? map_title : map_info.fileName();
+		if (detail.isEmpty()) {
+			detail = map_info.absoluteFilePath();
+		}
+	} else {
+		setWindowTitle("HiveWE 0.11 - " + map_title + " (Unsaved)");
+		if (detail.isEmpty()) {
+			detail = "Unsaved map";
+		}
+	}
+
+	ui->ribbon->set_map_context(map_title, detail, status);
+}
+
+bool HiveWE::confirm_map_replacement(const QString& action) {
+	if (!map || !map->loaded) {
+		return true;
+	}
+
+	const bool has_unsaved_changes = map->filesystem_path.empty() || map->world_undo.has_pending_changes();
+	if (!has_unsaved_changes) {
+		return true;
+	}
+
+	QMessageBox message_box(this);
+	message_box.setIcon(QMessageBox::Question);
+	message_box.setWindowTitle("Unsaved changes");
+	message_box.setText("The current map has unsaved changes.");
+	message_box.setInformativeText("Do you want to save before you " + action + "?");
+	message_box.setStandardButtons(QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+	message_box.setDefaultButton(QMessageBox::Save);
+
+	switch (message_box.exec()) {
+		case QMessageBox::Save:
+			return save_current_map();
+		case QMessageBox::Discard:
+			return true;
+		default:
+			return false;
+	}
+}
+
+QString HiveWE::sanitized_folder_name(const QString& map_name) {
+	QString sanitized = map_name.trimmed();
+	if (sanitized.isEmpty()) {
+		sanitized = "New Map";
+	}
+
+	sanitized.replace(QRegularExpression(R"([<>:"/\\|?*\x00-\x1F])"), "_");
+	sanitized.replace(QRegularExpression(R"(\s+)"), " ");
+	sanitized = sanitized.trimmed();
+	if (sanitized.isEmpty()) {
+		sanitized = "New Map";
+	}
+
+	return sanitized;
 }
 
 void HiveWE::update_active_palette_visuals() {

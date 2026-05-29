@@ -156,6 +156,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/doodad_palette.cpp"
 	"menus/map_info_editor.cpp"
 	"menus/minimap.cpp"
+	"menus/new_map_dialog.cpp"
 	"menus/palette.cpp"
 	"menus/pathing_palette.cpp"
 	"menus/region_palette.cpp"
@@ -169,6 +170,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/gameplay_constants_editor.cpp"
 	"menus/gameplay_constants_editor.h"
 	"menus/region_palette.h"
+	"menus/new_map_dialog.h"
 	"menus/shortcut_config_dialog.h"
 
 	"asset_manager/asset_manager.cpp"
