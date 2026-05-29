@@ -4,6 +4,7 @@
 #include <QDialog>
 
 class QComboBox;
+class QGridLayout;
 class QLabel;
 class QLineEdit;
 
@@ -21,8 +22,9 @@ class NewMapDialog : public QDialog {
 	[[nodiscard]]
 	Result result() const;
 
-  private:
+ private:
 	void refresh_summary() const;
+	void refresh_tileset_preview() const;
 
 	static QString size_descriptor(int width, int height);
 
@@ -32,4 +34,5 @@ class NewMapDialog : public QDialog {
 	QComboBox* height = nullptr;
 	QLabel* size_description = nullptr;
 	QLabel* playable_summary = nullptr;
+	QGridLayout* tileset_preview = nullptr;
 };

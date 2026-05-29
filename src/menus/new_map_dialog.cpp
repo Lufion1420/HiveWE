@@ -12,6 +12,10 @@
 
 import std;
 import Globals;
+import OpenGLUtilities;
+import ResourceManager;
+import SLK;
+import Texture;
 
 namespace {
 QFrame* create_section(const QString& title, const QString& subtitle) {
@@ -72,6 +76,17 @@ NewMapDialog::NewMapDialog(QWidget* parent) : QDialog(parent) {
 		"background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgb(39, 61, 88), stop:1 rgb(21, 34, 49));"
 		"border: 1px solid rgba(153, 199, 255, 64);"
 		"border-radius: 14px;"
+		"}"
+		"#newMapTilesetPreview {"
+		"background: rgb(20, 27, 36);"
+		"border: 1px solid rgba(255, 255, 255, 18);"
+		"border-radius: 12px;"
+		"}"
+		"#newMapTileThumb {"
+		"background: rgba(255, 255, 255, 5);"
+		"border: 1px solid rgba(255, 255, 255, 12);"
+		"border-radius: 8px;"
+		"padding: 2px;"
 		"}"
 		"#newMapSummaryLabel {"
 		"font-size: 12px;"
@@ -198,6 +213,18 @@ NewMapDialog::NewMapDialog(QWidget* parent) : QDialog(parent) {
 	playable_summary->setStyleSheet("color: rgb(213, 223, 234); font-size: 13px;");
 	summary_layout->addWidget(playable_summary);
 
+	QLabel* tileset_label = new QLabel("Tileset Preview");
+	tileset_label->setObjectName("newMapSummaryLabel");
+	summary_layout->addWidget(tileset_label);
+
+	QFrame* preview_frame = new QFrame;
+	preview_frame->setObjectName("newMapTilesetPreview");
+	tileset_preview = new QGridLayout(preview_frame);
+	tileset_preview->setContentsMargins(12, 12, 12, 12);
+	tileset_preview->setHorizontalSpacing(8);
+	tileset_preview->setVerticalSpacing(8);
+	summary_layout->addWidget(preview_frame);
+
 	right_layout->addWidget(summary);
 	right_layout->addStretch();
 
@@ -209,9 +236,14 @@ NewMapDialog::NewMapDialog(QWidget* parent) : QDialog(parent) {
 	connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
+	connect(tileset, &QComboBox::currentTextChanged, this, [this](const QString&) {
+		refresh_summary();
+		refresh_tileset_preview();
+	});
 	connect(width, &QComboBox::currentTextChanged, this, [this](const QString&) { refresh_summary(); });
 	connect(height, &QComboBox::currentTextChanged, this, [this](const QString&) { refresh_summary(); });
 	refresh_summary();
+	refresh_tileset_preview();
 }
 
 NewMapDialog::Result NewMapDialog::result() const {
@@ -237,6 +269,57 @@ void NewMapDialog::refresh_summary() const {
 			.arg(playable_width)
 			.arg(playable_height)
 	);
+}
+
+void NewMapDialog::refresh_tileset_preview() const {
+	if (!tileset_preview) {
+		return;
+	}
+
+	QLayoutItem* item = nullptr;
+	while ((item = tileset_preview->takeAt(0)) != nullptr) {
+		if (QWidget* widget = item->widget()) {
+			widget->deleteLater();
+		}
+		delete item;
+	}
+
+	const std::string selected_tileset = tileset->currentData().toString().toStdString();
+	if (selected_tileset.empty()) {
+		return;
+	}
+
+	slk::SLK terrain_slk("TerrainArt/Terrain.slk");
+	std::vector<std::string> tile_ids;
+	for (const auto& [id, row] : terrain_slk.row_headers) {
+		if (!id.empty() && id.front() == selected_tileset.front()) {
+			tile_ids.push_back(id);
+		}
+	}
+	std::sort(tile_ids.begin(), tile_ids.end());
+
+	int shown_tiles = 0;
+	for (const auto& tile_id : tile_ids) {
+		const auto texture_result = resource_manager.load<Texture>(terrain_slk.data("dir", tile_id) + "\\" + terrain_slk.data("file", tile_id));
+		if (!texture_result.has_value()) {
+			continue;
+		}
+
+		const auto& image = texture_result.value();
+		QLabel* thumb = new QLabel;
+		thumb->setObjectName("newMapTileThumb");
+		thumb->setFixedSize(48, 48);
+		thumb->setPixmap(ground_texture_to_icon(image->data.data(), image->width, image->height).pixmap(40, 40));
+		thumb->setAlignment(Qt::AlignCenter);
+		thumb->setToolTip(QString::fromUtf8(terrain_slk.data<std::string_view>("comment", tile_id)));
+
+		tileset_preview->addWidget(thumb, shown_tiles / 4, shown_tiles % 4);
+		++shown_tiles;
+
+		if (shown_tiles >= 8) {
+			break;
+		}
+	}
 }
 
 QString NewMapDialog::size_descriptor(const int width, const int height) {
