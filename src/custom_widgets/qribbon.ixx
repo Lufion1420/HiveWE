@@ -263,12 +263,19 @@ export class QRibbon : public QTabWidget {
 	Q_OBJECT
 
 	QRibbonFileButton* file = new QRibbonFileButton;
+	QWidget* file_corner = new QWidget;
 
   public:
 	explicit QRibbon(QWidget* parent = nullptr)
 		: QTabWidget(parent) {
 		file->setObjectName("ribbonFileButton");
-		setCornerWidget(file, Qt::TopLeftCorner);
+		file_corner->setObjectName("ribbonFileCorner");
+		file_corner->setAttribute(Qt::WA_StyledBackground, true);
+		auto* file_corner_layout = new QHBoxLayout(file_corner);
+		file_corner_layout->setContentsMargins(0, 0, 0, 0);
+		file_corner_layout->setSpacing(0);
+		file_corner_layout->addWidget(file, 0, Qt::AlignLeft | Qt::AlignTop);
+		setCornerWidget(file_corner, Qt::TopLeftCorner);
 	}
 
 	void addMenuItem(QAbstractButton* widget) {

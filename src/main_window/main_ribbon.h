@@ -5,6 +5,8 @@ import QRibbon;
 #include <array>
 #include <QObject>
 #include <QLabel>
+#include <QResizeEvent>
+#include <QShowEvent>
 #include <QToolButton>
 
 class MainRibbon : public QRibbon {
@@ -90,7 +92,13 @@ public:
 	void set_map_context(const QString& title, const QString& meta, const QString& badge);
 	void show_tab(HeaderTab tab);
 
+protected:
+	void resizeEvent(QResizeEvent* event) override;
+	void showEvent(QShowEvent* event) override;
+
 private:
+	void sync_file_corner_geometry();
+
 	int home_tab_index = -1;
 	int terrain_tab_index = -1;
 	int doodads_tab_index = -1;

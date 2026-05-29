@@ -1,10 +1,10 @@
 #include "main_ribbon.h"
 
+#include <algorithm>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QStyle>
 #include <QTabBar>
-#include <QTimer>
 #include <QVBoxLayout>
 
 MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
@@ -55,6 +55,10 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 		"border: none;"
 		"border-bottom: 1px solid rgba(255, 255, 255, 16);"
 		"}"
+		"MainRibbon::left-corner {"
+		"background: rgb(33, 39, 47);"
+		"border: none;"
+		"}"
 		"MainRibbon::pane { border: none; }"
 		"MainRibbon QTabBar { background: rgb(33, 39, 47); border: none; color: rgb(180, 188, 198); }"
 		"MainRibbon QTabBar::tab {"
@@ -102,6 +106,11 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 		"color: rgb(205, 214, 224);"
 		"text-align: left;"
 		"}"
+		"QWidget#ribbonFileCorner {"
+		"background: rgb(33, 39, 47);"
+		"margin: 0px;"
+		"padding: 0px;"
+		"}"
 		"QWidget#ribbonHeaderCorner { background: rgba(33, 39, 47, 224); }"
 		"#ribbonFileButton {"
 		"background: rgb(33, 39, 47);"
@@ -129,28 +138,54 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 		"}"
 	);
 
-	if (auto* file_btn = qobject_cast<QRibbonFileButton*>(cornerWidget(Qt::TopLeftCorner))) {
+	if (auto* file_btn = findChild<QRibbonFileButton*>("ribbonFileButton")) {
 		file_btn->setPopupMode(QToolButton::InstantPopup);
+		file_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 		file_btn->setStyleSheet(
 			"#ribbonFileButton {"
-			"background: rgb(33, 39, 47);"
+			"background: rgba(52, 60, 72, 220);"
 			"border: none;"
-			"border-radius: 6px;"
-			"color: rgb(200, 210, 220);"
-			"padding: 8px 14px;"
+			"border-top-left-radius: 10px;"
+			"border-top-right-radius: 10px;"
+			"border-bottom-left-radius: 0px;"
+			"border-bottom-right-radius: 0px;"
+			"color: rgb(245, 248, 252);"
+			"padding: 10px 16px;"
 			"font-size: 12px;"
 			"font-weight: 700;"
 			"}"
-			"#ribbonFileButton:hover { background: rgb(52, 60, 72); }"
+			"#ribbonFileButton:hover { background: rgb(60, 69, 82); }"
 			"#ribbonFileButton:pressed { background: rgb(40, 48, 58); }"
 			"#ribbonFileButton::menu-indicator { image: none; width: 0; }"
 		);
-		// Match the button height to the tab bar after layout is finalised
-		QTimer::singleShot(0, this, [this]() {
-			if (auto* btn = qobject_cast<QRibbonFileButton*>(cornerWidget(Qt::TopLeftCorner))) {
-				btn->setFixedHeight(tabBar()->height());
-			}
-		});
+		file_btn->menu->setStyleSheet(
+			"QRibbonMenu {"
+			"background: rgb(33, 39, 47);"
+			"border: 1px solid rgba(255, 255, 255, 16);"
+			"}"
+			"QRibbonMenu QToolButton {"
+			"background: rgb(33, 39, 47);"
+			"border: 1px solid transparent;"
+			"color: rgb(232, 236, 241);"
+			"padding-left: 10px;"
+			"padding-right: 10px;"
+			"height: 44px;"
+			"width: 216px;"
+			"}"
+			"QRibbonMenu QToolButton:hover {"
+			"background: rgb(52, 60, 72);"
+			"}"
+			"QRibbonMenu QToolButton:pressed {"
+			"background: rgb(40, 48, 58);"
+			"}"
+			"QRibbonMenu QFrame {"
+			"background: rgba(255, 255, 255, 16);"
+			"border: none;"
+			"max-height: 1px;"
+			"margin-left: 8px;"
+			"margin-right: 8px;"
+			"}"
+		);
 	}
 
 	auto* top_right = new QWidget(this);
@@ -589,6 +624,8 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	regions_tab_index = addTab(regions_tab, "Regions");
 	view_tab_index = addTab(view_tab, "View");
 	map_tab_index = addTab(map_tab, "Map");
+
+	sync_file_corner_geometry();
 }
 
 MainRibbon::~MainRibbon() {
@@ -628,4 +665,33 @@ void MainRibbon::show_tab(const HeaderTab tab) {
 		setCurrentIndex(map_tab_index);
 		break;
 	}
+}
+
+void MainRibbon::resizeEvent(QResizeEvent* event) {
+	QRibbon::resizeEvent(event);
+	sync_file_corner_geometry();
+}
+
+void MainRibbon::showEvent(QShowEvent* event) {
+	QRibbon::showEvent(event);
+	sync_file_corner_geometry();
+}
+
+void MainRibbon::sync_file_corner_geometry() {
+	auto* file_corner = findChild<QWidget*>("ribbonFileCorner");
+	auto* file_btn = findChild<QRibbonFileButton*>("ribbonFileButton");
+	auto* file_corner_layout = qobject_cast<QHBoxLayout*>(file_corner ? file_corner->layout() : nullptr);
+
+	if (!file_corner || !file_btn || !file_corner_layout || tabBar()->count() == 0) {
+		return;
+	}
+
+	const QRect first_tab_rect = tabBar()->tabRect(0);
+	const int top_margin = std::max(0, first_tab_rect.y());
+	const int right_margin = 4;
+	const int tab_row_height = std::max(first_tab_rect.height(), tabBar()->height() - top_margin);
+
+	file_corner_layout->setContentsMargins(0, top_margin, right_margin, 0);
+	file_corner->setFixedHeight(tabBar()->height());
+	file_btn->setFixedHeight(tab_row_height);
 }
