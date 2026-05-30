@@ -355,6 +355,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 			 map_loading_screen,
 			 map_options,
 			 gameplay_constants,
+			 item_tables,
 			 import_heightmap,
 			 change_tileset,
 			 change_tile_pathing,
@@ -484,6 +485,10 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	gameplay_constants->setIcon(QIcon("data/icons/ribbon/options.png"));
 	gameplay_constants->setText("Gameplay\nConstants");
 
+	item_tables->setIcon(QIcon("data/icons/ribbon/objecteditor.png"));
+	item_tables->setText("Item\nTables");
+	set_tooltip(item_tables, "Open the map item tables editor.");
+
 	import_heightmap->setIcon(QIcon("data/icons/ribbon/heightmap.png"));
 	import_heightmap->setText("Import\nHeightmap");
 
@@ -552,8 +557,12 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	unit_tools_section->addWidget(mirror_button(minimap_visible, "Show or hide the minimap."));
 	unit_tools_section->addWidget(mirror_button(object_editor, "Open the Object Editor. Shortcut: O"));
 
+	auto* unit_data_section = make_section("Data");
+	unit_data_section->addWidget(item_tables);
+
 	units_tab->addSection(unit_section);
 	units_tab->addSection(unit_tools_section);
+	units_tab->addSection(unit_data_section);
 
 	// Pathing tab
 	auto* pathing_tab = new QRibbonTab;

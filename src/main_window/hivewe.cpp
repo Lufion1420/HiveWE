@@ -45,6 +45,7 @@ import "trigger_editor.h";
 #include <QStringList>
 #include <QTextDocument>
 import "menus/gameplay_constants_editor.h";
+import "menus/item_tables_editor.h";
 import "asset_manager/asset_manager.h";
 import "tooltip_editor/tooltip_editor.h";
 
@@ -234,6 +235,11 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->gameplay_constants, &QRibbonButton::clicked, [this]() {
 		bool created = false;
 		window_handler.create_or_raise<GameplayConstantsEditor>(nullptr, created);
+	});
+
+	connect(ui->ribbon->item_tables, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ItemTablesEditor>(nullptr, created);
 	});
 
 	connect(ui->ribbon->asset_manager, &QRibbonButton::clicked, [this]() {

@@ -239,7 +239,7 @@ void generate_units(
 				script.call("UnitAddItemToSlotById", unit_reference, script.four_cc(j.second), j.first);
 			}
 
-			if (i.item_sets.size()) {
+			if (!i.item_sets.empty()) {
 				script.set_variable("t", "CreateTrigger()");
 				script.call("TriggerRegisterUnitEvent", "t", unit_reference, "EVENT_UNIT_DEATH");
 				script.call("TriggerRegisterUnitEvent", "t", unit_reference, "EVENT_UNIT_CHANGE_OWNER");
@@ -248,6 +248,16 @@ void generate_units(
 					script.call("TriggerAddAction", "t", "function UnitItemDrops_" + std::to_string(i.creation_number));
 				} else {
 					script.call("TriggerAddAction", "t", "UnitItemDrops_" + std::to_string(i.creation_number));
+				}
+			} else if (i.item_table_pointer != -1) {
+				script.set_variable("t", "CreateTrigger()");
+				script.call("TriggerRegisterUnitEvent", "t", unit_reference, "EVENT_UNIT_DEATH");
+				script.call("TriggerRegisterUnitEvent", "t", unit_reference, "EVENT_UNIT_CHANGE_OWNER");
+
+				if (script.mode == ScriptMode::jass) {
+					script.call("TriggerAddAction", "t", "function ItemTable_" + std::to_string(i.item_table_pointer));
+				} else {
+					script.call("TriggerAddAction", "t", "ItemTable_" + std::to_string(i.item_table_pointer));
 				}
 			}
 		}

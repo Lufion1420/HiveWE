@@ -42,7 +42,7 @@ export struct Unit {
 	int health = -1;
 	int mana = -1;
 
-	int item_table_pointer = 0xFFFF;
+	int item_table_pointer = -1;
 	std::vector<ItemSet> item_sets;
 
 	int gold = 12500;

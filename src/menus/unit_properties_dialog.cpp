@@ -10,10 +10,14 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QVBoxLayout>
+
+#include "item_drop_editor.h"
+#include "item_tables_editor.h"
 
 import std;
 import Globals;
@@ -21,9 +25,13 @@ import MapGlobal;
 import SLK;
 import TableModel;
 import UnitsUndo;
+import Utilities;
+import WindowHandler;
 import <glm/glm.hpp>;
 
 namespace {
+constexpr int no_unit_item_table_pointer = -1;
+
 std::string_view slk_string(const slk::SLK& slk, const std::string_view id, const std::initializer_list<std::string_view> fields) {
 	for (const auto field : fields) {
 		if (slk.column_headers.contains(field)) {
@@ -104,6 +112,20 @@ QIcon unit_icon(const Unit& unit) {
 	}
 
 	return {};
+}
+
+bool item_sets_equal(const std::vector<ItemSet>& left, const std::vector<ItemSet>& right) {
+	if (left.size() != right.size()) {
+		return false;
+	}
+
+	for (size_t i = 0; i < left.size(); ++i) {
+		if (left[i].items != right[i].items) {
+			return false;
+		}
+	}
+
+	return true;
 }
 }
 
@@ -350,6 +372,83 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 	general_layout->addStretch();
 
 	tabs->addTab(general_tab, "General");
+
+	edited_item_table_pointer = unit->item_table_pointer;
+	edited_item_sets = unit->item_sets;
+
+	auto* drops_tab = new QWidget;
+	auto* drops_layout = new QVBoxLayout(drops_tab);
+	drops_layout->setContentsMargins(16, 16, 16, 16);
+	drops_layout->setSpacing(14);
+
+	QFrame* mode_panel = new QFrame;
+	mode_panel->setObjectName("unitPropertiesPanel");
+	auto* mode_layout = new QGridLayout(mode_panel);
+	mode_layout->setContentsMargins(14, 14, 14, 14);
+	mode_layout->setHorizontalSpacing(12);
+	mode_layout->setVerticalSpacing(12);
+
+	auto* drops_label = new QLabel("ITEMS DROPPED");
+	drops_label->setObjectName("unitPropertiesSection");
+	mode_layout->addWidget(drops_label, 0, 0, 1, 2);
+
+	item_drop_mode = new QComboBox;
+	item_drop_mode->addItem("None");
+	item_drop_mode->addItem("Use Item Table From Map");
+	item_drop_mode->addItem("Use Custom Item Sets");
+	mode_layout->addWidget(new QLabel("Drop Mode"), 1, 0);
+	mode_layout->addWidget(item_drop_mode, 1, 1);
+
+	map_item_table = new QComboBox;
+	mode_layout->addWidget(new QLabel("Map Item Table"), 2, 0);
+	mode_layout->addWidget(map_item_table, 2, 1);
+
+	auto* edit_map_tables = new QPushButton("Edit Map Item Tables");
+	mode_layout->addWidget(edit_map_tables, 3, 1, 1, 1, Qt::AlignLeft);
+
+	apply_item_drops_to_type = new QCheckBox("Apply item drop settings to all placed units of this type");
+	mode_layout->addWidget(apply_item_drops_to_type, 4, 0, 1, 2);
+	drops_layout->addWidget(mode_panel);
+
+	auto* custom_layout = new QHBoxLayout;
+	custom_layout->setSpacing(14);
+
+	QFrame* sets_panel = new QFrame;
+	sets_panel->setObjectName("unitPropertiesPanel");
+	auto* sets_layout = new QVBoxLayout(sets_panel);
+	sets_layout->setContentsMargins(14, 14, 14, 14);
+	sets_layout->setSpacing(10);
+	sets_layout->addWidget(new QLabel("Sets"));
+	custom_sets = new QListWidget;
+	sets_layout->addWidget(custom_sets, 1);
+	auto* set_buttons = new QHBoxLayout;
+	add_set = new QPushButton("New Set");
+	delete_set = new QPushButton("Delete Set");
+	set_buttons->addWidget(add_set);
+	set_buttons->addWidget(delete_set);
+	sets_layout->addLayout(set_buttons);
+	custom_layout->addWidget(sets_panel, 1);
+
+	QFrame* items_panel = new QFrame;
+	items_panel->setObjectName("unitPropertiesPanel");
+	auto* items_layout = new QVBoxLayout(items_panel);
+	items_layout->setContentsMargins(14, 14, 14, 14);
+	items_layout->setSpacing(10);
+	items_layout->addWidget(new QLabel("Items"));
+	custom_items = new QListWidget;
+	items_layout->addWidget(custom_items, 1);
+	auto* item_buttons = new QHBoxLayout;
+	add_item = new QPushButton("New Item");
+	edit_item = new QPushButton("Edit Item");
+	delete_item = new QPushButton("Delete Item");
+	item_buttons->addWidget(add_item);
+	item_buttons->addWidget(edit_item);
+	item_buttons->addWidget(delete_item);
+	items_layout->addLayout(item_buttons);
+	custom_layout->addWidget(items_panel, 1);
+
+	drops_layout->addLayout(custom_layout, 1);
+	tabs->addTab(drops_tab, "Items Dropped");
 	root->addWidget(tabs, 1);
 
 	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -358,6 +457,73 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 	root->addWidget(buttons);
 
 	connect(default_attributes, &QCheckBox::toggled, this, [this](bool) { refresh_attribute_state(); });
+	connect(item_drop_mode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { refresh_item_drop_mode_state(); });
+	connect(custom_sets, &QListWidget::currentRowChanged, this, [this](int) {
+		refresh_custom_items();
+		refresh_item_drop_mode_state();
+	});
+	connect(custom_items, &QListWidget::currentRowChanged, this, [this](int) { refresh_item_drop_mode_state(); });
+	connect(edit_map_tables, &QPushButton::clicked, this, [this]() {
+		bool created = false;
+		auto* editor = window_handler.create_or_raise<ItemTablesEditor>(this, created);
+		connect(editor, &QObject::destroyed, this, [this]() { refresh_map_item_table_options(); }, Qt::UniqueConnection);
+	});
+	connect(add_set, &QPushButton::clicked, this, [this]() {
+		edited_item_sets.push_back({});
+		refresh_custom_item_sets();
+		custom_sets->setCurrentRow(static_cast<int>(edited_item_sets.size()) - 1);
+		refresh_item_drop_mode_state();
+	});
+	connect(delete_set, &QPushButton::clicked, this, [this]() {
+		const int set_index = custom_sets->currentRow();
+		if (set_index < 0) {
+			return;
+		}
+		edited_item_sets.erase(edited_item_sets.begin() + set_index);
+		refresh_custom_item_sets();
+		refresh_custom_items();
+		refresh_item_drop_mode_state();
+	});
+	connect(add_item, &QPushButton::clicked, this, [this]() {
+		const int set_index = custom_sets->currentRow();
+		if (set_index < 0) {
+			return;
+		}
+		std::pair<int, std::string> entry { 100, "" };
+		if (!edit_item_drop_entry(entry, this)) {
+			return;
+		}
+		edited_item_sets[set_index].items.push_back(entry);
+		refresh_custom_items();
+		custom_items->setCurrentRow(static_cast<int>(edited_item_sets[set_index].items.size()) - 1);
+		refresh_custom_item_sets();
+		refresh_item_drop_mode_state();
+	});
+	connect(edit_item, &QPushButton::clicked, this, [this]() {
+		const int set_index = custom_sets->currentRow();
+		const int item_index = custom_items->currentRow();
+		if (set_index < 0 || item_index < 0) {
+			return;
+		}
+		auto& entry = edited_item_sets[set_index].items[item_index];
+		if (!edit_item_drop_entry(entry, this)) {
+			return;
+		}
+		refresh_custom_items();
+		refresh_custom_item_sets();
+	});
+	connect(delete_item, &QPushButton::clicked, this, [this]() {
+		const int set_index = custom_sets->currentRow();
+		const int item_index = custom_items->currentRow();
+		if (set_index < 0 || item_index < 0) {
+			return;
+		}
+		auto& entries = edited_item_sets[set_index].items;
+		entries.erase(entries.begin() + item_index);
+		refresh_custom_items();
+		refresh_custom_item_sets();
+		refresh_item_drop_mode_state();
+	});
 	connect(buttons, &QDialogButtonBox::accepted, this, &UnitPropertiesDialog::apply_changes);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
@@ -365,7 +531,20 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 		default_attributes->setChecked(true);
 		default_attributes->setEnabled(false);
 	}
+
+	if (!edited_item_sets.empty()) {
+		item_drop_mode->setCurrentIndex(2);
+	} else if (edited_item_table_pointer != no_unit_item_table_pointer) {
+		item_drop_mode->setCurrentIndex(1);
+	} else {
+		item_drop_mode->setCurrentIndex(0);
+	}
+
+	refresh_map_item_table_options();
+	refresh_custom_item_sets();
+	refresh_custom_items();
 	refresh_attribute_state();
+	refresh_item_drop_mode_state();
 }
 
 void UnitPropertiesDialog::refresh_attribute_state() const {
@@ -373,6 +552,74 @@ void UnitPropertiesDialog::refresh_attribute_state() const {
 	strength->setEnabled(enabled);
 	agility->setEnabled(enabled);
 	intelligence->setEnabled(enabled);
+}
+
+void UnitPropertiesDialog::refresh_item_drop_mode_state() {
+	const bool using_map_table = item_drop_mode->currentIndex() == 1;
+	const bool using_custom_sets = item_drop_mode->currentIndex() == 2;
+	const bool has_set = custom_sets->currentRow() >= 0;
+	const bool has_item = custom_items->currentRow() >= 0;
+
+	map_item_table->setEnabled(using_map_table);
+	custom_sets->setEnabled(using_custom_sets);
+	custom_items->setEnabled(using_custom_sets && has_set);
+	add_set->setEnabled(using_custom_sets);
+	delete_set->setEnabled(using_custom_sets && has_set);
+	add_item->setEnabled(using_custom_sets && has_set);
+	edit_item->setEnabled(using_custom_sets && has_item);
+	delete_item->setEnabled(using_custom_sets && has_item);
+}
+
+void UnitPropertiesDialog::refresh_map_item_table_options() {
+	const int selected_pointer = map_item_table->currentData().isValid() ? map_item_table->currentData().toInt() : edited_item_table_pointer;
+
+	map_item_table->clear();
+	map_item_table->addItem("No Item Table", no_unit_item_table_pointer);
+	for (const auto& table : map->info.random_item_tables) {
+		map_item_table->addItem(QString::fromStdString(table.name), table.creation_number);
+	}
+
+	if (const int index = map_item_table->findData(selected_pointer); index != -1) {
+		map_item_table->setCurrentIndex(index);
+	} else {
+		map_item_table->setCurrentIndex(0);
+	}
+}
+
+void UnitPropertiesDialog::refresh_custom_item_sets() {
+	const int current_row = custom_sets->currentRow();
+	custom_sets->clear();
+
+	for (size_t i = 0; i < edited_item_sets.size(); ++i) {
+		int total_chance = 0;
+		for (const auto& [chance, id] : edited_item_sets[i].items) {
+			total_chance += chance;
+		}
+		custom_sets->addItem(QString("Set %1 (Total: %2%)").arg(i + 1).arg(total_chance));
+	}
+
+	if (!edited_item_sets.empty()) {
+		custom_sets->setCurrentRow(std::clamp(current_row, 0, static_cast<int>(edited_item_sets.size()) - 1));
+	}
+}
+
+void UnitPropertiesDialog::refresh_custom_items() {
+	const int set_index = custom_sets->currentRow();
+	const int current_row = custom_items->currentRow();
+	custom_items->clear();
+
+	if (set_index < 0 || set_index >= static_cast<int>(edited_item_sets.size())) {
+		return;
+	}
+
+	for (const auto& entry : edited_item_sets[set_index].items) {
+		auto* item = new QListWidgetItem(icon_for_item_drop_entry(entry), describe_item_drop_entry(entry), custom_items);
+		item->setToolTip(describe_item_drop_entry(entry));
+	}
+
+	if (!edited_item_sets[set_index].items.empty()) {
+		custom_items->setCurrentRow(std::clamp(current_row, 0, static_cast<int>(edited_item_sets[set_index].items.size()) - 1));
+	}
 }
 
 void UnitPropertiesDialog::apply_changes() {
@@ -394,19 +641,57 @@ void UnitPropertiesDialog::apply_changes() {
 		unit->intelligence = intelligence->value();
 	}
 
-	const bool changed = unit->player != old_state.player || std::abs(unit->angle - old_state.angle) > 0.0001f || unit->health != old_state.health
+	if (item_drop_mode->currentIndex() == 0) {
+		unit->item_table_pointer = no_unit_item_table_pointer;
+		unit->item_sets.clear();
+	} else if (item_drop_mode->currentIndex() == 1) {
+		unit->item_table_pointer = map_item_table->currentData().toInt();
+		unit->item_sets.clear();
+	} else {
+		unit->item_table_pointer = no_unit_item_table_pointer;
+		unit->item_sets = edited_item_sets;
+	}
+
+	std::vector<Unit> old_units;
+	std::vector<Unit> new_units;
+
+	const bool current_unit_changed = unit->player != old_state.player || std::abs(unit->angle - old_state.angle) > 0.0001f || unit->health != old_state.health
 		|| unit->mana != old_state.mana || unit->level != old_state.level || unit->strength != old_state.strength
-		|| unit->agility != old_state.agility || unit->intelligence != old_state.intelligence;
-	if (!changed) {
+		|| unit->agility != old_state.agility || unit->intelligence != old_state.intelligence || unit->item_table_pointer != old_state.item_table_pointer
+		|| !item_sets_equal(unit->item_sets, old_state.item_sets);
+
+	if (current_unit_changed) {
+		old_units.push_back(old_state);
+		unit->update();
+		new_units.push_back(*unit);
+	}
+
+	if (apply_item_drops_to_type->isChecked()) {
+		for (auto& other : map->units.units) {
+			if (&other == unit || other.id != unit->id) {
+				continue;
+			}
+
+			Unit old_other = other;
+			other.item_table_pointer = unit->item_table_pointer;
+			other.item_sets = unit->item_sets;
+
+			if (other.item_table_pointer != old_other.item_table_pointer || !item_sets_equal(other.item_sets, old_other.item_sets)) {
+				old_units.push_back(old_other);
+				new_units.push_back(other);
+			}
+		}
+	}
+
+	if (old_units.empty()) {
 		accept();
 		return;
 	}
 
 	map->world_undo.new_undo_group();
 	auto action = std::make_unique<UnitStateAction>();
-	action->old_units.push_back(old_state);
-	unit->update();
-	action->new_units.push_back(*unit);
+	action->old_units = std::move(old_units);
+	action->new_units = std::move(new_units);
 	map->world_undo.add_undo_action(std::move(action));
 
 	accept();
