@@ -71,36 +71,6 @@ export class Map: public QObject {
 	ShadowMap shadow_map;
 	WorldUndoManager world_undo;
 	Brush* brush = nullptr;
-
-	void do_undo() {
-		if (brush) {
-			brush->clear_selection();
-		}
-		WorldEditContext context{
-			.terrain = terrain,
-			.units = units,
-			.doodads = doodads,
-			.regions = regions,
-			.brush = brush,
-			.pathing_map = pathing_map,
-		};
-		world_undo.undo(context);
-	}
-
-	void do_redo() {
-		if (brush) {
-			brush->clear_selection();
-		}
-		WorldEditContext context{
-			.terrain = terrain,
-			.units = units,
-			.doodads = doodads,
-			.regions = regions,
-			.brush = brush,
-			.pathing_map = pathing_map,
-		};
-		world_undo.redo(context);
-	}
 	Physics physics;
 
 	bool enforce_water_height_limits = true;

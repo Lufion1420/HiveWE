@@ -84,7 +84,6 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"models/table_model.ixx"
 
 	"object_editor/slk_conversions.ixx"
-	"object_editor/object_editor_undo.ixx"
 
 	"custom_widgets/aspect_ratio_pixmap_label.ixx"
 	"custom_widgets/color_button.ixx"
