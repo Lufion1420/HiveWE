@@ -45,6 +45,7 @@ import MapGlobal;
 import Globals;
 import ResourceManager;
 import SlkConversions;
+import ObjectEditorUndo;
 import "single_model.h";
 
 namespace {
@@ -344,7 +345,26 @@ void paste_selected_field_from_clipboard(QTableView* view) {
 		return;
 	}
 
+	auto* table = static_cast<TableModel*>(single_model->sourceModel());
+	const std::string id = single_model->getID();
+	const std::string field = mapping[source_index.row()].field;
+	const bool is_string_type = (target_type == "string" || target_type == "stringList");
+	const QString old_value = is_string_type ? current.data(Qt::DisplayRole).toString()
+	                                          : current.data(Qt::EditRole).toString();
+
 	view->model()->setData(current, value, Qt::EditRole);
+
+	if (map && table) {
+		const QString new_value = is_string_type ? current.data(Qt::DisplayRole).toString() : value;
+		map->world_undo.new_undo_group();
+		auto action = std::make_unique<ObjectFieldSetAction>();
+		action->table = table;
+		action->id = std::move(id);
+		action->field = std::move(field);
+		action->old_value = old_value;
+		action->new_value = new_value;
+		map->world_undo.add_undo_action(std::move(action));
+	}
 }
 
 class ObjectTreeDelegate : public QStyledItemDelegate {
@@ -368,7 +388,7 @@ class ObjectTreeDelegate : public QStyledItemDelegate {
 	}
 
 	void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const override {
-		QRect rect = option.rect.adjusted(28, 1, -8, -1);
+		QRect rect = option.rect.adjusted(32, 0, 0, 0);
 		if (const auto* item_view = qobject_cast<const QAbstractItemView*>(option.widget)) {
 			rect.setRight(item_view->viewport()->width() - 8);
 		}
@@ -1202,8 +1222,28 @@ void ObjectEditor::duplicate_object_entry(
 	if (const std::string name_field = primary_name_field(table); !name_field.empty() && table->slk->column_headers.contains(name_field)) {
 		const QString copied_name = copied_name_with_suffix(object_display_name(table, source_id));
 		if (!copied_name.isEmpty()) {
+			// Erase first so setData sees the plain base value instead of the shared TRIGSTR key copied from the source.
+			if (table->slk->shadow_data.contains(new_id)) {
+				table->slk->shadow_data.at(new_id).erase(name_field);
+			}
 			table->setData(table->index(table->slk->row_headers.at(new_id), table->slk->column_headers.at(name_field)), copied_name, Qt::EditRole);
 		}
+	}
+
+	if (map) {
+		auto action = std::make_unique<ObjectEntryAddAction>();
+		action->table = table;
+		action->new_id = new_id;
+		for (const auto& [k, v] : table->slk->base_data.at(new_id)) {
+			action->base_data[k] = v;
+		}
+		if (table->slk->shadow_data.contains(new_id)) {
+			for (const auto& [k, v] : table->slk->shadow_data.at(new_id)) {
+				action->shadow_data[k] = v;
+			}
+		}
+		map->world_undo.new_undo_group();
+		map->world_undo.add_undo_action(std::move(action));
 	}
 
 	const QModelIndex source_index = table->rowIDToIndex(new_id);
@@ -1676,10 +1716,14 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	const int field_column_width = details_header_width(single_model, view->verticalHeader());
 	view->verticalHeader()->setFixedWidth(field_column_width);
 	current_details_view = view;
-	connect(new QShortcut(QKeySequence::Copy, view), &QShortcut::activated, view, [view]() {
+	auto* sc_copy = new QShortcut(QKeySequence::Copy, view);
+	sc_copy->setContext(Qt::WidgetWithChildrenShortcut);
+	connect(sc_copy, &QShortcut::activated, view, [view]() {
 		copy_selected_field_to_clipboard(view);
 	});
-	connect(new QShortcut(QKeySequence::Paste, view), &QShortcut::activated, view, [view]() {
+	auto* sc_paste = new QShortcut(QKeySequence::Paste, view);
+	sc_paste->setContext(Qt::WidgetWithChildrenShortcut);
+	connect(sc_paste, &QShortcut::activated, view, [view]() {
 		paste_selected_field_from_clipboard(view);
 	});
 	view->installEventFilter(this);
@@ -2930,6 +2974,19 @@ bool ObjectEditor::eventFilter(QObject* watched, QEvent* event) {
 			}
 			if (key_event->matches(QKeySequence::Paste)) {
 				paste_selected_field_from_clipboard(current_details_view);
+				key_event->accept();
+				return true;
+			}
+		}
+
+		if (map) {
+			if (key_event->matches(QKeySequence::Undo)) {
+				map->do_undo();
+				key_event->accept();
+				return true;
+			}
+			if (key_event->matches(QKeySequence::Redo)) {
+				map->do_redo();
 				key_event->accept();
 				return true;
 			}

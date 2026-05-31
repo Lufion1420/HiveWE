@@ -375,7 +375,7 @@ void SingleModel::sourceDataChanged(const QModelIndex& topLeft, const QModelInde
 	Q_ASSERT(topLeft.isValid() ? topLeft.model() == sourceModel() : true);
 	Q_ASSERT(bottomRight.isValid() ? bottomRight.model() == sourceModel() : true);
 
-	for (size_t i = topLeft.row(); i < bottomRight.row(); i++) {
+	for (size_t i = topLeft.row(); i <= static_cast<size_t>(bottomRight.row()); i++) {
 		if (i == slk->row_headers.at(id)) {
 			const auto top_left = mapFromSource(createIndex(i, topLeft.column()));
 			const auto bottom_right = mapFromSource(createIndex(i, bottomRight.column()));
