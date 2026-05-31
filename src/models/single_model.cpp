@@ -520,6 +520,21 @@ void TableDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
 	QStyleOptionViewItem opt(option);
 	initStyleOption(&opt, index);
 
+	if (const auto* item_view = qobject_cast<const QAbstractItemView*>(option.widget)) {
+		if (item_view->currentIndex() == index) {
+			if (QWidget* focus_widget = QApplication::focusWidget();
+				focus_widget && focus_widget != item_view->viewport() && item_view->isAncestorOf(focus_widget)) {
+				const QRect editor_rect = QRect(focus_widget->mapTo(item_view->viewport(), QPoint(0, 0)), focus_widget->size());
+				if (editor_rect.intersects(opt.rect)) {
+					painter->save();
+					painter->fillRect(opt.rect, opt.state.testFlag(QStyle::State_Selected) ? opt.palette.highlight() : opt.palette.base());
+					painter->restore();
+					return;
+				}
+			}
+		}
+	}
+
 	const bool is_modified = index.model()->headerData(index.row(), Qt::Vertical, SingleModel::ModifiedRole).toBool();
 	const bool category_start = index.model()->headerData(index.row(), Qt::Vertical, SingleModel::CategoryStartRole).toBool();
 	const bool selected = opt.state.testFlag(QStyle::State_Selected);

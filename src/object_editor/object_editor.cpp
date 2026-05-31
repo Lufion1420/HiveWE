@@ -23,6 +23,9 @@
 #include <QScrollBar>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMimeData>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSettings>
 #include <QSet>
 #include <QButtonGroup>
@@ -30,6 +33,9 @@
 #include <QGridLayout>
 #include <QStackedWidget>
 #include <QFrame>
+#include <QPlainTextEdit>
+#include <QTextEdit>
+#include <QAbstractSpinBox>
 #include <QStyledItemDelegate>
 #include <QStyle>
 
@@ -162,6 +168,185 @@ QString category_label(const ObjectEditor::Category category) {
 	return "Units";
 }
 
+QString field_type_group(const QString& type) {
+	if (type == "int" || type == "real" || type == "unreal") {
+		return "number";
+	}
+
+	return type;
+}
+
+bool field_types_compatible(const QString& source_type, const QString& target_type) {
+	return field_type_group(source_type) == field_type_group(target_type);
+}
+
+bool is_sequential_custom_id(const std::string_view id) {
+	return id.size() == 4 && std::isalpha(static_cast<unsigned char>(id[0])) && std::isdigit(static_cast<unsigned char>(id[1]))
+		&& std::isdigit(static_cast<unsigned char>(id[2])) && std::isdigit(static_cast<unsigned char>(id[3]));
+}
+
+std::string next_sequential_custom_id(TableModel* table, const std::optional<std::string_view> source_id = std::nullopt) {
+	char prefix = 0;
+	if (source_id && is_sequential_custom_id(*source_id)) {
+		prefix = static_cast<char>((*source_id)[0]);
+	}
+
+	if (!prefix) {
+		std::string best_custom_id;
+		for (const auto& [id, values] : table->slk->shadow_data) {
+			if (!values.contains("oldid") || !is_sequential_custom_id(id)) {
+				continue;
+			}
+
+			if (best_custom_id.empty() || id < best_custom_id) {
+				best_custom_id = id;
+			}
+		}
+
+		if (!best_custom_id.empty()) {
+			prefix = best_custom_id.front();
+		}
+	}
+
+	if (!prefix && source_id && !source_id->empty()) {
+		prefix = static_cast<char>((*source_id)[0]);
+	}
+
+	if (!prefix) {
+		prefix = 'A';
+	}
+
+	std::array<bool, 1000> used {};
+	for (const auto& [id, index] : table->slk->row_headers) {
+		if (!is_sequential_custom_id(id) || id.front() != prefix) {
+			continue;
+		}
+
+		used[std::stoi(id.substr(1))] = true;
+	}
+
+	for (int number = 0; number < static_cast<int>(used.size()); ++number) {
+		if (!used[number]) {
+			return std::format("{}{:03d}", prefix, number);
+		}
+	}
+
+	return {};
+}
+
+QString copied_name_with_suffix(QString name) {
+	name = name.trimmed();
+	if (name.isEmpty()) {
+		return name;
+	}
+	if (!name.endsWith(" Copy", Qt::CaseInsensitive)) {
+		name += " Copy";
+	}
+	return name;
+}
+
+bool is_text_input_widget(QWidget* widget) {
+	return qobject_cast<QLineEdit*>(widget) || qobject_cast<QTextEdit*>(widget) || qobject_cast<QPlainTextEdit*>(widget)
+		|| qobject_cast<QAbstractSpinBox*>(widget) || qobject_cast<QComboBox*>(widget);
+}
+
+void copy_selected_field_to_clipboard(QTableView* view) {
+	if (!view) {
+		return;
+	}
+
+	QModelIndex current = view->currentIndex();
+	if (!current.isValid()) {
+		return;
+	}
+	current = current.siblingAtColumn(0);
+
+	const auto* filter_model = qobject_cast<const SingleModelFilter*>(view->model());
+	if (!filter_model) {
+		return;
+	}
+
+	const auto* single_model = qobject_cast<const SingleModel*>(filter_model->sourceModel());
+	if (!single_model) {
+		return;
+	}
+
+	const QModelIndex source_index = filter_model->mapToSource(current);
+	if (!source_index.isValid()) {
+		return;
+	}
+
+	const auto& mapping = single_model->getMapping();
+	const QString field_type = QString::fromStdString(single_model->meta_slk->data("type", mapping[source_index.row()].key));
+	QJsonObject payload;
+	payload["type"] = field_type;
+	payload["value"] = current.data(Qt::EditRole).toString();
+	payload["field"] = QString::fromStdString(mapping[source_index.row()].key);
+
+	auto* mime = new QMimeData;
+	mime->setData("application/x-hivewe-object-field", QJsonDocument(payload).toJson(QJsonDocument::Compact));
+	mime->setText(current.data(Qt::DisplayRole).toString());
+	QApplication::clipboard()->setMimeData(mime);
+}
+
+void paste_selected_field_from_clipboard(QTableView* view) {
+	if (!view) {
+		return;
+	}
+
+	QModelIndex current = view->currentIndex();
+	if (!current.isValid()) {
+		return;
+	}
+	current = current.siblingAtColumn(0);
+
+	const auto* filter_model = qobject_cast<const SingleModelFilter*>(view->model());
+	if (!filter_model) {
+		return;
+	}
+
+	const auto* single_model = qobject_cast<const SingleModel*>(filter_model->sourceModel());
+	if (!single_model) {
+		return;
+	}
+
+	const QModelIndex source_index = filter_model->mapToSource(current);
+	if (!source_index.isValid()) {
+		return;
+	}
+
+	const auto* mime = QApplication::clipboard()->mimeData();
+	if (!mime) {
+		return;
+	}
+
+	QString source_type;
+	QString value;
+	if (mime->hasFormat("application/x-hivewe-object-field")) {
+		const QJsonDocument document = QJsonDocument::fromJson(mime->data("application/x-hivewe-object-field"));
+		if (!document.isObject()) {
+			return;
+		}
+
+		const QJsonObject payload = document.object();
+		source_type = payload.value("type").toString();
+		value = payload.value("value").toString();
+	} else if (mime->hasText()) {
+		source_type = "string";
+		value = mime->text();
+	} else {
+		return;
+	}
+
+	const auto& mapping = single_model->getMapping();
+	const QString target_type = QString::fromStdString(single_model->meta_slk->data("type", mapping[source_index.row()].key));
+	if (!field_types_compatible(source_type, target_type)) {
+		return;
+	}
+
+	view->model()->setData(current, value, Qt::EditRole);
+}
+
 class ObjectTreeDelegate : public QStyledItemDelegate {
   public:
 	using QStyledItemDelegate::QStyledItemDelegate;
@@ -170,6 +355,24 @@ class ObjectTreeDelegate : public QStyledItemDelegate {
 		QSize size = QStyledItemDelegate::sizeHint(option, index);
 		size.setHeight(std::max(size.height(), 24));
 		return size;
+	}
+
+	QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+		QWidget* editor = QStyledItemDelegate::createEditor(parent, option, index);
+		if (auto* line_edit = qobject_cast<QLineEdit*>(editor)) {
+			line_edit->setFrame(true);
+			line_edit->setClearButtonEnabled(false);
+			line_edit->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+		}
+		return editor;
+	}
+
+	void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const override {
+		QRect rect = option.rect.adjusted(28, 1, -8, -1);
+		if (const auto* item_view = qobject_cast<const QAbstractItemView*>(option.widget)) {
+			rect.setRight(item_view->viewport()->width() - 8);
+		}
+		editor->setGeometry(rect);
 	}
 
 	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
@@ -644,6 +847,7 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	connect(qApp, &QApplication::focusChanged, this, [this](QWidget*, QWidget*) {
 		refresh_details_focus_visuals();
 	});
+	qApp->installEventFilter(this);
 
 	show();
 }
@@ -808,6 +1012,309 @@ void ObjectEditor::toggle_object_bookmark(const Category category, const std::st
 			object_bookmarks.erase(object_bookmarks.begin());
 		}
 	}
+}
+
+TableModel* ObjectEditor::table_for_category(const Category category) const {
+	switch (category) {
+		case Category::unit:
+			return units_table;
+		case Category::item:
+			return items_table;
+		case Category::doodad:
+			return doodads_table;
+		case Category::destructible:
+			return destructibles_table;
+		case Category::ability:
+			return abilities_table;
+		case Category::upgrade:
+			return upgrade_table;
+		case Category::buff:
+			return buff_table;
+	}
+
+	return nullptr;
+}
+
+BaseTreeModel* ObjectEditor::tree_model_for_category(const Category category) const {
+	switch (category) {
+		case Category::unit:
+			return unitTreeModel;
+		case Category::item:
+			return itemTreeModel;
+		case Category::doodad:
+			return doodadTreeModel;
+		case Category::destructible:
+			return destructibleTreeModel;
+		case Category::ability:
+			return abilityTreeModel;
+		case Category::upgrade:
+			return upgradeTreeModel;
+		case Category::buff:
+			return buffTreeModel;
+	}
+
+	return nullptr;
+}
+
+BaseFilter* ObjectEditor::filter_for_category(const Category category) const {
+	switch (category) {
+		case Category::unit:
+			return unitTreeFilter;
+		case Category::item:
+			return itemTreeFilter;
+		case Category::doodad:
+			return doodadTreeFilter;
+		case Category::destructible:
+			return destructibleTreeFilter;
+		case Category::ability:
+			return abilityTreeFilter;
+		case Category::upgrade:
+			return upgradeTreeFilter;
+		case Category::buff:
+			return buffTreeFilter;
+	}
+
+	return nullptr;
+}
+
+QTreeView* ObjectEditor::view_for_category(const Category category) const {
+	switch (category) {
+		case Category::unit:
+			return unit_explorer;
+		case Category::item:
+			return item_explorer;
+		case Category::doodad:
+			return doodad_explorer;
+		case Category::destructible:
+			return destructible_explorer;
+		case Category::ability:
+			return ability_explorer;
+		case Category::upgrade:
+			return upgrade_explorer;
+		case Category::buff:
+			return buff_explorer;
+	}
+
+	return nullptr;
+}
+
+QString ObjectEditor::category_item_label(const Category category) const {
+	switch (category) {
+		case Category::unit:
+			return "Unit";
+		case Category::item:
+			return "Item";
+		case Category::doodad:
+			return "Doodad";
+		case Category::destructible:
+			return "Destructible";
+		case Category::ability:
+			return "Ability";
+		case Category::upgrade:
+			return "Upgrade";
+		case Category::buff:
+			return "Buff";
+	}
+
+	return "Object";
+}
+
+void ObjectEditor::copy_object_entry_to_clipboard(const Category category, const std::string& id) const {
+	QJsonObject payload;
+	payload["category"] = category_key(category);
+	payload["id"] = QString::fromStdString(id);
+
+	auto* mime = new QMimeData;
+	mime->setData("application/x-hivewe-object-entry", QJsonDocument(payload).toJson(QJsonDocument::Compact));
+	mime->setText(QString::fromStdString(id));
+	QApplication::clipboard()->setMimeData(mime);
+}
+
+void ObjectEditor::duplicate_object_entry(
+	QTreeView* view,
+	BaseFilter* filter,
+	BaseTreeModel* tree_model,
+	TableModel* table,
+	const QString& name,
+	const std::string& source_id
+) {
+	if (!view || !filter || !tree_model || !table || !table->slk->row_headers.contains(source_id)) {
+		return;
+	}
+
+	QDialog dialog(this, Qt::WindowTitleHint | Qt::WindowCloseButtonHint);
+	dialog.setWindowModality(Qt::WindowModality::WindowModal);
+	dialog.setWindowTitle("Copy " + name);
+
+	QLabel* source_label = new QLabel("Source: " + (object_display_name(table, source_id).isEmpty()
+		? QString::fromStdString(source_id)
+		: object_display_name(table, source_id) + " (" + QString::fromStdString(source_id) + ")"));
+	source_label->setWordWrap(true);
+
+	QLineEdit* id = new QLineEdit;
+	id->setPlaceholderText("Free ID");
+	id->setText(QString::fromStdString(next_sequential_custom_id(table, source_id)));
+	id->setFont(QFont("consolas"));
+
+	QAction* id_error_icon = id->addAction(dialog.style()->standardIcon(QStyle::SP_MessageBoxCritical), QLineEdit::TrailingPosition);
+	id_error_icon->setVisible(false);
+
+	QDialogButtonBox* button_box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+	connect(button_box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+	connect(button_box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+	auto validate = [table, id, button_box, id_error_icon]() {
+		const std::string new_id = id->text().toStdString();
+		if (new_id.size() != 4) {
+			id_error_icon->setVisible(true);
+			id_error_icon->setToolTip("ID must be exactly 4 characters long.");
+			id->setStyleSheet("QLineEdit { border: 1px solid #e74c3c; }");
+			button_box->button(QDialogButtonBox::Ok)->setEnabled(false);
+		} else if (table->slk->row_headers.contains(new_id)) {
+			id_error_icon->setVisible(true);
+			id_error_icon->setToolTip(QString::fromStdString(std::format("ID '{}' is already in use.", new_id)));
+			id->setStyleSheet("QLineEdit { border: 1px solid #e74c3c; }");
+			button_box->button(QDialogButtonBox::Ok)->setEnabled(false);
+		} else {
+			id_error_icon->setVisible(false);
+			id->setStyleSheet("");
+			button_box->button(QDialogButtonBox::Ok)->setEnabled(true);
+		}
+	};
+
+	QVBoxLayout* layout = new QVBoxLayout(&dialog);
+	layout->addWidget(source_label);
+	layout->addWidget(id);
+	layout->addWidget(button_box);
+
+	connect(id, &QLineEdit::textChanged, &dialog, [validate](const QString&) {
+		validate();
+	});
+	validate();
+
+	if (dialog.exec() != QDialog::Accepted) {
+		return;
+	}
+
+	const std::string new_id = id->text().toStdString();
+	table->copyRow(source_id, new_id);
+
+	if (const std::string name_field = primary_name_field(table); !name_field.empty() && table->slk->column_headers.contains(name_field)) {
+		const QString copied_name = copied_name_with_suffix(object_display_name(table, source_id));
+		if (!copied_name.isEmpty()) {
+			table->setData(table->index(table->slk->row_headers.at(new_id), table->slk->column_headers.at(name_field)), copied_name, Qt::EditRole);
+		}
+	}
+
+	const QModelIndex source_index = table->rowIDToIndex(new_id);
+	const QModelIndex tree_index = tree_model->mapFromSource(source_index);
+	const QModelIndex filtered_index = filter->mapFromSource(tree_index);
+	if (!filtered_index.isValid()) {
+		return;
+	}
+
+	if (const QModelIndex parent = filtered_index.parent(); parent.isValid()) {
+		view->expand(parent);
+	}
+	view->setCurrentIndex(filtered_index);
+	view->selectionModel()->select(filtered_index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+	view->scrollTo(filtered_index, QAbstractItemView::ScrollHint::PositionAtCenter);
+	itemClicked(view, filter, table, filtered_index);
+}
+
+void ObjectEditor::begin_rename_selected_object() {
+	QTreeView* target_view = nullptr;
+	if (QWidget* focus_widget = QApplication::focusWidget()) {
+		for (QTreeView* candidate : {unit_explorer, item_explorer, doodad_explorer, destructible_explorer, ability_explorer, upgrade_explorer, buff_explorer}) {
+			if (candidate && is_focus_within(focus_widget, candidate)) {
+				target_view = candidate;
+				break;
+			}
+		}
+	}
+
+	if (!target_view && explorer_area && explorer_area->currentDockWidget()) {
+		target_view = explorer_area->currentDockWidget()->findChild<QTreeView*>();
+	}
+
+	if (!target_view) {
+		target_view = current_explorer_view;
+	}
+
+	if (!target_view) {
+		return;
+	}
+
+	current_explorer_view = target_view;
+	current_category =
+		target_view == unit_explorer		 ? Category::unit
+		: target_view == item_explorer		 ? Category::item
+		: target_view == doodad_explorer	 ? Category::doodad
+		: target_view == destructible_explorer ? Category::destructible
+		: target_view == ability_explorer	 ? Category::ability
+		: target_view == upgrade_explorer	 ? Category::upgrade
+										 : Category::buff;
+
+	const auto* filter = qobject_cast<BaseFilter*>(target_view->model());
+	if (!filter) {
+		return;
+	}
+
+	QModelIndex index = target_view->currentIndex();
+	if ((!index.isValid() || !target_view->selectionModel()) && target_view->selectionModel() && !target_view->selectionModel()->selectedRows().isEmpty()) {
+		index = target_view->selectionModel()->selectedRows().front();
+	}
+	if (!index.isValid()) {
+		return;
+	}
+
+	const auto* tree_item = static_cast<const BaseTreeItem*>(filter->mapToSource(index).internalPointer());
+	if (!tree_item || tree_item->baseCategory || tree_item->subCategory) {
+		return;
+	}
+
+	target_view->setCurrentIndex(index);
+	target_view->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
+	target_view->setFocus(Qt::OtherFocusReason);
+
+	const QPersistentModelIndex persistent_index(index);
+	QTimer::singleShot(0, target_view, [target_view, persistent_index]() {
+		if (!persistent_index.isValid()) {
+			return;
+		}
+
+		target_view->edit(persistent_index);
+		if (auto* line_edit = qobject_cast<QLineEdit*>(QApplication::focusWidget())) {
+			line_edit->selectAll();
+		}
+	});
+}
+
+void ObjectEditor::paste_copied_object() {
+	const auto* mime = QApplication::clipboard()->mimeData();
+	if (!mime || !mime->hasFormat("application/x-hivewe-object-entry")) {
+		return;
+	}
+
+	const QJsonDocument document = QJsonDocument::fromJson(mime->data("application/x-hivewe-object-entry"));
+	if (!document.isObject()) {
+		return;
+	}
+
+	const QJsonObject payload = document.object();
+	if (payload.value("category").toString() != category_key(current_category)) {
+		return;
+	}
+
+	const std::string source_id = payload.value("id").toString().toStdString();
+	duplicate_object_entry(
+		view_for_category(current_category),
+		filter_for_category(current_category),
+		tree_model_for_category(current_category),
+		table_for_category(current_category),
+		category_item_label(current_category),
+		source_id
+	);
 }
 
 void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon) {
@@ -1169,6 +1676,14 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	const int field_column_width = details_header_width(single_model, view->verticalHeader());
 	view->verticalHeader()->setFixedWidth(field_column_width);
 	current_details_view = view;
+	connect(new QShortcut(QKeySequence::Copy, view), &QShortcut::activated, view, [view]() {
+		copy_selected_field_to_clipboard(view);
+	});
+	connect(new QShortcut(QKeySequence::Paste, view), &QShortcut::activated, view, [view]() {
+		paste_selected_field_from_clipboard(view);
+	});
+	view->installEventFilter(this);
+	view->viewport()->installEventFilter(this);
 	const auto update_inspector_meta = [filter_model, single_model, inspector_meta]() {
 		inspector_meta->setText(QString::number(filter_model->rowCount()) + " of " + QString::number(single_model->rowCount()) + " fields");
 	};
@@ -1570,15 +2085,20 @@ void ObjectEditor::addTypeTreeView(
 	filter->sort(0, Qt::AscendingOrder);
 	view->setModel(filter);
 	view->header()->hide();
+	view->header()->setStretchLastSection(true);
+	view->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	view->setContextMenuPolicy(Qt::CustomContextMenu);
 	view->setItemDelegate(new ObjectTreeDelegate(view));
 	view->setSelectionBehavior(QAbstractItemView::SelectRows);
 	view->setSelectionMode(QAbstractItemView::ExtendedSelection);
+	view->setEditTriggers(QAbstractItemView::EditKeyPressed);
 	view->setUniformRowHeights(true);
 	view->setIndentation(18);
 	view->setIconSize({18, 18});
 	view->setAnimated(true);
 	view->setAllColumnsShowFocus(true);
+	view->installEventFilter(this);
+	view->viewport()->installEventFilter(this);
 	view->setStyleSheet(
 		"QTreeView {"
 		"border: 1px solid rgba(255, 255, 255, 16);"
@@ -1630,9 +2150,21 @@ void ObjectEditor::addTypeTreeView(
 		expand_custom_branch(QModelIndex());
 	}
 
+	const auto current_object_item = [view, filter]() -> const BaseTreeItem* {
+		const QModelIndex current = view->currentIndex();
+		if (!current.isValid()) {
+			return nullptr;
+		}
+
+		return static_cast<const BaseTreeItem*>(filter->mapToSource(current).internalPointer());
+	};
+
 	connect(view, &QTreeView::customContextMenuRequested, [=, this](const QPoint& pos) {
 		QMenu menu;
 		QAction* addAction = menu.addAction("Add " + name);
+		QAction* duplicateAction = menu.addAction("Duplicate " + name);
+		QAction* copyAction = menu.addAction("Copy " + name);
+		QAction* pasteAction = menu.addAction("Paste " + name);
 		QAction* removeAction = menu.addAction("Remove " + name);
 
 		if (category == Category::doodad) {
@@ -1674,6 +2206,37 @@ void ObjectEditor::addTypeTreeView(
 
 		QModelIndexList selection = view->selectionModel()->selectedIndexes();
 		if (selection.empty()) {
+			duplicateAction->setDisabled(true);
+		} else {
+			BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(filter->mapToSource(selection.front()).internalPointer());
+			if (treeItem->id.empty()) {
+				duplicateAction->setDisabled(true);
+			}
+		}
+		if (selection.empty()) {
+			copyAction->setDisabled(true);
+		} else {
+			BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(filter->mapToSource(selection.front()).internalPointer());
+			if (treeItem->id.empty()) {
+				copyAction->setDisabled(true);
+			}
+		}
+
+		{
+			const auto* mime = QApplication::clipboard()->mimeData();
+			bool can_paste = false;
+			if (mime && mime->hasFormat("application/x-hivewe-object-entry")) {
+				const QJsonDocument document = QJsonDocument::fromJson(mime->data("application/x-hivewe-object-entry"));
+				if (document.isObject()) {
+					const QJsonObject payload = document.object();
+					const std::string source_id = payload.value("id").toString().toStdString();
+					can_paste = payload.value("category").toString() == category_key(category) && table->slk->row_headers.contains(source_id);
+				}
+			}
+			pasteAction->setEnabled(can_paste);
+		}
+
+		if (selection.empty()) {
 			removeAction->setDisabled(true);
 		} else {
 			BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(filter->mapToSource(selection.front()).internalPointer());
@@ -1681,6 +2244,26 @@ void ObjectEditor::addTypeTreeView(
 				removeAction->setDisabled(true);
 			}
 		}
+
+		connect(copyAction, &QAction::triggered, [this, view, current_object_item, category]() {
+			const auto* tree_item = current_object_item();
+			if (!tree_item || tree_item->baseCategory || tree_item->subCategory) {
+				return;
+			}
+
+			copy_object_entry_to_clipboard(category, tree_item->id);
+		});
+		connect(duplicateAction, &QAction::triggered, [this, view, current_object_item, category, filter, treeModel, table, name]() {
+			const auto* tree_item = current_object_item();
+			if (!tree_item || tree_item->baseCategory || tree_item->subCategory) {
+				return;
+			}
+
+			duplicate_object_entry(view, filter, treeModel, table, name, tree_item->id);
+		});
+		connect(pasteAction, &QAction::triggered, [this]() {
+			paste_copied_object();
+		});
 
 		// add new object
 		connect(addAction, &QAction::triggered, [=, this]() {
@@ -1694,7 +2277,7 @@ void ObjectEditor::addTypeTreeView(
 
 			QLineEdit* id = new QLineEdit;
 			id->setPlaceholderText("Free ID");
-			id->setText(QString::fromStdString(map->get_unique_id(false)));
+			id->setText(QString::fromStdString(next_sequential_custom_id(table)));
 			id->setFont(QFont("consolas"));
 
 			// error icon inside the id field, hidden by default
@@ -1785,7 +2368,7 @@ void ObjectEditor::addTypeTreeView(
 					nameEdit->setText(sub_filter->data(current).toString());
 					const BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(sub_filter->mapToSource(current).internalPointer());
 					if (!(treeItem->baseCategory || treeItem->subCategory)) {
-						id->setText(QString::fromStdString(map->get_unique_id(!islower(treeItem->id.front()))));
+						id->setText(QString::fromStdString(next_sequential_custom_id(table, treeItem->id)));
 					}
 					is_valid();
 				}
@@ -2259,7 +2842,101 @@ void ObjectEditor::keyPressEvent(QKeyEvent* event) {
 		}
 	}
 
+	if (QWidget* focus_widget = QApplication::focusWidget(); !is_text_input_widget(focus_widget)) {
+		if (event->matches(QKeySequence::Copy)) {
+			if (current_explorer_view && is_focus_within(focus_widget, current_explorer_view)) {
+				if (const auto* filter = qobject_cast<BaseFilter*>(current_explorer_view->model())) {
+					if (const auto* tree_item =
+							static_cast<const BaseTreeItem*>(filter->mapToSource(current_explorer_view->currentIndex()).internalPointer());
+						tree_item && !tree_item->baseCategory && !tree_item->subCategory) {
+						copy_object_entry_to_clipboard(current_category, tree_item->id);
+						event->accept();
+						return;
+					}
+				}
+			}
+		} else if (event->matches(QKeySequence::Paste)) {
+			if (current_explorer_view && is_focus_within(focus_widget, current_explorer_view)) {
+				paste_copied_object();
+				event->accept();
+				return;
+			}
+		} else if (event->key() == Qt::Key_F2) {
+			if (current_explorer_view && is_focus_within(focus_widget, current_explorer_view)) {
+				begin_rename_selected_object();
+				event->accept();
+				return;
+			}
+		}
+	}
+
 	QMainWindow::keyPressEvent(event);
+}
+
+bool ObjectEditor::eventFilter(QObject* watched, QEvent* event) {
+	if (event->type() == QEvent::KeyPress) {
+		auto* key_event = static_cast<QKeyEvent*>(event);
+		QWidget* focus_widget = QApplication::focusWidget();
+		if (is_text_input_widget(focus_widget)) {
+			return QMainWindow::eventFilter(watched, event);
+		}
+
+		const auto handle_tree_key = [this, focus_widget, key_event](QTreeView* view) {
+			if (!view || !is_focus_within(focus_widget, view)) {
+				return false;
+			}
+
+			current_explorer_view = view;
+			current_category =
+				view == unit_explorer		 ? Category::unit
+				: view == item_explorer		 ? Category::item
+				: view == doodad_explorer	 ? Category::doodad
+				: view == destructible_explorer ? Category::destructible
+				: view == ability_explorer	 ? Category::ability
+				: view == upgrade_explorer	 ? Category::upgrade
+										 : Category::buff;
+
+			if (key_event->matches(QKeySequence::Copy)) {
+				if (const auto* filter = qobject_cast<BaseFilter*>(view->model())) {
+					if (const auto* tree_item = static_cast<const BaseTreeItem*>(filter->mapToSource(view->currentIndex()).internalPointer());
+						tree_item && !tree_item->baseCategory && !tree_item->subCategory) {
+						copy_object_entry_to_clipboard(current_category, tree_item->id);
+						return true;
+					}
+				}
+			} else if (key_event->matches(QKeySequence::Paste)) {
+				paste_copied_object();
+				return true;
+			} else if (key_event->key() == Qt::Key_F2) {
+				begin_rename_selected_object();
+				return true;
+			}
+
+			return false;
+		};
+
+		if (handle_tree_key(unit_explorer) || handle_tree_key(item_explorer) || handle_tree_key(doodad_explorer)
+			|| handle_tree_key(destructible_explorer) || handle_tree_key(ability_explorer) || handle_tree_key(upgrade_explorer)
+			|| handle_tree_key(buff_explorer)) {
+			key_event->accept();
+			return true;
+		}
+
+		if (current_details_view && is_focus_within(focus_widget, current_details_view)) {
+			if (key_event->matches(QKeySequence::Copy)) {
+				copy_selected_field_to_clipboard(current_details_view);
+				key_event->accept();
+				return true;
+			}
+			if (key_event->matches(QKeySequence::Paste)) {
+				paste_selected_field_from_clipboard(current_details_view);
+				key_event->accept();
+				return true;
+			}
+		}
+	}
+
+	return QMainWindow::eventFilter(watched, event);
 }
 
 bool ObjectEditor::focusNextPrevChild(const bool next) {

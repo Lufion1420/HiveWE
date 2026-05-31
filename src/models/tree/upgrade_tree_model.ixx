@@ -61,11 +61,16 @@ export class UpgradeTreeModel : public BaseTreeModel {
 				}
 				return sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("art1")), role);
 			case Qt::EditRole:
+				if (item->baseCategory) {
+					return QString::fromStdString(item->label);
+				} else {
+					return source_edit_data(index);
+				}
 			case Qt::DisplayRole:
 				if (item->baseCategory) {
 					return QString::fromStdString(item->label);
 				} else {
-					return append_id_label(QAbstractProxyModel::data(index, role).toString() + " " + QString::fromUtf8(upgrade_slk.data<std::string_view>("editorsuffix", item->id)), item->id);
+					return append_id_label(source_display_data(index, role).toString() + " " + QString::fromUtf8(upgrade_slk.data<std::string_view>("editorsuffix", item->id)), item->id);
 				}
 			default:
 				return BaseTreeModel::data(index, role);

@@ -95,7 +95,12 @@ export class BaseTreeModel : public QAbstractProxyModel {
 			return Qt::NoItemFlags;
 		}
 
-		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+		BaseTreeItem* item = static_cast<BaseTreeItem*>(index.internalPointer());
+		Qt::ItemFlags flags = Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+		if (item && !item->baseCategory && !item->subCategory) {
+			flags |= Qt::ItemIsEditable;
+		}
+		return flags;
 	}
 
 	QModelIndex index(int row, int column, const QModelIndex& parent) const override {
@@ -308,6 +313,36 @@ export class BaseTreeModel : public QAbstractProxyModel {
   protected:
 	[[nodiscard]] QString append_id_label(const QString& label, const std::string& id) const {
 		return label + " (" + QString::fromStdString(id) + ")";
+	}
+
+	[[nodiscard]] QVariant source_display_data(const QModelIndex& index, int role = Qt::DisplayRole) const {
+		return QAbstractProxyModel::data(index, role);
+	}
+
+	[[nodiscard]] QVariant source_edit_data(const QModelIndex& index) const {
+		return QAbstractProxyModel::data(index, Qt::EditRole);
+	}
+
+	bool setData(const QModelIndex& index, const QVariant& value, int role) override {
+		if (!index.isValid() || role != Qt::EditRole) {
+			return false;
+		}
+
+		BaseTreeItem* item = static_cast<BaseTreeItem*>(index.internalPointer());
+		if (!item || item->baseCategory || item->subCategory) {
+			return false;
+		}
+
+		const QModelIndex source_index = mapToSource(index);
+		if (!source_index.isValid()) {
+			return false;
+		}
+
+		const bool changed = sourceModel()->setData(source_index, value, role);
+		if (changed) {
+			emit dataChanged(index, index, {Qt::DisplayRole, Qt::EditRole});
+		}
+		return changed;
 	}
 
 	slk::SLK* slk;

@@ -125,8 +125,25 @@ private:
 	void navigate_object_history(int delta);
 	bool is_object_bookmarked(Category category, const std::string& id) const;
 	void toggle_object_bookmark(Category category, const std::string& id, const QString& name);
+	TableModel* table_for_category(Category category) const;
+	BaseTreeModel* tree_model_for_category(Category category) const;
+	BaseFilter* filter_for_category(Category category) const;
+	QTreeView* view_for_category(Category category) const;
+	QString category_item_label(Category category) const;
+	void copy_object_entry_to_clipboard(Category category, const std::string& id) const;
+	void duplicate_object_entry(
+		QTreeView* view,
+		BaseFilter* filter,
+		BaseTreeModel* tree_model,
+		TableModel* table,
+		const QString& name,
+		const std::string& source_id
+	);
+	void begin_rename_selected_object();
+	void paste_copied_object();
 protected:
 	void closeEvent(QCloseEvent* event) override;
+	bool eventFilter(QObject* watched, QEvent* event) override;
 	bool focusNextPrevChild(bool next) override;
 	void keyPressEvent(QKeyEvent* event) override;
 

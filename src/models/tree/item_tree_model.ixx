@@ -44,11 +44,16 @@ export class ItemTreeModel : public BaseTreeModel {
 
 		switch (role) {
 			case Qt::EditRole:
+				if (item->baseCategory) {
+					return QString::fromStdString(item->label);
+				} else {
+					return source_edit_data(index);
+				}
 			case Qt::DisplayRole:
 				if (item->baseCategory) {
 					return QString::fromStdString(item->label);
 				} else {
-					return append_id_label(QAbstractProxyModel::data(index, role).toString(), item->id);
+					return append_id_label(source_display_data(index, role).toString(), item->id);
 				}
 			default:
 				return BaseTreeModel::data(index, role);

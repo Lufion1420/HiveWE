@@ -39,6 +39,19 @@ export class BuffTreeModel : public BaseTreeModel {
 		return (is_custom ? categories.at(race).custom_item : categories.at(race).item)->children[subIndex];
 	}
 
+	QModelIndex mapToSource(const QModelIndex& proxyIndex) const override {
+		if (!proxyIndex.isValid()) {
+			return {};
+		}
+
+		BaseTreeItem* item = static_cast<BaseTreeItem*>(proxyIndex.internalPointer());
+		if (item->baseCategory || item->subCategory) {
+			return {};
+		}
+
+		return createIndex(slk->row_headers.at(item->id), slk->column_headers.at("editorname"), item);
+	}
+
   public:
 	QVariant data(const QModelIndex& index, int role) const override {
 		if (!index.isValid()) {
@@ -49,6 +62,13 @@ export class BuffTreeModel : public BaseTreeModel {
 
 		switch (role) {
 			case Qt::EditRole:
+				if (item->baseCategory) {
+					return QString::fromStdString(item->label);
+				} else if (item->subCategory) {
+					return QString::fromStdString(item->label);
+				} else {
+					return source_edit_data(index);
+				}
 			case Qt::DisplayRole:
 				if (item->baseCategory) {
 					return QString::fromStdString(item->label);
@@ -57,7 +77,11 @@ export class BuffTreeModel : public BaseTreeModel {
 				} else {
 					const QString editorname = sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorname")), role).toString();
 					if (editorname.isEmpty()) {
-						return append_id_label(QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
+						return append_id_label(
+							sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("bufftip")), role).toString()
+								+ " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(),
+							item->id
+						);
 					} else {
 						return append_id_label(editorname + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
 					}

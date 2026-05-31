@@ -65,6 +65,13 @@ export class UnitTreeModel : public BaseTreeModel {
 
 		switch (role) {
 			case Qt::EditRole:
+				if (item->baseCategory) {
+					return QString::fromStdString(item->label);
+				} else if (item->subCategory) {
+					return QString::fromStdString(item->label);
+				} else {
+					return source_edit_data(index);
+				}
 			case Qt::DisplayRole:
 				if (item->baseCategory) {
 					return QString::fromStdString(item->label);
@@ -79,7 +86,7 @@ export class UnitTreeModel : public BaseTreeModel {
 						}
 					}
 
-					return append_id_label(QAbstractProxyModel::data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
+					return append_id_label(source_display_data(index, role).toString() + " " + sourceModel()->data(sourceModel()->index(slk->row_headers.at(item->id), slk->column_headers.at("editorsuffix")), role).toString(), item->id);
 				}
 			default:
 				return BaseTreeModel::data(index, role);
