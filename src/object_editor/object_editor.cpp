@@ -363,12 +363,13 @@ class ObjectTreeDelegate : public QStyledItemDelegate {
 			line_edit->setFrame(true);
 			line_edit->setClearButtonEnabled(false);
 			line_edit->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+			line_edit->setTextMargins(4, 0, 4, 0);
 		}
 		return editor;
 	}
 
 	void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const override {
-		QRect rect = option.rect.adjusted(28, 1, -8, -1);
+		QRect rect = option.rect.adjusted(34, 0, -8, 2);
 		if (const auto* item_view = qobject_cast<const QAbstractItemView*>(option.widget)) {
 			rect.setRight(item_view->viewport()->width() - 8);
 		}

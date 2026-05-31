@@ -320,7 +320,7 @@ export class BaseTreeModel : public QAbstractProxyModel {
 	}
 
 	[[nodiscard]] QVariant source_edit_data(const QModelIndex& index) const {
-		return QAbstractProxyModel::data(index, Qt::EditRole);
+		return QAbstractProxyModel::data(index, Qt::DisplayRole);
 	}
 
 	bool setData(const QModelIndex& index, const QVariant& value, int role) override {
