@@ -128,6 +128,7 @@ public:
 
 	QWidget* create_list_editor(QWidget* parent) const;
 	QWidget* create_model_editor(QWidget* parent) const;
+	QWidget* create_hotkey_editor(QWidget* parent) const;
 	QWidget* create_target_list_editor(QWidget* parent) const;
 	QWidget* create_flags_editor(QWidget* parent, std::string_view type) const;
 	QWidget* create_upgrade_list_editor(QWidget* parent) const;

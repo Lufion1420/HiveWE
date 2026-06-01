@@ -17,6 +17,7 @@
 #include <QMouseEvent>
 #include <QTimer>
 #include <QApplication>
+#include <QRegularExpressionValidator>
 
 #include "object_editor/icon_view.h"
 
@@ -610,6 +611,8 @@ QWidget* TableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem
 		QTextEdit* editor = new QTextEdit(parent);
 		//		editor->setMaxLength(std::stoi(maxVal));
 		return editor;
+	} else if (type == "hotkey") {
+		return create_hotkey_editor(parent);
 	} else if (type == "model") {
 		return create_model_editor(parent);
 	} else if (type == "targetList") {
@@ -673,6 +676,8 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 	} else if (type == "string") {
 		// A hack to resolve TRIGSTR. The downside of taking the Display value is that we overwrite the TRIGSTR reference
 		dynamic_cast<QTextEdit*>(editor)->setText(index.data(Qt::DisplayRole).toString());
+	} else if (type == "hotkey") {
+		dynamic_cast<QLineEdit*>(editor)->setText(index.data(Qt::DisplayRole).toString().trimmed().left(1).toUpper());
 	} else if (type == "targetList") {
 		const auto parts = index.data(Qt::EditRole).toString().split(',');
 		for (const auto& i : parts) {
@@ -800,6 +805,8 @@ void TableDelegate::setModelData(QWidget* editor, QAbstractItemModel* model, con
 		auto text = static_cast<QTextEdit*>(editor)->toPlainText();
 		text.replace('\n', "|n");
 		model->setData(index, text, Qt::EditRole);
+	} else if (type == "hotkey") {
+		model->setData(index, static_cast<QLineEdit*>(editor)->text().trimmed().left(1).toUpper(), Qt::EditRole);
 	} else if (type == "model") {
 		ModelView* list = editor->findChild<ModelView*>("modelView");
 		model->setData(index, list->current_model_path());
@@ -973,6 +980,21 @@ QWidget* TableDelegate::create_model_editor(QWidget* parent) const {
 
 	dialog->show();
 
+	return editor;
+}
+
+QWidget* TableDelegate::create_hotkey_editor(QWidget* parent) const {
+	QLineEdit* editor = new QLineEdit(parent);
+	editor->setMaxLength(1);
+	editor->setValidator(new QRegularExpressionValidator(QRegularExpression("[A-Za-z]?"), editor));
+	editor->setAlignment(Qt::AlignCenter);
+	editor->setClearButtonEnabled(true);
+	connect(editor, &QLineEdit::textChanged, editor, [editor](const QString& text) {
+		const QString upper = text.left(1).toUpper();
+		if (text != upper) {
+			editor->setText(upper);
+		}
+	});
 	return editor;
 }
 
