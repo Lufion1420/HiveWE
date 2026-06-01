@@ -150,6 +150,25 @@ export class TableModel : public QAbstractTableModel {
 					QString result_qstring = result.join(", ");
 					result_qstring.replace('&', "");
 					return result_qstring;
+				} else if (type.ends_with("Flags") && unit_editor_data.section_exists(type)) {
+					int mask = 0;
+					std::from_chars(field_data.data(), field_data.data() + field_data.size(), mask);
+					QStringList result;
+					for (const auto& [key, value] : unit_editor_data.section(type)) {
+						if (key == "NumValues" || key == "Sort" || key.ends_with("_Alt") || value.empty()) {
+							continue;
+						}
+
+						const int bit = 1 << std::stoi(value[0]);
+						if ((mask & bit) == 0) {
+							continue;
+						}
+
+						QString displayText = QString::fromStdString(value[1]);
+						displayText.replace('&', "");
+						result += displayText;
+					}
+					return result.join(", ");
 				} else if (type == "tilesetList") {
 					std::vector<std::string_view> parts = absl::StrSplit(field_data, ',', absl::SkipEmpty());
 					QStringList result;

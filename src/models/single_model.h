@@ -7,6 +7,7 @@
 #include <QStyledItemDelegate>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 import TableModel;
@@ -128,6 +129,7 @@ public:
 	QWidget* create_list_editor(QWidget* parent) const;
 	QWidget* create_model_editor(QWidget* parent) const;
 	QWidget* create_target_list_editor(QWidget* parent) const;
+	QWidget* create_flags_editor(QWidget* parent, std::string_view type) const;
 	QWidget* create_upgrade_list_editor(QWidget* parent) const;
 	QWidget* create_unit_list_editor(QWidget* parent) const;
 	QWidget* create_ability_list_editor(QWidget* parent) const;

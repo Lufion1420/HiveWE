@@ -622,6 +622,8 @@ QWidget* TableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem
 		return create_ability_list_editor(parent);
 	} else if (type == "buffList") {
 		return create_buff_list_editor(parent);
+	} else if (type.ends_with("Flags") && unit_editor_data.section_exists(type)) {
+		return create_flags_editor(parent, type);
 	} else if (type.ends_with("List")) {
 		return create_list_editor(parent);
 	} else if (unit_editor_data.section_exists(type)) {
@@ -678,6 +680,12 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 			if (box) {
 				box->setChecked(true);
 			}
+		}
+	} else if (type.ends_with("Flags") && unit_editor_data.section_exists(type)) {
+		const int mask = index.data(Qt::EditRole).toInt();
+		for (auto* box : editor->findChildren<QCheckBox*>()) {
+			const int bit = 1 << box->property("flagValue").toInt();
+			box->setChecked((mask & bit) != 0);
 		}
 	} else if (type == "model") {
 		ModelView* list = editor->findChild<ModelView*>("modelView");
@@ -859,6 +867,14 @@ void TableDelegate::setModelData(QWidget* editor, QAbstractItemModel* model, con
 			}
 		}
 		model->setData(index, result, Qt::EditRole);
+	} else if (type.ends_with("Flags") && unit_editor_data.section_exists(type)) {
+		int result = 0;
+		for (auto* box : editor->findChildren<QCheckBox*>()) {
+			if (box->isChecked()) {
+				result |= 1 << box->property("flagValue").toInt();
+			}
+		}
+		model->setData(index, result, Qt::EditRole);
 	} else if (type.ends_with("List")) {
 		model->setData(index, editor->findChild<QPlainTextEdit*>("editor")->toPlainText());
 	} else if (unit_editor_data.section_exists(type)) {
@@ -982,6 +998,54 @@ QWidget* TableDelegate::create_target_list_editor(QWidget* parent) const {
 		flag->setObjectName(QString::fromStdString(value[0]));
 
 		flow->addWidget(flag);
+	}
+
+	QDialogButtonBox* buttonBox = new QDialogButtonBox;
+	buttonBox->setStandardButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+	connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+	connect(buttonBox, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+
+	layout->addLayout(flow);
+	layout->addWidget(buttonBox);
+
+	connect(dialog, &QDialog::accepted, [=]() {
+		const auto delegate = const_cast<TableDelegate*>(this);
+		emit delegate->commitData(editor);
+		emit delegate->closeEditor(editor);
+	});
+
+	connect(dialog, &QDialog::rejected, [=]() {
+		const auto delegate = const_cast<TableDelegate*>(this);
+		emit delegate->closeEditor(editor);
+	});
+
+	dialog->show();
+
+	return editor;
+}
+
+QWidget* TableDelegate::create_flags_editor(QWidget* parent, std::string_view type) const {
+	auto editor = new QWidget(parent);
+
+	QDialog* dialog = new QDialog(editor, Qt::WindowTitleHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->setWindowModality(Qt::WindowModality::WindowModal);
+
+	QVBoxLayout* layout = new QVBoxLayout(dialog);
+	QGridLayout* flow = new QGridLayout;
+
+	int row = 0;
+	for (const auto& [key, value] : unit_editor_data.section(type)) {
+		if (key == "NumValues" || key == "Sort" || key.ends_with("_Alt") || value.empty()) {
+			continue;
+		}
+
+		QString displayText = QString::fromStdString(value[1]);
+		displayText.replace('&', "");
+
+		QCheckBox* flag = new QCheckBox(displayText);
+		flag->setProperty("flagValue", std::stoi(value[0]));
+		flow->addWidget(flag, row++, 0);
 	}
 
 	QDialogButtonBox* buttonBox = new QDialogButtonBox;
