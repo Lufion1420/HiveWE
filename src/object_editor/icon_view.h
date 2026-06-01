@@ -2,11 +2,13 @@
 
 #include <unordered_map>
 #include <memory>
+#include <filesystem>
 
 #include <QDialog>
 #include <QComboBox>
 #include <QLineEdit>
 #include <QListView>
+#include <QPushButton>
 #include <QAbstractListModel>
 #include <QSortFilterProxyModel>
 
@@ -23,6 +25,7 @@ public:
 	QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
 	std::vector<std::pair<std::string, QString>> icons;
+	void addIconsFromFolder(const std::filesystem::path& folder);
 };
 
 class IconView : public QWidget {
@@ -30,6 +33,8 @@ class IconView : public QWidget {
 
 	QComboBox* type = new QComboBox;
 	QLineEdit* search = new QLineEdit;
+	QLineEdit* folderPath = new QLineEdit;
+	QPushButton* browseFolder = new QPushButton("Folder...");
 	QListView* view = new QListView;
 	QLineEdit* finalPath = new QLineEdit;
 

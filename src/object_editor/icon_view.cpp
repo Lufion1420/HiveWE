@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
+#include <QFileDialog>
 
 import std;
 import Hierarchy;
@@ -17,6 +18,53 @@ import ResourceManager;
 namespace fs = std::filesystem;
 
 std::unordered_map<std::string, std::shared_ptr<QIconResource>> icon_cache;
+
+std::string normalized_icon_path(fs::path path) {
+	return path.generic_string();
+}
+
+bool relative_path_stays_inside_root(const fs::path& path) {
+	return !path.empty() && *path.begin() != "..";
+}
+
+std::optional<std::string> icon_path_relative_to_root(const fs::path& path, const fs::path& root) {
+	if (root.empty()) {
+		return {};
+	}
+
+	std::error_code ec;
+	const fs::path normalized_root = fs::weakly_canonical(root, ec);
+	if (ec) {
+		return {};
+	}
+
+	const fs::path relative = path.lexically_relative(normalized_root);
+	if (!relative_path_stays_inside_root(relative)) {
+		return {};
+	}
+
+	return normalized_icon_path(relative);
+}
+
+std::optional<std::string> icon_path_for_selected_file(const fs::path& path) {
+	std::error_code ec;
+	const fs::path absolute_path = fs::weakly_canonical(path, ec);
+	const fs::path normalized_path = ec ? fs::absolute(path) : absolute_path;
+
+	if (auto relative_path = icon_path_relative_to_root(normalized_path, hierarchy.map_directory)) {
+		return relative_path;
+	}
+
+	if (auto relative_path = icon_path_relative_to_root(normalized_path, hierarchy.root_directory)) {
+		return relative_path;
+	}
+
+	if (hierarchy.file_exists(normalized_path)) {
+		return normalized_icon_path(normalized_path);
+	}
+
+	return {};
+}
 
 IconModel::IconModel(QObject* parent) : QAbstractListModel(parent) {
 	//std::unordered_map<std::string, QString> icons_map;
@@ -157,7 +205,10 @@ IconModel::IconModel(QObject* parent) : QAbstractListModel(parent) {
 	//file.close();
 
 	QFile file(fs::path("data/warcraft/icon_tags.json"));
-	file.open(QIODevice::ReadOnly);
+	if (!file.open(QIODevice::ReadOnly)) {
+		std::print("Error opening icon_tags.json");
+		return;
+	}
 
 	QJsonParseError error;
 	QJsonDocument json = QJsonDocument::fromJson(file.readAll(), &error);
@@ -188,6 +239,43 @@ IconModel::IconModel(QObject* parent) : QAbstractListModel(parent) {
 	}
 }
 
+void IconModel::addIconsFromFolder(const fs::path& folder) {
+	std::error_code ec;
+	if (!fs::exists(folder, ec) || !fs::is_directory(folder, ec)) {
+		return;
+	}
+
+	std::unordered_set<std::string> existing;
+	std::vector<std::pair<std::string, QString>> discovered;
+	for (const auto& entry : fs::recursive_directory_iterator(folder, fs::directory_options::skip_permission_denied, ec)) {
+		std::error_code file_ec;
+		if (ec || !entry.is_regular_file(file_ec) || file_ec) {
+			continue;
+		}
+
+		const fs::path path = entry.path();
+		std::string extension = path.extension().string();
+		std::ranges::transform(extension, extension.begin(), [](unsigned char c) {
+			return static_cast<char>(std::tolower(c));
+		});
+		if (extension != ".blp" && extension != ".dds") {
+			continue;
+		}
+
+		const auto icon_path = icon_path_for_selected_file(path);
+		if (!icon_path || existing.contains(*icon_path) || !hierarchy.file_exists(*icon_path)) {
+			continue;
+		}
+
+		existing.insert(*icon_path);
+		discovered.emplace_back(*icon_path, QString::fromStdString(path.stem().string() + " (" + *icon_path + ")"));
+	}
+
+	beginResetModel();
+	icons = std::move(discovered);
+	endResetModel();
+}
+
 QVariant IconModel::data(const QModelIndex& index, int role) const {
 	switch (role) {
 		case Qt::DecorationRole: {
@@ -195,10 +283,11 @@ QVariant IconModel::data(const QModelIndex& index, int role) const {
 
 			if (icon_cache.contains(string_path)) {
 				return icon_cache.at(string_path)->icon;
-			} else {
-				icon_cache.emplace(string_path, resource_manager.load<QIconResource>(string_path).value());
+			} else if (auto icon = resource_manager.load<QIconResource>(string_path)) {
+				icon_cache.emplace(string_path, *icon);
 				return icon_cache.at(string_path)->icon;
 			}
+			return {};
 		}
 		case Qt::ToolTipRole:
 			return icons[index.row()].second;
@@ -228,6 +317,12 @@ IconView::IconView(QWidget* parent) : QWidget(parent) {
 	layout->setContentsMargins(0, 0, 0, 0);
 	//layout->addWidget(type);
 	layout->addWidget(search);
+
+	QHBoxLayout* folderLayout = new QHBoxLayout;
+	folderLayout->addWidget(folderPath);
+	folderLayout->addWidget(browseFolder);
+	layout->addLayout(folderLayout);
+
 	layout->addWidget(view);
 
 	QHBoxLayout* hlayout = new QHBoxLayout;
@@ -243,9 +338,23 @@ IconView::IconView(QWidget* parent) : QWidget(parent) {
 	type->addItem("Upgrades");
 	type->addItem("Buffs");
 	search->setPlaceholderText("Search Icons");
+	folderPath->setPlaceholderText("Scan folder for .blp/.dds icons");
 
 	//connect(type, &QComboBox::currentTextChanged, filter, &QSortFilterProxyModel::setFilterFixedString);
 	connect(search, &QLineEdit::textEdited, filter, &QSortFilterProxyModel::setFilterFixedString);
+	connect(browseFolder, &QPushButton::clicked, this, [this]() {
+		const QString start = folderPath->text().isEmpty()
+			? QString::fromStdString(hierarchy.map_directory.empty() ? fs::current_path().string() : hierarchy.map_directory.string())
+			: folderPath->text();
+		const QString selected = QFileDialog::getExistingDirectory(this, "Select Icon Folder", start);
+		if (selected.isEmpty()) {
+			return;
+		}
+
+		folderPath->setText(selected);
+		model->addIconsFromFolder(selected.toStdString());
+		filter->invalidate();
+	});
 
 	connect(view->selectionModel(), &QItemSelectionModel::selectionChanged, [&]() {
 		if (!view->currentIndex().isValid()) {
