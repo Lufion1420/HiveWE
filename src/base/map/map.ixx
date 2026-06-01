@@ -248,6 +248,7 @@ export class Map: public QObject {
 			abilities_meta_slk.set_shadow_data("field", "abpy", "buttonpos2");
 			abilities_meta_slk.set_shadow_data("field", "auby", "unbuttonpos2");
 			abilities_meta_slk.set_shadow_data("field", "arpy", "researchbuttonpos2");
+			abilities_meta_slk.set_shadow_data("type", "abuf", "buffList");
 			abilities_meta_slk.build_meta_map();
 
 			abilities_slk.merge(ability_skin_ini, abilities_meta_slk);

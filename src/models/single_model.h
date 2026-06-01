@@ -131,6 +131,7 @@ public:
 	QWidget* create_upgrade_list_editor(QWidget* parent) const;
 	QWidget* create_unit_list_editor(QWidget* parent) const;
 	QWidget* create_ability_list_editor(QWidget* parent) const;
+	QWidget* create_buff_list_editor(QWidget* parent) const;
 	QWidget* create_icon_editor(QWidget* parent) const;
 
 	[[nodiscard]] QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
