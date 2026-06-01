@@ -131,6 +131,7 @@ private:
 	QTreeView* view_for_category(Category category) const;
 	QString category_item_label(Category category) const;
 	void copy_object_entry_to_clipboard(Category category, const std::string& id) const;
+	void copy_selected_object_entry(QTreeView* view, BaseFilter* filter, Category category);
 	void duplicate_object_entry(
 		QTreeView* view,
 		BaseFilter* filter,
@@ -141,6 +142,7 @@ private:
 	);
 	void begin_rename_selected_object();
 	void paste_copied_object();
+	void delete_selected_object_entries(QTreeView* view, BaseFilter* filter, TableModel* table, const QString& name);
 protected:
 	void closeEvent(QCloseEvent* event) override;
 	bool eventFilter(QObject* watched, QEvent* event) override;

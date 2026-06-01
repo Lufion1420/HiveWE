@@ -1131,6 +1131,29 @@ void ObjectEditor::copy_object_entry_to_clipboard(const Category category, const
 	QApplication::clipboard()->setMimeData(mime);
 }
 
+void ObjectEditor::copy_selected_object_entry(QTreeView* view, BaseFilter* filter, const Category category) {
+	if (!view || !filter) {
+		return;
+	}
+
+	QModelIndex index = view->currentIndex();
+	if ((!index.isValid() || !view->selectionModel()) && view->selectionModel() && !view->selectionModel()->selectedRows().isEmpty()) {
+		index = view->selectionModel()->selectedRows().front();
+	}
+	if (!index.isValid()) {
+		return;
+	}
+
+	const auto* tree_item = static_cast<const BaseTreeItem*>(filter->mapToSource(index).internalPointer());
+	if (!tree_item || tree_item->baseCategory || tree_item->subCategory) {
+		return;
+	}
+
+	current_explorer_view = view;
+	current_category = category;
+	copy_object_entry_to_clipboard(category, tree_item->id);
+}
+
 void ObjectEditor::duplicate_object_entry(
 	QTreeView* view,
 	BaseFilter* filter,
@@ -1289,6 +1312,82 @@ void ObjectEditor::begin_rename_selected_object() {
 			line_edit->selectAll();
 		}
 	});
+}
+
+void ObjectEditor::delete_selected_object_entries(QTreeView* view, BaseFilter* filter, TableModel* table, const QString& name) {
+	if (!view || !filter || !table || !view->selectionModel()) {
+		return;
+	}
+
+	std::vector<std::string> ids_to_delete;
+	QStringList labels_to_delete;
+	QModelIndexList selection = view->selectionModel()->selectedRows();
+	if (selection.empty() && view->currentIndex().isValid()) {
+		selection.push_back(view->currentIndex());
+	}
+
+	for (const auto& index : selection) {
+		const auto* tree_item = static_cast<const BaseTreeItem*>(filter->mapToSource(index).internalPointer());
+		if (!tree_item || tree_item->baseCategory || tree_item->subCategory) {
+			continue;
+		}
+
+		if (!table->slk->shadow_data.contains(tree_item->id) || !table->slk->shadow_data.at(tree_item->id).contains("oldid")) {
+			continue;
+		}
+
+		if (std::ranges::find(ids_to_delete, tree_item->id) != ids_to_delete.end()) {
+			continue;
+		}
+
+		ids_to_delete.push_back(tree_item->id);
+		const QString display_name = object_display_name(table, tree_item->id);
+		labels_to_delete.push_back(
+			display_name.isEmpty() ? QString::fromStdString(tree_item->id) : display_name + " (" + QString::fromStdString(tree_item->id) + ")"
+		);
+	}
+
+	if (ids_to_delete.empty()) {
+		return;
+	}
+
+	QDialog confirm(this, Qt::WindowTitleHint | Qt::WindowCloseButtonHint);
+	confirm.setWindowModality(Qt::WindowModality::WindowModal);
+	confirm.setWindowTitle("Remove " + name);
+
+	QVBoxLayout* layout = new QVBoxLayout(&confirm);
+	layout->setContentsMargins(18, 16, 18, 16);
+	layout->setSpacing(12);
+
+	const QString singular_name = name.endsWith("ies") ? name.left(name.size() - 3) + "y" : name.chopped(name.endsWith("s") ? 1 : 0);
+	QLabel* prompt = new QLabel(
+		ids_to_delete.size() == 1 ? "Remove this custom " + singular_name.toLower() + "?" : "Remove these custom " + name.toLower() + "?"
+	);
+	prompt->setWordWrap(true);
+	layout->addWidget(prompt);
+
+	QLabel* details = new QLabel(labels_to_delete.join("\n"));
+	details->setWordWrap(true);
+	layout->addWidget(details);
+
+	QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel);
+	QPushButton* remove_button = buttons->addButton("Remove", QDialogButtonBox::AcceptRole);
+	buttons->button(QDialogButtonBox::Cancel)->setAutoDefault(false);
+	remove_button->setDefault(true);
+	connect(buttons, &QDialogButtonBox::accepted, &confirm, &QDialog::accept);
+	connect(buttons, &QDialogButtonBox::rejected, &confirm, &QDialog::reject);
+	layout->addWidget(buttons);
+
+	if (confirm.exec() != QDialog::Accepted) {
+		return;
+	}
+
+	for (const auto& id : ids_to_delete) {
+		if (current_details_id == id) {
+			reset_details_panel();
+		}
+		table->deleteRow(id);
+	}
 }
 
 void ObjectEditor::paste_copied_object() {
@@ -2160,6 +2259,14 @@ void ObjectEditor::addTypeTreeView(
 		return static_cast<const BaseTreeItem*>(filter->mapToSource(current).internalPointer());
 	};
 
+	QShortcut* delete_shortcut = new QShortcut(QKeySequence(Qt::Key_Delete), view);
+	delete_shortcut->setContext(Qt::WidgetWithChildrenShortcut);
+	connect(delete_shortcut, &QShortcut::activated, this, [this, view, filter, table, name, category]() {
+		current_explorer_view = view;
+		current_category = category;
+		delete_selected_object_entries(view, filter, table, name);
+	});
+
 	connect(view, &QTreeView::customContextMenuRequested, [=, this](const QPoint& pos) {
 		QMenu menu;
 		QAction* addAction = menu.addAction("Add " + name);
@@ -2246,13 +2353,8 @@ void ObjectEditor::addTypeTreeView(
 			}
 		}
 
-		connect(copyAction, &QAction::triggered, [this, view, current_object_item, category]() {
-			const auto* tree_item = current_object_item();
-			if (!tree_item || tree_item->baseCategory || tree_item->subCategory) {
-				return;
-			}
-
-			copy_object_entry_to_clipboard(category, tree_item->id);
+		connect(copyAction, &QAction::triggered, [this, view, filter, category]() {
+			copy_selected_object_entry(view, filter, category);
 		});
 		connect(duplicateAction, &QAction::triggered, [this, view, current_object_item, category, filter, treeModel, table, name]() {
 			const auto* tree_item = current_object_item();
@@ -2427,29 +2529,7 @@ void ObjectEditor::addTypeTreeView(
 		});
 
 		connect(removeAction, &QAction::triggered, [=, this]() {
-			std::vector<std::string> ids_to_delete;
-			for (const auto& i : selection) {
-				BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(filter->mapToSource(i).internalPointer());
-
-				// skip folders/categories
-				if (treeItem->baseCategory || treeItem->subCategory) {
-					continue;
-				}
-
-				// skip base game objects (only delete custom objects)
-				if (!table->slk->shadow_data.contains(treeItem->id) || !table->slk->shadow_data.at(treeItem->id).contains("oldid")) {
-					continue;
-				}
-
-				ids_to_delete.push_back(treeItem->id);
-
-				if (current_details_id == treeItem->id) {
-					reset_details_panel();
-				}
-			}
-			for (const auto& i : ids_to_delete) {
-				table->deleteRow(i);
-			}
+			delete_selected_object_entries(view, filter, table, name);
 		});
 
 		menu.exec(view->mapToGlobal(pos));
@@ -2843,84 +2923,65 @@ void ObjectEditor::keyPressEvent(QKeyEvent* event) {
 		}
 	}
 
-	if (QWidget* focus_widget = QApplication::focusWidget(); !is_text_input_widget(focus_widget)) {
-		if (event->matches(QKeySequence::Copy)) {
-			if (current_explorer_view && is_focus_within(focus_widget, current_explorer_view)) {
-				if (const auto* filter = qobject_cast<BaseFilter*>(current_explorer_view->model())) {
-					if (const auto* tree_item =
-							static_cast<const BaseTreeItem*>(filter->mapToSource(current_explorer_view->currentIndex()).internalPointer());
-						tree_item && !tree_item->baseCategory && !tree_item->subCategory) {
-						copy_object_entry_to_clipboard(current_category, tree_item->id);
-						event->accept();
-						return;
-					}
-				}
-			}
-		} else if (event->matches(QKeySequence::Paste)) {
-			if (current_explorer_view && is_focus_within(focus_widget, current_explorer_view)) {
-				paste_copied_object();
-				event->accept();
-				return;
-			}
-		} else if (event->key() == Qt::Key_F2) {
-			if (current_explorer_view && is_focus_within(focus_widget, current_explorer_view)) {
-				begin_rename_selected_object();
-				event->accept();
-				return;
-			}
-		}
-	}
-
 	QMainWindow::keyPressEvent(event);
 }
 
 bool ObjectEditor::eventFilter(QObject* watched, QEvent* event) {
-	if (event->type() == QEvent::KeyPress) {
+	if (event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride) {
 		auto* key_event = static_cast<QKeyEvent*>(event);
 		QWidget* focus_widget = QApplication::focusWidget();
 		if (is_text_input_widget(focus_widget)) {
 			return QMainWindow::eventFilter(watched, event);
 		}
 
-		const auto handle_tree_key = [this, focus_widget, key_event](QTreeView* view) {
-			if (!view || !is_focus_within(focus_widget, view)) {
-				return false;
-			}
+		const bool copy_key = key_event->matches(QKeySequence::Copy)
+						   || (key_event->key() == Qt::Key_C && key_event->modifiers().testFlag(Qt::ControlModifier));
+		const bool paste_key = key_event->matches(QKeySequence::Paste)
+							|| (key_event->key() == Qt::Key_V && key_event->modifiers().testFlag(Qt::ControlModifier));
+		const bool browser_key = copy_key || paste_key || key_event->key() == Qt::Key_Delete || key_event->key() == Qt::Key_F2;
 
-			current_explorer_view = view;
-			current_category =
-				view == unit_explorer		 ? Category::unit
-				: view == item_explorer		 ? Category::item
-				: view == doodad_explorer	 ? Category::doodad
-				: view == destructible_explorer ? Category::destructible
-				: view == ability_explorer	 ? Category::ability
-				: view == upgrade_explorer	 ? Category::upgrade
-										 : Category::buff;
-
-			if (key_event->matches(QKeySequence::Copy)) {
-				if (const auto* filter = qobject_cast<BaseFilter*>(view->model())) {
-					if (const auto* tree_item = static_cast<const BaseTreeItem*>(filter->mapToSource(view->currentIndex()).internalPointer());
-						tree_item && !tree_item->baseCategory && !tree_item->subCategory) {
-						copy_object_entry_to_clipboard(current_category, tree_item->id);
-						return true;
-					}
-				}
-			} else if (key_event->matches(QKeySequence::Paste)) {
-				paste_copied_object();
-				return true;
-			} else if (key_event->key() == Qt::Key_F2) {
-				begin_rename_selected_object();
-				return true;
-			}
-
-			return false;
-		};
-
-		if (handle_tree_key(unit_explorer) || handle_tree_key(item_explorer) || handle_tree_key(doodad_explorer)
-			|| handle_tree_key(destructible_explorer) || handle_tree_key(ability_explorer) || handle_tree_key(upgrade_explorer)
-			|| handle_tree_key(buff_explorer)) {
+		if (event->type() == QEvent::ShortcutOverride && browser_key && explorer_area && focus_widget
+			&& is_focus_within(focus_widget, explorer_area->currentDockWidget())) {
 			key_event->accept();
 			return true;
+		}
+
+		const auto category_for_view = [this](QTreeView* view) {
+			return view == unit_explorer		 ? Category::unit
+				 : view == item_explorer		 ? Category::item
+				 : view == doodad_explorer		 ? Category::doodad
+				 : view == destructible_explorer ? Category::destructible
+				 : view == ability_explorer		 ? Category::ability
+				 : view == upgrade_explorer		 ? Category::upgrade
+												 : Category::buff;
+		};
+
+		if (browser_key && explorer_area && focus_widget && is_focus_within(focus_widget, explorer_area->currentDockWidget())) {
+			if (QTreeView* view = explorer_area->currentDockWidget()->findChild<QTreeView*>()) {
+				const Category category = category_for_view(view);
+				current_explorer_view = view;
+				current_category = category;
+
+				if (copy_key) {
+					if (auto* filter = filter_for_category(category)) {
+						copy_selected_object_entry(view, filter, category);
+						key_event->accept();
+						return true;
+					}
+				} else if (paste_key) {
+					paste_copied_object();
+					key_event->accept();
+					return true;
+				} else if (key_event->key() == Qt::Key_Delete) {
+					delete_selected_object_entries(view, filter_for_category(category), table_for_category(category), category_label(category));
+					key_event->accept();
+					return true;
+				} else if (key_event->key() == Qt::Key_F2) {
+					begin_rename_selected_object();
+					key_event->accept();
+					return true;
+				}
+			}
 		}
 
 		if (current_details_view && is_focus_within(focus_widget, current_details_view)) {
