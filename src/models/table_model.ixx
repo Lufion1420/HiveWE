@@ -235,21 +235,7 @@ export class TableModel : public QAbstractTableModel {
 
 		switch (role) {
 			case Qt::EditRole: {
-				const std::string& id = slk->index_to_row.at(index.row());
-				const std::string& field = slk->index_to_column.at(index.column());
-				const std::string_view meta_id = slk->field_to_meta_id(*meta_slk, field, id).value();
-				const std::string_view type = meta_slk->data<std::string_view>("type", meta_id);
 				std::string stored_value = value.toString().toStdString();
-
-				if ((type == "string" || type == "stringList") && trigger_strings) {
-					std::string trigger_key = std::string(slk->data<std::string_view>(field, id));
-					if (trigger_key.starts_with("TRIGSTR_") || (trigger_key.empty() && !stored_value.empty())) {
-						trigger_strings->set_string(trigger_key, stored_value);
-						if (!trigger_key.empty()) {
-							stored_value = trigger_key;
-						}
-					}
-				}
 
 				slk->set_shadow_data(index.column(), index.row(), stored_value);
 				emit dataChanged(index, index, { Qt::DisplayRole, Qt::EditRole, Qt::DecorationRole });
