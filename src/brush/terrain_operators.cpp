@@ -547,7 +547,13 @@ void CellOperator::apply_begin(const TerrainRect& area, int center_x, int center
 	auto& terrain = map->terrain;
 	const size_t center_idx = terrain.ci(center_x, center_y);
 
-	if (water_above_ground(center_idx)) {
+	// Reuse the existing water level only when the center corner actually has visible water,
+	// so the stroke extends an existing body of water at its current height. `corner_water_height`
+	// retains a value (map default, or 0 left behind when water was removed) even for corners with
+	// no water, so the `corner_water` flag must be checked too -- otherwise that stale height is
+	// treated as "existing water" and, on terrain that sits below it, the new water snaps up to that
+	// stale level instead of being placed just above the ground.
+	if (terrain.corner_water[center_idx] && water_above_ground(center_idx)) {
 		water_height = terrain.corner_water_height[center_idx];
 	} else {
 		int layer_height = terrain.corner_layer_height[center_idx];
@@ -604,16 +610,72 @@ PathingRect CellOperator::apply(const TerrainRect& area, double frame_delta) {
 		}
 	}
 
+	if (cell_operation_type == cell_operation::add_water) {
+		// Flatten the dry shoreline ring around the painted water.
+		//
+		// A water quad is drawn whenever *any* of its four corners has the water flag, and the
+		// water mesh uses each corner's stored `corner_water_height` for that vertex's height
+		// (water.vert). The corners just outside the painted region stay dry, but they still
+		// contribute their stored height to the edge quads. Those dry corners keep whatever height
+		// they happened to hold (a map default, or 0 left behind by a previous Remove Water), which
+		// on low terrain sits well above the freshly placed water -- so the edge quad spikes upward
+		// into a vertical "waterfall" wall instead of meeting the shore.
+		//
+		// Giving every dry corner that borders water the height of its (highest) watered neighbour
+		// keeps the surface flat across the shoreline; the water then fades to transparent where the
+		// ground rises through it, which is the normal shore look. This is also written into the
+		// stored data so the map renders correctly in-game and in other editors, not just here.
+		const int x0 = std::max(area.x() - 1, 0);
+		const int y0 = std::max(area.y() - 1, 0);
+		const int x1 = std::min(area.x() + area.width() + 1, width);
+		const int y1 = std::min(area.y() + area.height() + 1, height);
+		for (int i = x0; i < x1; i++) {
+			for (int j = y0; j < y1; j++) {
+				const size_t id = terrain.ci(i, j);
+				if (terrain.corner_water[id]) {
+					continue;
+				}
+
+				bool borders_water = false;
+				float edge_height = 0.f;
+				for (int di = -1; di <= 1; di++) {
+					for (int dj = -1; dj <= 1; dj++) {
+						const int ni = i + di;
+						const int nj = j + dj;
+						if (ni < 0 || nj < 0 || ni >= width || nj >= height) {
+							continue;
+						}
+						const size_t nid = terrain.ci(ni, nj);
+						if (terrain.corner_water[nid]) {
+							edge_height = borders_water ? std::max(edge_height, terrain.corner_water_height[nid])
+														: terrain.corner_water_height[nid];
+							borders_water = true;
+						}
+					}
+				}
+
+				if (borders_water) {
+					terrain.corner_water_height[id] = edge_height;
+				}
+			}
+		}
+	}
+
 	// finally, re-render the water if we changed it
 	if (edits_water) {
 		terrain.update_water(area.adjusted(0, 0, 1, 1).intersected({0, 0, width, height}));
 	}
 
+	// The shoreline-flattening pass above touches the dry ring one corner outside `area`, so widen
+	// the reported region by one corner to keep the undo snapshot (and pathing refresh) in sync.
+	const TerrainRect modified =
+		edits_water ? area.adjusted(-1, -1, 1, 1).intersected({0, 0, width, height}) : area;
+
 	// return modified area (in pathing resolution)
 	if (brush->brush_type == Brush::Type::corner) {
-		return area.to_pathing().adjusted(-2, -2, -2, -2);
+		return modified.to_pathing().adjusted(-2, -2, -2, -2);
 	} else {
-		return area.to_pathing();
+		return modified.to_pathing();
 	}
 }
 
