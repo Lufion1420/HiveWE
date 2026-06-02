@@ -270,7 +270,7 @@ void SingleModel::buildMapping() {
 		const std::string_view use_specific = meta_slk->data<std::string_view>("usespecific", key);
 		if (!use_specific.empty()) {
 			std::string_view id_to_check = id;
-			if (slk->shadow_data.contains("id") && slk->shadow_data.at(id).contains("oldid")) {
+			if (slk->shadow_data.contains(id) && slk->shadow_data.at(id).contains("oldid")) {
 				id_to_check = slk->shadow_data.at(id).at("oldid");
 			}
 
@@ -284,7 +284,7 @@ void SingleModel::buildMapping() {
 		const std::string_view not_specific = meta_slk->data<std::string_view>("notspecific", key);
 		if (!not_specific.empty()) {
 			std::string_view id_to_check = id;
-			if (slk->shadow_data.contains("id") && slk->shadow_data.at(id).contains("oldid")) {
+			if (slk->shadow_data.contains(id) && slk->shadow_data.at(id).contains("oldid")) {
 				id_to_check = slk->shadow_data.at(id).at("oldid");
 			}
 
@@ -309,6 +309,7 @@ void SingleModel::buildMapping() {
 			} else if (slk->column_headers.contains("maxlevel")) {
 				iterations = slk->data<int>("maxlevel", id);
 			}
+			iterations = std::clamp(iterations, 0, 64);
 
 			for (int i = 0; i < iterations; i++) {
 				std::string new_field_name;

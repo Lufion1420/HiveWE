@@ -34,6 +34,15 @@ export inline TableModel* buff_table;
 export class TableModel : public QAbstractTableModel {
 	std::shared_ptr<QIconResource> invalid_icon;
 
+	std::string_view field_type(const std::string_view id, const std::string_view field) const {
+		const auto meta_id = slk->field_to_meta_id(*meta_slk, field, id);
+		if (!meta_id) {
+			return {};
+		}
+
+		return meta_slk->data<std::string_view>("type", *meta_id);
+	}
+
   public:
 	slk::SLK* meta_slk;
 	slk::SLK* slk;
@@ -67,8 +76,11 @@ export class TableModel : public QAbstractTableModel {
 		switch (role) {
 			case Qt::DisplayRole: {
 				const std::string_view field_data = slk->data<std::string_view>(field, id);
-				const std::string_view meta_id = slk->field_to_meta_id(*meta_slk, field, id).value();
-				const std::string_view type = meta_slk->data<std::string_view>("type", meta_id);
+				const std::string_view type = field_type(id, field);
+				if (type.empty()) {
+					return QString::fromUtf8(field_data);
+				}
+
 				if (type == "string" || type == "stringList" || type == "hotkey") {
 					QString qt_string;
 					if (field_data.starts_with("TRIGSTR")) {
@@ -211,8 +223,7 @@ export class TableModel : public QAbstractTableModel {
 			case Qt::EditRole:
 				return QString::fromUtf8(slk->data<std::string_view>(field, id));
 			case Qt::CheckStateRole: {
-				const std::string_view meta_id = slk->field_to_meta_id(*meta_slk, field, id).value();
-				const std::string_view type = meta_slk->data<std::string_view>("type", meta_id);
+				const std::string_view type = field_type(id, field);
 				if (type != "bool") {
 					return {};
 				}
@@ -220,8 +231,7 @@ export class TableModel : public QAbstractTableModel {
 				return (slk->data<std::string_view>(field, id) == "1") ? Qt::Checked : Qt::Unchecked;
 			}
 			case Qt::DecorationRole:
-				const std::string_view meta_id = slk->field_to_meta_id(*meta_slk, field, id).value();
-				const std::string_view type = meta_slk->data<std::string_view>("type", meta_id);
+				const std::string_view type = field_type(id, field);
 				if (type != "icon") {
 					return {};
 				}
@@ -263,8 +273,7 @@ export class TableModel : public QAbstractTableModel {
 			case Qt::CheckStateRole: {
 				const std::string& id = slk->index_to_row.at(index.row());
 				const std::string& field = slk->index_to_column.at(index.column());
-				const std::string_view meta_id = slk->field_to_meta_id(*meta_slk, field, id).value();
-				const std::string_view type = meta_slk->data<std::string_view>("type", meta_id);
+				const std::string_view type = field_type(id, field);
 				if (type != "bool") {
 					return false;
 				}
@@ -298,8 +307,7 @@ export class TableModel : public QAbstractTableModel {
 
 		const std::string_view id = slk->index_to_row.at(index.row());
 		const std::string_view field = slk->index_to_column.at(index.column());
-		const std::string_view meta_id = slk->field_to_meta_id(*meta_slk, field, id).value();
-		const std::string_view type = meta_slk->data<std::string_view>("type", meta_id);
+		const std::string_view type = field_type(id, field);
 		if (type == "bool") {
 			flags |= Qt::ItemIsUserCheckable;
 		}

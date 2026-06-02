@@ -40,12 +40,14 @@ export class DoodadListModel: public BaseListModel {
 			case Qt::UserRole:
 				return QString::fromStdString("doodads/" + doodads_slk.data("category", index.row()) + "/" + doodads_slk.index_to_row.at(index.row()));
 			case Qt::DecorationRole: {
-				const char category = doodads_slk.data<std::string_view>("category", index.row()).front();
-				if (icons.contains(category)) {
-					return icons.at(category)->icon;
-				} else {
-					return {};
+				const std::string_view category = doodads_slk.data<std::string_view>("category", index.row());
+				if (!category.empty()) {
+					if (const auto found = icons.find(category.front()); found != icons.end()) {
+						return found->second->icon;
+					}
 				}
+
+				return {};
 			}
 			default:
 				return BaseListModel::data(index, role);

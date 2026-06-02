@@ -239,8 +239,14 @@ namespace slk {
 			// Sometimes only the base ID is used in `useSpecific` and sometimes only the alias.
 
 			// Safety: Only abilities should enter this block and they all have an alias
-			const auto alias = data_single_asset_type("code", id).value();
-			const auto found_alias = meta_slk.meta_map.find(std::string(stripped_field_name).append(alias));
+			const auto alias = data_single_asset_type("code", id);
+			if (!alias) {
+				return {};
+			}
+
+			std::string alias_field(stripped_field_name);
+			alias_field.append(alias->data(), alias->size());
+			const auto found_alias = meta_slk.meta_map.find(alias_field);
 			if (found_alias != meta_slk.meta_map.end()) {
 				return found_alias->second;
 			}
@@ -281,11 +287,11 @@ namespace slk {
 			} else if constexpr (std::is_same<T, std::string>()) {
 				return std::string(*data);
 			} else if constexpr (std::is_same<T, bool>()) {
-				int output;
+				int output = 0;
 				std::from_chars(data->data(), data->data() + data->size(), output);
 				return output != 0;
 			} else if constexpr (std::is_floating_point_v<T> || std::is_integral_v<T>) {
-				T output;
+				T output {};
 				std::from_chars(data->data(), data->data() + data->size(), output);
 				return output;
 			}

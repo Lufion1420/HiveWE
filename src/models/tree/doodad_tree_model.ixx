@@ -25,20 +25,37 @@ export class DoodadTreeModel : public BaseTreeModel {
 	std::unordered_map<char, Category> categories;
 	BaseTreeItem* custom_root = nullptr;
 
+	BaseTreeItem* fallbackFolderParent(const bool is_custom) const {
+		return is_custom ? categories.begin()->second.custom_item : categories.begin()->second.item;
+	}
+
+	QVariant categoryIcon(const std::string_view category) const {
+		if (category.empty()) {
+			return {};
+		}
+
+		if (const auto found = categories.find(category.front()); found != categories.end()) {
+			return found->second.icon->icon;
+		}
+
+		return {};
+	}
+
 	BaseTreeItem* getFolderParent(const std::string& id) const override {
 		const std::string_view category = doodads_slk.data<std::string_view>("category", id);
 		const bool is_custom = doodads_slk.shadow_data.contains(id) && doodads_slk.shadow_data.at(id).contains("oldid");
 
 		if (category.empty()) {
 			std::println("Doodad with id: {} has no category set. Set a category!", id);
-			return is_custom ? categories.begin()->second.custom_item : categories.begin()->second.item;
+			return fallbackFolderParent(is_custom);
 		}
 
 		if (const auto found = categories.find(category.front()); found != categories.end()) {
 			return is_custom ? found->second.custom_item : found->second.item;
 		}
 
-		return is_custom ? categories.begin()->second.custom_item : categories.begin()->second.item;
+		std::println("Doodad with id: {} has unknown category `{}`. Set a valid category!", id, category);
+		return fallbackFolderParent(is_custom);
 	}
 
   public:
@@ -66,7 +83,7 @@ export class DoodadTreeModel : public BaseTreeModel {
 				if (item->baseCategory || item->subCategory) {
 					return folderIcon;
 				}
-				return categories.at(doodads_slk.data<std::string_view>("category", item->id).front()).icon->icon;
+				return categoryIcon(doodads_slk.data<std::string_view>("category", item->id));
 			default:
 				return BaseTreeModel::data(index, role);
 		}
