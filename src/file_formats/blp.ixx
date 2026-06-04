@@ -6,7 +6,7 @@ import BinaryReader;
 import <turbojpeg.h>;
 
 namespace blp {
-	export u8* load(BinaryReader& reader, int& width, int& height, int& channels) {
+	export u8* load(BinaryReader& reader, int& width, int& height, int& channels, const bool force_jpeg_alpha_opaque = false) {
 		const std::string magic_number = reader.read_string(4);
 		if (magic_number != "BLP1") {
 			std::print("Wrong magic number, should be BLP1, is {}\n", magic_number);
@@ -43,6 +43,12 @@ namespace blp {
 				std::print("Error loading JPEG data from BLP {}\n", tjGetErrorStr());
 			}
 			tjDestroy(handle);
+
+			if (force_jpeg_alpha_opaque) {
+				for (int i = 0; i < width * height; i++) {
+					data[i * 4 + 3] = 255;
+				}
+			}
 		} else if (content_type == 1) { // direct
 			auto header = reader.read_vector<u32>(256);
 
