@@ -466,7 +466,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	minimap_visible->setIcon(QIcon("data/icons/ribbon/minimap.png"));
 	minimap_visible->setText("Minimap");
 	minimap_visible->setCheckable(true);
-	minimap_visible->setChecked(true);
+	minimap_visible->setChecked(false);
 	set_tooltip(minimap_visible, "Show or hide the minimap.");
 
 	reset_camera->setIcon(QIcon("data/icons/ribbon/reset.png"));

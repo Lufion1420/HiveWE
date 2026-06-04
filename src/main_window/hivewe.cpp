@@ -430,7 +430,8 @@ void HiveWE::setup_palette_sidebar() {
 	minimap->setFixedHeight(180);
 	minimap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 	minimap_layout->addWidget(minimap);
-	minimap->show();
+	sidebar_minimap_frame->setVisible(ui->ribbon->minimap_visible->isChecked());
+	minimap->setVisible(ui->ribbon->minimap_visible->isChecked());
 
 	sidebar_preview_frame = new QFrame(sidebar_root);
 	sidebar_preview_frame->setProperty("sidebarUtilityPanel", true);
