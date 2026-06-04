@@ -55,6 +55,9 @@ class DoodadBrush: public Brush {
 	bool dragged = false;
 	glm::vec3 drag_start;
 	std::vector<glm::vec2> drag_offsets;
+	float placement_drag_elapsed = 0.f;
+	glm::vec3 last_placement_position = glm::vec3(0.f);
+	bool has_last_placement_position = false;
 
 	enum class Action {
 		none,

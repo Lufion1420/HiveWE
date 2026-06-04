@@ -21,6 +21,14 @@ import <glm/glm.hpp>;
 import <glm/gtc/matrix_transform.hpp>;
 import <glm/gtc/quaternion.hpp>;
 
+namespace {
+constexpr float doodad_drag_place_delay = 0.22f;
+constexpr float doodad_drag_place_distance = 0.75f;
+constexpr float doodad_selection_min_scale = 0.75f;
+constexpr float doodad_selection_scale_padding = 1.25f;
+constexpr glm::vec3 doodad_selection_tint = {0.55f, 1.35f, 0.65f};
+}
+
 DoodadBrush::DoodadBrush() : Brush() {
 	position_granularity = 2.f;
 	size_granularity = 2;
@@ -226,6 +234,11 @@ void DoodadBrush::key_release_event(QKeyEvent* event) {
 }
 
 void DoodadBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
+	if (event->button() == Qt::LeftButton && mode == Mode::placement) {
+		placement_drag_elapsed = 0.f;
+		has_last_placement_position = false;
+	}
+
 	// The mouse.y check is needed as sometimes it is negative for unknown reasons
 	if (event->button() == Qt::LeftButton && input_handler.mouse.y > 0.f) {
 		if (mode == Mode::selection) {
@@ -277,6 +290,22 @@ void DoodadBrush::mouse_press_event(QMouseEvent* event, double frame_delta) {
 }
 
 void DoodadBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
+	if (event->buttons() == Qt::LeftButton && mode == Mode::placement) {
+		placement_drag_elapsed += static_cast<float>(frame_delta);
+		if (placement_drag_elapsed >= doodad_drag_place_delay && (can_place() || event->modifiers() & Qt::ShiftModifier)) {
+			const glm::vec3 current_position = glm::vec3(get_position(), 0.f);
+			const bool moved_enough =
+				!has_last_placement_position
+				|| glm::distance(glm::vec2(current_position), glm::vec2(last_placement_position)) >= doodad_drag_place_distance;
+
+			if (moved_enough) {
+				apply(frame_delta);
+				placement_drag_elapsed = 0.f;
+			}
+		}
+		return;
+	}
+
 	Brush::mouse_move_event(event, frame_delta);
 
 	if (event->buttons() == Qt::LeftButton) {
@@ -453,6 +482,8 @@ void DoodadBrush::apply(double frame_delta) {
 
 	doodad.creation_number = ++Doodad::auto_increment;
 	map->doodads.add_doodad(doodad);
+	last_placement_position = doodad.position;
+	has_last_placement_position = true;
 
 	doodad_undo->doodads.push_back(doodad);
 
@@ -534,6 +565,9 @@ void DoodadBrush::render_selection() const {
 		if (selection_scale < 0.1f) { // Todo hack, what is the correct approach?
 			selection_scale = i->mesh->mdx->extent.bounds_radius / 128.f;
 		}
+		selection_scale = std::max(selection_scale * doodad_selection_scale_padding, doodad_selection_min_scale);
+
+		map->render_manager.queue_render(*i->mesh, i->skeleton, doodad_selection_tint, 0);
 
 		glm::mat4 model(1.f);
 		model = glm::translate(model, i->position - glm::vec3(selection_scale * 0.5f, selection_scale * 0.5f, 0.f));
