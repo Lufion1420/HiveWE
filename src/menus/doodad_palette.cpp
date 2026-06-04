@@ -611,8 +611,8 @@ void DoodadPalette::update_selection_info() {
 		const Doodad& doodad = **brush.selections.begin();
 		emit preview_doodad_changed(QString::fromStdString(doodad.id), doodad.variation, QString::fromStdString(doodad.id));
 
-		const float first_relative_height =
-			doodad.position.z - map->terrain.interpolated_height(doodad.position.x, doodad.position.y, true);
+		const float first_absolute_height = doodad.final_position(map->terrain).z;
+		const float first_relative_height = first_absolute_height - map->terrain.interpolated_height(doodad.position.x, doodad.position.y, true);
 		bool same_object = true;
 		bool same_x = true;
 		bool same_y = true;
@@ -621,14 +621,15 @@ void DoodadPalette::update_selection_info() {
 		bool same_absolute_height = true;
 		bool same_relative_height = true;
 		for (const auto& i : brush.selections) {
-			const float other_relative_height = i->position.z - map->terrain.interpolated_height(i->position.x, i->position.y, true);
+			const float other_absolute_height = i->final_position(map->terrain).z;
+			const float other_relative_height = other_absolute_height - map->terrain.interpolated_height(i->position.x, i->position.y, true);
 
 			same_object = same_object && i->id == doodad.id;
 			same_x = same_x && i->scale.x == doodad.scale.x;
 			same_y = same_y && i->scale.y == doodad.scale.y;
 			same_z = same_z && i->scale.z == doodad.scale.z;
 			same_angle = same_angle && i->angle == doodad.angle;
-			same_absolute_height = same_absolute_height && std::abs(i->position.z - doodad.position.z) < 0.001f;
+			same_absolute_height = same_absolute_height && std::abs(other_absolute_height - first_absolute_height) < 0.001f;
 			same_relative_height = same_relative_height && std::abs(other_relative_height - first_relative_height) < 0.001f;
 		}
 
@@ -647,8 +648,8 @@ void DoodadPalette::update_selection_info() {
 
 		if (same_absolute_height) {
 			const auto text = absolute_height->text();
-			if (text.isEmpty() || text == "Various" || text.toFloat() != doodad.position.z) {
-				absolute_height->setText(toString(doodad.position.z));
+			if (text.isEmpty() || text == "Various" || text.toFloat() != first_absolute_height) {
+				absolute_height->setText(toString(first_absolute_height));
 			}
 		} else {
 			absolute_height->setText("Various");
@@ -714,7 +715,7 @@ void DoodadPalette::update_relative_change(const QString& text) {
 void DoodadPalette::set_group_height_minimum() {
 	float minimum = std::numeric_limits<float>::max();
 	for (auto& i : brush.selections) {
-		minimum = std::min(minimum, i->position.z);
+		minimum = std::min(minimum, i->final_position(map->terrain).z);
 	}
 
 	brush.set_selection_absolute_height(minimum);
@@ -723,15 +724,15 @@ void DoodadPalette::set_group_height_minimum() {
 void DoodadPalette::set_group_height_average() {
 	float average = 0.f;
 	for (auto& i : brush.selections) {
-		average += i->position.z;
+		average += i->final_position(map->terrain).z;
 	}
 	brush.set_selection_absolute_height(average / brush.selections.size());
 }
 
 void DoodadPalette::set_group_height_maximum() {
-	float maximum = std::numeric_limits<float>::min();
+	float maximum = std::numeric_limits<float>::lowest();
 	for (auto& i : brush.selections) {
-		maximum = std::max(maximum, i->position.z);
+		maximum = std::max(maximum, i->final_position(map->terrain).z);
 	}
 
 	brush.set_selection_absolute_height(maximum);

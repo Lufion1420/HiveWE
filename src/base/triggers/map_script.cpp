@@ -307,7 +307,7 @@ void generate_destructables(
 					script.four_cc(i.id),
 					i.position.x * 128.f + terrain.offset.x,
 					i.position.y * 128.f + terrain.offset.y,
-					i.position.z * 128.f,
+					i.final_position(terrain).z * 128.f,
 					glm::degrees(i.angle),
 					i.scale.x,
 					i.variation,

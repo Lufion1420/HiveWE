@@ -540,7 +540,7 @@ void TerrainBrush::apply(double frame_delta) {
 
 		if (change_doodad_heights) {
 			for (auto&& i : map->doodads.doodads) {
-				if (object_area.contains(i.position.x, i.position.y)) {
+				if (!i.fixed_z && object_area.contains(i.position.x, i.position.y)) {
 					if (std::find_if(
 							pre_change_doodads.begin(),
 							pre_change_doodads.end(),
@@ -551,7 +551,7 @@ void TerrainBrush::apply(double frame_delta) {
 						== pre_change_doodads.end()) {
 						pre_change_doodads.push_back(i);
 					}
-					i.position.z = map->terrain.interpolated_height(i.position.x, i.position.y, true);
+					i.snap_to_terrain(map->terrain);
 					i.update(map->terrain);
 					post_change_doodads[i.creation_number] = i;
 				}

@@ -152,7 +152,7 @@ void DoodadBrush::key_press_event(QKeyEvent* event) {
 			i->position.x += x_displacement;
 			i->position.y += y_displacement;
 			if (!lock_doodad_z) {
-				i->position.z = map->terrain.interpolated_height(i->position.x, i->position.y, true);
+				i->snap_to_terrain(map->terrain);
 			}
 			i->update(map->terrain);
 		}
@@ -177,7 +177,7 @@ void DoodadBrush::key_press_event(QKeyEvent* event) {
 					start_action(Action::move);
 				}
 				for (const auto& i : selections) {
-					i->position.z += 0.1f;
+					i->offset_height(map->terrain, 0.1f);
 					i->update(map->terrain);
 				}
 				emit position_changed();
@@ -187,7 +187,7 @@ void DoodadBrush::key_press_event(QKeyEvent* event) {
 					start_action(Action::move);
 				}
 				for (const auto& i : selections) {
-					i->position.z -= 0.1f;
+					i->offset_height(map->terrain, -0.1f);
 					i->update(map->terrain);
 				}
 				emit position_changed();
@@ -338,7 +338,7 @@ void DoodadBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 				for (const auto& doodad : selections) {
 					doodad->position += offset;
 					if (!lock_doodad_z) {
-						doodad->position.z = map->terrain.interpolated_height(doodad->position.x, doodad->position.y, true);
+						doodad->snap_to_terrain(map->terrain);
 					}
 					doodad->update(map->terrain);
 				}
@@ -456,6 +456,7 @@ void DoodadBrush::place_clipboard() {
 			i.position.z
 		);
 		if (!lock_doodad_z) {
+			new_doodad.fixed_z = false;
 			final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true);
 		}
 
@@ -481,6 +482,7 @@ void DoodadBrush::apply(double frame_delta) {
 	}
 
 	doodad.creation_number = ++Doodad::auto_increment;
+	doodad.state = state;
 	map->doodads.add_doodad(doodad);
 	last_placement_position = doodad.position;
 	has_last_placement_position = true;
@@ -536,6 +538,7 @@ void DoodadBrush::render_brush() {
 	final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, false);
 
 	doodad.position = final_position;
+	doodad.fixed_z = false;
 	doodad.update(map->terrain);
 	doodad.skeleton.update(0.016f);
 	map->render_manager.queue_render(*doodad.mesh, doodad.skeleton, doodad.color, 0);
@@ -570,7 +573,7 @@ void DoodadBrush::render_selection() const {
 		map->render_manager.queue_render(*i->mesh, i->skeleton, doodad_selection_tint, 0);
 
 		glm::mat4 model(1.f);
-		model = glm::translate(model, i->position - glm::vec3(selection_scale * 0.5f, selection_scale * 0.5f, 0.f));
+		model = glm::translate(model, i->final_position(map->terrain) - glm::vec3(selection_scale * 0.5f, selection_scale * 0.5f, 0.f));
 		model = glm::scale(model, glm::vec3(selection_scale));
 
 		model = camera.projection_view * model;
@@ -601,15 +604,18 @@ void DoodadBrush::render_clipboard() {
 			i.position.z
 		);
 
+		const auto previous_position = i.position;
+		const bool previous_fixed_z = i.fixed_z;
 		if (!lock_doodad_z) {
+			i.fixed_z = false;
 			final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true);
 		}
 
-		const auto previous_position = i.position;
 		i.position = final_position;
 		i.update(map->terrain);
 		i.skeleton.update(0.016f);
 		i.position = previous_position;
+		i.fixed_z = previous_fixed_z;
 
 		map->render_manager.queue_render(*i.mesh, i.skeleton, glm::vec3(1.f), 0);
 	}
@@ -725,7 +731,7 @@ void DoodadBrush::set_selection_angle(const float angle) {
 void DoodadBrush::set_selection_absolute_height(const float height) {
 	start_action(Action::move);
 	for (auto& i : selections) {
-		i->position.z = height;
+		i->set_absolute_height(height);
 		i->update(map->terrain);
 	}
 	end_action();
@@ -734,7 +740,7 @@ void DoodadBrush::set_selection_absolute_height(const float height) {
 void DoodadBrush::set_selection_relative_height(const float height) {
 	start_action(Action::move);
 	for (auto& i : selections) {
-		i->position.z = map->terrain.interpolated_height(i->position.x, i->position.y, true) + height;
+		i->set_relative_height(map->terrain, height);
 		i->update(map->terrain);
 	}
 	end_action();

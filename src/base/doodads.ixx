@@ -86,7 +86,9 @@ export class Doodads {
 				i.skin_id = i.id;
 			}
 
-			i.state = static_cast<Doodad::State>(reader.read<uint8_t>());
+			const uint8_t flags = reader.read<uint8_t>();
+			i.state = Doodad::state_from_flags(flags);
+			i.fixed_z = flags & Doodad::fixed_z_flag;
 			i.life = reader.read<uint8_t>();
 
 			if (version >= 8) {
@@ -129,13 +131,13 @@ export class Doodads {
 		for (auto&& i : doodads) {
 			writer.write_string(i.id);
 			writer.write<uint32_t>(i.variation);
-			writer.write<glm::vec3>(i.position * 128.f + glm::vec3(terrain.offset, 0));
+			writer.write<glm::vec3>(i.final_position(terrain) * 128.f + glm::vec3(terrain.offset, 0));
 			writer.write<float>(i.angle);
 			writer.write<glm::vec3>(i.scale);
 
 			writer.write_string(i.skin_id);
 
-			writer.write<uint8_t>(static_cast<int>(i.state));
+			writer.write<uint8_t>(i.flags());
 			writer.write<uint8_t>(i.life);
 
 			writer.write<int32_t>(i.item_table_pointer);

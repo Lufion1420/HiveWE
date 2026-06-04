@@ -74,6 +74,23 @@ export struct Unit {
 		creation_number = ++auto_increment;
 	}
 
+	static bool uses_water_height(const std::string_view id) {
+		if (!units_slk.row_headers.contains(id)) {
+			return false;
+		}
+
+		const std::string_view movement_type = units_slk.data<std::string_view>("movetp", id);
+		return movement_type == "amph" || movement_type == "amphibious" || movement_type == "float" || movement_type == "hover";
+	}
+
+	bool uses_water_height() const {
+		return uses_water_height(id);
+	}
+
+	void update_terrain_height(const Terrain& terrain) {
+		position.z = terrain.interpolated_height(position.x, position.y, uses_water_height());
+	}
+
 	void update() {
 		float model_scale = 0.f;
 		float move_height = 0.f;
@@ -212,6 +229,8 @@ export class Units {
 			i.waygate = reader.read<uint32_t>();
 			i.creation_number = reader.read<uint32_t>();
 
+			i.update_terrain_height(terrain);
+
 			// Either a unit or an item
 			if (units_slk.row_headers.contains(i.id) || i.id == "sloc" || i.id == "uDNR" || i.id == "bDNR") {
 				units.push_back(i);
@@ -300,7 +319,7 @@ export class Units {
 
 	void update_area(const TerrainRectF& area, const Terrain& terrain) {
 		for (auto&& i : query_area(area)) {
-			i->position.z = terrain.interpolated_height(i->position.x, i->position.y, true);
+			i->update_terrain_height(terrain);
 			i->update();
 		}
 	}

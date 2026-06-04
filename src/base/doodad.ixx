@@ -33,6 +33,7 @@ export struct Doodad {
 		visible_solid
 	};
 	State state = State::visible_solid;
+	bool fixed_z = false;
 	int life = 100;
 
 	int item_table_pointer = -1;
@@ -45,6 +46,46 @@ export struct Doodad {
 	std::shared_ptr<SkinnedMesh> mesh;
 	std::shared_ptr<PathingTexture> pathing;
 	glm::vec3 color = glm::vec3(1.f);
+
+	static constexpr uint8_t fixed_z_flag = 0x04;
+	static constexpr uint8_t state_mask = 0x03;
+
+	static State state_from_flags(const uint8_t flags) {
+		const uint8_t state = flags & state_mask;
+		return static_cast<State>(std::min(state, static_cast<uint8_t>(State::visible_solid)));
+	}
+
+	uint8_t flags() const {
+		return static_cast<uint8_t>(state) | (fixed_z ? fixed_z_flag : 0);
+	}
+
+	float terrain_height(const Terrain& terrain) const {
+		return terrain.interpolated_height(position.x, position.y, true);
+	}
+
+	glm::vec3 final_position(const Terrain& terrain) const {
+		return {position.x, position.y, fixed_z ? position.z : terrain_height(terrain)};
+	}
+
+	void snap_to_terrain(const Terrain& terrain) {
+		position.z = terrain_height(terrain);
+		fixed_z = false;
+	}
+
+	void set_absolute_height(const float height) {
+		position.z = height;
+		fixed_z = true;
+	}
+
+	void set_relative_height(const Terrain& terrain, const float height) {
+		position.z = terrain_height(terrain) + height;
+		fixed_z = true;
+	}
+
+	void offset_height(const Terrain& terrain, const float offset) {
+		position.z = final_position(terrain).z + offset;
+		fixed_z = true;
+	}
 
 	void init(const std::string_view id, const std::shared_ptr<SkinnedMesh> mesh, const Terrain& terrain) {
 		this->id = id;
@@ -130,7 +171,7 @@ export struct Doodad {
 		}
 		rotation *= glm::angleAxis(roll, glm::vec3(1, 0, 0));
 
-		skeleton.update_location(position, rotation, (base_scale * scale) / 128.f);
+		skeleton.update_location(final_position(terrain), rotation, (base_scale * scale) / 128.f);
 	}
 
 	[[nodiscard]]

@@ -192,7 +192,7 @@ void UnitBrush::mouse_move_event(QMouseEvent* event, double frame_delta) {
 
 				for (const auto& unit : selections) {
 					unit->position += offset;
-					unit->position.z = map->terrain.interpolated_height(unit->position.x, unit->position.y, true);
+					unit->update_terrain_height(map->terrain);
 					unit->update();
 				}
 			} else if (event->modifiers() & Qt::ControlModifier) {
@@ -290,7 +290,7 @@ void UnitBrush::place_clipboard() {
 		new_unit.creation_number = ++Unit::auto_increment;
 		glm::vec3 final_position = glm::vec3(glm::vec2(input_handler.mouse_world + i.position) - clipboard_mouse_offset, 0);
 
-		final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true);
+		final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, new_unit.uses_water_height());
 
 		new_unit.position = final_position;
 		new_unit.update();
@@ -310,7 +310,7 @@ void UnitBrush::apply(double frame_delta) {
 	}
 
 	glm::vec3 final_position = input_handler.mouse_world;
-	final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true);
+	final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, Unit::uses_water_height(id));
 
 	Unit& new_unit = map->units.add_unit(id, final_position);
 	new_unit.angle = rotation;
@@ -333,7 +333,7 @@ void UnitBrush::render_brush() {
 	const float move_height = units_slk.data<float>("moveheight", id);
 
 	glm::vec3 final_position = input_handler.mouse_world;
-	final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true) + move_height / 128.f;
+	final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, Unit::uses_water_height(id)) + move_height / 128.f;
 	const glm::vec3 final_scale = glm::vec3(model_scale / 128.f);
 
 	if (mesh) {
@@ -378,7 +378,8 @@ void UnitBrush::render_clipboard() {
 		const float move_height = units_slk.data<float>("moveheight", i.id);
 
 		glm::vec3 final_position = glm::vec3(glm::vec2(input_handler.mouse_world + i.position) - clipboard_mouse_offset, 0);
-		final_position.z = map->terrain.interpolated_height(final_position.x, final_position.y, true) + move_height / 128.f;
+		final_position.z =
+			map->terrain.interpolated_height(final_position.x, final_position.y, Unit::uses_water_height(i.id)) + move_height / 128.f;
 
 		const glm::vec3 final_scale = glm::vec3(model_scale / 128.f);
 
