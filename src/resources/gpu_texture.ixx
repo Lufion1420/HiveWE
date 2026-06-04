@@ -57,7 +57,7 @@ export class GPUTexture : public Resource {
 			int channels;
 			const u8* data = [&] {
 				ScopedTimer t(profile_parse_ns);
-				return blp::load(reader, width, height, channels, /*force_jpeg_alpha_opaque=*/true);
+				return blp::load(reader, width, height, channels);
 			}();
 
 			{
