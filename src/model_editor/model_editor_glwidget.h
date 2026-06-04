@@ -24,7 +24,7 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 	double delta = 0.0;
 
 	ModelEditorGLWidget() = delete;
-	explicit ModelEditorGLWidget(QWidget* parent, std::shared_ptr<mdx::MDX> model);
+	explicit ModelEditorGLWidget(QWidget* parent, std::shared_ptr<mdx::MDX> model, bool compact_preview = false);
 	~ModelEditorGLWidget() = default;
 
 	void initializeGL() override;
@@ -38,6 +38,8 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 	void mouseReleaseEvent(QMouseEvent* event) override;
 	void wheelEvent(QWheelEvent* event) override;
 
+	void set_model(std::shared_ptr<mdx::MDX> model);
+
 	std::shared_ptr<mdx::MDX> mdx;
 	std::shared_ptr<EditableMesh> mesh;
 	SkeletalModelInstance skeleton;
@@ -49,6 +51,8 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 
 	QtImGui::RenderRef ref = nullptr;
 	ModelEditorCamera camera;
+	bool compact_preview = false;
+	bool initialized = false;
 
 	void recenter_camera();
 };

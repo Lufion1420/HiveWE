@@ -69,4 +69,7 @@ private:
 public slots:
 	void deactivate(QRibbonTab* tab) override;
 	void update_selection_info();
+
+signals:
+	void preview_unit_changed(QString id, QString title);
 };

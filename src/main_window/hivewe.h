@@ -34,11 +34,16 @@ namespace Ui {
 class HiveWEClass;
 }
 
+namespace mdx {
+class MDX;
+}
+
 class TerrainPalette;
 class PathingPalette;
 class DoodadPalette;
 class UnitPalette;
 class RegionPalette;
+class ModelEditorGLWidget;
 
 class HiveWE : public QMainWindow {
 	Q_OBJECT
@@ -122,6 +127,9 @@ private:
 	void toggle_doodad_palette();
 	void toggle_unit_palette();
 	void toggle_region_palette();
+	void update_palette_model_preview(std::shared_ptr<mdx::MDX> model, const QString& title);
+	void update_doodad_model_preview(const QString& id, int variation, const QString& title);
+	void update_unit_model_preview(const QString& id, const QString& title);
 
 	/// Adds the tab to the ribbon and sets the current index to this tab
 	void set_current_custom_tab(QRibbonTab* tab, QString name);
@@ -135,6 +143,11 @@ private:
 	QLabel* sidebar_title = nullptr;
 	QLabel* sidebar_description = nullptr;
 	QLabel* sidebar_hint = nullptr;
+	QFrame* sidebar_minimap_frame = nullptr;
+	QFrame* sidebar_preview_frame = nullptr;
+	QLabel* sidebar_preview_title = nullptr;
+	QLabel* sidebar_preview_placeholder = nullptr;
+	ModelEditorGLWidget* sidebar_preview = nullptr;
 	QStackedWidget* sidebar_stack = nullptr;
 	QToolButton* terrain_mode_button = nullptr;
 	QToolButton* doodad_mode_button = nullptr;

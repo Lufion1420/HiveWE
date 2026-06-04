@@ -122,6 +122,15 @@ UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 	
 	connect(selector, &UnitSelector::unitSelected, [&](const std::string& id) { 
 		brush.set_unit(id); 
+		QString preview_title;
+		if (units_slk.row_headers.contains(id)) {
+			preview_title = units_table->data(id, "name").toString();
+		} else if (items_slk.row_headers.contains(id)) {
+			preview_title = items_table->data(id, "name").toString();
+		} else {
+			preview_title = QString::fromStdString(id);
+		}
+		emit preview_unit_changed(QString::fromStdString(id), preview_title);
 		selection_mode->setChecked(false);
 	});
 
@@ -209,6 +218,7 @@ void UnitPalette::update_selection_info() {
 				selection_name->setText(QString("Player Start Location (%1)").arg(unit.player + 1));
 				selection_summary_title->setText(selection_name->text());
 				selection_summary_meta->setText("Special map start location | Selection-only entity");
+				emit preview_unit_changed("", selection_summary_title->text());
 			} else {
 				auto index = units_table->index(units_slk.row_headers.at(unit.id), units_slk.column_headers.at("name"));
 				selection_name->setText(units_table->data(index).toString());
@@ -216,6 +226,7 @@ void UnitPalette::update_selection_info() {
 				selection_summary_meta->setText(
 					QString("%1 | %2 selected").arg(QString::fromStdString(unit.id)).arg(brush.selections.size())
 				);
+				emit preview_unit_changed(QString::fromStdString(unit.id), selection_name->text());
 			}
 		} else {
 			selection_name->setText("Various");

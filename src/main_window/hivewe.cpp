@@ -7,6 +7,7 @@
 
 import std;
 import Hierarchy;
+import BinaryReader;
 import MPQ;
 import Camera;
 import Globals;
@@ -20,6 +21,7 @@ import WindowHandler;
 import "pathing_palette.h";
 import "object_editor/object_editor.h";
 import "model_editor/model_editor.h";
+import "model_editor/model_editor_glwidget.h";
 import "tile_setter.h";
 import "map_info_editor.h";
 import "terrain_palette.h";
@@ -36,6 +38,7 @@ import "trigger_editor.h";
 #include "QProcess"
 #include "QKeySequence"
 #include "QString"
+#include <QApplication>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QFrame>
@@ -50,6 +53,18 @@ import "asset_manager/asset_manager.h";
 import "tooltip_editor/tooltip_editor.h";
 
 namespace fs = std::filesystem;
+
+namespace {
+std::shared_ptr<mdx::MDX> load_preview_mdx(const fs::path& path) {
+	auto result = hierarchy.open_file(path);
+	if (!result) {
+		std::println("Preview model load failed for {} ({})", path.string(), result.error());
+		return nullptr;
+	}
+
+	return std::make_shared<mdx::MDX>(result.value());
+}
+}
 
 HiveWE::HiveWE(QWidget* parent)
 	: QMainWindow(parent), ui(std::make_unique<Ui::HiveWEClass>()) {
@@ -128,7 +143,12 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->click_helpers_visible, &QPushButton::toggled, [](bool checked) { map->render_click_helpers = checked; });
 	connect(ui->ribbon->wireframe_visible, &QPushButton::toggled, [](bool checked) { map->render_wireframe = checked; });
 	connect(ui->ribbon->debug_visible, &QPushButton::toggled, [](bool checked) { map->render_debug = checked; });
-	connect(ui->ribbon->minimap_visible, &QPushButton::toggled, [&](bool checked) { (checked) ? minimap->show() : minimap->hide(); });
+	connect(ui->ribbon->minimap_visible, &QPushButton::toggled, [&](bool checked) {
+		(checked) ? minimap->show() : minimap->hide();
+		if (sidebar_minimap_frame) {
+			sidebar_minimap_frame->setVisible(checked);
+		}
+	});
 
 	connect(new QShortcut(Qt::CTRL | Qt::Key_U, this), &QShortcut::activated, ui->ribbon->units_visible, &QPushButton::click);
 	connect(new QShortcut(Qt::CTRL | Qt::Key_D, this), &QShortcut::activated, ui->ribbon->doodads_visible, &QPushButton::click);
@@ -255,10 +275,6 @@ HiveWE::HiveWE(QWidget* parent)
 	restore_window_state();
 	update_recent_maps_menu();
 
-	minimap->setParent(ui->widget);
-	minimap->move(10, 10);
-	minimap->show();
-
 	connect(minimap, &Minimap::clicked, [](QPointF location) { camera.position = { location.x() * map->terrain.width, (1.0 - location.y()) * map->terrain.height, camera.position.z }; });
 	ui->widget->makeCurrent();
 
@@ -288,8 +304,7 @@ void HiveWE::setup_palette_sidebar() {
 	sidebar_root = new QWidget(centralWidget());
 	sidebar_root->setObjectName("paletteSidebar");
 	sidebar_root->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-	sidebar_root->setMinimumWidth(360);
-	sidebar_root->setMaximumWidth(440);
+	sidebar_root->setFixedWidth(400);
 	sidebar_root->setStyleSheet(
 		"#paletteSidebar { background: rgba(20, 23, 27, 236); border-left: 1px solid rgba(255, 255, 255, 18); }"
 		"QWidget#paletteSidebarHeader { background: transparent; }"
@@ -313,6 +328,9 @@ void HiveWE::setup_palette_sidebar() {
 		"QLabel[sidebarDescription=\"true\"] { font-size: 13px; color: rgb(178, 187, 198); }"
 		"QFrame[sidebarBody=\"true\"] { background: rgba(33, 37, 43, 230); border: 1px solid rgba(255, 255, 255, 16); border-radius: 16px; }"
 		"QFrame[sidebarPaletteHost=\"true\"] { background: transparent; border: 0; }"
+		"QFrame[sidebarUtilityPanel=\"true\"] { background: rgba(24, 27, 31, 200); border: 1px solid rgba(255, 255, 255, 14); border-radius: 12px; }"
+		"QLabel[sidebarPreviewTitle=\"true\"] { color: rgb(241, 244, 247); font-size: 13px; font-weight: 700; }"
+		"QLabel[sidebarPreviewPlaceholder=\"true\"] { color: rgb(132, 141, 153); font-size: 12px; }"
 		"QLabel[sidebarHint=\"true\"] { font-size: 11px; color: rgb(132, 141, 153); padding-top: 2px; }"
 		"#paletteSidebar QLineEdit, #paletteSidebar QComboBox, #paletteSidebar QSpinBox {"
 		"background: rgba(24, 27, 31, 235);"
@@ -401,6 +419,37 @@ void HiveWE::setup_palette_sidebar() {
 	mode_layout->setColumnStretch(1, 1);
 	mode_layout->setColumnStretch(2, 1);
 
+	sidebar_minimap_frame = new QFrame(sidebar_root);
+	sidebar_minimap_frame->setProperty("sidebarUtilityPanel", true);
+	sidebar_minimap_frame->setFixedHeight(196);
+	sidebar_minimap_frame->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	auto* minimap_layout = new QVBoxLayout(sidebar_minimap_frame);
+	minimap_layout->setContentsMargins(8, 8, 8, 8);
+	minimap_layout->setSpacing(0);
+	minimap->setParent(sidebar_minimap_frame);
+	minimap->setFixedHeight(180);
+	minimap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	minimap_layout->addWidget(minimap);
+	minimap->show();
+
+	sidebar_preview_frame = new QFrame(sidebar_root);
+	sidebar_preview_frame->setProperty("sidebarUtilityPanel", true);
+	auto* preview_layout = new QVBoxLayout(sidebar_preview_frame);
+	preview_layout->setContentsMargins(8, 8, 8, 8);
+	preview_layout->setSpacing(6);
+
+	sidebar_preview_title = new QLabel("Model Preview", sidebar_preview_frame);
+	sidebar_preview_title->setProperty("sidebarPreviewTitle", true);
+	sidebar_preview_title->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+	preview_layout->addWidget(sidebar_preview_title);
+
+	sidebar_preview_placeholder = new QLabel("Select a doodad or unit to preview its model.", sidebar_preview_frame);
+	sidebar_preview_placeholder->setProperty("sidebarPreviewPlaceholder", true);
+	sidebar_preview_placeholder->setAlignment(Qt::AlignCenter);
+	sidebar_preview_placeholder->setWordWrap(true);
+	sidebar_preview_placeholder->setMinimumHeight(150);
+	preview_layout->addWidget(sidebar_preview_placeholder);
+
 	sidebar_header = new QWidget(sidebar_root);
 	sidebar_header->setObjectName("paletteSidebarHeader");
 	auto* header_layout = new QVBoxLayout(sidebar_header);
@@ -454,6 +503,8 @@ void HiveWE::setup_palette_sidebar() {
 	sidebar_hint->setAlignment(Qt::AlignLeft | Qt::AlignTop);
 
 	sidebar_layout->addWidget(sidebar_mode_bar);
+	sidebar_layout->addWidget(sidebar_minimap_frame);
+	sidebar_layout->addWidget(sidebar_preview_frame);
 	sidebar_layout->addWidget(sidebar_header);
 	sidebar_layout->addWidget(sidebar_body, 1);
 	sidebar_layout->addWidget(sidebar_hint);
@@ -1179,6 +1230,7 @@ void HiveWE::ensure_palette_view(const SidebarPaletteView view) {
 		doodad_host->layout()->addWidget(doodad_palette);
 		connect(doodad_palette, &Palette::activated, this, [this]() { activate_palette(doodad_palette); });
 		connect(doodad_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(doodad_palette, &DoodadPalette::preview_doodad_changed, this, &HiveWE::update_doodad_model_preview);
 		connect(this, &HiveWE::palette_changed, doodad_palette, &Palette::deactivate);
 	}
 
@@ -1187,6 +1239,7 @@ void HiveWE::ensure_palette_view(const SidebarPaletteView view) {
 		unit_host->layout()->addWidget(unit_palette);
 		connect(unit_palette, &Palette::activated, this, [this]() { activate_palette(unit_palette); });
 		connect(unit_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(unit_palette, &UnitPalette::preview_unit_changed, this, &HiveWE::update_unit_model_preview);
 		connect(this, &HiveWE::palette_changed, unit_palette, &Palette::deactivate);
 	}
 
@@ -1213,6 +1266,8 @@ void HiveWE::reset_map_session() {
 	remove_custom_tab();
 	current_sidebar_view = SidebarPaletteView::none;
 	sidebar_root->hide();
+	update_palette_model_preview(nullptr, "Model Preview");
+	ui->widget->makeCurrent();
 	ui->ribbon->terrain_palette->setChecked(false);
 	ui->ribbon->doodad_palette->setChecked(false);
 	ui->ribbon->unit_palette->setChecked(false);
@@ -1300,6 +1355,7 @@ QString HiveWE::sanitized_folder_name(const QString& map_name) {
 
 void HiveWE::update_active_palette_visuals() {
 	const bool sidebar_visible = sidebar_root && sidebar_root->isVisible() && current_sidebar_view != SidebarPaletteView::none;
+	const bool preview_visible = sidebar_visible && (current_sidebar_view == SidebarPaletteView::doodad || current_sidebar_view == SidebarPaletteView::unit);
 
 	auto set_checked = [](QAbstractButton* button, const bool checked) {
 		if (!button) {
@@ -1320,6 +1376,10 @@ void HiveWE::update_active_palette_visuals() {
 	set_checked(unit_mode_button, sidebar_visible && current_sidebar_view == SidebarPaletteView::unit);
 	set_checked(pathing_mode_button, sidebar_visible && current_sidebar_view == SidebarPaletteView::pathing);
 	set_checked(region_mode_button, sidebar_visible && current_sidebar_view == SidebarPaletteView::region);
+
+	if (sidebar_preview_frame) {
+		sidebar_preview_frame->setVisible(preview_visible);
+	}
 
 	if (!sidebar_visible) {
 		sidebar_title->clear();
@@ -1510,6 +1570,76 @@ void HiveWE::toggle_region_palette() {
 
 	show_palette_view(SidebarPaletteView::region, false);
 	show_transient_notice("Region sidebar shown", 700);
+}
+
+void HiveWE::update_palette_model_preview(std::shared_ptr<mdx::MDX> model, const QString& title) {
+	if (!sidebar_preview_title || !sidebar_preview_placeholder) {
+		return;
+	}
+
+	sidebar_preview_title->setText(title.isEmpty() ? "Model Preview" : title);
+	if (!sidebar_preview && model) {
+		sidebar_preview = new ModelEditorGLWidget(sidebar_preview_frame, nullptr, true);
+		sidebar_preview->setMinimumHeight(150);
+		sidebar_preview->setMaximumHeight(220);
+		sidebar_preview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+		if (auto* preview_layout = qobject_cast<QVBoxLayout*>(sidebar_preview_frame->layout())) {
+			preview_layout->insertWidget(1, sidebar_preview);
+		}
+	}
+
+	if (!sidebar_preview) {
+		sidebar_preview_placeholder->setVisible(true);
+		sidebar_preview_placeholder->setText("No preview model available.");
+		return;
+	}
+
+	sidebar_preview->set_model(std::move(model));
+
+	const bool has_model = sidebar_preview->mdx != nullptr;
+	sidebar_preview->setVisible(has_model);
+	sidebar_preview_placeholder->setVisible(!has_model);
+	if (!has_model) {
+		sidebar_preview_placeholder->setText("No preview model available.");
+	}
+}
+
+void HiveWE::update_doodad_model_preview(const QString& id, const int variation, const QString& title) {
+	QTimer::singleShot(300, this, [this, id, variation, title]() {
+		if (QApplication::activeModalWidget()) {
+			QTimer::singleShot(300, this, [this, id, variation, title]() {
+				update_doodad_model_preview(id, variation, title);
+			});
+			return;
+		}
+
+		if (id.isEmpty()) {
+			update_palette_model_preview(nullptr, title);
+			return;
+		}
+
+		const auto mesh = map->doodads.get_mesh(id.toStdString(), variation);
+		update_palette_model_preview(load_preview_mdx(mesh->path), title);
+	});
+}
+
+void HiveWE::update_unit_model_preview(const QString& id, const QString& title) {
+	QTimer::singleShot(300, this, [this, id, title]() {
+		if (QApplication::activeModalWidget()) {
+			QTimer::singleShot(300, this, [this, id, title]() {
+				update_unit_model_preview(id, title);
+			});
+			return;
+		}
+
+		if (id.isEmpty()) {
+			update_palette_model_preview(nullptr, title);
+			return;
+		}
+
+		const auto mesh = map->units.get_mesh(id.toStdString());
+		update_palette_model_preview(load_preview_mdx(mesh->path), title);
+	});
 }
 
 void HiveWE::show_transient_notice(const QString& text, int timeout_ms) {

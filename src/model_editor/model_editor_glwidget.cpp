@@ -24,8 +24,13 @@ namespace fs = std::filesystem;
 InputHandler my_input_handler;
 mdx::MDX::OptimizationStats stats;
 
-ModelEditorGLWidget::ModelEditorGLWidget(QWidget* parent, std::shared_ptr<mdx::MDX> mdx) : QOpenGLWidget(parent), mdx(mdx) {
-	makeCurrent();
+ModelEditorGLWidget::ModelEditorGLWidget(QWidget* parent, std::shared_ptr<mdx::MDX> mdx, const bool compact_preview) :
+	QOpenGLWidget(parent),
+	mdx(mdx),
+	compact_preview(compact_preview) {
+	if (!compact_preview) {
+		makeCurrent();
+	}
 
 	setMouseTracking(true);
 	setFocus();
@@ -35,7 +40,9 @@ ModelEditorGLWidget::ModelEditorGLWidget(QWidget* parent, std::shared_ptr<mdx::M
 }
 
 void ModelEditorGLWidget::initializeGL() {
-	ref = QtImGui::initialize(this, false);
+	if (!compact_preview) {
+		ref = QtImGui::initialize(this, false);
+	}
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
@@ -48,17 +55,23 @@ void ModelEditorGLWidget::initializeGL() {
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
-	mesh = std::make_shared<EditableMesh>(mdx, std::nullopt);
-	skeleton = SkeletalModelInstance(mdx);
-	SkeletalModelInstance::pick_preview_sequence(skeleton, *mdx);
-	recenter_camera();
+	if (mdx) {
+		mesh = std::make_shared<EditableMesh>(mdx, std::nullopt);
+		skeleton = SkeletalModelInstance(mdx);
+		SkeletalModelInstance::pick_preview_sequence(skeleton, *mdx);
+		recenter_camera();
+	}
 
 	shader_sd = resource_manager.load<Shader>({ "data/shaders/editable_mesh_sd.vert", "data/shaders/editable_mesh_sd.frag" }).value();
 	shader_hd = resource_manager.load<Shader>({ "data/shaders/editable_mesh_hd.vert", "data/shaders/editable_mesh_hd.frag" }).value();
+	initialized = true;
 }
 
 void ModelEditorGLWidget::resizeGL(const int w, const int h) {
 	glViewport(0, 0, w, h);
+	if (h <= 0) {
+		return;
+	}
 	camera.aspect_ratio = double(w) / h;
 	camera.update(delta);
 	delta = elapsed_timer.nsecsElapsed() / 1'000'000'000.0;
@@ -69,6 +82,12 @@ void ModelEditorGLWidget::paintGL() {
 	
 	delta = elapsed_timer.nsecsElapsed() / 1'000'000'000.0;
 	elapsed_timer.start();
+
+	if (!mesh || !mdx) {
+		glClearColor(0.18f, 0.18f, 0.18f, 1.f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		return;
+	}
 
 	skeleton.update_location(glm::vec3(0.f), glm::quat(), glm::vec3(1.f));
 	skeleton.update(delta);
@@ -112,6 +131,10 @@ void ModelEditorGLWidget::paintGL() {
 	glDepthFunc(GL_LEQUAL);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	if (compact_preview) {
+		return;
+	}
 
 	QtImGui::newFrame(ref);
 
@@ -303,9 +326,43 @@ void ModelEditorGLWidget::wheelEvent(QWheelEvent* event) {
 	camera.mouse_scroll_event(event);
 }
 
+void ModelEditorGLWidget::set_model(std::shared_ptr<mdx::MDX> model) {
+	if (mdx == model) {
+		return;
+	}
+
+	mdx = std::move(model);
+	if (!mdx) {
+		if (initialized) {
+			makeCurrent();
+		}
+		mesh.reset();
+		skeleton = {};
+		update();
+		return;
+	}
+
+	if (!initialized) {
+		update();
+		return;
+	}
+
+	makeCurrent();
+	mesh = std::make_shared<EditableMesh>(mdx, std::nullopt);
+	skeleton = SkeletalModelInstance(mdx);
+	SkeletalModelInstance::pick_preview_sequence(skeleton, *mdx);
+	recenter_camera();
+	update();
+}
+
 void ModelEditorGLWidget::recenter_camera() {
-	// Fit mesh extents AABB into screen
-	const auto& extent = mesh->mdx->sequences[skeleton.sequence_index].extent;
+	if (!mesh || !mesh->mdx) {
+		return;
+	}
+
+	// Fit mesh extents AABB into screen. Some assets do not expose a usable sequence extent.
+	const bool has_sequence_extent = skeleton.sequence_index >= 0 && skeleton.sequence_index < static_cast<int>(mesh->mdx->sequences.size());
+	const auto& extent = has_sequence_extent ? mesh->mdx->sequences[skeleton.sequence_index].extent : mesh->mdx->extent;
 	const glm::vec3 size = extent.maximum - extent.minimum;
 	const float radius = length(size) * 0.5f * 1.1f;
 	const float dist = radius / std::sin(camera.fov_rad * 0.5f);

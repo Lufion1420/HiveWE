@@ -305,6 +305,8 @@ void GLWidget::mouseDoubleClickEvent(QMouseEvent* event) {
 		return;
 	}
 
+	input_handler.mouse_move_event(event);
+
 	if (auto* unit_brush = dynamic_cast<UnitBrush*>(map->brush);
 		unit_brush && unit_brush->get_mode() == Brush::Mode::selection && input_handler.mouse.y > 0.f) {
 		makeCurrent();
@@ -315,6 +317,15 @@ void GLWidget::mouseDoubleClickEvent(QMouseEvent* event) {
 				UnitPropertiesDialog dialog(&unit, this);
 				dialog.exec();
 			}
+			event->accept();
+			return;
+		}
+	}
+
+	if (auto* doodad_brush = dynamic_cast<DoodadBrush*>(map->brush);
+		doodad_brush && doodad_brush->get_mode() == Brush::Mode::selection && input_handler.mouse.y > 0.f) {
+		makeCurrent();
+		if (map->render_manager.pick_doodad_id_under_mouse(map->doodads, input_handler.mouse).has_value()) {
 			event->accept();
 			return;
 		}

@@ -514,18 +514,26 @@ void DoodadPalette::activate_palette() {
 }
 
 void DoodadPalette::selection_changed(const QModelIndex& index) {
+	if (!index.isValid()) {
+		return;
+	}
+
 	std::string id;
+	QString preview_title;
 
 	const auto model = concat_table->mapToSource(index).model();
 	if (model == destructable_filter_model) {
 		const int row = destructable_filter_model->mapToSource(concat_table->mapToSource(index)).row();
 		id = destructibles_slk.index_to_row.at(row);
+		preview_title = destructibles_table->data(id, "name").toString();
 	} else if (model == doodad_filter_model) {
 		const int row = doodad_filter_model->mapToSource(concat_table->mapToSource(index)).row();
 		id = doodads_slk.index_to_row.at(row);
+		preview_title = doodads_table->data(id, "name").toString();
 	}
 
 	brush.set_doodad(id);
+	emit preview_doodad_changed(QString::fromStdString(id), 0, preview_title);
 	selection_mode->setChecked(false);
 
 	bool is_doodad = doodads_slk.row_headers.contains(id);
@@ -600,6 +608,7 @@ void DoodadPalette::update_selection_info() {
 			current_selection_section->setEnabled(true);
 		}
 		const Doodad& doodad = **brush.selections.begin();
+		emit preview_doodad_changed(QString::fromStdString(doodad.id), doodad.variation, QString::fromStdString(doodad.id));
 
 		const float first_relative_height =
 			doodad.position.z - map->terrain.interpolated_height(doodad.position.x, doodad.position.y, true);

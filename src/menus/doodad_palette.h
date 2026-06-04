@@ -114,4 +114,7 @@ public slots:
 	void set_group_height_average();
 	void set_group_height_maximum();
 	void set_selection_rotation(float rotation);
+
+signals:
+	void preview_doodad_changed(QString id, int variation, QString title);
 };

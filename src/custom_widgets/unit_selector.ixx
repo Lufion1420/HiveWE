@@ -73,11 +73,23 @@ export class UnitSelector : public QWidget {
 		});
 
 		connect(units, &QListView::clicked, [&](const QModelIndex& index) {
+			if (!index.isValid()) {
+				return;
+			}
 			const int row = filter_model->mapToSource(index).row();
+			if (!units_slk.index_to_row.contains(row)) {
+				return;
+			}
 			emit unitSelected(units_slk.index_to_row.at(row));
 		});
 		connect(units, &QListView::activated, [&](const QModelIndex& index) {
+			if (!index.isValid()) {
+				return;
+			}
 			const int row = filter_model->mapToSource(index).row();
+			if (!units_slk.index_to_row.contains(row)) {
+				return;
+			}
 			emit unitSelected(units_slk.index_to_row.at(row));
 		});
 	}
