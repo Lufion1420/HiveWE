@@ -376,6 +376,7 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 
 	connect(ui.doodads, &QListView::clicked, this, &DoodadPalette::selection_changed);
 	connect(ui.doodads, &QListView::activated, this, &DoodadPalette::selection_changed);
+	connect(ui.doodads->selectionModel(), &QItemSelectionModel::currentChanged, this, &DoodadPalette::selection_changed);
 
 	connect(&brush, &DoodadBrush::selection_changed, this, &DoodadPalette::update_selection_info);
 	connect(&brush, &DoodadBrush::angle_changed, this, &DoodadPalette::update_selection_info);

@@ -72,7 +72,7 @@ export class UnitSelector : public QWidget {
 			units->setFocus();
 		});
 
-		connect(units, &QListView::clicked, [&](const QModelIndex& index) {
+		auto emit_unit_at_index = [this](const QModelIndex& index) {
 			if (!index.isValid()) {
 				return;
 			}
@@ -81,17 +81,10 @@ export class UnitSelector : public QWidget {
 				return;
 			}
 			emit unitSelected(units_slk.index_to_row.at(row));
-		});
-		connect(units, &QListView::activated, [&](const QModelIndex& index) {
-			if (!index.isValid()) {
-				return;
-			}
-			const int row = filter_model->mapToSource(index).row();
-			if (!units_slk.index_to_row.contains(row)) {
-				return;
-			}
-			emit unitSelected(units_slk.index_to_row.at(row));
-		});
+		};
+
+		connect(units, &QListView::activated, this, emit_unit_at_index);
+		connect(units->selectionModel(), &QItemSelectionModel::currentChanged, this, emit_unit_at_index);
 	}
 
 	UnitListModel* list_model;
