@@ -27,8 +27,8 @@ export class PathingMap {
 		unbuildable = 0b00001000,
 		harvestable = 0b00010000,
 		blight = 0b00100000,
-		water = 0b01000000,
-		amphibious = 0b10000000
+		unfloatable = 0b01000000,
+		unamphibious = 0b10000000
 	};
 
 	GLuint texture_static = 0;

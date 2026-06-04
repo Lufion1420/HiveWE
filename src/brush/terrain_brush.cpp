@@ -6,6 +6,7 @@ import MapGlobal;
 import Terrain;
 import DoodadsUndo;
 import PathingUndo;
+import PathingMap;
 import TerrainUndo;
 import Camera;
 import Rects;
@@ -522,9 +523,11 @@ void TerrainBrush::apply(double frame_delta) {
 	updated_area = updated_area.united(affected_area);
 
 	// apply pathing
+	constexpr uint8_t terrain_pathing_mask = PathingMap::unwalkable | PathingMap::unflyable | PathingMap::unbuildable
+		| PathingMap::blight | PathingMap::unfloatable | PathingMap::unamphibious;
 	for (size_t i = affected_area.x(); i <= affected_area.right(); i++) {
 		for (size_t j = affected_area.y(); j <= affected_area.bottom(); j++) {
-			map->pathing_map.pathing_cells_static[j * map->pathing_map.width + i] &= ~0b01001110;
+			map->pathing_map.pathing_cells_static[j * map->pathing_map.width + i] &= static_cast<uint8_t>(~terrain_pathing_mask);
 			uint8_t mask = map->terrain.get_terrain_pathing(i, j, apply_tile_pathing, apply_cliff_pathing, apply_water_pathing);
 			map->pathing_map.pathing_cells_static[j * map->pathing_map.width + i] |= mask;
 		}

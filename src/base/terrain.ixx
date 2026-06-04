@@ -796,7 +796,7 @@ export class Terrain: public QObject {
 		}
 	}
 
-	/// Returns the height at x,y by bilinear interpolation
+	/// Returns the height at x,y on the rendered terrain triangles
 	/// Set water_too to true to also take the water height into account
 	float interpolated_height(float x, float y, const bool water_too) const {
 		x = std::clamp(x, 0.f, width - 1.01f);
@@ -807,30 +807,26 @@ export class Terrain: public QObject {
 		const int cx = static_cast<int>(std::ceil(x));
 		const int cy = static_cast<int>(std::ceil(y));
 
-		float p1 = corner_final_ground_height(ix, iy);
-		float p2 = corner_final_ground_height(cx, iy);
-		float p3 = corner_final_ground_height(ix, cy);
-		float p4 = corner_final_ground_height(cx, cy);
+		auto sampled_corner_height = [&](const int x, const int y) {
+			float height = corner_final_ground_height(x, y);
+			if (water_too && corner_water[ci(x, y)]) {
+				height = std::max(height, corner_final_water_height(x, y));
+			}
+			return height;
+		};
 
-		if (water_too && corner_water[ci(ix, iy)]) {
-			p1 = std::max(p1, corner_final_water_height(ix, iy));
+		const float bottom_left = sampled_corner_height(ix, iy);
+		const float bottom_right = sampled_corner_height(cx, iy);
+		const float top_left = sampled_corner_height(ix, cy);
+		const float top_right = sampled_corner_height(cx, cy);
+
+		const float fx = x - std::floor(x);
+		const float fy = y - std::floor(y);
+		if (fy > fx) {
+			return bottom_left + (top_left - bottom_left) * fy + (top_right - top_left) * fx;
 		}
 
-		if (water_too && corner_water[ci(cx, iy)]) {
-			p2 = std::max(p2, corner_final_water_height(cx, iy));
-		}
-
-		if (water_too && corner_water[ci(ix, cy)]) {
-			p3 = std::max(p3, corner_final_water_height(ix, cy));
-		}
-
-		if (water_too && corner_water[ci(cx, cy)]) {
-			p4 = std::max(p4, corner_final_water_height(cx, cy));
-		}
-
-		const float xx = glm::mix(p1, p2, x - floor(x));
-		const float yy = glm::mix(p3, p4, x - floor(x));
-		return glm::mix(xx, yy, y - floor(y));
+		return bottom_left + (bottom_right - bottom_left) * fx + (top_right - bottom_right) * fy;
 	}
 
 	// Returns the y gradient in radians
@@ -1211,7 +1207,7 @@ export class Terrain: public QObject {
 					&& corner_ramp[ci(cx + 1, cy + 1)];
 
 				if (!is_ramp) {
-					mask |= PathingMap::unbuildable | PathingMap::unwalkable;
+					mask |= PathingMap::unbuildable | PathingMap::unwalkable | PathingMap::unamphibious;
 				}
 			}
 		}
@@ -1221,25 +1217,25 @@ export class Terrain: public QObject {
 			mask |= PathingMap::blight;
 		}
 
-		// take water into account
-		if (water_pathing && corner_water[closest_idx]) {
-			// apply water mask
-			mask |= PathingMap::water;
-
+		const bool has_visible_water =
+			water_pathing && corner_water[closest_idx] && corner_final_water_height(x, y) > corner_final_ground_height(x, y);
+		if (has_visible_water) {
 			if (corner_final_water_height(x, y) > corner_final_ground_height(x, y) + 0.40) {
 				// deep water is unwalkable and unbuildable
 				mask |= PathingMap::unbuildable | PathingMap::unwalkable;
-			} else if (corner_final_water_height(x, y) > corner_final_ground_height(x, y)) {
+			} else {
 				// shallow water is unbuildable
 				mask |= PathingMap::unbuildable;
 			}
+		} else {
+			mask |= PathingMap::unfloatable;
 		}
 
 		// boundaries and map edges are unwalkable, unflyable and unbuildable¸
 		// NOTE: game handles corners/boundaries differently
 		// if the bottom-left corner is a boundary, then the entire 4x4 cell is considered a boundary
 		if (corner_map_edge[bl_idx] || corner_boundary[bl_idx]) {
-			mask |= PathingMap::unbuildable | PathingMap::unflyable | PathingMap::unwalkable;
+			mask |= PathingMap::unbuildable | PathingMap::unflyable | PathingMap::unwalkable | PathingMap::unamphibious;
 		}
 
 		return mask;
