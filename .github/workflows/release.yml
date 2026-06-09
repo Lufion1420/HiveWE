@@ -1,0 +1,194 @@
+name: Release HiveWE
+
+# Builds a packaged, ready-to-run Windows release of HiveWE and publishes it as
+# a GitHub Release with an auto-generated changelog of this fork's changes.
+#
+# Two ways to trigger:
+#   1. Push a version tag, e.g.  git tag v0.2 && git push origin v0.2
+#   2. Manually from the Actions tab ("Run workflow") and type the version.
+#      A manual run also creates and pushes the tag for you.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version tag (e.g. v0.20)"
+        required: true
+        default: "v0.20"
+      prerelease:
+        description: "Mark this release as a pre-release"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0 # full history so the changelog can diff against v0.10
+
+      # ----------------------------------------------------------------------
+      # Resolve the version string and (for manual runs) create the git tag.
+      # ----------------------------------------------------------------------
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $version = '${{ github.event.inputs.version }}'
+          } else {
+            $version = '${{ github.ref_name }}'
+          }
+          if (-not $version) { throw "Could not determine a version string." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Releasing version: $version"
+
+      - name: Create and push tag (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if (git tag --list $version) {
+            Write-Host "Tag $version already exists, reusing it."
+          } else {
+            git tag -a $version -m "HiveWE $version"
+            git push origin $version
+          }
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Restore/Save vcpkg Binary Cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-binaries-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-binaries-${{ runner.os }}-
+
+      - name: Configure CMake
+        run: >
+          cmake --preset Release
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DHIVEWE_AUTO_RUN_AFTER_BUILD=OFF
+          -DHIVEWE_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build --preset Release
+
+      - name: Test
+        run: ctest --preset Release
+
+      # ----------------------------------------------------------------------
+      # Stage a clean, runnable folder: the exe, all runtime DLLs, the Qt
+      # plugin folders, and a real copy of the data/ directory (the build emits
+      # data/ as a symlink, which does not survive zipping cleanly).
+      # ----------------------------------------------------------------------
+      - name: Package release
+        id: package
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $buildDir = "build/Release/Release"
+          $stageName = "HiveWE-$version-win64"
+          $stageDir = "staging/$stageName"
+
+          New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+
+          # Copy build output, skipping build artefacts, the test exe, and the
+          # data symlink (copied as a real folder below).
+          $exclude = @('*.lib', '*.exp', '*.pdb', 'HiveWE_tests.exe')
+          Get-ChildItem -Path $buildDir -Force |
+            Where-Object { $_.Name -ne 'data' } |
+            ForEach-Object {
+              if ($_.PSIsContainer) {
+                Copy-Item $_.FullName -Destination $stageDir -Recurse -Force
+              } else {
+                $skip = $false
+                foreach ($pat in $exclude) { if ($_.Name -like $pat) { $skip = $true } }
+                if (-not $skip) { Copy-Item $_.FullName -Destination $stageDir -Force }
+              }
+            }
+
+          # Real copy of the data directory from the source tree.
+          Copy-Item -Path "data" -Destination "$stageDir/data" -Recurse -Force
+
+          if (-not (Test-Path "$stageDir/HiveWE.exe")) {
+            throw "HiveWE.exe missing from staging directory - build output layout may have changed."
+          }
+
+          $zipName = "$stageName.zip"
+          Compress-Archive -Path "$stageDir/*" -DestinationPath "staging/$zipName" -Force
+
+          "zip_path=staging/$zipName" >> $env:GITHUB_OUTPUT
+          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+          Write-Host "Created staging/$zipName"
+
+      # ----------------------------------------------------------------------
+      # Build release notes listing every fork commit since upstream's v0.10.
+      # ----------------------------------------------------------------------
+      - name: Generate changelog
+        id: changelog
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $base = "v0.10"
+          $notes = "release_notes.md"
+
+          $hasBase = git tag --list $base
+          if ($hasBase) {
+            $range = "$base..HEAD"
+            $header = "Changes in this fork since upstream HiveWE $base"
+          } else {
+            $range = "HEAD"
+            $header = "Changes in this fork"
+          }
+
+          $log = git log $range --no-merges --pretty=format:"- %s (%h)"
+
+          "# HiveWE $version" | Out-File $notes -Encoding utf8
+          "" | Out-File $notes -Append -Encoding utf8
+          "First release of the Lufion fork of HiveWE." | Out-File $notes -Append -Encoding utf8
+          "" | Out-File $notes -Append -Encoding utf8
+          "## $header" | Out-File $notes -Append -Encoding utf8
+          "" | Out-File $notes -Append -Encoding utf8
+          if ($log) {
+            $log | Out-File $notes -Append -Encoding utf8
+          } else {
+            "- No commits found in range." | Out-File $notes -Append -Encoding utf8
+          }
+          "" | Out-File $notes -Append -Encoding utf8
+          "## Running" | Out-File $notes -Append -Encoding utf8
+          "" | Out-File $notes -Append -Encoding utf8
+          "Download the zip, extract it, and run ``HiveWE.exe``. Requires a Warcraft III installation." | Out-File $notes -Append -Encoding utf8
+
+          "notes_path=$notes" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: HiveWE ${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.version.outputs.version }}
+          body_path: ${{ steps.changelog.outputs.notes_path }}
+          files: ${{ steps.package.outputs.zip_path }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          draft: false
