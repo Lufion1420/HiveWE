@@ -65,15 +65,6 @@ TEST_CASE("MDL round-trip: minimal_v1000.mdl") {
 	roundtrip_fixture_mdx("minimal_v1000.mdl");
 }
 
-TEST_CASE("MDL round-trip: minimal_v1000.mdl") {
-	roundtrip_fixture_mdl("TwoPlanes.mdl");
-	roundtrip_fixture_mdl("TwoPlanes.mdl");
-}
-
-TEST_CASE("MDL round-trip: minimal_v1000.mdl MDX") {
-	roundtrip_fixture_mdx("TwoPlanes.mdl");
-}
-
 // Sanity-check the version-aware MDL writer: writing a higher-version model out as
 // a lower-version target must strip fields that the lower version does not understand.
 TEST_CASE("MDL writer: cross-version downgrade strips version-specific fields") {

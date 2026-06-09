@@ -1,0 +1,23 @@
+# Normalize line endings. Without this, core.autocrlf=true on Windows checks
+# text files out as CRLF, which breaks byte-exact round-trip tests since the
+# MDX/MDL writer emits LF.
+
+# Let git auto-detect text vs binary and normalize text to LF in the repo.
+* text=auto eol=lf
+
+# MDL model files are line-based text and are written out with LF by the
+# writer; pin the test fixtures to LF on every platform so round-trip
+# comparisons stay byte-exact.
+*.mdl text eol=lf
+
+# Treat known binary assets as binary so they are never EOL-converted.
+*.mdx binary
+*.blp binary
+*.mpq binary
+*.w3x binary
+*.w3m binary
+*.png binary
+*.jpg binary
+*.dll binary
+*.exe binary
+*.ico binary
