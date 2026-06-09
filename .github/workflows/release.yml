@@ -144,42 +144,43 @@ jobs:
           Write-Host "Created staging/$zipName"
 
       # ----------------------------------------------------------------------
-      # Build release notes listing every fork commit since upstream's v0.10.
+      # Use the curated section for this version from CHANGELOG.md as the
+      # release notes. Keeping the summary hand-written there avoids dumping
+      # raw commit messages into the release description.
       # ----------------------------------------------------------------------
       - name: Generate changelog
         id: changelog
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'
-          $base = "v0.10"
+          $changelog = "CHANGELOG.md"
           $notes = "release_notes.md"
+          $section = @()
 
-          $hasBase = git tag --list $base
-          if ($hasBase) {
-            $range = "$base..HEAD"
-            $header = "Changes in this fork since upstream HiveWE $base"
-          } else {
-            $range = "HEAD"
-            $header = "Changes in this fork"
+          if (Test-Path $changelog) {
+            $inSection = $false
+            foreach ($line in (Get-Content $changelog)) {
+              if ($line -match '^##\s') {
+                if ($inSection) { break }                  # next version heading -> stop
+                if ($line -match [regex]::Escape($version)) { $inSection = $true }
+                continue
+              }
+              if ($inSection) { $section += $line }
+            }
           }
 
-          $log = git log $range --no-merges --pretty=format:"- %s (%h)"
+          # Trim leading/trailing blank lines from the captured section.
+          while ($section.Count -gt 0 -and $section[0].Trim() -eq '') { $section = $section[1..($section.Count - 1)] }
+          while ($section.Count -gt 0 -and $section[-1].Trim() -eq '') { $section = $section[0..($section.Count - 2)] }
 
-          "# HiveWE $version" | Out-File $notes -Encoding utf8
-          "" | Out-File $notes -Append -Encoding utf8
-          "First release of the Lufion fork of HiveWE." | Out-File $notes -Append -Encoding utf8
-          "" | Out-File $notes -Append -Encoding utf8
-          "## $header" | Out-File $notes -Append -Encoding utf8
-          "" | Out-File $notes -Append -Encoding utf8
-          if ($log) {
-            $log | Out-File $notes -Append -Encoding utf8
+          if ($section.Count -gt 0) {
+            "# HiveWE $version`n" | Out-File $notes -Encoding utf8
+            ($section -join "`n") | Out-File $notes -Append -Encoding utf8
           } else {
-            "- No commits found in range." | Out-File $notes -Append -Encoding utf8
+            # Fallback: no matching CHANGELOG section found.
+            Write-Host "::warning::No '## $version' section found in $changelog; using a minimal note."
+            "# HiveWE $version`n`nSee CHANGELOG.md for details." | Out-File $notes -Encoding utf8
           }
-          "" | Out-File $notes -Append -Encoding utf8
-          "## Running" | Out-File $notes -Append -Encoding utf8
-          "" | Out-File $notes -Append -Encoding utf8
-          "Download the zip, extract it, and run ``HiveWE.exe``. Requires a Warcraft III installation." | Out-File $notes -Append -Encoding utf8
 
           "notes_path=$notes" >> $env:GITHUB_OUTPUT
 
