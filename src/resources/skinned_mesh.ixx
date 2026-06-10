@@ -199,7 +199,10 @@ export class SkinnedMesh: public Resource {
 
 				buf.uvs_snorm.reserve(i.uv_sets.front().size());
 				for (const auto& j : i.uv_sets.front()) {
-					buf.uvs_snorm.push_back(glm::packSnorm2x16((j + 1.f) / 8.f));
+					// Half floats so we can represent the large tiling UVs some models use (e.g. -34). A
+					// fixed-range snorm encoding clamped anything outside roughly [-9, 7], collapsing such
+					// geosets to a single texel and rendering them as a flat average colour.
+					buf.uvs_snorm.push_back(glm::packHalf2x16(j));
 				}
 
 				buf.normals_oct_snorm.reserve(i.normals.size());

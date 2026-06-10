@@ -134,7 +134,7 @@ void main() {
 
 	gl_Position = VP * instance_matrices[instance_idx] * skin_matrix * vec4(vertex, 1.f);
 
-	UV = unpackSnorm2x16(uvs[gl_VertexID]) * 8.f - 1.f;
+	UV = unpackHalf2x16(uvs[gl_VertexID]);
 	Normal = oct_to_float32x3(unpackSnorm2x16(normals[gl_VertexID]));
 	vertexColor = layer_colors[info.layer_color_offset + uint(instance_id) * info.layer_skip_count + info.layer_index_local];
 	team_color = team_colors[team_color_indexes[instance_idx]];

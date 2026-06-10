@@ -147,7 +147,7 @@ void main() {
 	vec3 B = cross(N, T) * tangents[gl_VertexID].w; // to fix handedness
 	mat3 TBN = transpose(mat3(T, B, N));
 
-	UV = unpackSnorm2x16(uvs[gl_VertexID]) * 8.f - 1.f;
+	UV = unpackHalf2x16(uvs[gl_VertexID]);
 	tangent_light_direction = normalize(TBN * light_direction);
 	vertexColor = layer_colors[info.layer_color_offset + uint(instance_id) * info.layer_skip_count + info.layer_index_local];
 	team_color = team_colors[team_color_indexes[instance_idx]];
