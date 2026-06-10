@@ -20,30 +20,38 @@ std::vector<FileUsage> Map::get_file_usage() const {
 
 	hive::unordered_map<std::string, std::unordered_set<std::string>> resources;
 
-	const auto normalize_path = [&](const std::string& path) {
-		auto path_copy = path;
-		if (path_copy.ends_with(".mdl")) {
-			path_copy = path.substr(0, path.size() - 4) + ".mdx";
+	// Match key for comparing a referenced path against a file on disk. WC3 paths are case-insensitive
+	// and a model may be referenced as .mdl while imported as .mdx (or vice versa), so we lowercase and
+	// unify the model extension. Only used for matching, never for display or deletion.
+	const auto match_key = [](std::string path) {
+		std::ranges::transform(path, path.begin(), [](const unsigned char c) {
+			return c == '\\' ? '/' : static_cast<char>(std::tolower(c));
+		});
+		if (path.ends_with(".mdl")) {
+			path = path.substr(0, path.size() - 4) + ".mdx";
 		}
-		normalize_path_to_forward_slash(path_copy);
-		return path_copy;
+		return path;
+	};
+
+	// Real, displayable relative path (forward slashes, original case + extension).
+	const auto display_path = [](std::string path) {
+		normalize_path_to_forward_slash(path);
+		return path;
 	};
 
 	// Files placed under these stock game-asset roots override game content by path (terrain tiles,
 	// cliffs, team colours, ...). The map references them implicitly rather than via an object, so we
 	// treat anything under them as a used override instead of flagging it as unused.
-	const auto is_stock_override_path = [](const std::string& path) {
+	const auto is_stock_override_path = [](const std::string& lowercase_path) {
 		static constexpr std::array<std::string_view, 2> roots = {"terrainart/", "replaceabletextures/"};
-		std::string lower(path.size(), '\0');
-		std::ranges::transform(path, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		return std::ranges::any_of(roots, [&](std::string_view root) { return lower.starts_with(root); });
+		return std::ranges::any_of(roots, [&](std::string_view root) { return lowercase_path.starts_with(root); });
 	};
 
 	const auto find_references = [&](const slk::SLK& slk, const std::vector<std::string>& keys) {
 		for (const auto& [id, values] : slk.shadow_data) {
 			for (const auto& key : keys) {
 				if (auto found = values.find(key); found != values.end()) {
-					resources[normalize_path(found->second)].emplace(id);
+					resources[match_key(found->second)].emplace(id);
 				}
 			}
 		}
@@ -59,11 +67,11 @@ std::vector<FileUsage> Map::get_file_usage() const {
 	// find_references(upgrade_slk, {"file"});
 
 	if (!info.loading_screen_model.empty() && info.loading_screen_number == -1) {
-		resources[normalize_path(info.loading_screen_model)].emplace("loadingscreen");
+		resources[match_key(info.loading_screen_model)].emplace("loadingscreen");
 	}
 
 	for (const auto& i : sounds.sounds) {
-		resources[normalize_path(i.file)].emplace(i.name);
+		resources[match_key(i.file)].emplace(i.name);
 	}
 
 	std::println(
@@ -72,61 +80,60 @@ std::vector<FileUsage> Map::get_file_usage() const {
 	);
 	start = std::chrono::steady_clock::now();
 
-	// Enumerate every file in the map folder up front so we can scan every model (not just the ones
-	// reachable from the Object Editor) and report a size/override status for each.
-	std::unordered_set<std::string> files;
+	// Enumerate every file in the map folder, keeping both its real path (for display/deletion) and its
+	// match key (for case-insensitive comparison against references).
+	struct MapFile {
+		std::string display;
+		std::string key;
+	};
+	std::vector<MapFile> files;
 	for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
 		if (i.is_regular_file()) {
 			const std::string file_name = i.path().filename().string();
 			if (imports.blacklist.contains(file_name)) {
 				continue;
 			}
-			files.emplace(normalize_path(i.path().lexically_relative(filesystem_path).string()));
+			const std::string rel = i.path().lexically_relative(filesystem_path).string();
+			files.push_back({display_path(rel), match_key(rel)});
 		}
 	}
 
-	// Scan every MDX in the map (plus any model the Object Editor points at, which may live in the game
-	// data) for the textures/attachments/emitters it references. This way a texture counts as used if
-	// *any* model references it, not only models reachable from the Object Editor.
-	std::unordered_set<std::string> mdx_to_scan;
+	// Scan every model in the map for the textures/attachments/emitters it references, so a texture
+	// counts as used if any model references it (not just models reachable from the Object Editor).
+	std::vector<std::string> models;
 	for (const auto& file : files) {
-		if (file.ends_with(".mdx")) {
-			mdx_to_scan.emplace(file);
-		}
-	}
-	for (const auto& [path, ids] : resources) {
-		if (path.ends_with(".mdx")) {
-			mdx_to_scan.emplace(path);
+		if (file.key.ends_with(".mdx")) {
+			models.push_back(file.display);
 		}
 	}
 
 	hive::unordered_map<std::string, std::unordered_set<std::string>> referenced_resources;
 	std::mutex mutex;
 
-	std::for_each(std::execution::par_unseq, mdx_to_scan.begin(), mdx_to_scan.end(), [&](const std::string& path) {
+	std::for_each(std::execution::par_unseq, models.begin(), models.end(), [&](const std::string& model_path) {
 		mdx::MDX mdx;
 		try {
-			auto mdx_content = hierarchy.open_file(path);
+			auto mdx_content = hierarchy.open_file(model_path);
 			if (!mdx_content) {
 				return;
 			}
 			mdx = mdx::MDX(mdx_content.value());
 		} catch (const std::exception& e) {
-			std::println("Exception loading mdx: {} with error: {}", path, e.what());
+			std::println("Exception loading mdx: {} with error: {}", model_path, e.what());
 			return;
 		}
 
 		const auto guard = std::scoped_lock(mutex);
 		for (const auto& texture : mdx.textures) {
-			referenced_resources[normalize_path(texture.file_name.string())].emplace(path);
+			referenced_resources[match_key(texture.file_name.string())].emplace(model_path);
 		}
 
 		for (const auto& attachment : mdx.attachments) {
-			referenced_resources[normalize_path(attachment.path)].emplace(path);
+			referenced_resources[match_key(attachment.path)].emplace(model_path);
 		}
 
 		for (const auto& emitter : mdx.emitters1) {
-			referenced_resources[normalize_path(emitter.path)].emplace(path);
+			referenced_resources[match_key(emitter.path)].emplace(model_path);
 		}
 	});
 
@@ -154,28 +161,35 @@ std::vector<FileUsage> Map::get_file_usage() const {
 	} else {
 		const auto a = binary.value();
 		map_script = std::string(a.buffer.begin(), a.buffer.end());
+		std::ranges::transform(map_script, map_script.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 	}
 
 	std::vector<FileUsage> result;
 	result.reserve(files.size());
-	for (const auto& file : files) {
+	for (const auto& [display, key] : files) {
 		FileUsage usage;
-		usage.path = file;
+		usage.path = display;
 
 		std::error_code ec;
-		usage.size = fs::file_size(filesystem_path / file, ec);
+		usage.size = fs::file_size(filesystem_path / display, ec);
 		if (ec) {
 			usage.size = 0;
 		}
 
 		// Files that override a stock game asset by path (e.g. TerrainArt/*) are used implicitly even
 		// though nothing in the map references them.
-		usage.is_override = hierarchy.game_file_exists(file) || is_stock_override_path(file);
+		usage.is_override = hierarchy.game_file_exists(display) || is_stock_override_path(key);
 
-		if (resources.contains(file)) {
-			usage.used_by = resources.at(file);
-		} else if (!map_script.empty() && map_script.contains(file)) {
-			usage.used_by.emplace("map script");
+		if (const auto found = resources.find(key); found != resources.end()) {
+			usage.used_by = found->second;
+		} else if (!map_script.empty()) {
+			// The map script references files by literal path; check both separator styles (lowercased).
+			std::string forward = key;
+			std::string backward = key;
+			std::ranges::replace(backward, '/', '\\');
+			if (map_script.contains(forward) || map_script.contains(backward)) {
+				usage.used_by.emplace("map script");
+			}
 		}
 		result.push_back(std::move(usage));
 	}
