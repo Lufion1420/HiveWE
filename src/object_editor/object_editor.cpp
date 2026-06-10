@@ -929,7 +929,6 @@ void ObjectEditor::itemClicked(QTreeView* view, const QSortFilterProxyModel* mod
 		: view == upgrade_explorer	 ? Category::upgrade
 									 : Category::buff;
 	open_by_id(table, item->id, index.data(Qt::DisplayRole).toString(), index.data(Qt::DecorationRole).value<QIcon>());
-	view->setFocus(Qt::FocusReason::OtherFocusReason);
 }
 
 void ObjectEditor::reset_details_panel() {
@@ -1419,7 +1418,6 @@ void ObjectEditor::paste_copied_object() {
 
 void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon) {
 	if (current_details_id == id) {
-		details_dock->setFocus();
 		details_dock->raise();
 		return;
 	}
