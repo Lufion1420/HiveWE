@@ -80,6 +80,11 @@ export class GPUTexture : public Resource {
 			if (id == 0) {
 				glCreateTextures(GL_TEXTURE_2D, 1, &id);
 				std::println("Error loading texture: {}", path.string());
+			} else if (new_path.extension() != ".dds") {
+				// SOIL only loads a mip chain for DDS (via SOIL_FLAG_DDS_LOAD_DIRECT). For other formats
+				// (TGA, PNG, ...) it uploads only the base level, but the mipmapped min filter set below
+				// then leaves the texture incomplete, so it samples as solid black. Generate the mips.
+				glGenerateTextureMipmap(id);
 			}
 		}
 
