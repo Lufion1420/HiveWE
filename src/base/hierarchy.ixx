@@ -109,6 +109,31 @@ export class Hierarchy {
 		return std::unexpected(path_str + " could not be found in the hierarchy");
 	}
 
+	/// True if `path` exists as a stock asset in the base game data, ignoring the map's own files and
+	/// local overrides. Used to detect map files that override a game asset by path (e.g. TerrainArt/*),
+	/// which are "used" implicitly even though nothing references them.
+	bool game_file_exists(const fs::path& path) const {
+		if (path.empty()) {
+			return false;
+		}
+
+		const auto path_str = path.string();
+
+		// Same lookup as file_exists() but without the map's own files, so a map file at the same path
+		// still counts as overriding the underlying game asset (HiveWE overrides / local install / CASC).
+		return fs::exists("data/overrides" / path)
+			|| (local_files && fs::exists(root_directory / path))
+			|| (hd && game_data.file_exists("war3.w3mod:_hd.w3mod:_tilesets/"s + tileset + ".w3mod:"s + path_str))
+			|| (hd && teen && game_data.file_exists("war3.w3mod:_hd.w3mod:_teen.w3mod:"s + path_str))
+			|| (hd && game_data.file_exists("war3.w3mod:_hd.w3mod:"s + path_str))
+			|| game_data.file_exists("war3.w3mod:_tilesets/"s + tileset + ".w3mod:"s + path_str)
+			|| game_data.file_exists(std::format("war3.w3mod:_locales/{}.w3mod:{}", locale, path_str))
+			|| (teen && game_data.file_exists("war3.w3mod:_teen.w3mod:"s + path_str))
+			|| game_data.file_exists("war3.w3mod:"s + path_str)
+			|| game_data.file_exists("war3.w3mod:_deprecated.w3mod:"s + path_str)
+			|| (aliases.exists(path_str) ? game_file_exists(aliases.alias(path_str)) : false);
+	}
+
 	bool file_exists(const fs::path& path) const {
 		if (path.empty()) {
 			return false;

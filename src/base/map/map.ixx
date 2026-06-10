@@ -47,7 +47,9 @@ using namespace std::literals::string_literals;
 
 export struct FileUsage {
 	std::string path;
-	std::unordered_set<std::string> used_by; // empty = unused
+	std::unordered_set<std::string> used_by; // empty and not an override = unused
+	bool is_override = false; // overrides a stock game asset by path; counts as used
+	std::uintmax_t size = 0; // file size in bytes
 };
 
 export class Map: public QObject {

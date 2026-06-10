@@ -29,6 +29,16 @@ std::vector<FileUsage> Map::get_file_usage() const {
 		return path_copy;
 	};
 
+	// Files placed under these stock game-asset roots override game content by path (terrain tiles,
+	// cliffs, team colours, ...). The map references them implicitly rather than via an object, so we
+	// treat anything under them as a used override instead of flagging it as unused.
+	const auto is_stock_override_path = [](const std::string& path) {
+		static constexpr std::array<std::string_view, 2> roots = {"terrainart/", "replaceabletextures/"};
+		std::string lower(path.size(), '\0');
+		std::ranges::transform(path, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return std::ranges::any_of(roots, [&](std::string_view root) { return lower.starts_with(root); });
+	};
+
 	const auto find_references = [&](const slk::SLK& slk, const std::vector<std::string>& keys) {
 		for (const auto& [id, values] : slk.shadow_data) {
 			for (const auto& key : keys) {
@@ -62,21 +72,42 @@ std::vector<FileUsage> Map::get_file_usage() const {
 	);
 	start = std::chrono::steady_clock::now();
 
+	// Enumerate every file in the map folder up front so we can scan every model (not just the ones
+	// reachable from the Object Editor) and report a size/override status for each.
+	std::unordered_set<std::string> files;
+	for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
+		if (i.is_regular_file()) {
+			const std::string file_name = i.path().filename().string();
+			if (imports.blacklist.contains(file_name)) {
+				continue;
+			}
+			files.emplace(normalize_path(i.path().lexically_relative(filesystem_path).string()));
+		}
+	}
+
+	// Scan every MDX in the map (plus any model the Object Editor points at, which may live in the game
+	// data) for the textures/attachments/emitters it references. This way a texture counts as used if
+	// *any* model references it, not only models reachable from the Object Editor.
+	std::unordered_set<std::string> mdx_to_scan;
+	for (const auto& file : files) {
+		if (file.ends_with(".mdx")) {
+			mdx_to_scan.emplace(file);
+		}
+	}
+	for (const auto& [path, ids] : resources) {
+		if (path.ends_with(".mdx")) {
+			mdx_to_scan.emplace(path);
+		}
+	}
+
 	hive::unordered_map<std::string, std::unordered_set<std::string>> referenced_resources;
 	std::mutex mutex;
 
-	std::for_each(std::execution::par_unseq, resources.begin(), resources.end(), [&](const auto& resource) {
-		const auto& [path, ids] = resource; // MSVC does not support structured bindings in lambdas atm.
-
-		if (!path.ends_with(".mdx")) {
-			return;
-		}
-
+	std::for_each(std::execution::par_unseq, mdx_to_scan.begin(), mdx_to_scan.end(), [&](const std::string& path) {
 		mdx::MDX mdx;
 		try {
 			auto mdx_content = hierarchy.open_file(path);
 			if (!mdx_content) {
-				std::println("Error loading mdx: {} with error: {}", path, mdx_content.error());
 				return;
 			}
 			mdx = mdx::MDX(mdx_content.value());
@@ -109,20 +140,6 @@ std::vector<FileUsage> Map::get_file_usage() const {
 		resources[path].insert(values.begin(), values.end());
 	}
 
-	std::unordered_set<std::string> files;
-
-	for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
-		if (i.is_regular_file()) {
-			const auto new_path = i.path();
-			std::string path = new_path.lexically_relative(filesystem_path).string();
-			std::string file_name = i.path().filename().string();
-			if (imports.blacklist.contains(file_name)) {
-				continue;
-			}
-			files.emplace(normalize_path(path));
-		}
-	}
-
 	std::string script_file_name;
 	if (info.lua) {
 		script_file_name = "war3map.lua";
@@ -144,6 +161,17 @@ std::vector<FileUsage> Map::get_file_usage() const {
 	for (const auto& file : files) {
 		FileUsage usage;
 		usage.path = file;
+
+		std::error_code ec;
+		usage.size = fs::file_size(filesystem_path / file, ec);
+		if (ec) {
+			usage.size = 0;
+		}
+
+		// Files that override a stock game asset by path (e.g. TerrainArt/*) are used implicitly even
+		// though nothing in the map references them.
+		usage.is_override = hierarchy.game_file_exists(file) || is_stock_override_path(file);
+
 		if (resources.contains(file)) {
 			usage.used_by = resources.at(file);
 		} else if (!map_script.empty() && map_script.contains(file)) {
