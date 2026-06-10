@@ -87,57 +87,54 @@ export class UnitListFilter: public QSortFilterProxyModel {
 
 	[[nodiscard]]
 	bool lessThan(const QModelIndex& left, const QModelIndex& right) const override {
+		// The resolved display name (TRIGSTR/etc. references expanded) is what the list shows, so
+		// sort on that case-insensitively rather than on the raw SLK field. Units are still grouped
+		// first by category (the numeric prefix below); only the alphabetical tie-break changed.
+		const QString left_name = sourceModel()->data(left, Qt::DisplayRole).toString();
+		const QString right_name = sourceModel()->data(right, Qt::DisplayRole).toString();
+
 		if (filterRace && *filterRace == custom_race) {
-			auto sort_key = [&](const QModelIndex& index) {
+			auto group = [&](const QModelIndex& index) {
 				const bool isBuilding = units_slk.data<std::string_view>("isbldg", index.row()) == "1";
 				const bool isHero = isupper(units_slk.index_to_row.at(index.row()).front());
 
-				QString prefix = "1";
 				if (isHero) {
-					prefix = "0";
+					return 0;
 				} else if (isBuilding) {
-					prefix = "2";
+					return 2;
 				}
-
-				return prefix + QString::fromUtf8(units_slk.data<std::string_view>("name", index.row()));
+				return 1;
 			};
 
-			return sort_key(left) < sort_key(right);
+			const int left_group = group(left);
+			const int right_group = group(right);
+			if (left_group != right_group) {
+				return left_group < right_group;
+			}
+			return left_name.localeAwareCompare(right_name) < 0;
 		}
 
-		QString leftIndex = "0";
-		{
-			const bool isBuilding = units_slk.data<std::string_view>("isbldg", left.row()) == "1";
-			const bool isHero = isupper(units_slk.index_to_row.at(left.row()).front());
-			const bool isSpecial = units_slk.data<std::string_view>("special", left.row()) == "1";
+		auto group = [&](const QModelIndex& index) {
+			const bool isBuilding = units_slk.data<std::string_view>("isbldg", index.row()) == "1";
+			const bool isHero = isupper(units_slk.index_to_row.at(index.row()).front());
+			const bool isSpecial = units_slk.data<std::string_view>("special", index.row()) == "1";
 
 			if (isSpecial) {
-				leftIndex = "3";
+				return 3;
 			} else if (isBuilding) {
-				leftIndex = "1";
+				return 1;
 			} else if (isHero) {
-				leftIndex = "2";
+				return 2;
 			}
-			leftIndex += QString::fromUtf8(units_slk.data<std::string_view>("name", left.row()));
-		}
+			return 0;
+		};
 
-		QString rightIndex = "0";
-		{
-			const bool isBuilding = units_slk.data<std::string_view>("isbldg", right.row()) == "1";
-			const bool isHero = isupper(units_slk.index_to_row.at(right.row()).front());
-			const bool isSpecial = units_slk.data<std::string_view>("special", right.row()) == "1";
-
-			if (isSpecial) {
-				rightIndex = "3";
-			} else if (isBuilding) {
-				rightIndex = "1";
-			} else if (isHero) {
-				rightIndex = "2";
-			}
-			rightIndex += QString::fromUtf8(units_slk.data<std::string_view>("name", right.row()));
+		const int left_group = group(left);
+		const int right_group = group(right);
+		if (left_group != right_group) {
+			return left_group < right_group;
 		}
-		
-		return leftIndex < rightIndex;
+		return left_name.localeAwareCompare(right_name) < 0;
 	}
 
 	std::optional<std::string> filterRace;

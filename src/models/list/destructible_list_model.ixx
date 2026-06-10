@@ -91,7 +91,12 @@ export class DestructableListFilter: public QSortFilterProxyModel {
 	}
 
 	[[nodiscard]] bool lessThan(const QModelIndex& left, const QModelIndex& right) const override {
-		return destructibles_slk.data<std::string_view>("name", left.row()) < destructibles_slk.data<std::string_view>("name", right.row());
+		// Sort on the resolved display name (the same text shown in the list, with TRIGSTR/etc.
+		// references expanded) rather than the raw SLK field, and do so case-insensitively so the
+		// ordering matches the World Editor.
+		const QString left_name = sourceModel()->data(left, Qt::DisplayRole).toString();
+		const QString right_name = sourceModel()->data(right, Qt::DisplayRole).toString();
+		return left_name.localeAwareCompare(right_name) < 0;
 	}
 
 	std::optional<std::string> filterCategory;
