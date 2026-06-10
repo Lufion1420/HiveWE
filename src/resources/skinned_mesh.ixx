@@ -392,7 +392,18 @@ export class SkinnedMesh: public Resource {
 				layer_ids.push_back(e);
 
 				LayerParams p {};
-				p.alpha_test = layer.blend_mode == 1 ? 0.75f : 0.01f;
+				// blend_mode 1 keys out alpha below ~0.75. Other modes discard fully transparent fragments
+				// (alpha < 0.01), EXCEPT classic SD "None" (blend_mode 0) layers: WC3 treats those as fully
+				// opaque and ignores the texture alpha entirely, so we must not alpha-test them away (many SD
+				// models store a 0 alpha channel on opaque textures). The 0.01 cut on blend_mode 0 is only
+				// wanted for HD materials (e.g. some Reforged bridges).
+				if (layer.blend_mode == 1) {
+					p.alpha_test = 0.75f;
+				} else if (layer.blend_mode == 0 && !layer.hd) {
+					p.alpha_test = 0.0f;
+				} else {
+					p.alpha_test = 0.01f;
+				}
 				p.layer_lit = (layer.shading_flags & 0x1) ? 0u : 1u;
 				const uint32_t replaceable_id = mdx->textures[layer.textures[0].id].replaceable_id;
 				p.is_team_color = (replaceable_id == 1 || replaceable_id == 2) ? 1u : 0u;
