@@ -1,0 +1,32 @@
+---
+description: Warcraft III map serialization, binary formats, and load/save invariants
+globs: "src/{file_formats,base/map,base/triggers}/**/*"
+alwaysApply: false
+---
+
+# HiveWE File Formats
+
+WC3 compatibility is fragile — tiny ordering or field-size mistakes break saves.
+
+## Owners
+
+- Map load/save orchestration: `src/base/map/map.ixx` (`Map::load()` / `Map::save()` sequencing).
+- Asset lookup: `src/base/hierarchy.ixx`.
+- Binary helpers: `BinaryReader`, `BinaryWriter` in `src/base/`.
+- MDL/MDX: `src/file_formats/mdx/`.
+- Triggers/script: `src/base/triggers/`.
+- Object SLK merges: `src/object_editor/slk_conversions.ixx`.
+
+## Rules
+
+- Read both load and save paths before editing one side.
+- Preserve round-trip: MDL/MDX, SLK merges, W3* files, generated scripts.
+- Do not silently discard unknown data unless existing code does intentionally.
+- Keep bounds checks and explicit error propagation.
+- Preserve Hierarchy lookup order unless task is specifically to change it.
+- No "cleanup" refactors while fixing compatibility bugs.
+- Mark uncertain format rules `Needs verification`; test with `data/test map/` or fixtures.
+
+## Tests
+
+- `tests/binary_writer_test.cpp`, `tests/modification_tables_test.cpp`, `tests/mdl_reader_test.cpp`.

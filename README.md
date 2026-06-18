@@ -138,3 +138,9 @@ A dedicated Tooltip Editor with a template manager for working with WC3 tooltip 
 
 ### Build Process
 - Attempts to automatically launch the project after building and kills any previously running instance first (note: automatic launch is currently not working as intended — the old instance is killed but starting the new one fails with an error)
+
+---
+
+## AI-assisted development
+
+Cursor agent guidance lives in [`AGENTS.md`](AGENTS.md) (index) and [`.cursor/`](.cursor/) (rules, skills, plans). Scoped rules load automatically when editing matching files; invoke skills explicitly for subsystem workflows.

@@ -1,0 +1,57 @@
+---
+description: HiveWE architecture boundaries, safe-change rules, workflows, and agent pitfalls
+alwaysApply: true
+---
+
+# HiveWE Core
+
+HiveWE is a C++23 Warcraft III World Editor replacement (`.ixx` modules + Qt `.cpp`/`.h`). Preserve WC3 map/editor compatibility — not a generic game engine.
+
+## Architecture boundaries
+
+- File formats: `src/file_formats/` or owning `src/base/` component — not UI classes.
+- Qt/editors: `src/main_window/`, `src/menus/`, `src/object_editor/`, `src/trigger_editor/`, `src/model_editor/`.
+- Rendering/resources: `src/resources/`, `src/base/render_manager.ixx`, `src/main_window/glwidget.cpp`.
+- `Map` (`src/base/map/map.ixx`) orchestrates load/save order, undo, rendering wiring.
+- `Hierarchy` owns asset lookup order (overrides → local → map → CASC). Do not bypass.
+- `ResourceManager` caches shared resources. Do not duplicate loading ad hoc.
+- `GLThreadPool` and post-load `glFinish()` are intentional sync points.
+
+## Safe changes
+
+- Small edits in the owning subsystem. Preserve `Map` load/save order unless verified.
+- Reuse Qt models, docks, palettes — no parallel UI state.
+- Verify Qt parent ownership before changing lifetimes.
+- Verify main-thread GL assumptions when touching async loading.
+
+## Workflows
+
+**Bug fix:** Identify layer (UI / map / render / format) → read owner first → narrowest test → broader verification.
+
+**Feature:** Extend existing subsystem → match undo/save flows → identify WC3 files → add tests for parsers.
+
+## Delegate vs inline (summary)
+
+- **Inline:** single-file fix, pasted compiler errors, known subsystem.
+- **Delegate explore:** unknown ownership across Map / Hierarchy / hivewe.cpp.
+- **Delegate generalPurpose:** cross-cutting features spanning 3+ folders.
+- **Never auto-build** unless user re-allows (see build-policy rule).
+
+## Verification
+
+- Parser changes: `ctest --preset Release`; MDL/MDX round-trip tests.
+- UI: open affected editor, check shortcuts/docking/persistence.
+- Map save: `data/test map/` load/save smoke test.
+- Say explicitly if build/tests were not run.
+
+## Pitfalls
+
+- Do not break `Map` load/save sequencing or `Hierarchy` lookup order.
+- Do not remove `glFinish()` / GL thread-pool sync without proof.
+- No broad abstractions for one-off editor behavior.
+- Regions/player starts/palettes are recent — check viewport AND save/script paths.
+- Watch Qt ownership, `QProcess`, GL resources on map reload.
+
+## Keeping guidance current
+
+Update `.cursor/rules/` or `.cursor/skills/` when you learn durable repo facts. Label uncertain conventions `Needs verification`.

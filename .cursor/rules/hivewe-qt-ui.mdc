@@ -1,0 +1,29 @@
+---
+description: Qt editor UI patterns for palettes, docking, models, and shortcuts
+globs: "src/{main_window,menus,object_editor,trigger_editor,model_editor,custom_widgets}/**/*.{cpp,h,ui}"
+alwaysApply: false
+---
+
+# HiveWE Qt UI
+
+Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
+
+## Patterns
+
+- `window_handler.create_or_raise<T>()` for singleton-like tool windows.
+- `Palette` subclasses for brush/context tools.
+- Sidebar palettes orchestrated from `src/main_window/hivewe.cpp` — visibility vs active brush are separate.
+- Models in `src/models/` — extend models, not duplicate widget state.
+- `QShortcut` wiring close to the owning widget.
+
+## Rules
+
+- Verify Qt parent ownership or explicit cleanup for `new` allocations.
+- Do not move parsing/resource loading into widgets unless that area already does.
+- UX: active-state clarity, predictable toggles, low-noise feedback.
+- User-facing values: prefer Warcraft coordinates/IDs over internal engine values.
+- Errors: Qt dialogs where surrounding code already does.
+
+## Verification
+
+Open affected window/palette; check shortcuts, focus, docking, save/reload if editing map data.

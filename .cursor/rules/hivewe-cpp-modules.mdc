@@ -1,0 +1,33 @@
+---
+description: C++ module conventions, naming, globals, and error handling in HiveWE
+globs: "**/*.ixx"
+alwaysApply: false
+---
+
+# HiveWE C++ Modules
+
+Primary implementation units are `.ixx` modules; Qt UI stays in `.cpp`/`.h`.
+
+## Style
+
+- Tabs, width 4, line limit 140 (`.clang-format`, `tabs.editorconfig`).
+- `snake_case` functions/fields/files; `PascalCase` types.
+- Imports by logical name: `import Map;`, `import BinaryReader;`, `import Terrain;`.
+- Do not auto-sort includes.
+
+## Globals
+
+Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_thread_pool`. Do not add new globals casually.
+
+## Error handling by layer
+
+- UI flows: `QMessageBox`.
+- Parsing/resources: `std::expected<..., std::string>`.
+- Low-level binary: exceptions on invalid bounds / I/O failure.
+- Diagnostics: `std::println`.
+- Assertions are invariants in parsers — do not replace with silent fallbacks unless user-facing.
+
+## Performance
+
+- `Map::load()` uses `std::async` — hot path.
+- Large SLK/meta merges affect startup — avoid redundant work.

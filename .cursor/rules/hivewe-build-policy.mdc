@@ -1,0 +1,37 @@
+---
+description: HiveWE build, test, and dependency workflow on Windows
+alwaysApply: true
+---
+
+# HiveWE Build Policy
+
+Windows-first: Visual Studio 2022 17.14+, `VCPKG_ROOT`, overlay ports in `overlay-ports/`.
+
+## Default agent behavior
+
+- **Do not run `cmake --build ...`** unless the user explicitly re-allows it for the current task.
+- Prefer fixing compile issues from **pasted build errors** first.
+- Leave build/debug execution manual unless asked.
+
+## Commands (when user allows)
+
+```powershell
+cmake --preset Release
+cmake --build --preset Release
+ctest --preset Release
+```
+
+Presets: `Debug`, `Release`, `ReleaseTracing` (Tracy profiling).
+
+## Dependency / CI notes
+
+- Custom vcpkg overlay ports are intentional patches — inspect before changing source.
+- CI reference: `.github/workflows/compile.yml`.
+- VS open-folder builds may need Administrator (post-build `data/` symlink).
+- `LNK1104` on `HiveWE.exe` is often a running editor holding the file lock.
+
+## Verification
+
+- Reconfigure after CMake or dependency changes.
+- Narrowest test first, then full preset if feasible.
+- For runtime/UI changes, user launches the built app manually.
