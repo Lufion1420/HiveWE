@@ -39,11 +39,13 @@ import "trigger_editor.h";
 #include "QKeySequence"
 #include "QString"
 #include <QApplication>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QFrame>
 #include <QStyle>
 #include <QFileInfo>
+#include <QMenu>
 #include <QRegularExpression>
 #include <QStringList>
 #include <QTextDocument>
@@ -51,6 +53,8 @@ import "menus/gameplay_constants_editor.h";
 import "menus/item_tables_editor.h";
 import "asset_manager/asset_manager.h";
 import "tooltip_editor/tooltip_editor.h";
+#include "object_data_import_dialog.h"
+import ObjectDataIo;
 
 namespace fs = std::filesystem;
 
@@ -196,6 +200,20 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->quick_search, &QToolButton::clicked, this, [this]() { new GlobalSearchWidget(this); });
 	connect(ui->ribbon->settings, &QToolButton::clicked, [&]() { new SettingsEditor(this); });
 	connect(ui->ribbon->config, &QToolButton::clicked, [&]() { new ShortcutConfigDialog(this); });
+
+	auto* export_menu = new QMenu(this);
+	export_menu->addAction("Binary package", this, &HiveWE::export_object_data_binary);
+	export_menu->addAction("Text package", this, &HiveWE::export_object_data_text);
+	ui->ribbon->export_objects->setMenu(export_menu);
+	ui->ribbon->export_objects->setPopupMode(QToolButton::InstantPopup);
+
+	auto* import_menu = new QMenu(this);
+	import_menu->addAction("Binary package", this, &HiveWE::import_object_data_binary);
+	import_menu->addAction("Map folder", this, &HiveWE::import_object_data_map_folder);
+	import_menu->addAction("Text package", this, &HiveWE::import_object_data_text);
+	ui->ribbon->import_objects->setMenu(import_menu);
+	ui->ribbon->import_objects->setPopupMode(QToolButton::InstantPopup);
+
 	connect(ui->ribbon->switch_warcraft, &QToolButton::clicked, this, &HiveWE::switch_warcraft);
 	connect(ui->ribbon->exit, &QToolButton::clicked, [&]() { QApplication::exit(); });
 
@@ -1025,6 +1043,142 @@ void HiveWE::import_heightmap() {
 
 	map->terrain.update_ground_heights({ 0, 0, width, height });
 	delete image_data;
+}
+
+namespace {
+
+QString object_data_default_directory() {
+	QSettings settings;
+	if (!map) {
+		return settings.value("openDirectory", QDir::current().path()).toString();
+	}
+	return settings.value("openDirectory", QDir::current().path()).toString() + "/" + QString::fromStdString(map->filesystem_path.filename().string());
+}
+
+bool ensure_map_loaded_for_object_io(QWidget* parent) {
+	if (map && map->loaded) {
+		return true;
+	}
+
+	QMessageBox::warning(parent, "No Map Loaded", "Open a map before importing or exporting Object Editor data.");
+	return false;
+}
+
+void show_import_validation_failure(QWidget* parent, const ImportValidationReport& report) {
+	QStringList lines;
+	for (const ValidationIssue& issue : report.issues) {
+		if (issue.severity == ValidationSeverity::error) {
+			lines.push_back(QString::fromStdString(issue.message));
+		}
+	}
+	if (lines.isEmpty()) {
+		lines.push_back("Import validation failed.");
+	}
+	QMessageBox::warning(parent, "Import Blocked", lines.join("\n"));
+}
+
+} // namespace
+
+void HiveWE::export_object_data_binary() {
+	if (!ensure_map_loaded_for_object_io(this)) {
+		return;
+	}
+
+	const QString directory = QFileDialog::getExistingDirectory(this, "Export Object Data (Binary)", object_data_default_directory());
+	if (directory.isEmpty()) {
+		return;
+	}
+
+	if (const auto result = export_binary_object_data(directory.toStdString()); !result) {
+		QMessageBox::warning(this, "Export Failed", QString::fromStdString(result.error()));
+		return;
+	}
+
+	show_transient_notice("Exported Object Editor binary package.");
+}
+
+void HiveWE::export_object_data_text() {
+	if (!ensure_map_loaded_for_object_io(this)) {
+		return;
+	}
+
+	const QString directory = QFileDialog::getExistingDirectory(this, "Export Object Data (Text)", object_data_default_directory());
+	if (directory.isEmpty()) {
+		return;
+	}
+
+	if (const auto result = export_text_object_data(directory.toStdString()); !result) {
+		QMessageBox::warning(this, "Export Failed", QString::fromStdString(result.error()));
+		return;
+	}
+
+	show_transient_notice("Exported Object Editor text package.");
+}
+
+void HiveWE::import_object_data_binary() {
+	if (!ensure_map_loaded_for_object_io(this)) {
+		return;
+	}
+
+	const QString directory = QFileDialog::getExistingDirectory(this, "Import Object Data (Binary)", object_data_default_directory());
+	if (directory.isEmpty()) {
+		return;
+	}
+
+	const auto loaded = load_binary_object_data(directory.toStdString(), true);
+	if (!loaded) {
+		show_import_validation_failure(this, loaded.error());
+		return;
+	}
+
+	ObjectDataImportDialog dialog(std::move(*loaded), this);
+	if (dialog.exec() == QDialog::Accepted && dialog.dialog_result() == ObjectDataImportDialog::Result::applied) {
+		show_transient_notice("Imported Object Editor data.");
+	}
+}
+
+void HiveWE::import_object_data_map_folder() {
+	if (!ensure_map_loaded_for_object_io(this)) {
+		return;
+	}
+
+	const QString directory = QFileDialog::getExistingDirectory(this, "Import Object Data (Map Folder)", object_data_default_directory());
+	if (directory.isEmpty()) {
+		return;
+	}
+
+	const auto loaded = load_binary_object_data(directory.toStdString(), false);
+	if (!loaded) {
+		show_import_validation_failure(this, loaded.error());
+		return;
+	}
+
+	ObjectDataImportDialog dialog(std::move(*loaded), this);
+	if (dialog.exec() == QDialog::Accepted && dialog.dialog_result() == ObjectDataImportDialog::Result::applied) {
+		show_transient_notice("Imported Object Editor data from map folder.");
+	}
+}
+
+void HiveWE::import_object_data_text() {
+	if (!ensure_map_loaded_for_object_io(this)) {
+		return;
+	}
+
+	const QString directory = QFileDialog::getExistingDirectory(this, "Import Object Data (Text)", object_data_default_directory());
+	if (directory.isEmpty()) {
+		return;
+	}
+
+	const auto loaded = load_text_object_data(directory.toStdString());
+	if (!loaded) {
+		show_import_validation_failure(this, loaded.error());
+		return;
+	}
+
+	ObjectDataImportDialog dialog(std::move(*loaded), this);
+	if (dialog.exec() == QDialog::Accepted && dialog.dialog_result() == ObjectDataImportDialog::Result::applied) {
+		show_transient_notice("Imported Object Editor text data.");
+	}
 }
 
 void HiveWE::save_window_state() {

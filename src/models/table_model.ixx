@@ -344,4 +344,15 @@ export class TableModel : public QAbstractTableModel {
 	QModelIndex rowIDToIndex(const std::string_view id) const {
 		return createIndex(slk->row_headers.at(id), 0);
 	}
+
+	void refreshRow(const std::string_view id) {
+		if (!slk->row_headers.contains(id)) {
+			return;
+		}
+
+		const int row = slk->row_headers.at(id);
+		const QModelIndex top_left = index(row, 0);
+		const QModelIndex bottom_right = index(row, columnCount() - 1);
+		emit dataChanged(top_left, bottom_right);
+	}
 };

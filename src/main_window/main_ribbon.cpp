@@ -335,6 +335,8 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 			 asset_manager,
 			 tooltip_editor,
 			 config,
+			 export_objects,
+			 import_objects,
 			 terrain_palette,
 			 doodad_palette,
 			 unit_palette,
@@ -391,6 +393,14 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	config->setIcon(QIcon("data/icons/ribbon/options.png"));
 	config->setText("Config");
 	config->setToolTip("Open the shortcut and behavior reference.");
+
+	export_objects->setIcon(QIcon("data/icons/ribbon/saveas.png"));
+	export_objects->setText("Export\nObjects");
+	export_objects->setToolTip("Export Object Editor data to a portable binary or text package.");
+
+	import_objects->setIcon(QIcon("data/icons/ribbon/open.png"));
+	import_objects->setText("Import\nObjects");
+	import_objects->setToolTip("Import Object Editor data. For text export, select the folder that contains manifest.json and the table/ directory.");
 
 	terrain_palette->setIcon(QIcon("data/icons/ribbon/heightmap.png"));
 	terrain_palette->setText("Terrain");
@@ -515,6 +525,8 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	editor_section->addWidget(tooltip_editor);
 
 	auto* config_section = make_section("Config");
+	config_section->addWidget(export_objects);
+	config_section->addWidget(import_objects);
 	config_section->addWidget(config);
 
 	home_tab->addSection(history_section);

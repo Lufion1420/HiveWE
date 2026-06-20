@@ -97,6 +97,8 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"utilities/utilities.ixx"
 	"utilities/opengl_utilities.ixx"
 	"utilities/modification_tables.ixx" 
+	"utilities/object_data_text.ixx"
+	"utilities/object_data_io.ixx"
 	"utilities/unordered_map.ixx"
 
 	"utilities/no_init_allocator.ixx"
@@ -162,6 +164,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/region_palette.cpp"
 	"menus/settings_editor.cpp"
 	"menus/shortcut_config_dialog.cpp"
+	"menus/object_data_import_dialog.cpp"
 	"menus/terrain_palette.cpp"
 	"menus/unit_properties_dialog.cpp"
 	"menus/unit_palette.cpp"
@@ -177,6 +180,7 @@ target_sources(HiveWE_lib PRIVATE
 	"menus/region_palette.h"
 	"menus/new_map_dialog.h"
 	"menus/shortcut_config_dialog.h"
+	"menus/object_data_import_dialog.h"
 	"menus/unit_properties_dialog.h"
 
 	"asset_manager/asset_manager.cpp"

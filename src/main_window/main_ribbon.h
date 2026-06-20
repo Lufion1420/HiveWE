@@ -63,6 +63,8 @@ public:
 	QRibbonButton* asset_manager = new QRibbonButton;
 	QRibbonButton* tooltip_editor = new QRibbonButton;
 	QRibbonButton* config = new QRibbonButton;
+	QRibbonButton* export_objects = new QRibbonButton;
+	QRibbonButton* import_objects = new QRibbonButton;
 
 	QRibbonButton* terrain_palette = new QRibbonButton;
 	QRibbonButton* doodad_palette = new QRibbonButton;

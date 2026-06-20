@@ -3,6 +3,7 @@ find_package(doctest CONFIG REQUIRED)
 add_executable(HiveWE_tests
 	test_main.cpp
 	modification_tables_test.cpp
+	object_data_io_test.cpp
 	binary_writer_test.cpp
 	mdl_reader_test.cpp
 )

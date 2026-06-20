@@ -96,6 +96,11 @@ private:
 
 	void switch_warcraft();
 	void import_heightmap();
+	void export_object_data_binary();
+	void export_object_data_text();
+	void import_object_data_binary();
+	void import_object_data_map_folder();
+	void import_object_data_text();
 	void create_new_map();
 	void save_window_state();
 	void restore_window_state();
