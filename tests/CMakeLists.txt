@@ -6,6 +6,7 @@ add_executable(HiveWE_tests
 	object_data_io_test.cpp
 	binary_writer_test.cpp
 	mdl_reader_test.cpp
+	asset_obfuscation_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

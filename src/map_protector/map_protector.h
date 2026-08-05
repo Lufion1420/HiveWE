@@ -60,6 +60,7 @@ class MapProtector : public QMainWindow {
 	QSpinBox* junk_file_count_spin;
 	QCheckBox* remove_gui_triggers_check;
 	QCheckBox* strip_trigger_strings_check;
+	QCheckBox* obfuscate_asset_paths_check;
 	QCheckBox* clear_author_check;
 	QCheckBox* clear_description_check;
 	QCheckBox* clear_loading_text_check;

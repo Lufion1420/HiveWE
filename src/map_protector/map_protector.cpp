@@ -100,6 +100,19 @@ MapProtector::MapProtector(QWidget* parent) : QMainWindow(parent) {
 	strip_trigger_strings_check = make_check(trigger_group, trigger_layout, "Strip trigger strings", "Inlines war3map.wts text directly into the script and into war3map.w3i's own fields (map name, author, description, loading screen text), then deletes war3map.wts. Note: object data fields (e.g. a very long custom tooltip) can independently reference a trigger string too - those will show raw \"TRIGSTR_XXX\" text in-game after stripping.", false);
 	main_layout->addWidget(trigger_group);
 
+	// Asset path obfuscation
+	auto* asset_group = new QGroupBox("Asset Path Obfuscation", central);
+	auto* asset_layout = new QVBoxLayout(asset_group);
+	obfuscate_asset_paths_check = make_check(
+		asset_group, asset_layout, "Rename imported files to random names",
+		"Renames every custom model, texture, etc. to a random name and rewrites every reference to "
+		"it so the map still plays correctly - defeats tools that recover filenames via a known-name "
+		"dictionary (e.g. Ladik's MPQ Editor). Not yet implemented: enabling this currently fails the "
+		"export with an explanatory message rather than shipping a map with a broken reference.",
+		false
+	);
+	main_layout->addWidget(asset_group);
+
 	// Metadata sanitization
 	auto* metadata_group = new QGroupBox("Metadata Sanitization", central);
 	auto* metadata_layout = new QVBoxLayout(metadata_group);
@@ -252,6 +265,7 @@ ProtectionOptions MapProtector::collect_options() const {
 	options.junk_file_count = junk_file_count_spin->value();
 	options.remove_gui_triggers = remove_gui_triggers_check->isChecked();
 	options.strip_trigger_strings = strip_trigger_strings_check->isChecked();
+	options.obfuscate_asset_paths = obfuscate_asset_paths_check->isChecked();
 	options.clear_author = clear_author_check->isChecked();
 	options.clear_description = clear_description_check->isChecked();
 	options.clear_loading_text = clear_loading_text_check->isChecked();
@@ -263,7 +277,7 @@ void MapProtector::set_options_enabled(bool enabled) {
 	const std::initializer_list<QWidget*> widgets = {
 		source_current_map_radio, source_external_radio,
 		remove_listfile_check, remove_attributes_check, encrypt_files_check, inject_junk_files_check,
-		remove_gui_triggers_check, strip_trigger_strings_check,
+		remove_gui_triggers_check, strip_trigger_strings_check, obfuscate_asset_paths_check,
 		clear_author_check, clear_description_check, clear_loading_text_check, normalize_name_check,
 		output_path_edit, browse_button, export_button
 	};
@@ -383,6 +397,7 @@ void MapProtector::load_settings() {
 	junk_file_count_spin->setEnabled(inject_junk_files_check->isChecked());
 	remove_gui_triggers_check->setChecked(settings.value("removeGuiTriggers", true).toBool());
 	strip_trigger_strings_check->setChecked(settings.value("stripTriggerStrings", false).toBool());
+	obfuscate_asset_paths_check->setChecked(settings.value("obfuscateAssetPaths", false).toBool());
 	clear_author_check->setChecked(settings.value("clearAuthor", false).toBool());
 	clear_description_check->setChecked(settings.value("clearDescription", false).toBool());
 	clear_loading_text_check->setChecked(settings.value("clearLoadingText", false).toBool());
@@ -402,6 +417,7 @@ void MapProtector::save_settings() const {
 	settings.setValue("junkFileCount", junk_file_count_spin->value());
 	settings.setValue("removeGuiTriggers", remove_gui_triggers_check->isChecked());
 	settings.setValue("stripTriggerStrings", strip_trigger_strings_check->isChecked());
+	settings.setValue("obfuscateAssetPaths", obfuscate_asset_paths_check->isChecked());
 	settings.setValue("clearAuthor", clear_author_check->isChecked());
 	settings.setValue("clearDescription", clear_description_check->isChecked());
 	settings.setValue("clearLoadingText", clear_loading_text_check->isChecked());

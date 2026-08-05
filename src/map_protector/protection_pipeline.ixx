@@ -14,6 +14,7 @@ import Imports;
 import MapInfo;
 import BinaryReader;
 import MPQ;
+import AssetObfuscation;
 
 namespace fs = std::filesystem;
 
@@ -34,6 +35,12 @@ export struct ProtectionOptions {
 	bool clear_description = false;
 	bool clear_loading_text = false;
 	bool normalize_name = false;
+
+	// Asset path obfuscation - plumbing only so far (see run_async_pack()); enumerate_rename_candidates()
+	// runs to validate the module boundary, but no file is actually renamed or has its references
+	// rewritten yet, so enabling this currently just fails the export with a clear message rather
+	// than silently doing nothing or shipping a map with dangling references.
+	bool obfuscate_asset_paths = false;
 };
 
 export struct SyncSaveResult {
@@ -551,6 +558,26 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 /// thread once run_sync_save_and_restore() has returned. Mirrors HiveWE::export_mpq()'s raw
 /// StormLib usage; the MPQ wrapper in mpq.ixx has no archive-creation support.
 export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& output_path, const ProtectionOptions& options) {
+	if (options.obfuscate_asset_paths) {
+		// Candidate enumeration is real and exercised here to prove the module boundary works end
+		// to end, but nothing downstream (SLK/w3i/MDX/script reference rewriting) exists yet, so
+		// renaming these files now would ship a map with dangling references. Fail loudly instead
+		// of either silently doing nothing or silently breaking the map - re-enable once the
+		// reference-rewrite phases land (see .cursor/plans/map_protection_plan.md).
+		static const Imports imports;
+		const std::vector<RenameCandidate> candidates = enumerate_rename_candidates(
+			temp_dir, imports.blacklist, [](const fs::path& path) { return hierarchy.game_file_exists(path); }
+		);
+		return {
+			false,
+			std::format(
+				"Asset Path Obfuscation is not fully implemented yet ({} candidate file(s) found) - reference "
+				"rewriting for object data, war3map.w3i, models, and scripts hasn't shipped. Leave this option off.",
+				candidates.size()
+			)
+		};
+	}
+
 	if (options.remove_gui_triggers) {
 		std::error_code ec;
 		fs::remove(temp_dir / "war3map.wtg", ec);

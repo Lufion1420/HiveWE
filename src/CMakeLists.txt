@@ -101,6 +101,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"utilities/object_data_io.ixx"
 	"utilities/unordered_map.ixx"
 
+	"map_protector/asset_obfuscation.ixx"
 	"map_protector/protection_pipeline.ixx"
 
 	"utilities/no_init_allocator.ixx"
