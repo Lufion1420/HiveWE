@@ -18,6 +18,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"base/map_info.ixx"
 	"base/pathing_map.ixx"
 	"base/regions.ixx"
+	"base/stock_object_data.ixx"
 	"base/camera.ixx"
 	"base/world_undo_manager.ixx"
 	"base/window_handler.ixx"
