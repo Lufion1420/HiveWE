@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
 
 import std;
+import SLK;
+import ModificationTables;
+import Hierarchy;
 import AssetObfuscation;
 
 namespace fs = std::filesystem;
@@ -101,4 +104,109 @@ TEST_CASE("enumerate_rename_candidates generates unique names that preserve exte
 TEST_CASE("enumerate_rename_candidates on a nonexistent directory returns empty") {
 	const auto candidates = enumerate_rename_candidates(fs::temp_directory_path() / "hivewe_asset_obfuscation_test" / "does_not_exist", {}, {});
 	CHECK(candidates.empty());
+}
+
+namespace {
+	// A minimal meta table with one "model"-typed field ("file") and one plain "string"-typed field
+	// ("name"), matching the shape of a real UnitMetaData.slk closely enough to exercise
+	// field_to_meta_id()/type classification without needing the real stock data.
+	slk::SLK make_test_meta() {
+		slk::SLK meta;
+		meta.add_row("Ymdl");
+		meta.set_shadow_data("field", "Ymdl", "file");
+		meta.set_shadow_data("type", "Ymdl", "model");
+		meta.set_shadow_data("data", "Ymdl", "0");
+		meta.add_row("Ynam");
+		meta.set_shadow_data("field", "Ynam", "name");
+		meta.set_shadow_data("type", "Ynam", "string");
+		meta.set_shadow_data("data", "Ynam", "0");
+		meta.build_meta_map();
+		return meta;
+	}
+
+	slk::SLK make_test_template(const std::string& row_id) {
+		slk::SLK data;
+		data.add_row(row_id);
+		return data;
+	}
+}
+
+TEST_CASE("rewrite_object_data_file rewrites a model-typed field but leaves a string field alone") {
+	const fs::path dir = make_scratch_dir("rewrite_model_field");
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = dir;
+
+	const slk::SLK meta = make_test_meta();
+	const slk::SLK template_slk = make_test_template("hfoo");
+
+	slk::SLK modification_data;
+	modification_data.add_row("hfoo");
+	modification_data.set_shadow_data("file", "hfoo", "war3mapImported\\Custom.mdx");
+	modification_data.set_shadow_data("name", "hfoo", "war3mapImported\\Custom.mdx");
+	const std::vector<u8> buffer = build_modification_file_buffer(modification_data, meta, false, false);
+
+	const fs::path w3u_path = dir / "war3map.w3u";
+	{
+		std::ofstream out(w3u_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(w3u_path, "war3map.w3u", template_slk, meta, false, false, candidates_by_match_key);
+	CHECK(result.success);
+	CHECK(result.changed);
+
+	const auto reloaded = extract_modification_shadow_map_path(w3u_path, template_slk, meta, false);
+	REQUIRE(reloaded.has_value());
+	CHECK(reloaded->at("hfoo").at("file") == "a3f9c1e2.mdx");
+	CHECK(reloaded->at("hfoo").at("name") == "war3mapImported\\Custom.mdx"); // untouched: not a model/icon field
+
+	hierarchy.map_directory = original_map_directory;
+}
+
+TEST_CASE("rewrite_object_data_file leaves the file untouched when no field matches a candidate") {
+	const fs::path dir = make_scratch_dir("rewrite_no_match");
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = dir;
+
+	const slk::SLK meta = make_test_meta();
+	const slk::SLK template_slk = make_test_template("hfoo");
+
+	slk::SLK modification_data;
+	modification_data.add_row("hfoo");
+	modification_data.set_shadow_data("file", "hfoo", "war3mapImported\\Unrelated.mdx");
+	const std::vector<u8> buffer = build_modification_file_buffer(modification_data, meta, false, false);
+
+	const fs::path w3u_path = dir / "war3map.w3u";
+	{
+		std::ofstream out(w3u_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(w3u_path, "war3map.w3u", template_slk, meta, false, false, candidates_by_match_key);
+	CHECK(result.success);
+	CHECK_FALSE(result.changed);
+
+	hierarchy.map_directory = original_map_directory;
+}
+
+TEST_CASE("rewrite_object_data_file is a no-op success when the file does not exist") {
+	const slk::SLK meta = make_test_meta();
+	const slk::SLK template_slk = make_test_template("hfoo");
+	const FileRewriteResult result = rewrite_object_data_file(
+		fs::temp_directory_path() / "hivewe_asset_obfuscation_test" / "does_not_exist.w3u", "war3map.w3u", template_slk, meta, false, false, {}
+	);
+	CHECK(result.success);
+	CHECK_FALSE(result.changed);
 }

@@ -5,6 +5,10 @@ module;
 export module AssetObfuscation;
 
 import std;
+import SLK;
+import ModificationTables;
+import StockObjectData;
+import Hierarchy;
 
 namespace fs = std::filesystem;
 
@@ -123,4 +127,148 @@ export std::vector<RenameCandidate> enumerate_rename_candidates(
 	}
 
 	return candidates;
+}
+
+export struct AssetObfuscationResult {
+	bool success = false;
+	std::string error;
+};
+
+/// Rewrites model/icon path fields in a single object-data modification file (e.g. temp_dir /
+/// "war3map.w3u" or its war3mapSkin.* counterpart) in place. template_slk/meta_slk must already
+/// be the fully-populated stock tables for this category (stock_object_data::load()'s output) -
+/// not a bare single-file load - since a custom object's oldid parent, or a field only present
+/// via one of the many stock .merge()'d files, needs the complete stock dataset to resolve
+/// correctly (see field_to_meta_id()'s doc comment in slk.ixx for why the alias/oldid fallback
+/// needs the merged view). Returns changed=true if anything was rewritten (and, in that case, the
+/// file has already been re-saved) so the caller only needs to act on failure.
+///
+/// Exported (not file-local) specifically so it's independently testable against small, hand-built
+/// in-memory template/meta SLKs - the same style tests/modification_tables_test.cpp already uses -
+/// without needing a real Warcraft III installation's stock data mounted through Hierarchy, which
+/// rewrite_object_data_references()'s production stock_object_data::load() call requires.
+export struct FileRewriteResult {
+	bool success = false;
+	std::string error;
+	bool changed = false;
+};
+
+export FileRewriteResult rewrite_object_data_file(
+	const fs::path& file_path,
+	const std::string_view file_name,
+	const slk::SLK& template_slk,
+	const slk::SLK& meta_slk,
+	const bool optional_ints,
+	const bool skin,
+	const std::unordered_map<std::string, const RenameCandidate*>& candidates_by_match_key
+) {
+	if (!fs::exists(file_path)) {
+		return { true, "", false };
+	}
+
+	auto shadow_map_result = extract_modification_shadow_map_path(file_path, template_slk, meta_slk, optional_ints);
+	if (!shadow_map_result) {
+		return { false, shadow_map_result.error(), false };
+	}
+	ModificationShadowMap shadow_map = std::move(shadow_map_result.value());
+
+	// Merged stock+shadow view, needed for field_to_meta_id()'s alias/oldid resolution (ability
+	// field-name aliasing) - matches how src/models/table_model.ixx's field_type() resolves the
+	// same classification for the live Object Editor UI.
+	slk::SLK scratch = shadow_map_to_slk(template_slk, shadow_map);
+
+	bool changed = false;
+	for (auto& [object_id, fields] : shadow_map) {
+		for (auto& [field_name, value] : fields) {
+			if (field_name == "oldid") {
+				continue;
+			}
+
+			const auto meta_id = scratch.field_to_meta_id(meta_slk, field_name, object_id);
+			if (!meta_id) {
+				continue;
+			}
+			const std::string_view type = meta_slk.data<std::string_view>("type", *meta_id);
+			if (type != "model" && type != "icon") {
+				continue;
+			}
+
+			const auto found = candidates_by_match_key.find(asset_match_key(value));
+			if (found == candidates_by_match_key.end()) {
+				continue;
+			}
+			value = found->second->new_relative_path.string();
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		scratch = shadow_map_to_slk(template_slk, shadow_map); // rebuild: shadow_map above was mutated in place
+		save_modification_file(file_name, scratch, meta_slk, optional_ints, skin);
+	}
+
+	return { true, "", changed };
+}
+
+/// Rewrites every model/icon object-data field across all 7 categories (units/items/doodads/
+/// destructibles/abilities/upgrades/buffs, plus each category's war3mapSkin.* counterpart) that
+/// references a renamed candidate, so a unit's icon, an ability's art, a doodad's model override,
+/// etc. all point at the new name. Loads its own independent copy of the stock tables via
+/// stock_object_data::load() rather than reusing whatever map is currently open in HiveWE - this is
+/// what makes Asset Path Obfuscation work for an external-source map that was never loaded into
+/// HiveWE's Map object (see map_protection_plan.md's session notes for why that path matters).
+///
+/// Redirects hierarchy.map_directory to temp_dir for the duration (same established pattern as
+/// protection_pipeline.ixx's sanitize_metadata()/inline_map_info_trigger_strings()), since
+/// save_modification_file() writes through hierarchy.map_file_write(). Must be called synchronously
+/// before any other step that also redirects hierarchy.map_directory.
+export AssetObfuscationResult rewrite_object_data_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	if (candidates.empty()) {
+		return { true, "" };
+	}
+
+	std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key;
+	for (const RenameCandidate& candidate : candidates) {
+		candidates_by_match_key[candidate.match_key] = &candidate;
+	}
+
+	struct Category {
+		std::string_view file_name;
+		std::string_view skin_file_name;
+		const stock_object_data::TableSet* tables;
+		bool optional_ints;
+	};
+
+	const stock_object_data::Tables stock = stock_object_data::load();
+	const std::array<Category, 7> categories = { {
+		{ "war3map.w3u", "war3mapSkin.w3u", &stock.units, false },
+		{ "war3map.w3t", "war3mapSkin.w3t", &stock.items, false },
+		{ "war3map.w3a", "war3mapSkin.w3a", &stock.abilities, true },
+		{ "war3map.w3b", "war3mapSkin.w3b", &stock.destructibles, false },
+		{ "war3map.w3h", "war3mapSkin.w3h", &stock.buffs, false },
+		{ "war3map.w3q", "war3mapSkin.w3q", &stock.upgrades, true },
+		{ "war3map.w3d", "war3mapSkin.w3d", &stock.doodads, true },
+	} };
+
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = temp_dir;
+
+	AssetObfuscationResult result{ true, "" };
+	for (const Category& category : categories) {
+		for (const auto& [file_name, skin] : { std::pair{ category.file_name, false }, std::pair{ category.skin_file_name, true } }) {
+			const FileRewriteResult step = rewrite_object_data_file(
+				temp_dir / file_name, file_name, category.tables->data, category.tables->meta, category.optional_ints, skin, candidates_by_match_key
+			);
+			if (!step.success) {
+				result = { false, std::format("Failed to rewrite asset references in {}: {}", file_name, step.error) };
+				break;
+			}
+		}
+		if (!result.success) {
+			break;
+		}
+	}
+
+	hierarchy.map_directory = original_map_directory;
+	return result;
 }
