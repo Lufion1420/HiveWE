@@ -120,17 +120,21 @@ namespace mpq {
 			return SFileCompactArchive(handle, nullptr, false);
 		}
 
+		/// Extracts every file the archive's wildcard search can find. This depends on the
+		/// archive's (listfile): without one, StormLib can still enumerate every entry, but
+		/// unnamed ones come back under fabricated names like "File00001234.blp" instead of
+		/// their real name. Callers that need specific files by name regardless of listfile
+		/// presence should use extract_file() instead.
 		bool unpack(const fs::path& path) {
 			SFILE_FIND_DATA file_data;
 			HANDLE find_handle = SFileFindFirstFile(handle, "*", &file_data, nullptr);
-			fs::create_directories((path / file_data.cFileName).parent_path());
-			SFileExtractFile(handle, file_data.cFileName, (path / file_data.cFileName).c_str(), SFILE_OPEN_FROM_MPQ);
-
-			while (SFileFindNextFile(find_handle, &file_data)) {
-				fs::create_directories((path / file_data.cFileName).parent_path());
-				SFileExtractFile(handle, file_data.cFileName, (path / file_data.cFileName).c_str(), SFILE_OPEN_FROM_MPQ);
+			if (find_handle) {
+				do {
+					fs::create_directories((path / file_data.cFileName).parent_path());
+					SFileExtractFile(handle, file_data.cFileName, (path / file_data.cFileName).c_str(), SFILE_OPEN_FROM_MPQ);
+				} while (SFileFindNextFile(find_handle, &file_data));
+				SFileFindClose(find_handle);
 			}
-			SFileFindClose(find_handle);
 
 			// Delete unneeded files
 			fs::remove(path / "(listfile)");
@@ -139,13 +143,20 @@ namespace mpq {
 			return true;
 		}
 
+		/// Extracts a single file by its exact archive-internal name, bypassing wildcard
+		/// enumeration entirely. MPQ files are looked up by name hash, so this works even
+		/// when the archive has no (listfile). Returns false if the file isn't present.
+		bool extract_file(const fs::path& archived_name, const fs::path& disk_path) const {
+			if (!file_exists(archived_name)) {
+				return false;
+			}
+			fs::create_directories(disk_path.parent_path());
+			return SFileExtractFile(handle, archived_name.string().c_str(), disk_path.c_str(), SFILE_OPEN_FROM_MPQ);
+		}
+
 		File file_open(const fs::path& path) const {
 			File file;
-#ifdef WIN32
-			const bool opened = SFileOpenFileEx(handle, fs::weakly_canonical(path).string().c_str(), 0, &file.handle);
-#else
 			const bool opened = SFileOpenFileEx(handle, path.string().c_str(), 0, &file.handle);
-#endif
 			if (!opened) {
 				throw std::runtime_error("Failed to read file " + path.string() + " with error: " + std::to_string(GetLastError()));
 			}
@@ -175,11 +186,7 @@ namespace mpq {
 		}
 
 		bool file_exists(const fs::path& path) const {
-#ifdef WIN32
-			return SFileHasFile(handle, fs::weakly_canonical(path).string().c_str());
-#else
 			return SFileHasFile(handle, path.string().c_str());
-#endif
 		}
 
 		void file_add(const fs::path& path, const fs::path& new_path) const {

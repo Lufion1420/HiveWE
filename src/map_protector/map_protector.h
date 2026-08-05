@@ -7,6 +7,7 @@ namespace fs = std::filesystem;
 
 #include <QMainWindow>
 #include <QCheckBox>
+#include <QRadioButton>
 #include <QLineEdit>
 #include <QLabel>
 #include <QProgressBar>
@@ -31,13 +32,22 @@ class MapProtector : public QMainWindow {
 
   private:
 	void on_browse_clicked();
+	void on_source_browse_file_clicked();
+	void on_source_browse_folder_clicked();
 	void on_export_clicked();
 	void on_export_finished(PackResult result);
 	void set_options_enabled(bool enabled);
+	void update_source_controls_enabled();
 	void load_settings();
 	void save_settings() const;
 	void populate_default_output_path();
 	ProtectionOptions collect_options() const;
+
+	QRadioButton* source_current_map_radio;
+	QRadioButton* source_external_radio;
+	QLineEdit* source_path_edit;
+	QPushButton* source_browse_file_button;
+	QPushButton* source_browse_folder_button;
 
 	QLineEdit* output_path_edit;
 	QPushButton* browse_button;

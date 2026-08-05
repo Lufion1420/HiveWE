@@ -32,6 +32,30 @@ MapProtector::MapProtector(QWidget* parent) : QMainWindow(parent) {
 	setCentralWidget(central);
 	auto* main_layout = new QVBoxLayout(central);
 
+	// Source
+	auto* source_group = new QGroupBox("Source", central);
+	auto* source_layout = new QVBoxLayout(source_group);
+	source_current_map_radio = new QRadioButton("Currently loaded map", source_group);
+	source_external_radio = new QRadioButton("Map file or folder:", source_group);
+	source_layout->addWidget(source_current_map_radio);
+	source_layout->addWidget(source_external_radio);
+
+	auto* source_path_row = new QHBoxLayout;
+	source_path_row->addSpacing(20);
+	source_path_edit = new QLineEdit(source_group);
+	source_browse_file_button = new QPushButton("Browse File...", source_group);
+	source_browse_folder_button = new QPushButton("Browse Folder...", source_group);
+	source_path_row->addWidget(source_path_edit, 1);
+	source_path_row->addWidget(source_browse_file_button);
+	source_path_row->addWidget(source_browse_folder_button);
+	source_layout->addLayout(source_path_row);
+
+	main_layout->addWidget(source_group);
+
+	connect(source_current_map_radio, &QRadioButton::toggled, this, &MapProtector::update_source_controls_enabled);
+	connect(source_browse_file_button, &QPushButton::clicked, this, &MapProtector::on_source_browse_file_clicked);
+	connect(source_browse_folder_button, &QPushButton::clicked, this, &MapProtector::on_source_browse_folder_clicked);
+
 	// Output path
 	auto* output_row = new QHBoxLayout;
 	output_row->addWidget(new QLabel("Output file:", central));
@@ -98,6 +122,7 @@ MapProtector::MapProtector(QWidget* parent) : QMainWindow(parent) {
 
 	load_settings();
 	populate_default_output_path();
+	update_source_controls_enabled();
 }
 
 void MapProtector::showEvent(QShowEvent* event) {
@@ -149,6 +174,29 @@ void MapProtector::on_browse_clicked() {
 	}
 }
 
+void MapProtector::on_source_browse_file_clicked() {
+	const QString start = source_path_edit->text();
+	const QString path = QFileDialog::getOpenFileName(this, "Select Map File", start, "Warcraft III Scenario (*.w3x *.w3m)");
+	if (!path.isEmpty()) {
+		source_path_edit->setText(path);
+	}
+}
+
+void MapProtector::on_source_browse_folder_clicked() {
+	const QString start = source_path_edit->text();
+	const QString path = QFileDialog::getExistingDirectory(this, "Select Map Folder", start, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+	if (!path.isEmpty()) {
+		source_path_edit->setText(path);
+	}
+}
+
+void MapProtector::update_source_controls_enabled() {
+	const bool external = source_external_radio->isChecked();
+	source_path_edit->setEnabled(external);
+	source_browse_file_button->setEnabled(external);
+	source_browse_folder_button->setEnabled(external);
+}
+
 ProtectionOptions MapProtector::collect_options() const {
 	ProtectionOptions options;
 	options.remove_listfile = remove_listfile_check->isChecked();
@@ -166,6 +214,7 @@ ProtectionOptions MapProtector::collect_options() const {
 
 void MapProtector::set_options_enabled(bool enabled) {
 	const std::initializer_list<QWidget*> widgets = {
+		source_current_map_radio, source_external_radio,
 		remove_listfile_check, remove_attributes_check, encrypt_files_check, inject_junk_files_check,
 		remove_gui_triggers_check,
 		clear_author_check, clear_description_check, clear_loading_text_check, normalize_name_check,
@@ -176,12 +225,30 @@ void MapProtector::set_options_enabled(bool enabled) {
 	}
 	// Keep the spinner's enabled state tied to its checkbox rather than blanket-enabling it.
 	junk_file_count_spin->setEnabled(enabled && inject_junk_files_check->isChecked());
+	// Keep the source path row tied to the radio selection rather than blanket-enabling it.
+	update_source_controls_enabled();
 }
 
 void MapProtector::on_export_clicked() {
-	if (!map || !map->loaded) {
-		QMessageBox::warning(this, "Map Protector", "No map is loaded.");
-		return;
+	const bool use_current_map = source_current_map_radio->isChecked();
+
+	fs::path source_path;
+	if (use_current_map) {
+		if (!map || !map->loaded) {
+			QMessageBox::warning(this, "Map Protector", "No map is loaded.");
+			return;
+		}
+	} else {
+		const QString source_text = source_path_edit->text();
+		if (source_text.isEmpty()) {
+			QMessageBox::warning(this, "Map Protector", "Choose a source map file or folder first.");
+			return;
+		}
+		source_path = source_text.toStdWString();
+		if (!fs::exists(source_path)) {
+			QMessageBox::warning(this, "Map Protector", "The selected source path does not exist.");
+			return;
+		}
 	}
 
 	const QString output = output_path_edit->text();
@@ -194,7 +261,7 @@ void MapProtector::on_export_clicked() {
 	save_settings();
 
 	set_options_enabled(false);
-	status_label->setText("Saving map data...");
+	status_label->setText(use_current_map ? "Saving map data..." : "Preparing source map...");
 	progress_bar->setVisible(true);
 
 	temp_dir = std::make_unique<QTemporaryDir>();
@@ -207,7 +274,9 @@ void MapProtector::on_export_clicked() {
 	}
 
 	const fs::path temp_path = temp_dir->path().toStdWString();
-	const SyncSaveResult save_result = run_sync_save_and_restore(temp_path, options);
+	const SyncSaveResult save_result = use_current_map
+		? run_sync_save_and_restore(temp_path, options)
+		: prepare_source_path(source_path, temp_path, options);
 	if (!save_result.success) {
 		status_label->setText(QString::fromStdString("Error: " + save_result.error));
 		set_options_enabled(true);
@@ -251,6 +320,11 @@ void MapProtector::on_export_finished(PackResult result) {
 void MapProtector::load_settings() {
 	QSettings settings;
 	settings.beginGroup("MapProtector");
+	const bool default_use_current_map = map && map->loaded;
+	const bool use_current_map = settings.value("useCurrentMap", default_use_current_map).toBool();
+	source_current_map_radio->setChecked(use_current_map);
+	source_external_radio->setChecked(!use_current_map);
+	source_path_edit->setText(settings.value("sourcePath", "").toString());
 	output_path_edit->setText(settings.value("outputPath", "").toString());
 	remove_listfile_check->setChecked(settings.value("removeListfile", true).toBool());
 	remove_attributes_check->setChecked(settings.value("removeAttributes", true).toBool());
@@ -269,6 +343,8 @@ void MapProtector::load_settings() {
 void MapProtector::save_settings() const {
 	QSettings settings;
 	settings.beginGroup("MapProtector");
+	settings.setValue("useCurrentMap", source_current_map_radio->isChecked());
+	settings.setValue("sourcePath", source_path_edit->text());
 	settings.setValue("outputPath", output_path_edit->text());
 	settings.setValue("removeListfile", remove_listfile_check->isChecked());
 	settings.setValue("removeAttributes", remove_attributes_check->isChecked());

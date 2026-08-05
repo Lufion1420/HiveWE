@@ -12,6 +12,7 @@ import MPQ;
 import Camera;
 import Globals;
 import Map;
+import Imports;
 import <soil2/SOIL2.h>;
 import MapGlobal;
 import WorldUndoManager;
@@ -703,6 +704,16 @@ void HiveWE::load_mpq() {
 		QMessageBox::critical(this, "Unpacking failed", "There was an error unpacking the archive.");
 		std::println("{}", GetLastError());
 		return;
+	}
+
+	// mpq.unpack() enumerates the archive via its (listfile); archives that don't have one
+	// (stripped by some map protectors, or simply never written) still unpack, but unnamed
+	// entries land on disk under fabricated names instead of e.g. "war3map.w3i". The core
+	// map files have a fixed, well-known set of names, so fetch them directly by name too -
+	// MPQ files are looked up by name hash, so this recovers them regardless of listfile
+	// presence.
+	for (const std::string& name : map->imports.blacklist) {
+		mpq.extract_file(name, final_directory / name);
 	}
 
 	load_map(final_directory);

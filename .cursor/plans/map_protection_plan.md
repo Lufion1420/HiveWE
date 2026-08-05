@@ -2,8 +2,8 @@
 
 **Project:** HiveWE Fork  
 **Feature:** Map Protection Window (standalone export-only tool, opens from main ribbon)  
-**Status:** Planning — not yet implemented  
-**Last updated:** 2026-05-29
+**Status:** Phase 1 and Phase 2 implemented (file layout and some options diverge from this plan — see `map_protection_handoff.md` for what actually shipped and for 2026-08-05 session changes you should know about before editing this feature).  
+**Last updated:** 2026-05-29 (stale — not updated alongside implementation)
 
 ---
 
