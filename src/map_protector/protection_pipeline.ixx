@@ -17,6 +17,9 @@ export struct ProtectionOptions {
 	// MPQ archive hardening
 	bool remove_listfile = true;
 	bool remove_attributes = true;
+	bool encrypt_files = true;
+	bool inject_junk_files = false;
+	int junk_file_count = 50;
 
 	// Trigger hardening
 	bool remove_gui_triggers = true;
@@ -99,6 +102,36 @@ export SyncSaveResult run_sync_save_and_restore(const fs::path& temp_dir, const 
 	return { true, "" };
 }
 
+/// Adds `count` files with random names, extensions, and content to temp_dir so they get
+/// packed into the archive alongside the real map files. Purely cosmetic noise for anyone
+/// enumerating archive contents - WC3 only loads files that are actually referenced by name,
+/// so unreferenced junk is silently ignored by the game.
+void inject_junk_files(const fs::path& temp_dir, int count) {
+	static constexpr std::array<std::string_view, 5> junk_extensions = { ".blp", ".mdx", ".wav", ".dat", ".txt" };
+
+	std::mt19937 rng{ std::random_device{}() };
+	std::uniform_int_distribution<int> hex_digit(0, 15);
+	std::uniform_int_distribution<int> extension_index(0, static_cast<int>(junk_extensions.size()) - 1);
+	std::uniform_int_distribution<int> content_size(64, 2048);
+	std::uniform_int_distribution<int> content_byte(0, 255);
+
+	for (int i = 0; i < count; ++i) {
+		std::string name = "_junk_";
+		for (int digit = 0; digit < 8; ++digit) {
+			name += "0123456789abcdef"[hex_digit(rng)];
+		}
+		name += junk_extensions[extension_index(rng)];
+
+		std::vector<char> content(content_size(rng));
+		for (char& byte : content) {
+			byte = static_cast<char>(content_byte(rng));
+		}
+
+		std::ofstream file(temp_dir / name, std::ios::binary);
+		file.write(content.data(), static_cast<std::streamsize>(content.size()));
+	}
+}
+
 /// Packs temp_dir into a protected MPQ at output_path. Operates only on plain files under
 /// temp_dir/output_path - never touches map/hierarchy - so it is safe to run on a background
 /// thread once run_sync_save_and_restore() has returned. Mirrors HiveWE::export_mpq()'s raw
@@ -107,6 +140,10 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 	if (options.remove_gui_triggers) {
 		std::error_code ec;
 		fs::remove(temp_dir / "war3map.wtg", ec);
+	}
+
+	if (options.inject_junk_files && options.junk_file_count > 0) {
+		inject_junk_files(temp_dir, options.junk_file_count);
 	}
 
 	std::error_code remove_ec;
@@ -125,9 +162,12 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 		return { false, std::format("There was an error creating the protected archive (error code {}).", GetLastError()) };
 	}
 
+	const unsigned long file_flags = static_cast<unsigned long>(MPQ_FILE_COMPRESS)
+		| (options.encrypt_files ? static_cast<unsigned long>(MPQ_FILE_ENCRYPTED) : 0ul);
+
 	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
 		if (entry.is_regular_file()) {
-			if (!SFileAddFileEx(handle, entry.path().c_str(), entry.path().lexically_relative(temp_dir).string().c_str(), MPQ_FILE_COMPRESS, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME)) {
+			if (!SFileAddFileEx(handle, entry.path().c_str(), entry.path().lexically_relative(temp_dir).string().c_str(), file_flags, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME)) {
 				const DWORD add_file_error = GetLastError();
 				SFileCloseArchive(handle);
 				return { false, std::format("There was an error adding '{}' to the protected archive (error code {}).", entry.path().filename().string(), add_file_error) };

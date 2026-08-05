@@ -11,6 +11,7 @@ namespace fs = std::filesystem;
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QThread>
 #include <QTemporaryDir>
 #include <QCloseEvent>
@@ -43,6 +44,9 @@ class MapProtector : public QMainWindow {
 
 	QCheckBox* remove_listfile_check;
 	QCheckBox* remove_attributes_check;
+	QCheckBox* encrypt_files_check;
+	QCheckBox* inject_junk_files_check;
+	QSpinBox* junk_file_count_spin;
 	QCheckBox* remove_gui_triggers_check;
 	QCheckBox* clear_author_check;
 	QCheckBox* clear_description_check;

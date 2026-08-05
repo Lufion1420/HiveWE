@@ -46,6 +46,21 @@ MapProtector::MapProtector(QWidget* parent) : QMainWindow(parent) {
 	auto* mpq_layout = new QVBoxLayout(mpq_group);
 	remove_listfile_check = make_check(mpq_group, mpq_layout, "Remove listfile", "Deletes (listfile) from the MPQ so editors cannot enumerate files.", true);
 	remove_attributes_check = make_check(mpq_group, mpq_layout, "Remove attributes file", "Deletes (attributes), the MD5 hash table used by some tools.", true);
+	encrypt_files_check = make_check(mpq_group, mpq_layout, "Encrypt MPQ files", "Encrypts every file in the archive (MPQ_FILE_ENCRYPTED). Warcraft III reads encrypted files transparently.", true);
+	inject_junk_files_check = make_check(mpq_group, mpq_layout, "Inject junk files", "Adds dummy files with random names and content to confuse deprotection tools.", false);
+
+	auto* junk_count_row = new QHBoxLayout;
+	junk_count_row->addSpacing(20);
+	junk_count_row->addWidget(new QLabel("Junk file count:", mpq_group));
+	junk_file_count_spin = new QSpinBox(mpq_group);
+	junk_file_count_spin->setRange(1, 1000);
+	junk_file_count_spin->setValue(50);
+	junk_file_count_spin->setEnabled(false);
+	junk_count_row->addWidget(junk_file_count_spin);
+	junk_count_row->addStretch(1);
+	mpq_layout->addLayout(junk_count_row);
+	connect(inject_junk_files_check, &QCheckBox::toggled, junk_file_count_spin, &QSpinBox::setEnabled);
+
 	main_layout->addWidget(mpq_group);
 
 	// Trigger hardening
@@ -138,6 +153,9 @@ ProtectionOptions MapProtector::collect_options() const {
 	ProtectionOptions options;
 	options.remove_listfile = remove_listfile_check->isChecked();
 	options.remove_attributes = remove_attributes_check->isChecked();
+	options.encrypt_files = encrypt_files_check->isChecked();
+	options.inject_junk_files = inject_junk_files_check->isChecked();
+	options.junk_file_count = junk_file_count_spin->value();
 	options.remove_gui_triggers = remove_gui_triggers_check->isChecked();
 	options.clear_author = clear_author_check->isChecked();
 	options.clear_description = clear_description_check->isChecked();
@@ -148,13 +166,16 @@ ProtectionOptions MapProtector::collect_options() const {
 
 void MapProtector::set_options_enabled(bool enabled) {
 	const std::initializer_list<QWidget*> widgets = {
-		remove_listfile_check, remove_attributes_check, remove_gui_triggers_check,
+		remove_listfile_check, remove_attributes_check, encrypt_files_check, inject_junk_files_check,
+		remove_gui_triggers_check,
 		clear_author_check, clear_description_check, clear_loading_text_check, normalize_name_check,
 		output_path_edit, browse_button, export_button
 	};
 	for (QWidget* widget : widgets) {
 		widget->setEnabled(enabled);
 	}
+	// Keep the spinner's enabled state tied to its checkbox rather than blanket-enabling it.
+	junk_file_count_spin->setEnabled(enabled && inject_junk_files_check->isChecked());
 }
 
 void MapProtector::on_export_clicked() {
@@ -233,6 +254,10 @@ void MapProtector::load_settings() {
 	output_path_edit->setText(settings.value("outputPath", "").toString());
 	remove_listfile_check->setChecked(settings.value("removeListfile", true).toBool());
 	remove_attributes_check->setChecked(settings.value("removeAttributes", true).toBool());
+	encrypt_files_check->setChecked(settings.value("encryptFiles", true).toBool());
+	inject_junk_files_check->setChecked(settings.value("injectJunkFiles", false).toBool());
+	junk_file_count_spin->setValue(settings.value("junkFileCount", 50).toInt());
+	junk_file_count_spin->setEnabled(inject_junk_files_check->isChecked());
 	remove_gui_triggers_check->setChecked(settings.value("removeGuiTriggers", true).toBool());
 	clear_author_check->setChecked(settings.value("clearAuthor", false).toBool());
 	clear_description_check->setChecked(settings.value("clearDescription", false).toBool());
@@ -247,6 +272,9 @@ void MapProtector::save_settings() const {
 	settings.setValue("outputPath", output_path_edit->text());
 	settings.setValue("removeListfile", remove_listfile_check->isChecked());
 	settings.setValue("removeAttributes", remove_attributes_check->isChecked());
+	settings.setValue("encryptFiles", encrypt_files_check->isChecked());
+	settings.setValue("injectJunkFiles", inject_junk_files_check->isChecked());
+	settings.setValue("junkFileCount", junk_file_count_spin->value());
 	settings.setValue("removeGuiTriggers", remove_gui_triggers_check->isChecked());
 	settings.setValue("clearAuthor", clear_author_check->isChecked());
 	settings.setValue("clearDescription", clear_description_check->isChecked());
