@@ -1,276 +1,147 @@
 # Map Protection Tool — Implementation Plan
 
-**Project:** HiveWE Fork  
-**Feature:** Map Protection Window (standalone export-only tool, opens from main ribbon)  
-**Status:** Phase 1 and Phase 2 implemented (file layout and some options diverge from this plan — see `map_protection_handoff.md` for what actually shipped and for 2026-08-05 session changes you should know about before editing this feature).  
-**Last updated:** 2026-05-29 (stale — not updated alongside implementation)
+**Project:** HiveWE Fork
+**Feature:** Map Protection Window (standalone export-only tool, opens from main ribbon)
+**Status:** Implemented — Phase 1 and the safe half of Phase 2 (see "What shipped vs. what's deferred" below). Verified in-game: protected output no longer opens in the stock World Editor and still plays correctly.
+**Last updated:** 2026-08-05
+
+For a session-by-session account of *how* this got built (bugs found, why certain approaches were chosen), see `map_protection_handoff.md`. This doc describes the current, as-built state.
 
 ---
 
 ## Overview
 
-A new **Map Protector** window that lets the user configure a set of protection transforms, then exports the currently-loaded map as a new `.w3x` file. The original map file is never touched. The protected output runs in Warcraft 3 but is resistant to being opened, decompiled, or edited in world editors.
-
-The feature is additive — it lives entirely in new files and hooks into two existing extension points:
-1. The **ribbon** (adds a button that opens the window)
-2. The **export MPQ pipeline** (`export_mpq()` in `hivewe.cpp`) (reused/extended for the protected export)
+A **Map Protector** window (ribbon: Config section) that lets the user configure a set of protection transforms, then exports either the currently-loaded map or an arbitrary external map file/folder as a new, separate `.w3x`. The source is never modified. The protected output runs in Warcraft III but is resistant to being opened, decompiled, or edited in world editors.
 
 ---
 
-## Architecture Fit
+## Architecture (as built)
 
-### How existing editors are opened (the pattern to follow)
-- A `QRibbonButton` is declared in `src/main_window/main_ribbon.h`
-- In `HiveWE::HiveWE()` (`src/main_window/hivewe.cpp` ~line 207) a lambda connects the button click to `window_handler.create_or_raise<EditorType>()`
-- The editor class inherits `QMainWindow`
-- `WindowHandler` (in `src/base/window_handler.ixx`) manages lifetime and focus
+Diverges from the original draft in two ways worth knowing before editing this feature:
 
-### How maps are exported (the pipeline to hook into)
-- `HiveWE::export_mpq()` (`src/main_window/hivewe.cpp` ~line 696) saves map data to a temp folder, then packs it into an MPQ using StormLib directly
-- The protection tool will call `map->save(temp_path)` the same way, then run its transforms on the resulting folder before calling its own MPQ packing step
-- StormLib is already available via `src/file_formats/mpq.ixx`
+- **File layout**: `protection_pipeline.ixx` is a single C++20 module, not a `.h`/`.cpp` split — matches this repo's module convention (see `.cursor/rules/hivewe-cpp-modules.mdc`).
+- **Source selection**: the window has a "Source" group with two mutually exclusive options:
+  - **Currently loaded map** — routes through `run_sync_save_and_restore()`, which calls the live `map->save(temp_dir)` (HiveWE's full save, regenerating triggers/script from HiveWE's own state). Correct for protecting the live editor session.
+  - **Map file or folder** (external) — routes through `prepare_source_path()`, which copies a folder-mode source or unpacks a `.w3x`/`.w3m` source directly into the temp folder **without ever loading it into HiveWE's `Map` object**. This exists because routing everything through `Map::save()` would silently regenerate `war3map.j`/`war3map.lua` from HiveWE's own trigger state, corrupting maps built by external tooling (e.g. a compiled Lua script from another build pipeline). Metadata sanitization for this path uses a standalone `MapInfo` instance instead of `map->info`.
+
+Both paths converge on the same `run_async_pack()` step (background thread, StormLib packing).
+
+### Files
+```
+src/map_protector/
+  map_protector.h            — QMainWindow subclass (the window)
+  map_protector.cpp          — UI logic, settings, export trigger
+  protection_pipeline.ixx    — ProtectionOptions + both save paths + packing (single module)
+```
+
+### Prerequisite fix: opening real `.w3x` archives
+
+`HiveWE::load_mpq()` (`hivewe.cpp`) and `MPQ::unpack()` (`src/file_formats/mpq.ixx`) previously failed silently on archives without a `(listfile)`: StormLib's wildcard enumeration still finds every entry, but unnamed ones come back under fabricated names (`File00001234.blp`) instead of the real ones, so the unpacked folder ended up missing `war3map.w3i` and failed to load. This mattered directly for Map Protector, since its own "Remove listfile" option produces exactly this kind of archive — there was no way to open/verify a protected map's own output. Fixed by also fetching the fixed set of core `war3map.*` files directly by name via the new `MPQ::extract_file()` (MPQ looks files up by name hash, not directory listing, so this works with or without a listfile). `unpack_source_archive()` in `protection_pipeline.ixx` reuses this same fix for the external-source path.
+
+Known limitation (expected, not a bug): custom-imported assets under non-core names (e.g. `war3mapImported\Something.mdx`) still can't be recovered under their real relative path from a listfile-less archive — there's no fixed name list to fall back on for arbitrary imports. This is exactly what removing the listfile is supposed to achieve.
 
 ---
 
-## New Files to Create
+## UI (as built)
 
-```
-src/
-  map_protector/
-    map_protector.h          — QMainWindow subclass (the window)
-    map_protector.cpp        — UI logic, settings, export trigger
-    protection_pipeline.h    — ProtectionPipeline struct + ProtectionOptions struct
-    protection_pipeline.cpp  — All transform logic (pure functions on temp folder / MPQ)
-```
+Window title: **Map Protector**, `QMainWindow`, resizes from 700×560.
 
----
+1. **Source** — `Currently loaded map` / `Map file or folder:` radio buttons; the latter enables a path field + `Browse File...` / `Browse Folder...` buttons.
+2. **Output file** — path field + `Browse...`. Defaults next to the source map's own folder (not the app-wide "last opened directory" setting, which can point at an unrelated/stale location).
+3. **MPQ Archive Hardening** — Remove listfile (default ON), Remove attributes file (ON), Encrypt MPQ files (ON), Inject junk files (OFF) + junk file count spinner (default 50, enabled only when the checkbox is on).
+4. **Trigger / Script Hardening** — Remove GUI trigger data (ON) — deletes `war3map.wtg`.
+5. **Metadata Sanitization** — Clear map author / description / loading screen text / normalize map name (all OFF by default).
+6. **Action bar** — status label, indeterminate progress bar, `Export Protected Map` button.
 
-## Files to Modify
-
-| File | Change |
-|---|---|
-| `src/main_window/main_ribbon.h` | Add `QRibbonButton* map_protector` pointer (~line 62) |
-| `src/main_window/main_ribbon.cpp` | Instantiate and label the button in the ribbon |
-| `src/main_window/hivewe.h` | Forward-declare MapProtector |
-| `src/main_window/hivewe.cpp` | Connect ribbon button → `window_handler.create_or_raise<MapProtector>()` (~line 207 area) |
-| `CMakeLists.txt` | Add new .cpp sources to the target |
+All options persist via `QSettings` (group `"MapProtector"`).
 
 ---
 
-## UI Design — MapProtector Window
+## `ProtectionOptions` (as built, `protection_pipeline.ixx`)
 
-Window title: **Map Protector**  
-Window class: `MapProtector : public QMainWindow`  
-Size: ~700 × 560 px (fixed or minimum)  
-Layout: single central widget, `QVBoxLayout`
-
-### Top section — Output path
-```
-[ Output file:  ______________________________ ] [ Browse... ]
-  (defaults to <map_name>_protected.w3x next to original)
-```
-
-### Middle section — Protection options (grouped QGroupBoxes)
-
-#### Group 1 — MPQ Archive Hardening
-| Option | Default | Description shown in tooltip |
-|---|---|---|
-| Remove listfile | ✓ ON | Deletes `(listfile)` from the MPQ so editors cannot enumerate files |
-| Remove attributes file | ✓ ON | Deletes `(attributes)` (MD5 hash table) used by some tools |
-| Encrypt MPQ files | ✓ ON | Applies StormLib per-file encryption (`MPQ_FILE_ENCRYPTED`) to all files |
-| Inject junk files | OFF | Adds N dummy files with random names and content to confuse deprotectors |
-| Junk file count | 50 | (spinner, only enabled when inject junk is ON) |
-
-#### Group 2 — Trigger / Script Hardening
-| Option | Default | Description |
-|---|---|---|
-| Remove GUI trigger data | ✓ ON | Deletes `war3map.wtg` (trigger tree). Map runs on compiled script, editor shows nothing |
-| Remove custom script source | OFF | Also removes `war3map.wct`. CAUTION: map must have a working compiled script already |
-| Strip trigger string references | OFF | Removes human-readable string keys from `war3map.wts`; replaces with raw values in script |
-
-#### Group 3 — Object Data Hardening
-| Option | Default | Description |
-|---|---|---|
-| Strip unused object fields | ✓ ON | Removes editor-only metadata fields that are not read by WC3 at runtime |
-| Obfuscate custom object IDs | OFF | Remaps all custom unit/ability/item IDs to random 4-char IDs (complex — Phase 2) |
-
-#### Group 4 — Metadata Sanitization
-| Option | Default | Description |
-|---|---|---|
-| Clear map author | OFF | Blanks author field in `war3map.w3i` |
-| Clear map description | OFF | Blanks description field |
-| Clear loading screen text | OFF | Blanks loading screen tip/hint text |
-| Normalize map name | OFF | Replaces map name with a generic placeholder |
-
-### Bottom section — Action bar
-```
-[ ℹ️  Status: Ready ]                    [ Export Protected Map ]
-```
-- Status label updates during export (e.g. "Saving map data...", "Applying transforms...", "Packing MPQ...", "Done — saved to X")
-- Export button disabled when no map is loaded or output path is empty
-- A `QProgressBar` (indeterminate) shows while export runs (runs in background thread via `QThread` or `QtConcurrent::run`)
-
----
-
-## Protection Pipeline — Technical Implementation
-
-### `ProtectionOptions` struct (`protection_pipeline.h`)
 ```cpp
 struct ProtectionOptions {
-    // MPQ hardening
-    bool remove_listfile       = true;
-    bool remove_attributes     = true;
-    bool encrypt_files         = true;
-    bool inject_junk_files     = false;
-    int  junk_file_count       = 50;
+    // MPQ archive hardening
+    bool remove_listfile = true;
+    bool remove_attributes = true;
+    bool encrypt_files = true;
+    bool inject_junk_files = false;
+    int junk_file_count = 50;
 
-    // Trigger/script
-    bool remove_gui_triggers   = true;
-    bool remove_script_source  = false;
-    bool strip_trigger_strings = false;
+    // Trigger hardening
+    bool remove_gui_triggers = true;
 
-    // Object data
-    bool strip_unused_fields   = true;
-    bool obfuscate_object_ids  = false; // Phase 2
-
-    // Metadata
-    bool clear_author          = false;
-    bool clear_description     = false;
-    bool clear_loading_text    = false;
-    bool normalize_name        = false;
-
-    std::filesystem::path output_path;
+    // Metadata sanitization
+    bool clear_author = false;
+    bool clear_description = false;
+    bool clear_loading_text = false;
+    bool normalize_name = false;
 };
 ```
 
-### `ProtectionPipeline` — ordered steps (`protection_pipeline.cpp`)
-
-All transforms operate on a **temporary folder** of unpacked map files (same as the normal save pipeline uses), before MPQ packing.
-
-**Step 1 — Save map to temp folder**
-- Call `map->save(temp_folder)` (same call as normal export)
-- This produces all `war3map.*` files in the temp folder
-
-**Step 2 — Metadata sanitization** (operates on `war3map.w3i` binary)
-- Read the file, zero out author/description/loading text fields based on options
-- Write back
-
-**Step 3 — Trigger/script hardening** (operates on files in temp folder)
-- `remove_gui_triggers`: delete `war3map.wtg` from temp folder
-- `remove_script_source`: delete `war3map.wct` from temp folder
-- `strip_trigger_strings`: parse `war3map.wts`, inline string values directly into `war3map.j`/`war3map.lua`, then delete/empty `war3map.wts`
-
-**Step 4 — Object data strip** (operates on `war3map.w3u`, `.w3t`, `.w3a`, etc.)
-- Iterate modification blocks, drop any field IDs that are editor-only (known list)
-- Write back
-
-**Step 5 — Inject junk files** (operates on temp folder)
-- Generate N files with random names (e.g. `_junk_a3f2.blp`) and random binary content
-- Add them to the folder so they get packed into the MPQ
-
-**Step 6 — Pack MPQ**
-- Use StormLib directly (same as `HiveWE::export_mpq()`) to create the `.w3x`
-- Use `MPQ_CREATE_LISTFILE` = 0 if `remove_listfile` is true (do NOT pass `MPQ_CREATE_LISTFILE` flag)
-- Use `MPQ_CREATE_ATTRIBUTES` = 0 if `remove_attributes` is true
-- For each file added: if `encrypt_files`, add `MPQ_FILE_ENCRYPTED` flag to `SFileAddFileEx()` call
-
-**Step 7 — Cleanup**
-- Delete temp folder
-- Emit signal to update status label with final output path
-
----
-
-## Integration Points — Exact Code Locations
-
-### Adding the ribbon button
-
-**`src/main_window/main_ribbon.h`** — Add in the public section near line 57:
-```cpp
-QRibbonButton* map_protector;
-```
-
-**`src/main_window/main_ribbon.cpp`** — Instantiate alongside other tool buttons.
-
-**`src/main_window/hivewe.cpp`** — In the constructor (~line 207), add:
-```cpp
-connect(ui->ribbon->map_protector, &QRibbonButton::clicked, [this]() {
-    bool created = false;
-    const auto editor = window_handler.create_or_raise<MapProtector>(nullptr, created);
-    if (created) {
-        editor->set_map(map.get()); // pass map pointer so it can call map->save()
-    }
-});
-```
-
-### Passing the map to the window
-- `MapProtector` holds a `Map*` (non-owning pointer)
-- Export button is only enabled when `map != nullptr`
-- Connect to HiveWE's `map_opened` / `map_closed` signals (check if these exist; if not, wire up manually in the connect block above)
-
----
-
-## Export Flow (sequence)
+## Export flow (as built)
 
 ```
 User clicks "Export Protected Map"
   → MapProtector::on_export_clicked()
-  → Validate: output path set? map loaded?
-  → Disable button, show progress bar
-  → QtConcurrent::run([this]() {
-        ProtectionPipeline::run(map, options, temp_dir);
-    })
-  → on_pipeline_finished(result):
-        hide progress bar
-        enable button
-        update status label ("Done — saved to X" or error message)
+  → Validate source (loaded map, or existing external path) and output path
+  → Disable options, show progress bar
+  → Synchronously, on the UI thread:
+        run_sync_save_and_restore(temp_dir, options)   [current map]
+        or prepare_source_path(source, temp_dir, options)  [external source]
+  → On success, background via QThread::create():
+        run_async_pack(temp_dir, output_path, options)
+  → QMetaObject::invokeMethod(..., Qt::QueuedConnection) back to
+    MapProtector::on_export_finished(result) on the UI thread
+  → Re-enable options, hide progress bar, update status label
 ```
 
----
-
-## Phase Plan
-
-### Phase 1 — Core (implement first)
-- Window skeleton (QMainWindow, layout, all option widgets)
-- Options struct + serialization (save/restore with QSettings)
-- Export pipeline: save to temp → pack MPQ (no transforms yet, just working end-to-end)
-- Remove listfile + remove attributes (trivial — just don't pass flags)
-- Remove GUI triggers (delete `war3map.wtg`)
-- Clear metadata fields
-- Ribbon button integration
-
-### Phase 2 — Hardening
-- Per-file MPQ encryption (`MPQ_FILE_ENCRYPTED`)
-- Junk file injection
-- Strip trigger strings (inline into script)
-- Strip unused object data fields
-
-### Phase 3 — Advanced (optional, complex)
-- JASS/Lua variable name obfuscation (requires a proper tokenizer — see `src/trigger_editor/jass_tokenizer.h`)
-- Custom object ID remapping (requires updating all cross-references in triggers)
+The sync-save step *must* run on the UI thread before backgrounding: both `run_sync_save_and_restore()` and `prepare_source_path()`'s metadata step briefly redirect the global `hierarchy.map_directory`, and `Map::save()`/`MapInfo::save()` aren't safe to call off the UI thread. Only the packing step (pure file I/O on the temp folder) is backgrounded.
 
 ---
 
-## Notes & Constraints
+## What shipped vs. what's deferred
 
-- **WC3 compatibility must be verified after each protection option is implemented.** Test the exported map in WC3 1.31+ and Reforged before calling a feature done.
-- `MPQ_FILE_ENCRYPTED` on the script file (`war3map.j` / `war3map.lua`) must be verified — WC3's loader should handle per-file encryption since it's part of the MPQ spec, but confirm.
-- `remove_script_source` is dangerous: only expose it if the map already has a working compiled script (`war3map.j` present). Guard this in the UI with a warning dialog.
-- `obfuscate_object_ids` (Phase 3) requires updating every reference to the old IDs in triggers and initialization code — very high effort and high breakage risk.
-- The temp folder used for export should be unique per-run (use `QTemporaryDir`) to avoid collisions if the user runs multiple exports.
-- All file I/O in the export pipeline should happen on a background thread (`QtConcurrent::run`) — never block the UI thread.
+### Implemented (Phase 1 + safe half of Phase 2)
+- Remove listfile / remove attributes
+- Remove GUI trigger data (`war3map.wtg`)
+- Metadata clearing (author / description / loading text / name) — via a standalone `MapInfo` instance for external sources, so this never requires loading the source into HiveWE's `Map` object
+- Per-file MPQ encryption (`MPQ_FILE_ENCRYPTED`) — the same technique real-world map protectors use; WC3 decrypts per-file-encrypted archive contents transparently
+- Junk file injection (configurable count, random name/extension/content)
+- Protecting either the live in-editor map or an arbitrary external `.w3x`/`.w3m`/folder
+
+### Deliberately deferred — not in `ProtectionOptions`, no UI
+- **`strip_trigger_strings`** (inline `war3map.wts` TRIGSTR placeholders into the generated script, then strip the string table) — blocked on: no JASS/Lua string-literal escaper exists anywhere in this codebase, and script generation currently passes TRIGSTR placeholders through untouched. Naive substitution without correctly escaping quotes/newlines/backslashes in trigger text would corrupt the generated script and produce a map that fails to load.
+- **`strip_unused_fields`** (drop object-data fields the World Editor uses but the engine doesn't read at runtime) — blocked on: no such classification exists anywhere in this codebase or in WC3's shipped meta files. The `useHero`/`useUnit`/`useItem`/`useBuilding` SLK columns only indicate which editor tab a field appears on, not whether the engine reads it. Misclassifying even one field risks silently breaking unit/item/ability behavior with no safety net.
+- **`remove_script_source`** (delete `war3map.wct`) — not implemented, not currently planned.
+
+### Phase 3 (optional, complex — unchanged from original assessment, not started)
+- JASS/Lua variable name obfuscation (would need a proper tokenizer — see `src/trigger_editor/jass_tokenizer.h`)
+- Custom object ID remapping (would need to update every cross-reference in triggers/initialization code)
 
 ---
 
-## Key References in Codebase
+## Verified
+
+- **Build**: `cmake --build --preset Release` (app + tests) — clean, no errors. Two pre-existing, unrelated `AutoMoc` warnings (`tooltip_editor`) are the only warnings.
+- **Tests**: same pre-existing baseline (23 passed / 5 failed — unrelated failures in `object_data_io_test`/`mdl_reader_test`, predate this feature) — no regression.
+- **In-game**: a map protected via Map Protector (a) no longer opens in the stock World Editor, (b) plays correctly in Warcraft III.
+- Not yet specifically tested: encryption + junk files in combination with an *external-source* (non-loaded-map) export; only the currently-loaded-map path and the basic external-source path have both been confirmed in-game so far.
+
+---
+
+## Key references (as built)
 
 | Concept | Location |
 |---|---|
-| Window open pattern | `src/main_window/hivewe.cpp` ~line 207 |
-| MPQ wrapper | `src/file_formats/mpq.ixx` lines 84–195 |
-| Export MPQ (full pipeline) | `src/main_window/hivewe.cpp` ~line 696 |
-| Map save | `src/base/map/map.ixx` ~line 593 |
-| Map data structures | `src/base/map/map.ixx` lines 53–93 |
-| Ribbon button declarations | `src/main_window/main_ribbon.h` ~line 57 |
+| Window class | `src/map_protector/map_protector.h` / `.cpp` |
+| Pipeline module | `src/map_protector/protection_pipeline.ixx` |
+| Ribbon button | `src/main_window/main_ribbon.h` / `.cpp` (`map_protector`, Config section) |
+| Ribbon → window wiring | `src/main_window/hivewe.cpp`, `HiveWE::HiveWE()` constructor |
+| MPQ wrapper (`open`/`unpack`/`extract_file`/`file_exists`) | `src/file_formats/mpq.ixx` |
+| Existing "Open Map (MPQ)" flow (reused fix) | `HiveWE::load_mpq()`, `src/main_window/hivewe.cpp` |
+| Full HiveWE save | `Map::save()`, `src/base/map/map.ixx` |
+| Map metadata format | `MapInfo`, `src/base/map_info.ixx` |
+| `war3map.w3e` header layout (tileset byte) | `Terrain::load()`, `src/base/terrain.ixx` (~line 296-308) |
+| Core map filename list (reused for listfile-independent extraction) | `Imports::blacklist`, `src/base/imports.ixx` |
 | WindowHandler | `src/base/window_handler.ixx` |
-| JASS tokenizer (for Phase 3) | `src/trigger_editor/jass_tokenizer.h` |
-| ObjectEditor (window template) | `src/object_editor/object_editor.h` |
