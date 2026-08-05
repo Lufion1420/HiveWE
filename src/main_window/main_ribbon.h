@@ -62,6 +62,7 @@ public:
 	QRibbonButton* model_editor = new QRibbonButton;
 	QRibbonButton* asset_manager = new QRibbonButton;
 	QRibbonButton* tooltip_editor = new QRibbonButton;
+	QRibbonButton* map_protector = new QRibbonButton;
 	QRibbonButton* config = new QRibbonButton;
 	QRibbonButton* export_objects = new QRibbonButton;
 	QRibbonButton* import_objects = new QRibbonButton;

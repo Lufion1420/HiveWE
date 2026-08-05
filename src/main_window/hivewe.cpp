@@ -53,6 +53,7 @@ import "menus/gameplay_constants_editor.h";
 import "menus/item_tables_editor.h";
 import "asset_manager/asset_manager.h";
 import "tooltip_editor/tooltip_editor.h";
+import "map_protector/map_protector.h";
 #include "object_data_import_dialog.h"
 import ObjectDataIo;
 
@@ -288,6 +289,11 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->tooltip_editor, &QRibbonButton::clicked, [this]() {
 		bool created = false;
 		window_handler.create_or_raise<TooltipEditor>(nullptr, created);
+	});
+
+	connect(ui->ribbon->map_protector, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<MapProtector>(nullptr, created);
 	});
 
 	restore_window_state();

@@ -334,6 +334,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 			 model_editor,
 			 asset_manager,
 			 tooltip_editor,
+			 map_protector,
 			 config,
 			 export_objects,
 			 import_objects,
@@ -389,6 +390,10 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	tooltip_editor->setIcon(QIcon("data/icons/ribbon/objecteditor.png"));
 	tooltip_editor->setText("Tooltip\nEditor");
 	set_tooltip(tooltip_editor, "Open the Tooltip Editor to edit unit, item, and ability tooltips.");
+
+	map_protector->setIcon(QIcon("data/icons/ribbon/saveas.png"));
+	map_protector->setText("Map\nProtector");
+	set_tooltip(map_protector, "Export the current map as a hardened, protected copy. The original map is never modified.");
 
 	config->setIcon(QIcon("data/icons/ribbon/options.png"));
 	config->setText("Config");
@@ -527,6 +532,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	auto* config_section = make_section("Config");
 	config_section->addWidget(export_objects);
 	config_section->addWidget(import_objects);
+	config_section->addWidget(map_protector);
 	config_section->addWidget(config);
 
 	home_tab->addSection(history_section);

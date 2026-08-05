@@ -96,10 +96,12 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"utilities/gl_thread_pool.ixx"
 	"utilities/utilities.ixx"
 	"utilities/opengl_utilities.ixx"
-	"utilities/modification_tables.ixx" 
+	"utilities/modification_tables.ixx"
 	"utilities/object_data_text.ixx"
 	"utilities/object_data_io.ixx"
 	"utilities/unordered_map.ixx"
+
+	"map_protector/protection_pipeline.ixx"
 
 	"utilities/no_init_allocator.ixx"
 	"utilities/math_operations.ixx"
@@ -215,6 +217,9 @@ target_sources(HiveWE_lib PRIVATE
 	"tooltip_editor/template_manager.h"
 	"tooltip_editor/wc3_color_dialog.cpp"
 	"tooltip_editor/wc3_color_dialog.h"
+
+	"map_protector/map_protector.cpp"
+	"map_protector/map_protector.h"
 
 	"qt_imgui/imgui_renderer.cpp"
 	"qt_imgui/qt_imgui.cpp"
