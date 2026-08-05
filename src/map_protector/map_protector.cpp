@@ -91,6 +91,7 @@ MapProtector::MapProtector(QWidget* parent) : QMainWindow(parent) {
 	auto* trigger_group = new QGroupBox("Trigger / Script Hardening", central);
 	auto* trigger_layout = new QVBoxLayout(trigger_group);
 	remove_gui_triggers_check = make_check(trigger_group, trigger_layout, "Remove GUI trigger data", "Deletes war3map.wtg (trigger tree). The map runs on its compiled script; editors show nothing.", true);
+	strip_trigger_strings_check = make_check(trigger_group, trigger_layout, "Strip trigger strings", "Inlines war3map.wts text directly into the script, then deletes war3map.wts. Note: object data fields (e.g. a very long custom tooltip) can independently reference a trigger string too - those will show raw \"TRIGSTR_XXX\" text in-game after stripping.", false);
 	main_layout->addWidget(trigger_group);
 
 	// Metadata sanitization
@@ -205,6 +206,7 @@ ProtectionOptions MapProtector::collect_options() const {
 	options.inject_junk_files = inject_junk_files_check->isChecked();
 	options.junk_file_count = junk_file_count_spin->value();
 	options.remove_gui_triggers = remove_gui_triggers_check->isChecked();
+	options.strip_trigger_strings = strip_trigger_strings_check->isChecked();
 	options.clear_author = clear_author_check->isChecked();
 	options.clear_description = clear_description_check->isChecked();
 	options.clear_loading_text = clear_loading_text_check->isChecked();
@@ -216,7 +218,7 @@ void MapProtector::set_options_enabled(bool enabled) {
 	const std::initializer_list<QWidget*> widgets = {
 		source_current_map_radio, source_external_radio,
 		remove_listfile_check, remove_attributes_check, encrypt_files_check, inject_junk_files_check,
-		remove_gui_triggers_check,
+		remove_gui_triggers_check, strip_trigger_strings_check,
 		clear_author_check, clear_description_check, clear_loading_text_check, normalize_name_check,
 		output_path_edit, browse_button, export_button
 	};
@@ -333,6 +335,7 @@ void MapProtector::load_settings() {
 	junk_file_count_spin->setValue(settings.value("junkFileCount", 50).toInt());
 	junk_file_count_spin->setEnabled(inject_junk_files_check->isChecked());
 	remove_gui_triggers_check->setChecked(settings.value("removeGuiTriggers", true).toBool());
+	strip_trigger_strings_check->setChecked(settings.value("stripTriggerStrings", false).toBool());
 	clear_author_check->setChecked(settings.value("clearAuthor", false).toBool());
 	clear_description_check->setChecked(settings.value("clearDescription", false).toBool());
 	clear_loading_text_check->setChecked(settings.value("clearLoadingText", false).toBool());
@@ -352,6 +355,7 @@ void MapProtector::save_settings() const {
 	settings.setValue("injectJunkFiles", inject_junk_files_check->isChecked());
 	settings.setValue("junkFileCount", junk_file_count_spin->value());
 	settings.setValue("removeGuiTriggers", remove_gui_triggers_check->isChecked());
+	settings.setValue("stripTriggerStrings", strip_trigger_strings_check->isChecked());
 	settings.setValue("clearAuthor", clear_author_check->isChecked());
 	settings.setValue("clearDescription", clear_description_check->isChecked());
 	settings.setValue("clearLoadingText", clear_loading_text_check->isChecked());

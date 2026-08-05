@@ -27,6 +27,7 @@ export struct ProtectionOptions {
 
 	// Trigger hardening
 	bool remove_gui_triggers = true;
+	bool strip_trigger_strings = false;
 
 	// Metadata sanitization
 	bool clear_author = false;
@@ -240,6 +241,244 @@ void inject_junk_files(const fs::path& temp_dir, int count) {
 	}
 }
 
+/// Reads temp_dir/war3map.wts directly off disk and parses it into id -> text, independent of
+/// the TriggerStrings class (which reads through the global hierarchy) so this stays a plain,
+/// background-thread-safe file operation. Mirrors TriggerStrings::load()'s parsing exactly,
+/// including its zero-pad-to-3-digits key convention, since callers match against that format.
+std::unordered_map<std::string, std::string> parse_trigger_strings_file(const fs::path& wts_path) {
+	std::unordered_map<std::string, std::string> table;
+
+	std::ifstream stream(wts_path, std::ios::binary);
+	if (!stream) {
+		return table;
+	}
+	std::string contents((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+
+	// Skip a leading UTF-8 BOM, which TriggerStrings::save() always writes.
+	if (contents.starts_with("\xEF\xBB\xBF")) {
+		contents.erase(0, 3);
+	}
+
+	std::istringstream file(contents);
+	std::string key;
+	std::string line;
+	while (std::getline(file, line)) {
+		if (!line.empty() && line.back() == '\r') {
+			line.pop_back();
+		}
+		if (line.empty() || line.starts_with("//")) {
+			continue;
+		}
+
+		if (line.front() == '{') {
+			std::string value;
+			bool first = true;
+			while (std::getline(file, line) && !line.empty() && line.front() != '}') {
+				if (!line.empty() && line.back() == '\r') {
+					line.pop_back();
+				}
+				value += (first ? "" : "\n") + line;
+				first = false;
+			}
+			table[key] = value;
+		} else {
+			const size_t found = line.find(' ') + 1;
+			if (found == std::string::npos || found >= line.size()) {
+				continue;
+			}
+			const int padsize = std::max(0, 3 - (static_cast<int>(line.size()) - static_cast<int>(found)));
+			key = "TRIGSTR_" + std::string(padsize, '0') + line.substr(found);
+		}
+	}
+	return table;
+}
+
+/// Escapes text for embedding as the body of a JASS or Lua double-quoted string literal. Both
+/// languages accept the same core escapes (\\, \", \n) for this purpose. Control bytes other
+/// than newline are dropped rather than risking an escape sequence the game's script parser
+/// doesn't accept - trigger string text is always printable text in practice (WC3 itself uses
+/// the literal 2-character sequence "|n", not a real newline byte, for tooltip line breaks).
+std::string escape_script_string(const std::string& text) {
+	std::string result;
+	result.reserve(text.size());
+	for (const char c : text) {
+		switch (c) {
+			case '\\':
+				result += "\\\\";
+				break;
+			case '"':
+				result += "\\\"";
+				break;
+			case '\n':
+				result += "\\n";
+				break;
+			case '\r':
+				break; // dropped: a lone \n is already a valid escaped line break
+			default:
+				if (static_cast<unsigned char>(c) >= 0x20) {
+					result += c;
+				}
+				break;
+		}
+	}
+	return result;
+}
+
+/// If `literal` (a string literal's raw, still-escaped content as it appears in source) is a
+/// trigger string reference, returns its canonical zero-padded key (e.g. "TRIGSTR_007").
+/// WC3 recognizes a string value as a trigger string reference if it *starts* with "TRIGSTR_"
+/// followed by digits - trailing characters after the digits are accepted but ignored by the
+/// engine (community-documented: "TRIGSTR_7abc" still resolves to trigger string #7) - so this
+/// matches on the same prefix+digits rule rather than requiring an exact whole-string match.
+std::optional<std::string> trigstr_key_from_literal(const std::string& literal) {
+	constexpr std::string_view prefix = "TRIGSTR_";
+	if (!literal.starts_with(prefix)) {
+		return std::nullopt;
+	}
+
+	size_t i = prefix.size();
+	const size_t digits_start = i;
+	while (i < literal.size() && std::isdigit(static_cast<unsigned char>(literal[i]))) {
+		++i;
+	}
+	if (i == digits_start) {
+		return std::nullopt;
+	}
+
+	std::string digits = literal.substr(digits_start, i - digits_start);
+	const size_t first_nonzero = digits.find_first_not_of('0');
+	digits = (first_nonzero == std::string::npos) ? "0" : digits.substr(first_nonzero);
+	if (digits.size() < 3) {
+		digits.insert(0, 3 - digits.size(), '0');
+	}
+	return "TRIGSTR_" + digits;
+}
+
+struct StringLiteralSpan {
+	size_t start; // index of the opening quote
+	size_t end; // index one past the closing quote
+	std::string raw_content; // between the quotes, still escaped as it appears in source
+};
+
+/// Scans `text` (a JASS or Lua source file's full contents) for double-quoted string literals,
+/// skipping both languages' line/block comment styles ("//", "/* */", "--", "--[[ ]]") so a
+/// quote character inside a comment can't desynchronize the scan for everything after it.
+/// Respects \\ and \" so an escaped quote doesn't end a literal early.
+std::vector<StringLiteralSpan> find_string_literals(const std::string& text) {
+	std::vector<StringLiteralSpan> spans;
+	size_t i = 0;
+	while (i < text.size()) {
+		if (text.compare(i, 2, "//") == 0) {
+			while (i < text.size() && text[i] != '\n') {
+				++i;
+			}
+		} else if (text.compare(i, 2, "/*") == 0) {
+			const size_t close = text.find("*/", i + 2);
+			i = (close == std::string::npos) ? text.size() : close + 2;
+		} else if (text.compare(i, 4, "--[[") == 0) {
+			const size_t close = text.find("]]", i + 4);
+			i = (close == std::string::npos) ? text.size() : close + 2;
+		} else if (text.compare(i, 2, "--") == 0) {
+			while (i < text.size() && text[i] != '\n') {
+				++i;
+			}
+		} else if (text[i] == '"') {
+			const size_t start = i;
+			std::string content;
+			++i;
+			bool terminated = false;
+			while (i < text.size() && text[i] != '\n') {
+				if (text[i] == '"') {
+					terminated = true;
+					++i;
+					break;
+				}
+				if (text[i] == '\\' && i + 1 < text.size()) {
+					content += text[i];
+					content += text[i + 1];
+					i += 2;
+				} else {
+					content += text[i];
+					++i;
+				}
+			}
+			if (terminated) {
+				spans.push_back({ start, i, content });
+			}
+			// Unterminated literal (shouldn't happen in valid generated script): leave it out of
+			// the results rather than guessing where it ends.
+		} else {
+			++i;
+		}
+	}
+	return spans;
+}
+
+/// Replaces every trigger-string-reference literal in war3map.j/war3map.lua (whichever are
+/// present under temp_dir) with the resolved, escaped text from war3map.wts, then deletes
+/// war3map.wts. Fails the whole step - callers should abort the export rather than ship a
+/// partially-resolved script - if any matched reference has no corresponding entry in the wts
+/// table, since silently leaving a raw "TRIGSTR_007" literal behind means that text is gone
+/// forever once war3map.wts is deleted.
+///
+/// Scope note: this only covers the script. Object data fields (unit/item/ability tooltips etc.)
+/// can independently store a TRIGSTR reference too, but patching those would require loading the
+/// full SLK/meta tables this pipeline's external-source path deliberately avoids touching. If a
+/// map stores long custom object-data text this way, that field will show raw "TRIGSTR_XXX" text
+/// in-game after stripping - a disclosed, known limitation, not a bug.
+SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
+	const fs::path wts_path = temp_dir / "war3map.wts";
+	if (!fs::exists(wts_path)) {
+		return { true, "" };
+	}
+
+	const std::unordered_map<std::string, std::string> trigger_string_table = parse_trigger_strings_file(wts_path);
+
+	for (const char* script_name : { "war3map.j", "war3map.lua" }) {
+		const fs::path script_path = temp_dir / script_name;
+		if (!fs::exists(script_path)) {
+			continue;
+		}
+
+		std::string text;
+		{
+			std::ifstream in(script_path, std::ios::binary);
+			text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		}
+
+		const std::vector<StringLiteralSpan> spans = find_string_literals(text);
+
+		std::string rebuilt;
+		rebuilt.reserve(text.size());
+		size_t cursor = 0;
+		for (const StringLiteralSpan& span : spans) {
+			const std::optional<std::string> key = trigstr_key_from_literal(span.raw_content);
+			if (!key) {
+				continue;
+			}
+
+			const auto found = trigger_string_table.find(*key);
+			if (found == trigger_string_table.end()) {
+				return { false, std::format("'{}' references {} which has no entry in war3map.wts - aborting rather than shipping a script with an unresolved reference.", script_name, *key) };
+			}
+
+			rebuilt.append(text, cursor, span.start - cursor);
+			rebuilt += '"';
+			rebuilt += escape_script_string(found->second);
+			rebuilt += '"';
+			cursor = span.end;
+		}
+		rebuilt.append(text, cursor, text.size() - cursor);
+
+		std::ofstream out(script_path, std::ios::binary | std::ios::trunc);
+		out.write(rebuilt.data(), static_cast<std::streamsize>(rebuilt.size()));
+	}
+
+	std::error_code ec;
+	fs::remove(wts_path, ec);
+	return { true, "" };
+}
+
 /// Packs temp_dir into a protected MPQ at output_path. Operates only on plain files under
 /// temp_dir/output_path - never touches map/hierarchy - so it is safe to run on a background
 /// thread once run_sync_save_and_restore() has returned. Mirrors HiveWE::export_mpq()'s raw
@@ -248,6 +487,13 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 	if (options.remove_gui_triggers) {
 		std::error_code ec;
 		fs::remove(temp_dir / "war3map.wtg", ec);
+	}
+
+	if (options.strip_trigger_strings) {
+		const SyncSaveResult strip_result = strip_trigger_strings_step(temp_dir);
+		if (!strip_result.success) {
+			return { false, strip_result.error };
+		}
 	}
 
 	if (options.inject_junk_files && options.junk_file_count > 0) {

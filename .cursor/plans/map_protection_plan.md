@@ -2,7 +2,7 @@
 
 **Project:** HiveWE Fork
 **Feature:** Map Protection Window (standalone export-only tool, opens from main ribbon)
-**Status:** Implemented — Phase 1 and the safe half of Phase 2 (see "What shipped vs. what's deferred" below). Verified in-game: protected output no longer opens in the stock World Editor and still plays correctly.
+**Status:** Implemented — Phase 1, all of Phase 2 except object-field stripping (see "What shipped vs. what's deferred" below). Verified in-game: protected output no longer opens in the stock World Editor and still plays correctly. `strip_trigger_strings` specifically is algorithm-tested (see "Verified") but **not yet in-game tested** — do that before trusting it on a real map.
 **Last updated:** 2026-08-05
 
 For a session-by-session account of *how* this got built (bugs found, why certain approaches were chosen), see `map_protection_handoff.md`. This doc describes the current, as-built state.
@@ -49,7 +49,7 @@ Window title: **Map Protector**, `QMainWindow`, resizes from 700×560.
 1. **Source** — `Currently loaded map` / `Map file or folder:` radio buttons; the latter enables a path field + `Browse File...` / `Browse Folder...` buttons.
 2. **Output file** — path field + `Browse...`. Defaults next to the source map's own folder (not the app-wide "last opened directory" setting, which can point at an unrelated/stale location).
 3. **MPQ Archive Hardening** — Remove listfile (default ON), Remove attributes file (ON), Encrypt MPQ files (ON), Inject junk files (OFF) + junk file count spinner (default 50, enabled only when the checkbox is on).
-4. **Trigger / Script Hardening** — Remove GUI trigger data (ON) — deletes `war3map.wtg`.
+4. **Trigger / Script Hardening** — Remove GUI trigger data (ON) — deletes `war3map.wtg`. Strip trigger strings (OFF) — inlines `war3map.wts` text into the script, then deletes `war3map.wts`.
 5. **Metadata Sanitization** — Clear map author / description / loading screen text / normalize map name (all OFF by default).
 6. **Action bar** — status label, indeterminate progress bar, `Export Protected Map` button.
 
@@ -70,6 +70,7 @@ struct ProtectionOptions {
 
     // Trigger hardening
     bool remove_gui_triggers = true;
+    bool strip_trigger_strings = false;
 
     // Metadata sanitization
     bool clear_author = false;
@@ -102,17 +103,23 @@ The sync-save step *must* run on the UI thread before backgrounding: both `run_s
 
 ## What shipped vs. what's deferred
 
-### Implemented (Phase 1 + safe half of Phase 2)
+### Implemented (Phase 1 + Phase 2 except object-field stripping)
 - Remove listfile / remove attributes
 - Remove GUI trigger data (`war3map.wtg`)
+- **Strip trigger strings** — inlines `war3map.wts` TRIGSTR references directly into `war3map.j`/`war3map.lua`, then deletes `war3map.wts`. Implementation notes:
+  - Researched (not guessed) how WC3 actually resolves TRIGSTR: a string value is recognized as a reference if it *starts with* `TRIGSTR_` followed by digits — trailing characters after the digits are accepted but ignored by the engine (e.g. `TRIGSTR_7abc` still resolves to trigger string #7). Matching is on that prefix+digits rule, not a stricter exact-string match.
+  - `find_string_literals()` scans the script text for `"..."` literals, skipping both JASS (`//`, `/* */`) and Lua (`--`, `--[[ ]]`) comment styles so a quote inside a comment can't desynchronize detection of literals after it. Respects `\"`/`\\` so an escaped quote doesn't end a literal early.
+  - `escape_script_string()` handles the shared JASS/Lua escape set needed here: `\\`, `\"`, `\n` (WC3 itself uses the literal 2-character sequence `|n`, not a real newline byte, for in-tooltip line breaks — but trigger string *text* can still legitimately contain a real newline byte if a user pasted multi-line text into a WTS field, so this is handled, not assumed away).
+  - Fails the whole export (does not silently ship a partially-resolved script) if a detected reference has no matching `war3map.wts` entry — a dangling reference would otherwise become unrecoverable text once the string table is deleted.
+  - **Scope limitation, disclosed in the UI tooltip**: this only patches the script. Object data fields (e.g. a very long custom unit tooltip) can *independently* store a `TRIGSTR_XXX` reference too — those are not patched, since doing so would require loading the full SLK/meta tables the external-source path deliberately avoids touching. If a map relies on this, that specific field will show raw `TRIGSTR_034`-style text in-game after stripping.
+  - All of the above (padding normalization, comment-skipping for both languages, escaping, and the fail-on-dangling-reference behavior) was validated with a standalone 22-case test against realistic sample script text before shipping — see git history for `protection_pipeline.ixx` around the commit that added this. **Not yet confirmed in a real Warcraft III client** — do that before trusting it on a real map.
 - Metadata clearing (author / description / loading text / name) — via a standalone `MapInfo` instance for external sources, so this never requires loading the source into HiveWE's `Map` object
 - Per-file MPQ encryption (`MPQ_FILE_ENCRYPTED`) — the same technique real-world map protectors use; WC3 decrypts per-file-encrypted archive contents transparently
 - Junk file injection (configurable count, random name/extension/content)
 - Protecting either the live in-editor map or an arbitrary external `.w3x`/`.w3m`/folder
 
 ### Deliberately deferred — not in `ProtectionOptions`, no UI
-- **`strip_trigger_strings`** (inline `war3map.wts` TRIGSTR placeholders into the generated script, then strip the string table) — blocked on: no JASS/Lua string-literal escaper exists anywhere in this codebase, and script generation currently passes TRIGSTR placeholders through untouched. Naive substitution without correctly escaping quotes/newlines/backslashes in trigger text would corrupt the generated script and produce a map that fails to load.
-- **`strip_unused_fields`** (drop object-data fields the World Editor uses but the engine doesn't read at runtime) — blocked on: no such classification exists anywhere in this codebase or in WC3's shipped meta files. The `useHero`/`useUnit`/`useItem`/`useBuilding` SLK columns only indicate which editor tab a field appears on, not whether the engine reads it. Misclassifying even one field risks silently breaking unit/item/ability behavior with no safety net.
+- **`strip_unused_fields`** (drop object-data fields the World Editor uses but the engine doesn't read at runtime) — blocked on: no such classification exists anywhere in this codebase, in WC3's shipped meta files, or (checked via web research) in any community source found so far. The `useHero`/`useUnit`/`useItem`/`useBuilding` SLK columns only indicate which editor tab a field appears on, not whether the engine reads it. Misclassifying even one field risks silently breaking unit/item/ability behavior with no safety net. Revisit only if a genuinely authoritative field-usage list turns up.
 - **`remove_script_source`** (delete `war3map.wct`) — not implemented, not currently planned.
 
 ### Phase 3 (optional, complex — unchanged from original assessment, not started)
@@ -125,8 +132,8 @@ The sync-save step *must* run on the UI thread before backgrounding: both `run_s
 
 - **Build**: `cmake --build --preset Release` (app + tests) — clean, no errors. Two pre-existing, unrelated `AutoMoc` warnings (`tooltip_editor`) are the only warnings.
 - **Tests**: same pre-existing baseline (23 passed / 5 failed — unrelated failures in `object_data_io_test`/`mdl_reader_test`, predate this feature) — no regression.
-- **In-game**: a map protected via Map Protector (a) no longer opens in the stock World Editor, (b) plays correctly in Warcraft III.
-- Not yet specifically tested: encryption + junk files in combination with an *external-source* (non-loaded-map) export; only the currently-loaded-map path and the basic external-source path have both been confirmed in-game so far.
+- **In-game**: a map protected via Map Protector (a) no longer opens in the stock World Editor, (b) plays correctly in Warcraft III. Confirmed for the external-source path specifically with encryption + junk files enabled together.
+- **Not yet in-game tested**: `strip_trigger_strings` (algorithm-validated standalone, see above, but not run through a real client on a map that actually uses TRIGSTR references).
 
 ---
 
@@ -144,4 +151,6 @@ The sync-save step *must* run on the UI thread before backgrounding: both `run_s
 | Map metadata format | `MapInfo`, `src/base/map_info.ixx` |
 | `war3map.w3e` header layout (tileset byte) | `Terrain::load()`, `src/base/terrain.ixx` (~line 296-308) |
 | Core map filename list (reused for listfile-independent extraction) | `Imports::blacklist`, `src/base/imports.ixx` |
+| Trigger string table format (mirrored, not reused directly) | `TriggerStrings`, `src/base/trigger_strings.ixx` |
+| Trigger-string inlining logic | `strip_trigger_strings_step()` and helpers, `src/map_protector/protection_pipeline.ixx` |
 | WindowHandler | `src/base/window_handler.ixx` |
