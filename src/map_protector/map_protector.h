@@ -41,6 +41,7 @@ class MapProtector : public QMainWindow {
 	void load_settings();
 	void save_settings() const;
 	void populate_default_output_path();
+	QString default_output_base_name() const;
 	ProtectionOptions collect_options() const;
 
 	QRadioButton* source_current_map_radio;
@@ -71,4 +72,9 @@ class MapProtector : public QMainWindow {
 	std::unique_ptr<QTemporaryDir> temp_dir;
 	QThread* pack_thread = nullptr;
 	bool export_in_progress = false;
+
+	// Tracks the last value populate_default_output_path() itself wrote, so it can tell "field is
+	// empty/still holds our own default" apart from "user typed a custom path" without a separate
+	// dirty flag - re-populating overwrites the former but never the latter.
+	QString auto_generated_output_path;
 };

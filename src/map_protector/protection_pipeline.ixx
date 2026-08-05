@@ -414,18 +414,80 @@ std::vector<StringLiteralSpan> find_string_literals(const std::string& text) {
 	return spans;
 }
 
+/// Resolves TRIGSTR references in war3map.w3i's own text fields (name, author, description,
+/// loading screen text/title/subtitle) and rewrites the file if anything changed. These are plain
+/// strings that can themselves literally read "TRIGSTR_XXX" - the World Editor writes that when a
+/// field is set via a localized/custom-text string picker, which is the common case for the
+/// loading screen fields and sometimes the map name. Left unpatched, they go dangling the instant
+/// war3map.wts is deleted: the map name and/or loading screen text then show up blank in-game,
+/// even with every "Metadata Sanitization" checkbox left off, since that's a separate code path.
+/// Fails (does not delete war3map.wts) if a referenced key has no entry in the wts table, mirroring
+/// the script-patching behavior below - a dangling reference here is unrecoverable once wts is gone.
+SyncSaveResult inline_map_info_trigger_strings(const fs::path& temp_dir, const std::unordered_map<std::string, std::string>& trigger_string_table) {
+	if (!fs::exists(temp_dir / "war3map.w3i")) {
+		return { true, "" };
+	}
+
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = temp_dir;
+
+	char tileset = 'L';
+	if (auto w3e = hierarchy.map_file_read("war3map.w3e"); w3e && w3e->read_string(4) == "W3E!") {
+		w3e->advance(4); // format version
+		tileset = w3e->read<char>();
+	}
+
+	SyncSaveResult result{ true, "" };
+	try {
+		MapInfo info;
+		info.load();
+
+		bool changed = false;
+		std::string unresolved_key;
+		auto resolve = [&](std::string& field) -> bool {
+			const std::optional<std::string> key = trigstr_key_from_literal(field);
+			if (!key) {
+				return true;
+			}
+			const auto found = trigger_string_table.find(*key);
+			if (found == trigger_string_table.end()) {
+				unresolved_key = *key;
+				return false;
+			}
+			field = found->second;
+			changed = true;
+			return true;
+		};
+
+		const bool ok = resolve(info.name) && resolve(info.author) && resolve(info.description)
+			&& resolve(info.loading_screen_text) && resolve(info.loading_screen_title) && resolve(info.loading_screen_subtitle);
+
+		if (!ok) {
+			result = { false, std::format("war3map.w3i references {} which has no entry in war3map.wts - aborting rather than shipping a map with unresolved map name/loading screen text.", unresolved_key) };
+		} else if (changed) {
+			info.save(tileset);
+		}
+	} catch (const std::exception& e) {
+		result = { false, std::string("Failed to inline trigger strings into war3map.w3i: ") + e.what() };
+	}
+
+	hierarchy.map_directory = original_map_directory;
+	return result;
+}
+
 /// Replaces every trigger-string-reference literal in war3map.j/war3map.lua (whichever are
-/// present under temp_dir) with the resolved, escaped text from war3map.wts, then deletes
-/// war3map.wts. Fails the whole step - callers should abort the export rather than ship a
+/// present under temp_dir) with the resolved, escaped text from war3map.wts, then inlines any
+/// TRIGSTR references in war3map.w3i's own metadata fields (map name / loading screen text), then
+/// deletes war3map.wts. Fails the whole step - callers should abort the export rather than ship a
 /// partially-resolved script - if any matched reference has no corresponding entry in the wts
 /// table, since silently leaving a raw "TRIGSTR_007" literal behind means that text is gone
 /// forever once war3map.wts is deleted.
 ///
-/// Scope note: this only covers the script. Object data fields (unit/item/ability tooltips etc.)
-/// can independently store a TRIGSTR reference too, but patching those would require loading the
-/// full SLK/meta tables this pipeline's external-source path deliberately avoids touching. If a
-/// map stores long custom object-data text this way, that field will show raw "TRIGSTR_XXX" text
-/// in-game after stripping - a disclosed, known limitation, not a bug.
+/// Scope note: this covers the script and war3map.w3i's own fields. Object data fields (unit/item/
+/// ability tooltips etc.) can independently store a TRIGSTR reference too, but patching those would
+/// require loading the full SLK/meta tables this pipeline's external-source path deliberately
+/// avoids touching. If a map stores long custom object-data text this way, that field will show
+/// raw "TRIGSTR_XXX" text in-game after stripping - a disclosed, known limitation, not a bug.
 SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 	const fs::path wts_path = temp_dir / "war3map.wts";
 	if (!fs::exists(wts_path)) {
@@ -472,6 +534,11 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 
 		std::ofstream out(script_path, std::ios::binary | std::ios::trunc);
 		out.write(rebuilt.data(), static_cast<std::streamsize>(rebuilt.size()));
+	}
+
+	const SyncSaveResult info_result = inline_map_info_trigger_strings(temp_dir, trigger_string_table);
+	if (!info_result.success) {
+		return info_result;
 	}
 
 	std::error_code ec;

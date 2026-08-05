@@ -2,7 +2,7 @@
 
 **Project:** HiveWE Fork
 **Feature:** Map Protection Window (standalone export-only tool, opens from main ribbon)
-**Status:** Implemented — Phase 1, all of Phase 2 except object-field stripping (see "What shipped vs. what's deferred" below). Verified in-game: protected output no longer opens in the stock World Editor and still plays correctly. `strip_trigger_strings` specifically is algorithm-tested (see "Verified") but **not yet in-game tested** — do that before trusting it on a real map.
+**Status:** Implemented — Phase 1, all of Phase 2 except object-field stripping (see "What shipped vs. what's deferred" below). Verified in-game: protected output no longer opens in the stock World Editor and still plays correctly. `strip_trigger_strings`'s first real in-game test (this session) found and fixed a real bug — see "Session notes" below — and still needs a fresh in-game re-test with the fix applied before it's fully trusted.
 **Last updated:** 2026-08-05
 
 For a session-by-session account of *how* this got built (bugs found, why certain approaches were chosen), see `map_protection_handoff.md`. This doc describes the current, as-built state.
@@ -133,7 +133,22 @@ The sync-save step *must* run on the UI thread before backgrounding: both `run_s
 - **Build**: `cmake --build --preset Release` (app + tests) — clean, no errors. Two pre-existing, unrelated `AutoMoc` warnings (`tooltip_editor`) are the only warnings.
 - **Tests**: same pre-existing baseline (23 passed / 5 failed — unrelated failures in `object_data_io_test`/`mdl_reader_test`, predate this feature) — no regression.
 - **In-game**: a map protected via Map Protector (a) no longer opens in the stock World Editor, (b) plays correctly in Warcraft III. Confirmed for the external-source path specifically with encryption + junk files enabled together.
-- **Not yet in-game tested**: `strip_trigger_strings` (algorithm-validated standalone, see above, but not run through a real client on a map that actually uses TRIGSTR references).
+- **Not yet in-game tested**: `strip_trigger_strings` with this session's fix applied (see "Session notes" below) — needs a fresh real-client run before it's fully trusted.
+
+---
+
+## Session notes (2026-08-05, second session)
+
+First real in-game test of `strip_trigger_strings` surfaced a bug: the map's protected name and loading screen text both went blank in-game, even with every "Metadata Sanitization" checkbox left unchecked.
+
+- **Root cause:** confirmed directly from the user's actual map's on-disk `war3map.w3i` — `loading_screen_text` was literally the string `"TRIGSTR_001"` and `loading_screen_title` was `"TRIGSTR_002"`. These `war3map.w3i` fields aren't always literal text; the World Editor writes a `TRIGSTR_XXX` placeholder when a field is set via a localized/custom-text string picker, resolved against `war3map.wts` at display time — same mechanism as script string literals. `strip_trigger_strings_step()` deleted `war3map.wts` after patching only `war3map.j`/`war3map.lua`, never touching `war3map.w3i`, so any TRIGSTR-based `name`/`author`/`description`/loading-screen field in it went dangling. This is a separate code path from "Metadata Sanitization", which is why toggling those checkboxes had no effect.
+- **Fix:** added `inline_map_info_trigger_strings()` to `protection_pipeline.ixx` — resolves TRIGSTR references in `war3map.w3i`'s `name`/`author`/`description`/`loading_screen_text`/`loading_screen_title`/`loading_screen_subtitle` fields (via a standalone `MapInfo` instance, same tileset-byte-from-`war3map.w3e` technique as `sanitize_metadata()`) using the same parsed `war3map.wts` table already built for script patching. Called from `strip_trigger_strings_step()` right before `war3map.wts` is deleted; fails (aborts, doesn't delete wts) on a dangling reference, same as the script-patching path.
+- **Separately found and fixed:** the output filename always defaulted to the *currently loaded* HiveWE map's name (`map->name`), even when protecting an unrelated external file/folder — and once any export had ever run, the field was pre-filled from a persisted `QSettings` value, so `populate_default_output_path()`'s empty-field check silently skipped recomputing it forever after. Fixed in `map_protector.cpp`/`.h`: added `default_output_base_name()` (derives from the actual selected source — `source_path_edit`'s file/folder stem for an external source, `map->name` only when "currently loaded map" is selected), stopped persisting `outputPath` in `QSettings`, and wired `populate_default_output_path()` to re-run on source-radio/source-path changes (tracked via a new `auto_generated_output_path` member so a manually-typed path is never clobbered).
+- **Not changed this session:** full filename obfuscation (renaming every packed file, including imports, to garbage names the way classic-era map protectors did) — discussed with the user but not implemented. See note below.
+
+### On classic-era file renaming/obfuscation (discussed, not implemented)
+
+The user asked how old map protectors renamed every file (including BLPs) to things like `File002591294921` while keeping the map playable. Mechanically: it's possible because everything WC3 loads by path — model paths in `war3map.doo`, unit/item art paths in `war3unit.doo`/object data, terrain textures in `war3map.w3e`, icon/portrait paths in the SLK-derived meta tables, etc. — is just a string, and the engine doesn't care what that string looks like as long as every reference to a given asset is rewritten to the *same* new name consistently. The catch: WC3 itself hardcodes the small set of `war3map.*`/`war3campaign.*` core filenames it looks up directly by name (these can never be renamed), but everything else — every custom import — is fair game if (and only if) every cross-reference to it, across every binary format that can mention a path, is rewritten in lockstep. That's a large, error-prone surface (this repo's Phase 3 notes already flag "custom object ID remapping" as similarly complex/deferred, for the same reason: many places to update, one miss silently breaks something). Not started; would need its own scoped pass through every format that stores an asset path before it's safe to build.
 
 ---
 

@@ -65,6 +65,12 @@ MapProtector::MapProtector(QWidget* parent) : QMainWindow(parent) {
 	output_row->addWidget(browse_button);
 	main_layout->addLayout(output_row);
 
+	// Keep the output filename in sync with whichever source is actually selected - it must not
+	// keep defaulting to the currently-loaded HiveWE map's name once an external source is picked.
+	connect(source_current_map_radio, &QRadioButton::toggled, this, &MapProtector::populate_default_output_path);
+	connect(source_external_radio, &QRadioButton::toggled, this, &MapProtector::populate_default_output_path);
+	connect(source_path_edit, &QLineEdit::textChanged, this, &MapProtector::populate_default_output_path);
+
 	// MPQ archive hardening
 	auto* mpq_group = new QGroupBox("MPQ Archive Hardening", central);
 	auto* mpq_layout = new QVBoxLayout(mpq_group);
@@ -91,7 +97,7 @@ MapProtector::MapProtector(QWidget* parent) : QMainWindow(parent) {
 	auto* trigger_group = new QGroupBox("Trigger / Script Hardening", central);
 	auto* trigger_layout = new QVBoxLayout(trigger_group);
 	remove_gui_triggers_check = make_check(trigger_group, trigger_layout, "Remove GUI trigger data", "Deletes war3map.wtg (trigger tree). The map runs on its compiled script; editors show nothing.", true);
-	strip_trigger_strings_check = make_check(trigger_group, trigger_layout, "Strip trigger strings", "Inlines war3map.wts text directly into the script, then deletes war3map.wts. Note: object data fields (e.g. a very long custom tooltip) can independently reference a trigger string too - those will show raw \"TRIGSTR_XXX\" text in-game after stripping.", false);
+	strip_trigger_strings_check = make_check(trigger_group, trigger_layout, "Strip trigger strings", "Inlines war3map.wts text directly into the script and into war3map.w3i's own fields (map name, author, description, loading screen text), then deletes war3map.wts. Note: object data fields (e.g. a very long custom tooltip) can independently reference a trigger string too - those will show raw \"TRIGSTR_XXX\" text in-game after stripping.", false);
 	main_layout->addWidget(trigger_group);
 
 	// Metadata sanitization
@@ -131,31 +137,70 @@ void MapProtector::showEvent(QShowEvent* event) {
 	populate_default_output_path();
 }
 
+QString MapProtector::default_output_base_name() const {
+	if (source_current_map_radio->isChecked()) {
+		if (!map || !map->loaded || map->name.empty()) {
+			return QString();
+		}
+		return QString::fromStdString(map->name);
+	}
+
+	const QString source_text = source_path_edit->text();
+	if (source_text.isEmpty()) {
+		return QString();
+	}
+	// stem() strips only the final extension either way, so a packed "Foo.w3x" file and a
+	// folder-mode "Foo.w3x" directory both yield "Foo", and a plain folder name with no
+	// extension (e.g. "Foo") is returned unchanged.
+	return QString::fromStdWString(fs::path(source_text.toStdWString()).stem().wstring());
+}
+
 void MapProtector::populate_default_output_path() {
-	if (!output_path_edit->text().isEmpty() || !map || !map->loaded) {
+	// Only overwrite the field if it's empty or still holds a default we generated ourselves -
+	// never clobber a path the user typed in by hand.
+	const QString current = output_path_edit->text();
+	if (!current.isEmpty() && current != auto_generated_output_path) {
 		return;
 	}
 
-	// Default next to the currently loaded map, not the app-wide "openDirectory" setting: that
-	// setting is shared by every open/save dialog in HiveWE and for folder-expansion maps holds
-	// the last-opened map's own folder (see HiveWE::load_folder()), which may be a stale path
-	// from an unrelated map and isn't guaranteed to exist.
+	const QString base_name = default_output_base_name();
+	if (base_name.isEmpty()) {
+		return;
+	}
+
+	// Default next to the source map, not the app-wide "openDirectory" setting: that setting is
+	// shared by every open/save dialog in HiveWE and for folder-expansion maps holds the
+	// last-opened map's own folder (see HiveWE::load_folder()), which may be a stale path from an
+	// unrelated map and isn't guaranteed to exist.
 	QString directory;
-	if (!map->filesystem_path.empty()) {
-		// Map::load()/save() always leave filesystem_path with a trailing separator, which makes
-		// filename() empty and a single parent_path() a no-op (it just strips that separator and
-		// returns the map's own folder again). Strip it explicitly so parent_path() below lands
-		// one level up, next to the map's folder, instead of inside it.
-		fs::path map_folder = map->filesystem_path;
-		if (map_folder.filename().empty()) {
-			map_folder = map_folder.parent_path();
+	if (source_current_map_radio->isChecked()) {
+		if (!map || !map->loaded) {
+			return;
 		}
-		directory = QString::fromStdWString(map_folder.parent_path().wstring());
+		if (!map->filesystem_path.empty()) {
+			// Map::load()/save() always leave filesystem_path with a trailing separator, which
+			// makes filename() empty and a single parent_path() a no-op (it just strips that
+			// separator and returns the map's own folder again). Strip it explicitly so
+			// parent_path() below lands one level up, next to the map's folder, instead of inside it.
+			fs::path map_folder = map->filesystem_path;
+			if (map_folder.filename().empty()) {
+				map_folder = map_folder.parent_path();
+			}
+			directory = QString::fromStdWString(map_folder.parent_path().wstring());
+		}
 	} else {
+		const fs::path source_fs_path = source_path_edit->text().toStdWString();
+		directory = QString::fromStdWString(source_fs_path.parent_path().wstring());
+	}
+
+	if (directory.isEmpty()) {
 		QSettings settings;
 		directory = settings.value("openDirectory", QDir::current().path()).toString();
 	}
-	output_path_edit->setText(directory + "/" + QString::fromStdString(map->name) + "_protected.w3x");
+
+	const QString new_path = directory + "/" + base_name + "_protected.w3x";
+	output_path_edit->setText(new_path);
+	auto_generated_output_path = new_path;
 }
 
 void MapProtector::closeEvent(QCloseEvent* event) {
@@ -327,7 +372,9 @@ void MapProtector::load_settings() {
 	source_current_map_radio->setChecked(use_current_map);
 	source_external_radio->setChecked(!use_current_map);
 	source_path_edit->setText(settings.value("sourcePath", "").toString());
-	output_path_edit->setText(settings.value("outputPath", "").toString());
+	// outputPath is deliberately not restored: it must always default freshly from whichever
+	// source is selected (see populate_default_output_path()), not a stale path remembered from a
+	// previous, possibly unrelated map.
 	remove_listfile_check->setChecked(settings.value("removeListfile", true).toBool());
 	remove_attributes_check->setChecked(settings.value("removeAttributes", true).toBool());
 	encrypt_files_check->setChecked(settings.value("encryptFiles", true).toBool());
@@ -348,7 +395,6 @@ void MapProtector::save_settings() const {
 	settings.beginGroup("MapProtector");
 	settings.setValue("useCurrentMap", source_current_map_radio->isChecked());
 	settings.setValue("sourcePath", source_path_edit->text());
-	settings.setValue("outputPath", output_path_edit->text());
 	settings.setValue("removeListfile", remove_listfile_check->isChecked());
 	settings.setValue("removeAttributes", remove_attributes_check->isChecked());
 	settings.setValue("encryptFiles", encrypt_files_check->isChecked());
