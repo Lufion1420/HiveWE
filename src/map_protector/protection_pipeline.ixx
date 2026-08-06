@@ -135,6 +135,34 @@ SyncSaveResult copy_source_folder(const fs::path& source_directory, const fs::pa
 /// depends on the archive's (listfile) and loses real names when it's absent, so the fixed set
 /// of core map files is also fetched directly by name, which works regardless of listfile
 /// presence since MPQ files are looked up by name hash.
+/// Parses war3map.imp's binary format - matches Imports::save()'s writer exactly: u32 version,
+/// u32 count, then `count` entries of {u8 import-category flag; null-terminated path string}. Only
+/// the path is needed here, so the flag (whose meaning doesn't matter for this purpose) is skipped
+/// rather than interpreted. Returns whatever was parsed successfully if the file is truncated or
+/// malformed, rather than failing the whole unpack over a manifest that's inherently non-critical to
+/// map loading (see unpack_source_archive()'s doc comment on why this file is being read at all).
+std::vector<std::string> parse_import_manifest_paths(const fs::path& imp_path) {
+	std::vector<std::string> paths;
+	auto file = read_file(imp_path);
+	if (!file) {
+		return paths;
+	}
+
+	try {
+		BinaryReader& reader = file.value();
+		reader.advance(4); // version
+		const uint32_t count = reader.read<uint32_t>();
+		paths.reserve(count);
+		for (uint32_t i = 0; i < count; ++i) {
+			reader.advance(1); // import-category flag, not needed here
+			paths.push_back(reader.read_c_string());
+		}
+	} catch (const std::exception&) {
+		// Truncated/malformed manifest: keep whatever was parsed before the failure.
+	}
+	return paths;
+}
+
 SyncSaveResult unpack_source_archive(const fs::path& source_file, const fs::path& temp_dir) {
 	mpq::MPQ mpq;
 	if (!mpq.open(source_file)) {
@@ -148,6 +176,25 @@ SyncSaveResult unpack_source_archive(const fs::path& source_file, const fs::path
 	static const Imports imports;
 	for (const std::string& name : imports.blacklist) {
 		mpq.extract_file(name, temp_dir / name);
+	}
+
+	// Without a (listfile), mpq.unpack()'s wildcard enumeration above returns every custom import
+	// under a StormLib-fabricated name (e.g. "File00001234.blp") - completely disconnected from the
+	// name every script/object-data/model reference actually uses, which silently breaks every one
+	// of those references (this is what previously made Asset Path Obfuscation rename real assets
+	// out from under an entire map's worth of intact references - not a bug in the rewrite logic
+	// itself, but every candidate it had to work with was already wrong). war3map.imp - the standard
+	// WC3 import manifest, written by the World Editor, HiveWE, and evidently third-party build
+	// tools too - already lists every custom import's real path, so it's reused here as a substitute
+	// listfile: extract_file() looks files up by name hash, so this recovers the real name
+	// regardless of whether the archive has a (listfile) at all. The stale fabricated-name copies
+	// from the wildcard unpack above are left in place rather than tracked down and deleted (that
+	// mapping isn't exposed by MPQ::unpack()) - harmless leftover junk, never referenced by anything
+	// once the real-named copy exists alongside it.
+	if (const fs::path imp_path = temp_dir / "war3map.imp"; fs::exists(imp_path)) {
+		for (const std::string& name : parse_import_manifest_paths(imp_path)) {
+			mpq.extract_file(name, temp_dir / name);
+		}
 	}
 
 	if (!fs::exists(temp_dir / "war3map.w3i")) {
