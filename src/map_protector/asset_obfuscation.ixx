@@ -40,6 +40,21 @@ bool is_stock_override_path(const std::string& lowercase_forward_slash_path) {
 	return std::ranges::any_of(roots, [&](std::string_view root) { return lowercase_forward_slash_path.starts_with(root); });
 }
 
+/// True for a filename that's OS-generated metadata, not WC3 map data - the Warcraft III engine
+/// never reads these regardless of what they contain, so they're excluded both from renaming
+/// (pointless - the game doesn't care what they're called) and from the dangling-reference
+/// verification scan (a stale reference inside one doesn't matter to gameplay). Found via a real
+/// case: a map whose source folder had once had its Windows folder icon customized picked up a
+/// "desktop.ini" (Explorer's folder-customization file) referencing the icon's path, which the
+/// verification scan flagged as an unresolved reference and correctly-by-its-own-rules aborted the
+/// export over - correct behavior for anything WC3 actually reads, wrong call for a file the engine
+/// never opens at all.
+bool is_os_metadata_filename(const std::string& filename) {
+	std::string lowercase = filename;
+	std::ranges::transform(lowercase, lowercase.begin(), [](const unsigned char c) { return std::tolower(c); });
+	return lowercase == "desktop.ini";
+}
+
 /// A single loose file under temp_dir that Asset Path Obfuscation will rename. new_relative_path is
 /// always a flat, single-segment name directly under the archive root (e.g. "a3f9c1e2.mdx") -
 /// nothing about WC3's asset loading depends on folder structure, only on every reference to a file
@@ -86,6 +101,8 @@ namespace {
 ///   same relative path - a broader safety net beyond the two known override roots. Injected rather
 ///   than hard-coded to the global Hierarchy singleton so this stays independently testable; the
 ///   pipeline's production call site passes hierarchy.game_file_exists().
+/// - OS-generated metadata files (currently just desktop.ini) - the engine never reads these, so
+///   renaming one is pointless regardless of what it contains.
 ///
 /// Sound files are excluded by the caller (not filtered here) since exclusion in v1 is driven by
 /// which files are referenced by a Sound object, which this file-system-only enumeration can't know
@@ -110,7 +127,7 @@ export std::vector<RenameCandidate> enumerate_rename_candidates(
 
 		const fs::path relative_path = entry.path().lexically_relative(temp_dir);
 		const std::string file_name = entry.path().filename().string();
-		if (never_rename_file_names.contains(file_name)) {
+		if (never_rename_file_names.contains(file_name) || is_os_metadata_filename(file_name)) {
 			continue;
 		}
 
@@ -420,6 +437,11 @@ export AssetObfuscationResult rewrite_mdx_references(const fs::path& temp_dir, c
 /// asset would cost real time on a large map (many-MB imports are exactly this user's profile) for
 /// no realistic gain. If this scan ever needs widening, do it deliberately, not as a silent blanket
 /// byte-scan.
+///
+/// Also skips is_os_metadata_filename() files (desktop.ini) - found via a real case where one
+/// referenced a renamed texture's old path (Windows Explorer folder-icon metadata, picked up
+/// incidentally from the source folder), which the engine never reads regardless of content, so a
+/// stale reference inside one isn't a real problem worth aborting the export over.
 export AssetObfuscationResult verify_no_dangling_text_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
 	if (candidates.empty() || !fs::exists(temp_dir)) {
 		return { true, "" };
@@ -428,7 +450,7 @@ export AssetObfuscationResult verify_no_dangling_text_references(const fs::path&
 	static constexpr std::array<std::string_view, 4> text_extensions = { ".txt", ".ini", ".j", ".lua" };
 
 	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
-		if (!entry.is_regular_file()) {
+		if (!entry.is_regular_file() || is_os_metadata_filename(entry.path().filename().string())) {
 			continue;
 		}
 		std::string extension = entry.path().extension().string();

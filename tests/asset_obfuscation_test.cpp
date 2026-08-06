@@ -85,6 +85,20 @@ TEST_CASE("enumerate_rename_candidates excludes files reported as stock assets")
 	CHECK(find_by_original(candidates, "Objects/Something.blp") == nullptr);
 }
 
+TEST_CASE("enumerate_rename_candidates excludes desktop.ini regardless of case") {
+	const fs::path dir = make_scratch_dir("desktop_ini");
+	write_file(dir / "desktop.ini");
+	write_file(dir / "UI" / "Desktop.INI");
+	write_file(dir / "war3mapImported" / "Custom.blp");
+
+	const auto candidates = enumerate_rename_candidates(dir, {}, {});
+
+	CHECK(candidates.size() == 1);
+	CHECK(find_by_original(candidates, "war3mapImported/Custom.blp") != nullptr);
+	CHECK(find_by_original(candidates, "desktop.ini") == nullptr);
+	CHECK(find_by_original(candidates, "UI/Desktop.INI") == nullptr);
+}
+
 TEST_CASE("enumerate_rename_candidates generates unique names that preserve extension") {
 	const fs::path dir = make_scratch_dir("unique_names");
 	for (int i = 0; i < 25; ++i) {
@@ -289,6 +303,23 @@ TEST_CASE("verify_no_dangling_text_references catches a reference in a text form
 	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
 	CHECK_FALSE(result.success);
 	CHECK(result.error.find("war3mapSkin.txt") != std::string::npos);
+}
+
+TEST_CASE("verify_no_dangling_text_references ignores desktop.ini even if it references a candidate") {
+	const fs::path dir = make_scratch_dir("verify_desktop_ini");
+	// A real case: Windows Explorer folder-icon metadata that happened to reference a renamed
+	// texture's old path. The engine never reads desktop.ini regardless of content, so this must
+	// not abort the export the way a real reference in an unhandled format (e.g. war3mapSkin.txt)
+	// correctly does in the test above.
+	write_file(dir / "desktop.ini", "[.ShellClassInfo]\nIconResource=war3mapImported\\Custom.mdx,0\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
+	CHECK(result.success);
 }
 
 TEST_CASE("verify_no_dangling_text_references passes when no text file references a candidate") {
