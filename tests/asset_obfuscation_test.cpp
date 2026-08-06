@@ -335,6 +335,37 @@ TEST_CASE("verify_no_dangling_text_references passes when no text file reference
 	CHECK(result.success);
 }
 
+TEST_CASE("verify_no_dangling_text_references does not false-positive on a candidate name embedded in a longer filename") {
+	// Real case: war3mapSkin.txt legitimately referenced "blank-background.blp" (a real, unrelated
+	// UI asset), which a plain substring search flagged as referencing a candidate literally named
+	// "ground.blp" - background.blp contains "...ground.blp" as a byte sequence purely by
+	// coincidence (back-GROUND.blp), not because anything actually points at the renamed file.
+	const fs::path dir = make_scratch_dir("verify_no_false_positive_substring");
+	write_file(dir / "war3mapSkin.txt", "[CustomSkin]\nBuildTimeIndicator=UI\\Widgets\\EscMenu\\Human\\blank-background.blp\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "ground.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("ground.blp");
+
+	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
+	CHECK(result.success);
+}
+
+TEST_CASE("verify_no_dangling_text_references still catches a genuine standalone reference") {
+	const fs::path dir = make_scratch_dir("verify_genuine_reference_still_caught");
+	write_file(dir / "war3mapSkin.txt", "[CustomSkin]\nGoldIcon=ground.blp\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "ground.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("ground.blp");
+
+	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
+	CHECK_FALSE(result.success);
+	CHECK(result.error.find("ground.blp") != std::string::npos);
+}
+
 TEST_CASE("verify_no_dangling_text_references ignores binary files entirely, even if bytes coincidentally match") {
 	const fs::path dir = make_scratch_dir("verify_dangling_binary");
 	// Deliberately a non-text-extension file containing the candidate's path text - must be ignored,

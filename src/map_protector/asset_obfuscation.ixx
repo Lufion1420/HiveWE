@@ -55,6 +55,37 @@ bool is_os_metadata_filename(const std::string& filename) {
 	return lowercase == "desktop.ini";
 }
 
+bool is_filename_continuation_char(const char c) {
+	return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-';
+}
+
+/// True if `needle` (a candidate's match_key, already lowercased) appears in `content` as a
+/// standalone path reference, not merely as a substring embedded inside a longer, unrelated
+/// filename. Found via a real case: a candidate literally named "ground.blp" byte-matched inside
+/// "blank-background.blp" in a real map's war3mapSkin.txt (back-GROUND.blp) - a coincidental
+/// substring collision, not an actual reference to the renamed file, that a plain `.find() != npos`
+/// check can't tell apart from a real one. Requires the character immediately before and after each
+/// occurrence, if any, to not itself be a filename-continuation character (alphanumeric/'_'/'-'); a
+/// path separator, quote, '=', whitespace, or the start/end of the content all count as valid
+/// boundaries. Keeps scanning past a rejected occurrence rather than giving up after the first one,
+/// in case a later occurrence of the same needle is a genuine reference.
+bool contains_path_reference(const std::string& content, const std::string& needle) {
+	if (needle.empty()) {
+		return false;
+	}
+	size_t pos = 0;
+	while ((pos = content.find(needle, pos)) != std::string::npos) {
+		const bool leading_ok = pos == 0 || !is_filename_continuation_char(content[pos - 1]);
+		const size_t after = pos + needle.size();
+		const bool trailing_ok = after >= content.size() || !is_filename_continuation_char(content[after]);
+		if (leading_ok && trailing_ok) {
+			return true;
+		}
+		pos += 1;
+	}
+	return false;
+}
+
 /// A single loose file under temp_dir that Asset Path Obfuscation will rename. new_relative_path is
 /// always a flat, single-segment name directly under the archive root (e.g. "a3f9c1e2.mdx") -
 /// nothing about WC3's asset loading depends on folder structure, only on every reference to a file
@@ -442,6 +473,11 @@ export AssetObfuscationResult rewrite_mdx_references(const fs::path& temp_dir, c
 /// referenced a renamed texture's old path (Windows Explorer folder-icon metadata, picked up
 /// incidentally from the source folder), which the engine never reads regardless of content, so a
 /// stale reference inside one isn't a real problem worth aborting the export over.
+///
+/// Matching goes through contains_path_reference(), not a plain substring search, for the same
+/// reason: a real map's war3mapSkin.txt legitimately reads "blank-background.blp" for a UI element,
+/// which a naive substring check flagged as referencing an unrelated candidate named "ground.blp"
+/// (background.blp contains "...ground.blp" as a byte sequence purely by coincidence).
 export AssetObfuscationResult verify_no_dangling_text_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
 	if (candidates.empty() || !fs::exists(temp_dir)) {
 		return { true, "" };
@@ -469,7 +505,7 @@ export AssetObfuscationResult verify_no_dangling_text_references(const fs::path&
 		for (const RenameCandidate& candidate : candidates) {
 			std::string backward_key = candidate.match_key;
 			std::ranges::replace(backward_key, '/', '\\');
-			if (content.find(candidate.match_key) != std::string::npos || content.find(backward_key) != std::string::npos) {
+			if (contains_path_reference(content, candidate.match_key) || contains_path_reference(content, backward_key)) {
 				return {
 					false,
 					std::format(
