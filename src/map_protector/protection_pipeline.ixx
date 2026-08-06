@@ -710,34 +710,48 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 /// Runs before strip_trigger_strings_step() in the pipeline below: both steps can touch
 /// war3map.j/war3map.lua, and this one should see (and rewrite paths within) the script before the
 /// TRIGSTR pass makes its own final pass over the same files.
+/// Everything below runs on run_async_pack()'s background QThread (see MapProtector::on_export_clicked()).
+/// An exception that escapes a QThread's entry point is unrecoverable - Qt/the C++ runtime calls
+/// std::terminate() and the whole application crashes, not just this export. try/catch here is a
+/// deliberate outer safety net around the entire pipeline, not just the one call site found and
+/// fixed this session (shadow_map_to_slk() in modification_tables.ixx could throw std::out_of_range
+/// for a real map's object data - fixed at the source too, see that function's own comment) - object
+/// data, SLK/MDX parsing, and file I/O all have other paths that can throw on data this pipeline
+/// hasn't been exercised against yet, and any one of them crashing the whole editor instead of
+/// failing this one export gracefully is categorically worse than the export simply not succeeding.
 export AssetObfuscationResult run_asset_obfuscation(const fs::path& temp_dir) {
-	static const Imports imports;
-	const std::vector<RenameCandidate> candidates = enumerate_rename_candidates(
-		temp_dir, imports.blacklist, [](const fs::path& path) { return hierarchy.game_file_exists(path); }
-	);
-	if (candidates.empty()) {
-		return { true, "" };
-	}
+	try {
+		static const Imports imports;
+		const std::vector<RenameCandidate> candidates = enumerate_rename_candidates(
+			temp_dir, imports.blacklist, [](const fs::path& path) { return hierarchy.game_file_exists(path); }
+		);
+		if (candidates.empty()) {
+			return { true, "" };
+		}
 
-	// Sequential, short-circuiting on the first failure - deliberately not a loop over a pre-built
-	// list of results, which would evaluate every step regardless of an earlier one failing.
-	if (const AssetObfuscationResult step = rewrite_object_data_references(temp_dir, candidates); !step.success) {
-		return step;
-	}
-	if (const AssetObfuscationResult step = rewrite_map_info_references(temp_dir, candidates); !step.success) {
-		return step;
-	}
-	if (const AssetObfuscationResult step = rewrite_mdx_references(temp_dir, candidates); !step.success) {
-		return step;
-	}
-	if (const AssetObfuscationResult step = rewrite_script_asset_references(temp_dir, candidates); !step.success) {
-		return step;
-	}
-	if (const AssetObfuscationResult step = verify_no_dangling_text_references(temp_dir, candidates); !step.success) {
-		return step;
-	}
+		// Sequential, short-circuiting on the first failure - deliberately not a loop over a
+		// pre-built list of results, which would evaluate every step regardless of an earlier one
+		// failing.
+		if (const AssetObfuscationResult step = rewrite_object_data_references(temp_dir, candidates); !step.success) {
+			return step;
+		}
+		if (const AssetObfuscationResult step = rewrite_map_info_references(temp_dir, candidates); !step.success) {
+			return step;
+		}
+		if (const AssetObfuscationResult step = rewrite_mdx_references(temp_dir, candidates); !step.success) {
+			return step;
+		}
+		if (const AssetObfuscationResult step = rewrite_script_asset_references(temp_dir, candidates); !step.success) {
+			return step;
+		}
+		if (const AssetObfuscationResult step = verify_no_dangling_text_references(temp_dir, candidates); !step.success) {
+			return step;
+		}
 
-	return apply_renames(temp_dir, candidates);
+		return apply_renames(temp_dir, candidates);
+	} catch (const std::exception& e) {
+		return { false, std::string("Asset Path Obfuscation failed unexpectedly: ") + e.what() };
+	}
 }
 
 /// True for a filename matching StormLib's own placeholder pattern for an archive entry it couldn't

@@ -444,10 +444,18 @@ namespace slk {
 			assert(base_data.contains(row_header));
 			assert(!base_data.contains(new_row_header));
 
-			base_data[new_row_header] = base_data.at(row_header);
+			// Deliberately copies the source row out by value into a local *before* inserting the new
+			// row: `base_data[new_row_header] = base_data.at(row_header);` looks equivalent but isn't -
+			// base_data is a flat hash map, so the operator[] insert on the left can reallocate the
+			// map's storage and invalidate the reference at() returned on the right before the
+			// assignment reads from it, silently copying stale/empty data instead of the real row (or
+			// worse, reading freed memory) rather than throwing anything that would surface the bug.
+			const auto base_row_copy = base_data.at(row_header);
+			base_data[new_row_header] = base_row_copy;
 
 			if (copy_shadow_data && shadow_data.contains(row_header)) {
-				shadow_data[new_row_header] = shadow_data.at(row_header);
+				const auto shadow_row_copy = shadow_data.at(row_header);
+				shadow_data[new_row_header] = shadow_row_copy;
 			}
 
 			size_t index = row_headers.size();

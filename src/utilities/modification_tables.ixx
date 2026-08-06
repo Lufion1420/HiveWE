@@ -498,7 +498,11 @@ export slk::SLK shadow_map_to_slk(const slk::SLK& template_slk, const Modificati
 	for (const auto& [object_id, fields] : shadow_map) {
 		if (fields.contains("oldid") && !scratch.row_headers.contains(object_id)) {
 			const std::string& parent = fields.at("oldid");
-			if (scratch.row_headers.contains(parent) || scratch.base_data.contains(parent)) {
+			// copy_row() unconditionally does base_data.at(row_header), which throws std::out_of_range
+			// if the row isn't in base_data specifically - a row can be present in row_headers without
+			// a base_data entry (e.g. a header declared with no cell data), so the guard here must
+			// match that exact precondition, not treat "in row_headers" as an equally-safe substitute.
+			if (scratch.base_data.contains(parent)) {
 				scratch.copy_row(parent, object_id, false);
 			}
 		}
