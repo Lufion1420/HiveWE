@@ -740,6 +740,33 @@ export AssetObfuscationResult run_asset_obfuscation(const fs::path& temp_dir) {
 	return apply_renames(temp_dir, candidates);
 }
 
+/// True for a filename matching StormLib's own placeholder pattern for an archive entry it couldn't
+/// resolve a real name for: "File" + exactly 8 digits + "." + a guessed extension (falling back to
+/// the literal extension ".xxx" when it can't even guess that). MPQ::unpack()'s wildcard enumeration
+/// (used by unpack_source_archive() to seed temp_dir from a source archive) produces exactly these
+/// names for every entry a listfile-less archive can't identify - confirmed directly, via a
+/// standalone repro against a real archive, that SFileAddFileEx unconditionally rejects re-adding
+/// any file under this exact name pattern with ERROR_INVALID_PARAMETER (error 87), regardless of the
+/// file's actual content: two different files sharing this pattern both failed identically, while
+/// the same bytes under a normal name succeeded, so StormLib treats the pattern itself as reserved,
+/// not just an unlucky guess. Real-named copies of these files are separately recovered via
+/// war3map.imp where possible (see unpack_source_archive()); any that aren't recoverable this way
+/// were never going to pack successfully under their fabricated name regardless, so skipping them
+/// here converts a guaranteed export failure into a clean export missing only that one untraceable
+/// file, rather than failing the whole export over a file with no real identity to give it.
+export bool is_stormlib_fabricated_name(const std::string& filename) {
+	constexpr std::string_view prefix = "File";
+	if (!filename.starts_with(prefix)) {
+		return false;
+	}
+	size_t i = prefix.size();
+	const size_t digits_start = i;
+	while (i < filename.size() && std::isdigit(static_cast<unsigned char>(filename[i]))) {
+		++i;
+	}
+	return i - digits_start == 8 && i < filename.size() && filename[i] == '.' && i + 1 < filename.size();
+}
+
 export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& output_path, const ProtectionOptions& options) {
 	if (options.obfuscate_asset_paths) {
 		const AssetObfuscationResult obfuscation_result = run_asset_obfuscation(temp_dir);
@@ -785,6 +812,9 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 
 	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
 		if (entry.is_regular_file()) {
+			if (is_stormlib_fabricated_name(entry.path().filename().string())) {
+				continue;
+			}
 			if (!SFileAddFileEx(handle, entry.path().c_str(), entry.path().lexically_relative(temp_dir).string().c_str(), file_flags, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME)) {
 				const DWORD add_file_error = GetLastError();
 				SFileCloseArchive(handle);

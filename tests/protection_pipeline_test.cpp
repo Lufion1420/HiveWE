@@ -98,3 +98,20 @@ TEST_CASE("rewrite_script_asset_references does not touch a quote inside a comme
 	CHECK(result.success);
 	CHECK(read_all(dir / "war3map.lua") == original); // commented-out reference must not be rewritten
 }
+
+TEST_CASE("is_stormlib_fabricated_name matches StormLib's reserved no-name placeholder pattern") {
+	// Confirmed directly against a real listfile-less archive: SFileAddFileEx rejects re-adding a
+	// file under any name matching this pattern with ERROR_INVALID_PARAMETER, regardless of the
+	// file's actual content or which 8 digits/extension are used.
+	CHECK(is_stormlib_fabricated_name("File00000000.xxx"));
+	CHECK(is_stormlib_fabricated_name("File99999999.xxx"));
+	CHECK(is_stormlib_fabricated_name("File00003784.blp"));
+
+	// Real, legitimately-named files must never be caught by this.
+	CHECK_FALSE(is_stormlib_fabricated_name("war3map.lua"));
+	CHECK_FALSE(is_stormlib_fabricated_name("Filename.blp")); // "Filename", not "File" + 8 digits
+	CHECK_FALSE(is_stormlib_fabricated_name("File1234567.blp")); // only 7 digits
+	CHECK_FALSE(is_stormlib_fabricated_name("File123456789.blp")); // 9 digits
+	CHECK_FALSE(is_stormlib_fabricated_name("File00000000")); // no extension at all
+	CHECK_FALSE(is_stormlib_fabricated_name("File00000000.")); // dot with nothing after it
+}
