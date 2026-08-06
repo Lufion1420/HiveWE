@@ -13,6 +13,8 @@ import MapInfo;
 import MDX;
 import BinaryWriter;
 import Utilities;
+import "absl/strings/str_split.h";
+import "absl/strings/str_join.h";
 
 namespace fs = std::filesystem;
 
@@ -241,7 +243,31 @@ export FileRewriteResult rewrite_object_data_file(
 				continue;
 			}
 			const std::string_view type = meta_slk.data<std::string_view>("type", *meta_id);
-			if (type != "model" && type != "icon") {
+			if (type != "model" && type != "icon" && type != "modelList") {
+				continue;
+			}
+
+			if (type == "modelList") {
+				// Confirmed via a real map: Ability Buff fields (targetart/specialart) are typed
+				// "modelList", not "model", in the stock meta SLK - a genuine third type value this
+				// pipeline didn't originally account for, which is why these fields were silently
+				// skipped rather than rewritten. Every real value seen so far has been a single path,
+				// but the type name implies the field format allows a comma-separated list, so this
+				// splits, rewrites whichever segments match a candidate, and rejoins - safe either way
+				// (a single-path value is just a "list" of one element).
+				std::vector<std::string> segments = absl::StrSplit(value, ',');
+				bool any_segment_changed = false;
+				for (std::string& segment : segments) {
+					const auto found = candidates_by_match_key.find(asset_match_key(segment));
+					if (found != candidates_by_match_key.end()) {
+						segment = found->second->new_relative_path.string();
+						any_segment_changed = true;
+					}
+				}
+				if (any_segment_changed) {
+					value = absl::StrJoin(segments, ",");
+					changed = true;
+				}
 				continue;
 			}
 

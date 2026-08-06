@@ -217,6 +217,52 @@ TEST_CASE("rewrite_object_data_file leaves the file untouched when no field matc
 	hierarchy.map_directory = original_map_directory;
 }
 
+TEST_CASE("rewrite_object_data_file rewrites a modelList-typed field, including a comma-separated value") {
+	// Real case: war3map.w3h's Ability Buff targetart/specialart fields are typed "modelList" in the
+	// stock AbilityBuffMetaData.slk, not "model" - a genuine third type value the original model/icon
+	// check didn't account for, which silently left these fields unrewritten and produced a dangling
+	// reference that crashed the game on load. Every real value seen so far has been a single path, but
+	// the type name implies the field can hold a comma-separated list, so this also covers that case.
+	const fs::path dir = make_scratch_dir("rewrite_model_list_field");
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = dir;
+
+	slk::SLK meta;
+	meta.add_row("Ytar");
+	meta.set_shadow_data("field", "Ytar", "targetart");
+	meta.set_shadow_data("type", "Ytar", "modelList");
+	meta.set_shadow_data("data", "Ytar", "0");
+	meta.build_meta_map();
+	const slk::SLK template_slk = make_test_template("Bstn");
+
+	slk::SLK modification_data;
+	modification_data.add_row("Bstn");
+	modification_data.set_shadow_data("targetart", "Bstn", "war3mapImported\\Custom.mdx,war3mapImported\\Unrelated.mdx");
+	const std::vector<u8> buffer = build_modification_file_buffer(modification_data, meta, false, false);
+
+	const fs::path w3h_path = dir / "war3map.w3h";
+	{
+		std::ofstream out(w3h_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(w3h_path, "war3map.w3h", template_slk, meta, false, false, candidates_by_match_key);
+	CHECK(result.success);
+	CHECK(result.changed);
+
+	const auto reloaded = extract_modification_shadow_map_path(w3h_path, template_slk, meta, false);
+	REQUIRE(reloaded.has_value());
+	CHECK(reloaded->at("Bstn").at("targetart") == "a3f9c1e2.mdx,war3mapImported\\Unrelated.mdx");
+
+	hierarchy.map_directory = original_map_directory;
+}
+
 TEST_CASE("rewrite_object_data_file is a no-op success when the file does not exist") {
 	const slk::SLK meta = make_test_meta();
 	const slk::SLK template_slk = make_test_template("hfoo");
