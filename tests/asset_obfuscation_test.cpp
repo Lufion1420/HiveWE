@@ -305,6 +305,31 @@ TEST_CASE("verify_no_dangling_text_references catches a reference in a text form
 	CHECK(result.error.find("war3mapSkin.txt") != std::string::npos);
 }
 
+TEST_CASE("verify_no_dangling_text_references catches a dangling reference left in an object-data file") {
+	// Real case: rewrite_object_data_file() failed to rewrite an Ability Buff SFX field
+	// (targetart/missileart/specialart/buffart) in a real map's war3map.w3h for a reason not yet
+	// root-caused, leaving a dangling reference that crashed the game on load. This safety net is
+	// what should catch that class of miss and abort the export instead of shipping it - object-data
+	// files are binary, but the candidate's name still appears in them as a literal byte sequence
+	// (surrounded by non-filename bytes on both sides), which contains_path_reference() can find the
+	// same way it finds a reference in a text file.
+	const fs::path dir = make_scratch_dir("verify_dangling_object_data");
+	std::string fake_w3h;
+	fake_w3h += std::string(8, '\x00');
+	fake_w3h += "NCOW_SFX_Stunned.mdx";
+	fake_w3h += std::string(8, '\x00');
+	write_file(dir / "war3map.w3h", fake_w3h);
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "NCOW_SFX_Stunned.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("NCOW_SFX_Stunned.mdx");
+
+	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
+	CHECK_FALSE(result.success);
+	CHECK(result.error.find("war3map.w3h") != std::string::npos);
+}
+
 TEST_CASE("verify_no_dangling_text_references ignores desktop.ini even if it references a candidate") {
 	const fs::path dir = make_scratch_dir("verify_desktop_ini");
 	// A real case: Windows Explorer folder-icon metadata that happened to reference a renamed

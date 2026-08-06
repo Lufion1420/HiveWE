@@ -457,17 +457,24 @@ export AssetObfuscationResult rewrite_mdx_references(const fs::path& temp_dir, c
 
 /// Safety-net scan run after all the structured rewrite phases (object data, war3map.w3i, MDX-
 /// internal paths, script literals) have already run: catches a reference living somewhere none of
-/// those phases understands - most concretely war3mapSkin.txt (can legitimately hold path overrides
-/// per WC3's format, but nothing in this codebase parses it, so it's excluded from the rename
-/// candidate pool entirely and never rewritten) or any other stray text file a map happens to ship.
+/// those phases correctly rewrote it - most concretely war3mapSkin.txt (can legitimately hold path
+/// overrides per WC3's format, but nothing in this codebase parses it, so it's excluded from the
+/// rename candidate pool entirely and never rewritten), but also, in practice, a real gap found in
+/// rewrite_object_data_file() itself: a real map's Ability Buff SFX fields (targetart/missileart/
+/// specialart/buffart in war3map.w3h) went unrewritten for a reason not yet root-caused (the fields
+/// are genuine, manifest-tracked custom imports - not a stock/desktop.ini-style false positive), and
+/// the resulting dangling references crashed the game on load. That gap is why this scan also covers
+/// the object-data files, not just text formats, despite the FunctionKind name.
 ///
-/// Deliberately scoped to text-like files only (.txt/.ini/.j/.lua), not a blind byte-scan of every
-/// binary asset in the map: a BLP/MDX/WAV file's *own* bytes were already exhaustively covered by
-/// the structured phases above (MDX contents specifically, by rewrite_mdx_references()) or simply
-/// can't reference another file's path in the first place, so scanning every byte of every binary
-/// asset would cost real time on a large map (many-MB imports are exactly this user's profile) for
-/// no realistic gain. If this scan ever needs widening, do it deliberately, not as a silent blanket
-/// byte-scan.
+/// Includes the object-data extensions (.w3u/.w3t/.w3a/.w3b/.w3h/.w3q/.w3d, plus their
+/// war3mapSkin.* counterparts) alongside text formats (.txt/.ini/.j/.lua) - these files are
+/// typically small (low hundreds of KB even on a large map), so scanning them costs little, unlike
+/// the *actual* binary assets (BLP/MDX/WAV) this deliberately still excludes: those were already
+/// exhaustively covered by the structured phases above (MDX contents specifically, by
+/// rewrite_mdx_references()) or simply can't reference another file's path in the first place, so
+/// scanning every byte of a many-MB import for no realistic gain stays out of scope. The matching
+/// itself (contains_path_reference(), see below) is content-agnostic - it works identically whether
+/// the file is text or binary, so widening this list costs nothing beyond the extra files read.
 ///
 /// Also skips is_os_metadata_filename() files (desktop.ini) - found via a real case where one
 /// referenced a renamed texture's old path (Windows Explorer folder-icon metadata, picked up
@@ -483,7 +490,9 @@ export AssetObfuscationResult verify_no_dangling_text_references(const fs::path&
 		return { true, "" };
 	}
 
-	static constexpr std::array<std::string_view, 4> text_extensions = { ".txt", ".ini", ".j", ".lua" };
+	static constexpr std::array<std::string_view, 11> text_extensions = {
+		".txt", ".ini", ".j", ".lua", ".w3u", ".w3t", ".w3a", ".w3b", ".w3h", ".w3q", ".w3d",
+	};
 
 	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
 		if (!entry.is_regular_file() || is_os_metadata_filename(entry.path().filename().string())) {
