@@ -263,6 +263,50 @@ TEST_CASE("rewrite_object_data_file rewrites a modelList-typed field, including 
 	hierarchy.map_directory = original_map_directory;
 }
 
+TEST_CASE("rewrite_object_data_file rewrites a pathingTexture-typed field") {
+	// Real case: war3map.w3b/.w3d's pathtex/pathtexdeath fields are typed "pathingTexture" in the
+	// stock meta SLKs - a fourth type value (alongside model/icon/modelList) the original check
+	// didn't account for. Unlike modelList, this is always a single path, not a comma-separated list.
+	const fs::path dir = make_scratch_dir("rewrite_pathing_texture_field");
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = dir;
+
+	slk::SLK meta;
+	meta.add_row("Ypat");
+	meta.set_shadow_data("field", "Ypat", "pathtex");
+	meta.set_shadow_data("type", "Ypat", "pathingTexture");
+	meta.set_shadow_data("data", "Ypat", "0");
+	meta.build_meta_map();
+	const slk::SLK template_slk = make_test_template("Bfoo");
+
+	slk::SLK modification_data;
+	modification_data.add_row("Bfoo");
+	modification_data.set_shadow_data("pathtex", "Bfoo", "war3mapImported\\Custom.tga");
+	const std::vector<u8> buffer = build_modification_file_buffer(modification_data, meta, false, false);
+
+	const fs::path w3b_path = dir / "war3map.w3b";
+	{
+		std::ofstream out(w3b_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.tga";
+	candidate.new_relative_path = "a3f9c1e2.tga";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.tga");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(w3b_path, "war3map.w3b", template_slk, meta, false, false, candidates_by_match_key);
+	CHECK(result.success);
+	CHECK(result.changed);
+
+	const auto reloaded = extract_modification_shadow_map_path(w3b_path, template_slk, meta, false);
+	REQUIRE(reloaded.has_value());
+	CHECK(reloaded->at("Bfoo").at("pathtex") == "a3f9c1e2.tga");
+
+	hierarchy.map_directory = original_map_directory;
+}
+
 TEST_CASE("rewrite_object_data_file is a no-op success when the file does not exist") {
 	const slk::SLK meta = make_test_meta();
 	const slk::SLK template_slk = make_test_template("hfoo");

@@ -188,11 +188,12 @@ export struct AssetObfuscationResult {
 	std::string error;
 };
 
-/// Rewrites model/icon path fields in a single object-data modification file (e.g. temp_dir /
-/// "war3map.w3u" or its war3mapSkin.* counterpart) in place. template_slk/meta_slk must already
-/// be the fully-populated stock tables for this category (stock_object_data::load()'s output) -
-/// not a bare single-file load - since a custom object's oldid parent, or a field only present
-/// via one of the many stock .merge()'d files, needs the complete stock dataset to resolve
+/// Rewrites model/icon/modelList/pathingTexture path fields in a single object-data modification
+/// file (e.g. temp_dir / "war3map.w3u" or its war3mapSkin.* counterpart) in place. template_slk/
+/// meta_slk must already be the fully-populated stock tables for this category
+/// (stock_object_data::load()'s output) - not a bare single-file load - since a custom object's
+/// oldid parent, or a field only present via one of the many stock .merge()'d files, needs the
+/// complete stock dataset to resolve
 /// correctly (see field_to_meta_id()'s doc comment in slk.ixx for why the alias/oldid fallback
 /// needs the merged view). Returns changed=true if anything was rewritten (and, in that case, the
 /// file has already been re-saved) so the caller only needs to act on failure.
@@ -243,7 +244,7 @@ export FileRewriteResult rewrite_object_data_file(
 				continue;
 			}
 			const std::string_view type = meta_slk.data<std::string_view>("type", *meta_id);
-			if (type != "model" && type != "icon" && type != "modelList") {
+			if (type != "model" && type != "icon" && type != "modelList" && type != "pathingTexture") {
 				continue;
 			}
 
@@ -288,7 +289,7 @@ export FileRewriteResult rewrite_object_data_file(
 	return { true, "", changed };
 }
 
-/// Rewrites every model/icon object-data field across all 7 categories (units/items/doodads/
+/// Rewrites every model/icon/modelList/pathingTexture object-data field across all 7 categories (units/items/doodads/
 /// destructibles/abilities/upgrades/buffs, plus each category's war3mapSkin.* counterpart) that
 /// references a renamed candidate, so a unit's icon, an ability's art, a doodad's model override,
 /// etc. all point at the new name. Loads its own independent copy of the stock tables via
