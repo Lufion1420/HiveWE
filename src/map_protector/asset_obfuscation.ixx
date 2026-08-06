@@ -9,6 +9,10 @@ import SLK;
 import ModificationTables;
 import StockObjectData;
 import Hierarchy;
+import MapInfo;
+import MDX;
+import BinaryWriter;
+import Utilities;
 
 namespace fs = std::filesystem;
 
@@ -271,4 +275,134 @@ export AssetObfuscationResult rewrite_object_data_references(const fs::path& tem
 
 	hierarchy.map_directory = original_map_directory;
 	return result;
+}
+
+/// Rewrites war3map.w3i's own literal-path fields (loading_screen_model, prologue_screen_model) if
+/// either matches a renamed candidate. Reuses the exact MapInfo load/tileset-byte/save pattern
+/// already implemented in protection_pipeline.ixx's sanitize_metadata()/inline_map_info_trigger_strings()
+/// - MapInfo::save() needs a tileset byte MapInfo::load() itself discards, so it's read directly
+/// from war3map.w3e's header instead (same layout Terrain::load() parses).
+export AssetObfuscationResult rewrite_map_info_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	if (candidates.empty() || !fs::exists(temp_dir / "war3map.w3i")) {
+		return { true, "" };
+	}
+
+	std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key;
+	for (const RenameCandidate& candidate : candidates) {
+		candidates_by_match_key[candidate.match_key] = &candidate;
+	}
+
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = temp_dir;
+
+	char tileset = 'L';
+	if (auto w3e = hierarchy.map_file_read("war3map.w3e"); w3e && w3e->read_string(4) == "W3E!") {
+		w3e->advance(4); // format version
+		tileset = w3e->read<char>();
+	}
+
+	AssetObfuscationResult result{ true, "" };
+	try {
+		MapInfo info;
+		info.load();
+
+		bool changed = false;
+		const auto rewrite_field = [&](std::string& field) {
+			const auto found = candidates_by_match_key.find(asset_match_key(field));
+			if (found != candidates_by_match_key.end()) {
+				field = found->second->new_relative_path.string();
+				changed = true;
+			}
+		};
+		rewrite_field(info.loading_screen_model);
+		rewrite_field(info.prologue_screen_model);
+
+		if (changed) {
+			info.save(tileset);
+		}
+	} catch (const std::exception& e) {
+		result = { false, std::string("Failed to rewrite asset references in war3map.w3i: ") + e.what() };
+	}
+
+	hierarchy.map_directory = original_map_directory;
+	return result;
+}
+
+/// Rewrites paths stored *inside* MDX model files themselves - a model's own texture list
+/// (Texture::file_name), attachment paths (Attachment::path), and Emitter1 particle paths
+/// (ParticleEmitter1::path) are literal path strings independent of whatever file the model itself
+/// was renamed to. Reads/writes temp_dir files directly via plain file I/O rather than through
+/// Hierarchy, since every .mdx worth checking here is already a loose file physically present in
+/// temp_dir (guaranteed by enumerate_rename_candidates()'s walk) - no override/CASC lookup needed.
+///
+/// No cross-file ordering dependency: every MDX is rewritten independently against the same fixed
+/// candidate table built once in enumerate_rename_candidates(), so it doesn't matter whether model A
+/// (which might reference model B as an attachment) is visited before or after model B - neither
+/// rewrite depends on the other's *new* name being already known, only on the fixed original->new
+/// mapping. Explicitly re-serializes at the model's own original version (not to_mdx()'s
+/// LATEST_MDX_VERSION default) so an untouched model's version isn't silently bumped as a side
+/// effect of an unrelated rename. Deliberately does not call MDX::validate() - that's meant for
+/// editor-authored models being exported and can restructure things (e.g. add a bone if none exist);
+/// this step should only ever change the handful of path strings it found a candidate for.
+export AssetObfuscationResult rewrite_mdx_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	if (candidates.empty()) {
+		return { true, "" };
+	}
+
+	std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key;
+	for (const RenameCandidate& candidate : candidates) {
+		candidates_by_match_key[candidate.match_key] = &candidate;
+	}
+
+	const auto rewrite_if_match = [&](std::string& value) {
+		const auto found = candidates_by_match_key.find(asset_match_key(value));
+		if (found != candidates_by_match_key.end()) {
+			value = found->second->new_relative_path.string();
+			return true;
+		}
+		return false;
+	};
+
+	if (!fs::exists(temp_dir)) {
+		return { true, "" };
+	}
+
+	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
+		if (!entry.is_regular_file() || !asset_match_key(entry.path().filename().string()).ends_with(".mdx")) {
+			continue;
+		}
+
+		try {
+			auto file_result = read_file(entry.path());
+			if (!file_result) {
+				return { false, std::format("Failed to read '{}': {}", entry.path().filename().string(), file_result.error()) };
+			}
+			mdx::MDX model(file_result.value());
+
+			bool changed = false;
+			for (mdx::Texture& texture : model.textures) {
+				std::string path_string = texture.file_name.string();
+				if (rewrite_if_match(path_string)) {
+					texture.file_name = path_string;
+					changed = true;
+				}
+			}
+			for (auto& attachment : model.attachments) {
+				changed |= rewrite_if_match(attachment.path);
+			}
+			for (auto& emitter : model.emitters1) {
+				changed |= rewrite_if_match(emitter.path);
+			}
+
+			if (changed) {
+				const BinaryWriter writer = model.to_mdx(model.version);
+				std::ofstream out(entry.path(), std::ios::binary | std::ios::trunc);
+				out.write(reinterpret_cast<const char*>(writer.buffer.data()), static_cast<std::streamsize>(writer.buffer.size()));
+			}
+		} catch (const std::exception& e) {
+			return { false, std::format("Failed to rewrite asset references in '{}': {}", entry.path().filename().string(), e.what()) };
+		}
+	}
+
+	return { true, "" };
 }

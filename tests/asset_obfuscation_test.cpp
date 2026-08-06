@@ -4,6 +4,8 @@ import std;
 import SLK;
 import ModificationTables;
 import Hierarchy;
+import MDX;
+import Utilities;
 import AssetObfuscation;
 
 namespace fs = std::filesystem;
@@ -209,4 +211,66 @@ TEST_CASE("rewrite_object_data_file is a no-op success when the file does not ex
 	);
 	CHECK(result.success);
 	CHECK_FALSE(result.changed);
+}
+
+TEST_CASE("rewrite_mdx_references rewrites a texture path stored inside the model itself") {
+	const fs::path dir = make_scratch_dir("rewrite_mdx");
+
+	// minimal_v1000.mdl (shared with mdl_reader_test.cpp) ships one texture: "Textures/Stone.blp".
+	const std::string source = read_text_file(fs::path(MDL_FIXTURES_DIR) / "minimal_v1000.mdl");
+	auto parsed = mdx::MDX::from_mdl(source);
+	REQUIRE(parsed.has_value());
+	REQUIRE(parsed.value().textures.size() == 1);
+	REQUIRE(parsed.value().textures.front().file_name == "Textures/Stone.blp");
+	const auto original_version = parsed.value().version;
+
+	const auto writer = parsed.value().to_mdx(original_version);
+	const fs::path mdx_path = dir / "Model.mdx";
+	{
+		std::ofstream out(mdx_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(writer.buffer.data()), static_cast<std::streamsize>(writer.buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "Textures/Stone.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("Textures/Stone.blp");
+
+	const AssetObfuscationResult result = rewrite_mdx_references(dir, { candidate });
+	CHECK(result.success);
+
+	auto reread_file = read_file(mdx_path);
+	REQUIRE(reread_file.has_value());
+	const mdx::MDX reread(reread_file.value());
+	REQUIRE(reread.textures.size() == 1);
+	CHECK(reread.textures.front().file_name == "a3f9c1e2.blp");
+	CHECK(reread.version == original_version); // must not silently bump version as a side effect
+}
+
+TEST_CASE("rewrite_mdx_references leaves a model untouched when no texture matches a candidate") {
+	const fs::path dir = make_scratch_dir("rewrite_mdx_no_match");
+
+	const std::string source = read_text_file(fs::path(MDL_FIXTURES_DIR) / "minimal_v1000.mdl");
+	auto parsed = mdx::MDX::from_mdl(source);
+	REQUIRE(parsed.has_value());
+
+	const auto writer = parsed.value().to_mdx(parsed.value().version);
+	const fs::path mdx_path = dir / "Model.mdx";
+	std::vector<char> original_bytes(writer.buffer.begin(), writer.buffer.end());
+	{
+		std::ofstream out(mdx_path, std::ios::binary);
+		out.write(original_bytes.data(), static_cast<std::streamsize>(original_bytes.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "Textures/Unrelated.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("Textures/Unrelated.blp");
+
+	const AssetObfuscationResult result = rewrite_mdx_references(dir, { candidate });
+	CHECK(result.success);
+
+	std::ifstream in(mdx_path, std::ios::binary);
+	const std::vector<char> after_bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+	CHECK(original_bytes == after_bytes); // untouched, byte for byte
 }
