@@ -1,0 +1,100 @@
+#include <doctest/doctest.h>
+
+import std;
+import AssetObfuscation;
+import ProtectionPipeline;
+
+namespace fs = std::filesystem;
+
+namespace {
+	fs::path make_scratch_dir(const std::string& name) {
+		const fs::path dir = fs::temp_directory_path() / "hivewe_protection_pipeline_test" / name;
+		std::error_code ec;
+		fs::remove_all(dir, ec);
+		fs::create_directories(dir, ec);
+		return dir;
+	}
+
+	std::string read_all(const fs::path& path) {
+		std::ifstream in(path, std::ios::binary);
+		return { std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>() };
+	}
+
+	void write_all(const fs::path& path, const std::string& content) {
+		std::ofstream out(path, std::ios::binary | std::ios::trunc);
+		out << content;
+	}
+}
+
+TEST_CASE("escape_script_string / unescape_script_string round-trip") {
+	const std::vector<std::string> samples = {
+		"war3mapImported/Custom.mdx",
+		"war3mapImported\\Custom.mdx",
+		"quote\"backslash\\newline\nend",
+		"",
+	};
+	for (const std::string& sample : samples) {
+		CHECK(unescape_script_string(escape_script_string(sample)) == sample);
+	}
+}
+
+TEST_CASE("unescape_script_string turns an escaped backslash path into a real single-backslash path") {
+	// This is what a JASS/Lua compiler actually emits for a Windows-style path literal: each real
+	// backslash becomes the two source characters \\ inside the quotes.
+	const std::string raw_source_literal = "war3mapImported\\\\Custom.mdx";
+	CHECK(unescape_script_string(raw_source_literal) == "war3mapImported\\Custom.mdx");
+	CHECK(asset_match_key(unescape_script_string(raw_source_literal)) == asset_match_key("war3mapImported/Custom.mdx"));
+}
+
+TEST_CASE("rewrite_script_asset_references rewrites a matching path literal in war3map.j") {
+	const fs::path dir = make_scratch_dir("rewrite_script_j");
+	// war3mapImported\\Custom.mdx in the actual JASS source text below is the two-character-escaped
+	// form of a single backslash - exactly what a real compiled script contains.
+	write_all(dir / "war3map.j", "function Init takes nothing returns nothing\n"
+								  "    call AddSpecialEffect(\"war3mapImported\\\\Custom.mdx\", 0, 0)\n"
+								  "    call DisplayTextToPlayer(GetLocalPlayer(), 0, 0, \"not a path\")\n"
+								  "endfunction\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	const AssetObfuscationResult result = rewrite_script_asset_references(dir, { candidate });
+	CHECK(result.success);
+
+	const std::string rewritten = read_all(dir / "war3map.j");
+	CHECK(rewritten.find("a3f9c1e2.mdx") != std::string::npos);
+	CHECK(rewritten.find("war3mapImported") == std::string::npos);
+	CHECK(rewritten.find("not a path") != std::string::npos); // unrelated literal left alone
+}
+
+TEST_CASE("rewrite_script_asset_references leaves war3map.lua untouched when nothing matches") {
+	const fs::path dir = make_scratch_dir("rewrite_script_lua_no_match");
+	const std::string original = "print(\"hello world\")\nAddSpecialEffect(\"Doodads/Other.mdx\", 0, 0)\n";
+	write_all(dir / "war3map.lua", original);
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	const AssetObfuscationResult result = rewrite_script_asset_references(dir, { candidate });
+	CHECK(result.success);
+	CHECK(read_all(dir / "war3map.lua") == original);
+}
+
+TEST_CASE("rewrite_script_asset_references does not touch a quote inside a comment") {
+	const fs::path dir = make_scratch_dir("rewrite_script_comment");
+	const std::string original = "-- AddSpecialEffect(\"war3mapImported\\\\Custom.mdx\", 0, 0)\nprint(\"unrelated\")\n";
+	write_all(dir / "war3map.lua", original);
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	const AssetObfuscationResult result = rewrite_script_asset_references(dir, { candidate });
+	CHECK(result.success);
+	CHECK(read_all(dir / "war3map.lua") == original); // commented-out reference must not be rewritten
+}

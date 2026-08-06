@@ -274,3 +274,90 @@ TEST_CASE("rewrite_mdx_references leaves a model untouched when no texture match
 	const std::vector<char> after_bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 	CHECK(original_bytes == after_bytes); // untouched, byte for byte
 }
+
+TEST_CASE("verify_no_dangling_text_references catches a reference in a text format nothing else rewrites") {
+	const fs::path dir = make_scratch_dir("verify_dangling_text");
+	// war3mapSkin.txt is never parsed/rewritten by any phase - exactly the kind of leftover this
+	// safety net exists to catch.
+	write_file(dir / "war3mapSkin.txt", "[Ymdl]\nfile=war3mapImported\\Custom.mdx\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
+	CHECK_FALSE(result.success);
+	CHECK(result.error.find("war3mapSkin.txt") != std::string::npos);
+}
+
+TEST_CASE("verify_no_dangling_text_references passes when no text file references a candidate") {
+	const fs::path dir = make_scratch_dir("verify_no_dangling_text");
+	write_file(dir / "war3mapSkin.txt", "[Ymdl]\nfile=Objects\\Unrelated.mdx\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
+	CHECK(result.success);
+}
+
+TEST_CASE("verify_no_dangling_text_references ignores binary files entirely, even if bytes coincidentally match") {
+	const fs::path dir = make_scratch_dir("verify_dangling_binary");
+	// Deliberately a non-text-extension file containing the candidate's path text - must be ignored,
+	// since binary assets don't reference other files by path and scanning every byte of every large
+	// import would be wasted work (see the function's own doc comment).
+	write_file(dir / "Some.mdx", "war3mapImported\\Custom.mdx");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
+	CHECK(result.success);
+}
+
+TEST_CASE("apply_renames physically renames every candidate on disk") {
+	const fs::path dir = make_scratch_dir("apply_renames");
+	write_file(dir / "war3mapImported" / "Custom.mdx", "model bytes");
+	write_file(dir / "Textures" / "Icon.blp", "blp bytes");
+
+	std::vector<RenameCandidate> candidates(2);
+	candidates[0].original_relative_path = "war3mapImported/Custom.mdx";
+	candidates[0].new_relative_path = "a3f9c1e2.mdx";
+	candidates[1].original_relative_path = "Textures/Icon.blp";
+	candidates[1].new_relative_path = "b7e1d4f0.blp";
+
+	const AssetObfuscationResult result = apply_renames(dir, candidates);
+	CHECK(result.success);
+
+	CHECK_FALSE(fs::exists(dir / "war3mapImported" / "Custom.mdx"));
+	CHECK_FALSE(fs::exists(dir / "Textures" / "Icon.blp"));
+	REQUIRE(fs::exists(dir / "a3f9c1e2.mdx"));
+	REQUIRE(fs::exists(dir / "b7e1d4f0.blp"));
+
+	std::ifstream model_in(dir / "a3f9c1e2.mdx", std::ios::binary);
+	CHECK(std::string((std::istreambuf_iterator<char>(model_in)), std::istreambuf_iterator<char>()) == "model bytes");
+}
+
+TEST_CASE("apply_renames fails without renaming anything already done if a candidate's source is missing") {
+	const fs::path dir = make_scratch_dir("apply_renames_missing_source");
+	write_file(dir / "war3mapImported" / "Custom.mdx", "model bytes");
+
+	std::vector<RenameCandidate> candidates(2);
+	candidates[0].original_relative_path = "war3mapImported/Custom.mdx";
+	candidates[0].new_relative_path = "a3f9c1e2.mdx";
+	candidates[1].original_relative_path = "DoesNotExist.blp"; // never actually created
+	candidates[1].new_relative_path = "b7e1d4f0.blp";
+
+	const AssetObfuscationResult result = apply_renames(dir, candidates);
+	CHECK_FALSE(result.success);
+	// The first candidate, processed before the failing one, is left renamed - apply_renames() is the
+	// last step and only ever runs after every reference has already been rewritten to the new name,
+	// so a partial rename here still leaves every *reference* consistent with what's on disk for that
+	// one file; run_asset_obfuscation() as a whole still reports failure to the caller either way.
+	CHECK(fs::exists(dir / "a3f9c1e2.mdx"));
+}

@@ -406,3 +406,79 @@ export AssetObfuscationResult rewrite_mdx_references(const fs::path& temp_dir, c
 
 	return { true, "" };
 }
+
+/// Safety-net scan run after all the structured rewrite phases (object data, war3map.w3i, MDX-
+/// internal paths, script literals) have already run: catches a reference living somewhere none of
+/// those phases understands - most concretely war3mapSkin.txt (can legitimately hold path overrides
+/// per WC3's format, but nothing in this codebase parses it, so it's excluded from the rename
+/// candidate pool entirely and never rewritten) or any other stray text file a map happens to ship.
+///
+/// Deliberately scoped to text-like files only (.txt/.ini/.j/.lua), not a blind byte-scan of every
+/// binary asset in the map: a BLP/MDX/WAV file's *own* bytes were already exhaustively covered by
+/// the structured phases above (MDX contents specifically, by rewrite_mdx_references()) or simply
+/// can't reference another file's path in the first place, so scanning every byte of every binary
+/// asset would cost real time on a large map (many-MB imports are exactly this user's profile) for
+/// no realistic gain. If this scan ever needs widening, do it deliberately, not as a silent blanket
+/// byte-scan.
+export AssetObfuscationResult verify_no_dangling_text_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	if (candidates.empty() || !fs::exists(temp_dir)) {
+		return { true, "" };
+	}
+
+	static constexpr std::array<std::string_view, 4> text_extensions = { ".txt", ".ini", ".j", ".lua" };
+
+	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
+		if (!entry.is_regular_file()) {
+			continue;
+		}
+		std::string extension = entry.path().extension().string();
+		std::ranges::transform(extension, extension.begin(), [](const unsigned char c) { return std::tolower(c); });
+		if (!std::ranges::contains(text_extensions, extension)) {
+			continue;
+		}
+
+		std::string content;
+		{
+			std::ifstream in(entry.path(), std::ios::binary);
+			content.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		}
+		std::ranges::transform(content, content.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+		for (const RenameCandidate& candidate : candidates) {
+			std::string backward_key = candidate.match_key;
+			std::ranges::replace(backward_key, '/', '\\');
+			if (content.find(candidate.match_key) != std::string::npos || content.find(backward_key) != std::string::npos) {
+				return {
+					false,
+					std::format(
+						"'{}' still references '{}', which is not a reference kind this pipeline rewrites - aborting rather "
+						"than renaming a file something else still points at by its old name.",
+						entry.path().filename().string(), candidate.original_relative_path.string()
+					)
+				};
+			}
+		}
+	}
+
+	return { true, "" };
+}
+
+/// Physically renames every candidate on disk. Must run last, strictly after every rewrite phase and
+/// the verification scan above have already succeeded - every reference elsewhere in the map already
+/// points at new_relative_path by this point, so renaming any earlier would make those references
+/// (briefly, but for real if any step in between failed) point at nothing.
+export AssetObfuscationResult apply_renames(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	for (const RenameCandidate& candidate : candidates) {
+		std::error_code ec;
+		fs::rename(temp_dir / candidate.original_relative_path, temp_dir / candidate.new_relative_path, ec);
+		if (ec) {
+			return {
+				false,
+				std::format(
+					"Failed to rename '{}' to '{}': {}", candidate.original_relative_path.string(), candidate.new_relative_path.string(), ec.message()
+				)
+			};
+		}
+	}
+	return { true, "" };
+}

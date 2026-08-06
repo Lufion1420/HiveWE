@@ -106,9 +106,10 @@ MapProtector::MapProtector(QWidget* parent) : QMainWindow(parent) {
 	obfuscate_asset_paths_check = make_check(
 		asset_group, asset_layout, "Rename imported files to random names",
 		"Renames every custom model, texture, etc. to a random name and rewrites every reference to "
-		"it so the map still plays correctly - defeats tools that recover filenames via a known-name "
-		"dictionary (e.g. Ladik's MPQ Editor). Not yet implemented: enabling this currently fails the "
-		"export with an explanatory message rather than shipping a map with a broken reference.",
+		"it (object data, war3map.w3i, paths inside models, script literals) so the map still plays "
+		"correctly - defeats tools that recover filenames via a known-name dictionary (e.g. Ladik's "
+		"MPQ Editor). Core map files, stock game assets, and sound files are never renamed. Aborts "
+		"the export instead of shipping a map with a broken reference if anything can't be verified.",
 		false
 	);
 	main_layout->addWidget(asset_group);

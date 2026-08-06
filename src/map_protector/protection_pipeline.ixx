@@ -305,7 +305,7 @@ std::unordered_map<std::string, std::string> parse_trigger_strings_file(const fs
 /// than newline are dropped rather than risking an escape sequence the game's script parser
 /// doesn't accept - trigger string text is always printable text in practice (WC3 itself uses
 /// the literal 2-character sequence "|n", not a real newline byte, for tooltip line breaks).
-std::string escape_script_string(const std::string& text) {
+export std::string escape_script_string(const std::string& text) {
 	std::string result;
 	result.reserve(text.size());
 	for (const char c : text) {
@@ -327,6 +327,40 @@ std::string escape_script_string(const std::string& text) {
 				}
 				break;
 		}
+	}
+	return result;
+}
+
+/// Inverse of escape_script_string(): turns a string literal's raw, still-escaped source content
+/// back into the plain text it represents (\\ -> \, \" -> ", \n -> a real newline byte). Needed
+/// because asset paths inside a literal are written pre-escaped in the script (e.g. a single
+/// backslash path separator appears as the two-character sequence \\), and asset_match_key() must
+/// compare against the real path text, not its escaped-for-source-code form, or every backslash
+/// would be mis-read as two separate characters and never match a candidate. An unrecognized escape
+/// sequence is left as-is (the backslash is kept, nothing is consumed) rather than guessed at.
+export std::string unescape_script_string(const std::string& raw) {
+	std::string result;
+	result.reserve(raw.size());
+	for (size_t i = 0; i < raw.size(); ++i) {
+		if (raw[i] == '\\' && i + 1 < raw.size()) {
+			switch (raw[i + 1]) {
+				case '\\':
+					result += '\\';
+					++i;
+					continue;
+				case '"':
+					result += '"';
+					++i;
+					continue;
+				case 'n':
+					result += '\n';
+					++i;
+					continue;
+				default:
+					break;
+			}
+		}
+		result += raw[i];
 	}
 	return result;
 }
@@ -482,6 +516,71 @@ SyncSaveResult inline_map_info_trigger_strings(const fs::path& temp_dir, const s
 	return result;
 }
 
+/// Rewrites literal path arguments in war3map.j/war3map.lua string literals that match a renamed
+/// asset candidate (e.g. AddSpecialEffect("war3mapImported\\Foo.mdx", ...) after Foo.mdx has been
+/// renamed). Reuses find_string_literals() - the same JASS/Lua-aware literal scanner built for
+/// TRIGSTR inlining below - but unlike TRIGSTR resolution, a literal that doesn't match any
+/// candidate is not an error: most string literals in a script aren't asset paths at all (dialogue
+/// text, unit names, ...), so only literals whose unescaped content match-keys to a candidate are
+/// touched. Must run before strip_trigger_strings_step() in the pipeline (see run_async_pack()) so
+/// the TRIGSTR pass, which also rewrites these same two files, always sees the final script text.
+///
+/// Known, disclosed limitation: a path built at runtime via string concatenation
+/// (e.g. "war3mapImported\\" .. part .. ".mdx") is not a single literal and is invisible to this
+/// static scan - that asset will not be rewritten. Same category of limitation already disclosed
+/// for strip_trigger_strings' object-data scope gap above.
+export AssetObfuscationResult rewrite_script_asset_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	if (candidates.empty()) {
+		return { true, "" };
+	}
+
+	std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key;
+	for (const RenameCandidate& candidate : candidates) {
+		candidates_by_match_key[candidate.match_key] = &candidate;
+	}
+
+	for (const char* script_name : { "war3map.j", "war3map.lua" }) {
+		const fs::path script_path = temp_dir / script_name;
+		if (!fs::exists(script_path)) {
+			continue;
+		}
+
+		std::string text;
+		{
+			std::ifstream in(script_path, std::ios::binary);
+			text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		}
+
+		const std::vector<StringLiteralSpan> spans = find_string_literals(text);
+
+		std::string rebuilt;
+		rebuilt.reserve(text.size());
+		size_t cursor = 0;
+		bool changed = false;
+		for (const StringLiteralSpan& span : spans) {
+			const auto found = candidates_by_match_key.find(asset_match_key(unescape_script_string(span.raw_content)));
+			if (found == candidates_by_match_key.end()) {
+				continue;
+			}
+
+			rebuilt.append(text, cursor, span.start - cursor);
+			rebuilt += '"';
+			rebuilt += escape_script_string(found->second->new_relative_path.string());
+			rebuilt += '"';
+			cursor = span.end;
+			changed = true;
+		}
+		rebuilt.append(text, cursor, text.size() - cursor);
+
+		if (changed) {
+			std::ofstream out(script_path, std::ios::binary | std::ios::trunc);
+			out.write(rebuilt.data(), static_cast<std::streamsize>(rebuilt.size()));
+		}
+	}
+
+	return { true, "" };
+}
+
 /// Replaces every trigger-string-reference literal in war3map.j/war3map.lua (whichever are
 /// present under temp_dir) with the resolved, escaped text from war3map.wts, then inlines any
 /// TRIGSTR references in war3map.w3i's own metadata fields (map name / loading screen text), then
@@ -557,25 +656,49 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 /// temp_dir/output_path - never touches map/hierarchy - so it is safe to run on a background
 /// thread once run_sync_save_and_restore() has returned. Mirrors HiveWE::export_mpq()'s raw
 /// StormLib usage; the MPQ wrapper in mpq.ixx has no archive-creation support.
+/// Runs the full Asset Path Obfuscation pipeline: enumerate rename candidates, rewrite every known
+/// reference kind (object data, war3map.w3i, MDX-internal paths, script literals), verify nothing
+/// was missed, then physically rename the files - strictly in that order, aborting immediately (and
+/// renaming nothing) if any step fails, since a partially-applied rename is worse than none at all.
+/// Runs before strip_trigger_strings_step() in the pipeline below: both steps can touch
+/// war3map.j/war3map.lua, and this one should see (and rewrite paths within) the script before the
+/// TRIGSTR pass makes its own final pass over the same files.
+export AssetObfuscationResult run_asset_obfuscation(const fs::path& temp_dir) {
+	static const Imports imports;
+	const std::vector<RenameCandidate> candidates = enumerate_rename_candidates(
+		temp_dir, imports.blacklist, [](const fs::path& path) { return hierarchy.game_file_exists(path); }
+	);
+	if (candidates.empty()) {
+		return { true, "" };
+	}
+
+	// Sequential, short-circuiting on the first failure - deliberately not a loop over a pre-built
+	// list of results, which would evaluate every step regardless of an earlier one failing.
+	if (const AssetObfuscationResult step = rewrite_object_data_references(temp_dir, candidates); !step.success) {
+		return step;
+	}
+	if (const AssetObfuscationResult step = rewrite_map_info_references(temp_dir, candidates); !step.success) {
+		return step;
+	}
+	if (const AssetObfuscationResult step = rewrite_mdx_references(temp_dir, candidates); !step.success) {
+		return step;
+	}
+	if (const AssetObfuscationResult step = rewrite_script_asset_references(temp_dir, candidates); !step.success) {
+		return step;
+	}
+	if (const AssetObfuscationResult step = verify_no_dangling_text_references(temp_dir, candidates); !step.success) {
+		return step;
+	}
+
+	return apply_renames(temp_dir, candidates);
+}
+
 export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& output_path, const ProtectionOptions& options) {
 	if (options.obfuscate_asset_paths) {
-		// Candidate enumeration is real and exercised here to prove the module boundary works end
-		// to end, but nothing downstream (SLK/w3i/MDX/script reference rewriting) exists yet, so
-		// renaming these files now would ship a map with dangling references. Fail loudly instead
-		// of either silently doing nothing or silently breaking the map - re-enable once the
-		// reference-rewrite phases land (see .cursor/plans/map_protection_plan.md).
-		static const Imports imports;
-		const std::vector<RenameCandidate> candidates = enumerate_rename_candidates(
-			temp_dir, imports.blacklist, [](const fs::path& path) { return hierarchy.game_file_exists(path); }
-		);
-		return {
-			false,
-			std::format(
-				"Asset Path Obfuscation is not fully implemented yet ({} candidate file(s) found) - reference "
-				"rewriting for object data, war3map.w3i, models, and scripts hasn't shipped. Leave this option off.",
-				candidates.size()
-			)
-		};
+		const AssetObfuscationResult obfuscation_result = run_asset_obfuscation(temp_dir);
+		if (!obfuscation_result.success) {
+			return { false, obfuscation_result.error };
+		}
 	}
 
 	if (options.remove_gui_triggers) {
