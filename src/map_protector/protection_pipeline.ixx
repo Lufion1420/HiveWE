@@ -163,6 +163,29 @@ std::vector<std::string> parse_import_manifest_paths(const fs::path& imp_path) {
 	return paths;
 }
 
+/// True for a filename matching StormLib's own placeholder pattern for an archive entry it couldn't
+/// resolve a real name for: "File" + exactly 8 digits + "." + a guessed extension (falling back to
+/// the literal extension ".xxx" when it can't even guess that). MPQ::unpack()'s wildcard enumeration
+/// (used by unpack_source_archive() below to seed temp_dir from a source archive) produces exactly
+/// these names for every entry a listfile-less archive can't identify - confirmed directly, via a
+/// standalone repro against a real archive, that SFileAddFileEx unconditionally rejects re-adding
+/// any file under this exact name pattern with ERROR_INVALID_PARAMETER (error 87), regardless of the
+/// file's actual content: two different files sharing this pattern both failed identically, while
+/// the same bytes under a normal name succeeded, so StormLib treats the pattern itself as reserved,
+/// not just an unlucky guess.
+export bool is_stormlib_fabricated_name(const std::string& filename) {
+	constexpr std::string_view prefix = "File";
+	if (!filename.starts_with(prefix)) {
+		return false;
+	}
+	size_t i = prefix.size();
+	const size_t digits_start = i;
+	while (i < filename.size() && std::isdigit(static_cast<unsigned char>(filename[i]))) {
+		++i;
+	}
+	return i - digits_start == 8 && i < filename.size() && filename[i] == '.' && i + 1 < filename.size();
+}
+
 SyncSaveResult unpack_source_archive(const fs::path& source_file, const fs::path& temp_dir) {
 	mpq::MPQ mpq;
 	if (!mpq.open(source_file)) {
@@ -187,14 +210,34 @@ SyncSaveResult unpack_source_archive(const fs::path& source_file, const fs::path
 	// WC3 import manifest, written by the World Editor, HiveWE, and evidently third-party build
 	// tools too - already lists every custom import's real path, so it's reused here as a substitute
 	// listfile: extract_file() looks files up by name hash, so this recovers the real name
-	// regardless of whether the archive has a (listfile) at all. The stale fabricated-name copies
-	// from the wildcard unpack above are left in place rather than tracked down and deleted (that
-	// mapping isn't exposed by MPQ::unpack()) - harmless leftover junk, never referenced by anything
-	// once the real-named copy exists alongside it.
+	// regardless of whether the archive has a (listfile) at all.
 	if (const fs::path imp_path = temp_dir / "war3map.imp"; fs::exists(imp_path)) {
 		for (const std::string& name : parse_import_manifest_paths(imp_path)) {
 			mpq.extract_file(name, temp_dir / name);
 		}
+	}
+
+	// Delete every stale fabricated-name copy left over from the wildcard unpack above, now that
+	// real-named copies have been recovered wherever the manifest lists them. Originally left in
+	// place on the theory they were harmless clutter never referenced by anything - wrong: once
+	// Asset Path Obfuscation runs, it doesn't know these are duplicates (there's no fabricated-name-
+	// to-real-name mapping to check against - MPQ::unpack() doesn't expose one), so it treats each
+	// one as an ordinary file, renames it to a *new*, non-fabricated-looking name, and ships it in
+	// the output archive right alongside the real asset's own separately-renamed copy - silently
+	// doubling the size of every custom asset in the protected map. A file matching this pattern
+	// that ISN'T listed in war3map.imp was never going to pack successfully anyway (see
+	// is_stormlib_fabricated_name()'s comment) and is simply dropped, same net effect as before.
+	// Collected first, then deleted in a separate pass - modifying the directory tree while still
+	// iterating it is unspecified behavior, even though only already-visited files are removed here.
+	std::vector<fs::path> fabricated_files;
+	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
+		if (entry.is_regular_file() && is_stormlib_fabricated_name(entry.path().filename().string())) {
+			fabricated_files.push_back(entry.path());
+		}
+	}
+	std::error_code fabricated_cleanup_ec;
+	for (const fs::path& path : fabricated_files) {
+		fs::remove(path, fabricated_cleanup_ec);
 	}
 
 	if (!fs::exists(temp_dir / "war3map.w3i")) {
@@ -766,33 +809,6 @@ export AssetObfuscationResult run_asset_obfuscation(const fs::path& temp_dir) {
 	} catch (const std::exception& e) {
 		return { false, std::string("Asset Path Obfuscation failed unexpectedly: ") + e.what() };
 	}
-}
-
-/// True for a filename matching StormLib's own placeholder pattern for an archive entry it couldn't
-/// resolve a real name for: "File" + exactly 8 digits + "." + a guessed extension (falling back to
-/// the literal extension ".xxx" when it can't even guess that). MPQ::unpack()'s wildcard enumeration
-/// (used by unpack_source_archive() to seed temp_dir from a source archive) produces exactly these
-/// names for every entry a listfile-less archive can't identify - confirmed directly, via a
-/// standalone repro against a real archive, that SFileAddFileEx unconditionally rejects re-adding
-/// any file under this exact name pattern with ERROR_INVALID_PARAMETER (error 87), regardless of the
-/// file's actual content: two different files sharing this pattern both failed identically, while
-/// the same bytes under a normal name succeeded, so StormLib treats the pattern itself as reserved,
-/// not just an unlucky guess. Real-named copies of these files are separately recovered via
-/// war3map.imp where possible (see unpack_source_archive()); any that aren't recoverable this way
-/// were never going to pack successfully under their fabricated name regardless, so skipping them
-/// here converts a guaranteed export failure into a clean export missing only that one untraceable
-/// file, rather than failing the whole export over a file with no real identity to give it.
-export bool is_stormlib_fabricated_name(const std::string& filename) {
-	constexpr std::string_view prefix = "File";
-	if (!filename.starts_with(prefix)) {
-		return false;
-	}
-	size_t i = prefix.size();
-	const size_t digits_start = i;
-	while (i < filename.size() && std::isdigit(static_cast<unsigned char>(filename[i]))) {
-		++i;
-	}
-	return i - digits_start == 8 && i < filename.size() && filename[i] == '.' && i + 1 < filename.size();
 }
 
 export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& output_path, const ProtectionOptions& options) {
