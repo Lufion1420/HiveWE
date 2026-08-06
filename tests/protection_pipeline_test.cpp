@@ -84,6 +84,45 @@ TEST_CASE("rewrite_script_asset_references leaves war3map.lua untouched when not
 	CHECK(read_all(dir / "war3map.lua") == original);
 }
 
+TEST_CASE("rewrite_script_asset_references rewrites a single-quoted Lua literal") {
+	// Real case: a map's spell-kit Lua code used single quotes for these calls
+	// (EffectEx():onPoint('NCOW_SFX_Whatever.mdx', x, y, 0)), which the scanner originally missed
+	// entirely since it only recognized double-quoted strings.
+	const fs::path dir = make_scratch_dir("rewrite_script_lua_single_quote");
+	write_all(dir / "war3map.lua", "EffectEx():onPoint('war3mapImported/Custom.mdx',x,y,0):setScale(2)\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	const AssetObfuscationResult result = rewrite_script_asset_references(dir, { candidate });
+	CHECK(result.success);
+
+	const std::string rewritten = read_all(dir / "war3map.lua");
+	CHECK(rewritten.find("a3f9c1e2.mdx") != std::string::npos);
+	CHECK(rewritten.find("war3mapImported") == std::string::npos);
+}
+
+TEST_CASE("rewrite_script_asset_references leaves a JASS rawcode literal alone even if it happens to match") {
+	// 'hfoo' in JASS is not a string - it's a 4-character rawcode literal that compiles to an
+	// integer constant. find_string_literals() must never treat single-quoted JASS content as a
+	// string (unlike Lua, where single and double quotes are interchangeable), or this would both
+	// misclassify a rawcode and risk corrupting the script if a rewrite ever fired on it.
+	const fs::path dir = make_scratch_dir("rewrite_script_jass_rawcode");
+	const std::string original = "call BlzSetAbilityIcon('hfoo', \"war3mapImported\\\\Unrelated.blp\")\n";
+	write_all(dir / "war3map.j", original);
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "hfoo";
+	candidate.new_relative_path = "a3f9c1e2.hfoo";
+	candidate.match_key = asset_match_key("hfoo");
+
+	const AssetObfuscationResult result = rewrite_script_asset_references(dir, { candidate });
+	CHECK(result.success);
+	CHECK(read_all(dir / "war3map.j") == original); // 'hfoo' must survive untouched
+}
+
 TEST_CASE("rewrite_script_asset_references does not touch a quote inside a comment") {
 	const fs::path dir = make_scratch_dir("rewrite_script_comment");
 	const std::string original = "-- AddSpecialEffect(\"war3mapImported\\\\Custom.mdx\", 0, 0)\nprint(\"unrelated\")\n";

@@ -448,13 +448,48 @@ struct StringLiteralSpan {
 	std::string raw_content; // between the quotes, still escaped as it appears in source
 };
 
-/// Scans `text` (a JASS or Lua source file's full contents) for double-quoted string literals,
-/// skipping both languages' line/block comment styles ("//", "/* */", "--", "--[[ ]]") so a
-/// quote character inside a comment can't desynchronize the scan for everything after it.
-/// Respects \\ and \" so an escaped quote doesn't end a literal early.
-std::vector<StringLiteralSpan> find_string_literals(const std::string& text) {
+/// Scans `text` (a JASS or Lua source file's full contents) for quoted string literals, skipping
+/// both languages' line/block comment styles ("//", "/* */", "--", "--[[ ]]") so a quote character
+/// inside a comment can't desynchronize the scan for everything after it. Respects \\ and the
+/// matching quote character so an escaped quote doesn't end a literal early.
+///
+/// allow_single_quote_strings must be true for Lua and false for JASS: Lua accepts '...' and "..."
+/// interchangeably for strings (a real map was found using '...' for several AddSpecialEffect-style
+/// calls, which this scanner originally missed entirely since it only recognized "..."), but in JASS
+/// '...' is not a string at all - it's a 4-character rawcode literal (e.g. 'hfoo') that compiles to
+/// an integer constant. Treating a JASS rawcode as a string here would misclassify it, and rewriting
+/// it as one would corrupt the script.
+std::vector<StringLiteralSpan> find_string_literals(const std::string& text, const bool allow_single_quote_strings) {
 	std::vector<StringLiteralSpan> spans;
 	size_t i = 0;
+
+	const auto scan_literal = [&](const char quote) {
+		const size_t start = i;
+		std::string content;
+		++i;
+		bool terminated = false;
+		while (i < text.size() && text[i] != '\n') {
+			if (text[i] == quote) {
+				terminated = true;
+				++i;
+				break;
+			}
+			if (text[i] == '\\' && i + 1 < text.size()) {
+				content += text[i];
+				content += text[i + 1];
+				i += 2;
+			} else {
+				content += text[i];
+				++i;
+			}
+		}
+		if (terminated) {
+			spans.push_back({ start, i, content });
+		}
+		// Unterminated literal (shouldn't happen in valid generated script): leave it out of the
+		// results rather than guessing where it ends.
+	};
+
 	while (i < text.size()) {
 		if (text.compare(i, 2, "//") == 0) {
 			while (i < text.size() && text[i] != '\n') {
@@ -471,30 +506,9 @@ std::vector<StringLiteralSpan> find_string_literals(const std::string& text) {
 				++i;
 			}
 		} else if (text[i] == '"') {
-			const size_t start = i;
-			std::string content;
-			++i;
-			bool terminated = false;
-			while (i < text.size() && text[i] != '\n') {
-				if (text[i] == '"') {
-					terminated = true;
-					++i;
-					break;
-				}
-				if (text[i] == '\\' && i + 1 < text.size()) {
-					content += text[i];
-					content += text[i + 1];
-					i += 2;
-				} else {
-					content += text[i];
-					++i;
-				}
-			}
-			if (terminated) {
-				spans.push_back({ start, i, content });
-			}
-			// Unterminated literal (shouldn't happen in valid generated script): leave it out of
-			// the results rather than guessing where it ends.
+			scan_literal('"');
+		} else if (allow_single_quote_strings && text[i] == '\'') {
+			scan_literal('\'');
 		} else {
 			++i;
 		}
@@ -598,7 +612,7 @@ export AssetObfuscationResult rewrite_script_asset_references(const fs::path& te
 			text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 		}
 
-		const std::vector<StringLiteralSpan> spans = find_string_literals(text);
+		const std::vector<StringLiteralSpan> spans = find_string_literals(text, std::string_view(script_name) == "war3map.lua");
 
 		std::string rebuilt;
 		rebuilt.reserve(text.size());
@@ -661,7 +675,7 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 			text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 		}
 
-		const std::vector<StringLiteralSpan> spans = find_string_literals(text);
+		const std::vector<StringLiteralSpan> spans = find_string_literals(text, std::string_view(script_name) == "war3map.lua");
 
 		std::string rebuilt;
 		rebuilt.reserve(text.size());
