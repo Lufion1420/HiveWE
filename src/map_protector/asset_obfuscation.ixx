@@ -21,15 +21,29 @@ namespace fs = std::filesystem;
 
 /// Normalizes a path string for case/separator-insensitive comparison against other paths (never
 /// for display or for the string actually written back into map data - see RenameCandidate below).
-/// Mirrors Map::get_file_usage()'s match_key lambda (src/base/map/unused_files.cpp) exactly: WC3
-/// paths are case-insensitive, and a model may be referenced as .mdl in one place and imported as
-/// .mdx in another (or vice versa), so both the case and that specific extension pair are unified.
+/// Starts from Map::get_file_usage()'s match_key lambda (src/base/map/unused_files.cpp) - WC3 paths
+/// are case-insensitive, and a model may be referenced as .mdl in one place and imported as .mdx in
+/// another (or vice versa), so both the case and that specific extension pair are unified - but adds
+/// normalizations that lambda doesn't have: WC3 (Reforged specifically) resolves a texture path
+/// against .blp/.tga/.png somewhat interchangeably (the same class of fallback as .mdl/.mdx for
+/// models). Found via two separate real-map cases: a war3mapSkin.txt CustomSkin override that named a
+/// texture ".tga" when the actual imported file was ".blp", and - far more widespread - a custom UI
+/// built with Reforged UI Designer (RUI), whose generated BlzFrameSetTexture() calls reference every
+/// frame's texture by its *design-time* ".png" filename (114 call sites in one real map's compiled
+/// script) even though the map only ever ships the compiled ".blp". Either way, a rename candidate
+/// built from the real file's actual extension silently failed to match the reference (both for
+/// rewriting it and for the dangling-reference safety net, since both go through this same function),
+/// leaving the frame/override pointing at a name nothing on disk had anymore - the exact cause of
+/// widespread missing-texture green boxes across a from-RUI custom UI. Not folded back into
+/// unused_files.cpp's copy - that's a pre-existing, separate gap outside this session's scope.
 export std::string asset_match_key(std::string path) {
 	std::ranges::transform(path, path.begin(), [](const unsigned char c) {
 		return c == '\\' ? '/' : static_cast<char>(std::tolower(c));
 	});
 	if (path.ends_with(".mdl")) {
 		path = path.substr(0, path.size() - 4) + ".mdx";
+	} else if (path.ends_with(".tga") || path.ends_with(".png")) {
+		path = path.substr(0, path.size() - 4) + ".blp";
 	}
 	return path;
 }
@@ -263,6 +277,15 @@ namespace {
 			}
 		}
 	}
+
+	bool starts_with_ci(const std::string& value, const std::string_view prefix) {
+		if (value.size() < prefix.size()) {
+			return false;
+		}
+		return std::ranges::equal(value.substr(0, prefix.size()), prefix, [](const unsigned char a, const unsigned char b) {
+			return std::tolower(a) == std::tolower(b);
+		});
+	}
 } // namespace
 
 /// Enumerates every loose file under temp_dir that Asset Path Obfuscation is allowed to rename.
@@ -355,7 +378,15 @@ export std::vector<RenameCandidate> enumerate_rename_candidates(
 		}
 
 		const std::string key = asset_match_key(relative_path.string());
-		if (is_stock_override_path(key)) {
+		// ReplaceableTextures/CommandButtonsDisabled/ is nested under the otherwise-fixed
+		// ReplaceableTextures/ stock-override root (see is_stock_override_path()), but a custom
+		// button's disabled-state icon there isn't overriding any stock asset by exact path - it's
+		// WC3's fixed lookup location for *any* button's disabled icon (custom or stock), derived
+		// from the enabled icon's own filename at runtime. It needs to stay renameable, in lockstep
+		// with its "BTN..." pair - see the pairing pass below - not pinned to a fixed name.
+		static constexpr std::string_view command_buttons_disabled_root = "replaceabletextures/commandbuttonsdisabled/";
+		const bool is_custom_disabled_button_icon = key.starts_with(command_buttons_disabled_root);
+		if (is_stock_override_path(key) && !is_custom_disabled_button_icon) {
 			continue;
 		}
 		if (is_stock_asset && is_stock_asset(relative_path)) {
@@ -369,6 +400,52 @@ export std::vector<RenameCandidate> enumerate_rename_candidates(
 		candidate.new_relative_path = keep_dirs ? (relative_path.parent_path() / new_name) : new_name;
 		taken_names.insert(new_name.string());
 		candidates.push_back(std::move(candidate));
+	}
+
+	// Re-pair "BTN<name>.ext" command-button icons with their "DISBTN<name>.ext" disabled-state
+	// counterpart under ReplaceableTextures/CommandButtonsDisabled/. WC3 never stores a reference to
+	// the disabled icon anywhere in the map's own data - no rewrite phase could ever find and fix a
+	// reference that doesn't exist - it derives the path itself at runtime, purely from the *enabled*
+	// icon's own filename: strip a literal "BTN" prefix, prepend "DISBTN", and look for that name
+	// specifically in ReplaceableTextures\CommandButtonsDisabled\, regardless of which folder the
+	// enabled icon itself lives in. Found via a real map: 422 BTN icons with 418 matching DISBTN
+	// counterparts, every one of which would otherwise get its own independent random name from the
+	// loop above and permanently break that derivation - showing as a green box specifically whenever
+	// a button is disabled (on cooldown, unaffordable, or - the common case in a hero-select-style
+	// custom UI - representing a not-yet-unlocked/empty slot, which is why "most" icons looked broken
+	// while a few actively-usable ones didn't).
+	{
+		std::unordered_map<std::string, size_t> candidate_index_by_lowercase_filename;
+		for (size_t i = 0; i < candidates.size(); ++i) {
+			std::string lowercase_name = candidates[i].original_relative_path.filename().string();
+			std::ranges::transform(lowercase_name, lowercase_name.begin(), [](const unsigned char c) { return std::tolower(c); });
+			candidate_index_by_lowercase_filename[lowercase_name] = i;
+		}
+
+		for (size_t i = 0; i < candidates.size(); ++i) {
+			const std::string original_filename = candidates[i].original_relative_path.filename().string();
+			if (!starts_with_ci(original_filename, "BTN")) {
+				continue;
+			}
+
+			std::string lowercase_disabled_name = "disbtn" + original_filename.substr(3);
+			std::ranges::transform(lowercase_disabled_name, lowercase_disabled_name.begin(), [](const unsigned char c) { return std::tolower(c); });
+
+			const auto found = candidate_index_by_lowercase_filename.find(lowercase_disabled_name);
+			if (found == candidate_index_by_lowercase_filename.end()) {
+				continue;
+			}
+
+			// Re-derive the enabled icon's new name with a "BTN" prefix preserved (the loop above
+			// only ever generates a flat hex name), and point the disabled counterpart at the matching
+			// "DISBTN" name inside the one fixed folder the engine always looks in - independent of
+			// wherever the enabled icon's own new name ends up (it's already flattened to the archive
+			// root like everything else, since that's freely referenceable via the object-data field
+			// this pipeline does rewrite).
+			const std::string hex_and_extension = candidates[i].new_relative_path.filename().string();
+			candidates[i].new_relative_path = "BTN" + hex_and_extension;
+			candidates[found->second].new_relative_path = fs::path("ReplaceableTextures") / "CommandButtonsDisabled" / ("DISBTN" + hex_and_extension);
+		}
 	}
 
 	return candidates;
@@ -430,12 +507,46 @@ export FileRewriteResult rewrite_object_data_file(
 				continue;
 			}
 
+			// TEMPORARY (2026-08-08): this type whitelist has already needed extending twice for real
+			// maps (modelList, pathingTexture, both below) - real maps still show missing-texture green
+			// boxes for some object-editor-set icons after those fixes and after the BTN/DISBTN pairing
+			// fix, which fits the same pattern: a field whose real value is a path but that this pipeline
+			// never actually rewrites, for one of two possible reasons - either field_to_meta_id() can't
+			// resolve the field at all (e.g. a per-level field code like the one
+			// BlzGetAbilityStringLevelField(ability, ABILITY_SLF_ICON_NORMAL, level) reads, which may
+			// use a different field-name/alias shape than the plain "art" field this pipeline has mostly
+			// been exercised against), or it resolves but to a "type" not in the accepted set. Logs
+			// either case for any field whose *value* looks path-like (ends in a known asset extension),
+			// to find the real cause directly from real data instead of guessing - gated on
+			// HIVEWE_MP_TYPE_DEBUG (its value is the report file path), a no-op otherwise. Remove once
+			// the gap is found and fixed.
+			const auto log_type_debug = [&](const std::string_view reason, const std::string_view type_text) {
+				static const std::array<std::string_view, 4> path_like_extensions = { ".blp", ".tga", ".mdx", ".mdl" };
+				const std::string lowercase_value = [&] {
+					std::string v(value);
+					std::ranges::transform(v, v.begin(), [](const unsigned char c) { return std::tolower(c); });
+					return v;
+				}();
+				if (!std::ranges::any_of(path_like_extensions, [&](std::string_view ext) { return lowercase_value.ends_with(ext); })) {
+					return;
+				}
+				char* raw = nullptr;
+				size_t raw_len = 0;
+				if (_dupenv_s(&raw, &raw_len, "HIVEWE_MP_TYPE_DEBUG") == 0 && raw && *raw) {
+					std::ofstream report(raw, std::ios::app);
+					report << file_name << ": object=" << object_id << " field=" << field_name << " reason=" << reason << " type=" << type_text << " value=" << value << "\n";
+				}
+				free(raw);
+			};
+
 			const auto meta_id = scratch.field_to_meta_id(meta_slk, field_name, object_id);
 			if (!meta_id) {
+				log_type_debug("NO_META_ID", "?");
 				continue;
 			}
 			const std::string_view type = meta_slk.data<std::string_view>("type", *meta_id);
 			if (type != "model" && type != "icon" && type != "modelList" && type != "pathingTexture") {
+				log_type_debug("UNHANDLED_TYPE", type);
 				continue;
 			}
 
@@ -815,16 +926,150 @@ export AssetObfuscationResult rewrite_toc_references(const fs::path& temp_dir, c
 	return { true, "" };
 }
 
+/// Rewrites path references inside .fdf (frame definition) files - WC3's UI-layout text format,
+/// used for custom-skinned health bars, portraits, minimap borders, buttons, etc. A texture path
+/// appears as an ordinary double-quoted string literal after a token like BackdropBackground/
+/// BackdropEdgeFile/HighlightAlphaFile, indistinguishable at the syntax level from any other quoted
+/// FDF string (a frame type, a frame name, a flag list) - so this reuses the same JASS/Lua-style
+/// quoted-literal scanner already built for script asset references and TRIGSTR inlining
+/// (find_string_literals(), with allow_single_quote_strings=false since FDF has no single-quoted
+/// string form to worry about misclassifying) rather than trying to parse FDF's block grammar: any
+/// literal whose *entire* unescaped content matches a candidate gets rewritten, and anything else -
+/// keywords, frame names, flag strings - is left alone since those never happen to equal a
+/// candidate's generated hex name.
+///
+/// Found via a real map: none of the other rewrite phases understand .fdf at all, so a renamed
+/// texture referenced only from inside a custom .fdf (as opposed to also being reachable from
+/// object data, war3map.w3i, or the script) went dangling - it didn't fail the export outright since
+/// verify_no_dangling_text_references() didn't scan .fdf either at the time, so the game just showed
+/// the affected frame as a missing-texture green box instead of the file failing to load entirely
+/// (unlike a bad .toc reference, BlzFrameSetTexture-equivalent FDF fields don't have a dedicated
+/// error message pointing back at the cause).
+export AssetObfuscationResult rewrite_fdf_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	if (candidates.empty() || !fs::exists(temp_dir)) {
+		return { true, "" };
+	}
+
+	std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key;
+	for (const RenameCandidate& candidate : candidates) {
+		candidates_by_match_key[candidate.match_key] = &candidate;
+	}
+
+	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
+		if (!entry.is_regular_file() || !asset_match_key(entry.path().filename().string()).ends_with(".fdf")) {
+			continue;
+		}
+
+		std::string text;
+		{
+			std::ifstream in(entry.path(), std::ios::binary);
+			text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		}
+
+		const std::vector<StringLiteralSpan> spans = find_string_literals(text, false);
+
+		std::string rebuilt;
+		rebuilt.reserve(text.size());
+		size_t cursor = 0;
+		bool changed = false;
+		for (const StringLiteralSpan& span : spans) {
+			const auto found = candidates_by_match_key.find(asset_match_key(unescape_script_string(span.raw_content)));
+			if (found == candidates_by_match_key.end()) {
+				continue;
+			}
+
+			rebuilt.append(text, cursor, span.start - cursor);
+			rebuilt += '"';
+			rebuilt += escape_script_string(found->second->new_relative_path.string());
+			rebuilt += '"';
+			cursor = span.end;
+			changed = true;
+		}
+		rebuilt.append(text, cursor, text.size() - cursor);
+
+		if (changed) {
+			std::ofstream out(entry.path(), std::ios::binary | std::ios::trunc);
+			out.write(rebuilt.data(), static_cast<std::streamsize>(rebuilt.size()));
+		}
+	}
+
+	return { true, "" };
+}
+
+/// Rewrites path references in war3mapSkin.txt's [CustomSkin] section - the mechanism WC3 uses to
+/// re-skin *stock* UI frames (health bar, resource icons, hero attribute icons, etc.) without needing
+/// a custom .fdf at all: each line is `FrameName=path` (or `FrameName=NONE` for "no override"), e.g.
+/// `GoldIcon=UI/NCOW_UI_IconCoin.tga`. war3mapSkin.txt's own filename is (correctly) never a rename
+/// candidate - the engine looks it up by that exact hardcoded name, same as war3map.w3i - but nothing
+/// previously rewrote its *contents*, so once a texture it names got renamed, the override just
+/// pointed at nothing: found via a real map where every stock-frame override (gold/lumber icons, hero
+/// attribute icons) turned into a green missing-texture box in-game despite the underlying files
+/// being renamed and tracked as candidates correctly. Doesn't need to distinguish [CustomSkin] from
+/// the [FrameDef] section below it (TRIGSTR_XXX string-table references, not paths) - a value is only
+/// ever rewritten if it actually matches a candidate's match_key, which a TRIGSTR reference never
+/// will, so a single generic `key=value` scan over the whole file is sufficient and section-agnostic.
+export AssetObfuscationResult rewrite_war3mapskin_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	const fs::path skin_path = temp_dir / "war3mapSkin.txt";
+	if (candidates.empty() || !fs::exists(skin_path)) {
+		return { true, "" };
+	}
+
+	std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key;
+	for (const RenameCandidate& candidate : candidates) {
+		candidates_by_match_key[candidate.match_key] = &candidate;
+	}
+
+	std::string text;
+	{
+		std::ifstream in(skin_path, std::ios::binary);
+		text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+	}
+
+	std::vector<std::string> lines = absl::StrSplit(text, '\n');
+	bool changed = false;
+	for (std::string& line : lines) {
+		const bool has_cr = line.ends_with('\r');
+		const std::string_view line_view = has_cr ? std::string_view(line).substr(0, line.size() - 1) : std::string_view(line);
+		const size_t equals = line_view.find('=');
+		if (equals == std::string_view::npos) {
+			continue;
+		}
+		const std::string_view key = line_view.substr(0, equals);
+		const std::string_view value = line_view.substr(equals + 1);
+
+		const auto found = candidates_by_match_key.find(asset_match_key(std::string(value)));
+		if (found == candidates_by_match_key.end()) {
+			continue;
+		}
+
+		line = std::string(key) + "=" + found->second->new_relative_path.string();
+		if (has_cr) {
+			line += '\r';
+		}
+		changed = true;
+	}
+
+	if (changed) {
+		const std::string rebuilt = absl::StrJoin(lines, "\n");
+		std::ofstream out(skin_path, std::ios::binary | std::ios::trunc);
+		out.write(rebuilt.data(), static_cast<std::streamsize>(rebuilt.size()));
+	}
+
+	return { true, "" };
+}
+
 /// Safety-net scan run after all the structured rewrite phases (object data, war3map.w3i, MDX-
 /// internal paths, script literals) have already run: catches a reference living somewhere none of
-/// those phases correctly rewrote it - most concretely war3mapSkin.txt (can legitimately hold path
-/// overrides per WC3's format, but nothing in this codebase parses it, so it's excluded from the
-/// rename candidate pool entirely and never rewritten), but also, in practice, a real gap found in
-/// rewrite_object_data_file() itself: a real map's Ability Buff SFX fields (targetart/missileart/
-/// specialart/buffart in war3map.w3h) went unrewritten for a reason not yet root-caused (the fields
-/// are genuine, manifest-tracked custom imports - not a stock/desktop.ini-style false positive), and
-/// the resulting dangling references crashed the game on load. That gap is why this scan also covers
-/// the object-data files, not just text formats, despite the FunctionKind name.
+/// those phases correctly rewrote it. war3mapSkin.txt's own filename is (correctly) never a rename
+/// candidate - the engine looks it up by that exact hardcoded name - but its *contents* are now
+/// rewritten by rewrite_war3mapskin_references() above, so this scan (which also covers plain .txt
+/// files generically) is what would catch a war3mapSkin.txt reference that rewrite phase missed for
+/// some other reason. Also, in practice, a real gap found in rewrite_object_data_file() itself: a
+/// real map's Ability Buff SFX fields (targetart/missileart/specialart/buffart in war3map.w3h) went
+/// unrewritten for a reason not yet root-caused (the fields are genuine, manifest-tracked custom
+/// imports - not a stock/desktop.ini-style false positive), and the resulting dangling references
+/// crashed the game on load. That gap is why this scan also covers the object-data files, not just
+/// text formats, despite the FunctionKind name.
 ///
 /// Includes the object-data extensions (.w3u/.w3t/.w3a/.w3b/.w3h/.w3q/.w3d, plus their
 /// war3mapSkin.* counterparts) alongside text formats (.txt/.ini/.j/.lua) - these files are
@@ -876,8 +1121,8 @@ export AssetObfuscationResult verify_no_dangling_text_references(const fs::path&
 		};
 	};
 
-	static constexpr std::array<std::string_view, 12> text_extensions = {
-		".txt", ".ini", ".j", ".lua", ".w3u", ".w3t", ".w3a", ".w3b", ".w3h", ".w3q", ".w3d", ".toc",
+	static constexpr std::array<std::string_view, 13> text_extensions = {
+		".txt", ".ini", ".j", ".lua", ".w3u", ".w3t", ".w3a", ".w3b", ".w3h", ".w3q", ".w3d", ".toc", ".fdf",
 	};
 
 	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
@@ -896,7 +1141,11 @@ export AssetObfuscationResult verify_no_dangling_text_references(const fs::path&
 			content.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 		}
 
-		if (extension == ".j" || extension == ".lua") {
+		if (extension == ".j" || extension == ".lua" || extension == ".fdf") {
+			// Whole-literal match, not a substring scan: a filename can legitimately appear as a
+			// *fragment* of a larger, human-readable string (an error message, a frame/control name)
+			// without that string being used as a load path - see rewrite_fdf_references()'s comment
+			// for why .fdf specifically needs this same treatment as script literals.
 			for (const StringLiteralSpan& span : find_string_literals(content, extension == ".lua")) {
 				const auto found = candidates_by_match_key.find(asset_match_key(unescape_script_string(span.raw_content)));
 				if (found != candidates_by_match_key.end()) {

@@ -634,10 +634,10 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 /// thread once run_sync_save_and_restore() has returned. Mirrors HiveWE::export_mpq()'s raw
 /// StormLib usage; the MPQ wrapper in mpq.ixx has no archive-creation support.
 /// Runs the full Asset Path Obfuscation pipeline: enumerate rename candidates, rewrite every known
-/// reference kind (object data, war3map.w3i, MDX-internal paths, .toc file listings, script
-/// literals), verify nothing was missed, then physically rename the files - strictly in that order,
-/// aborting immediately (and renaming nothing) if any step fails, since a partially-applied rename is
-/// worse than none at all.
+/// reference kind (object data, war3map.w3i, MDX-internal paths, .toc file listings, .fdf UI-template
+/// files, war3mapSkin.txt's CustomSkin overrides, script literals), verify nothing was missed, then
+/// physically rename the files - strictly in that order, aborting immediately (and renaming nothing)
+/// if any step fails, since a partially-applied rename is worse than none at all.
 /// Runs before strip_trigger_strings_step() in the pipeline below: both steps can touch
 /// war3map.j/war3map.lua, and this one should see (and rewrite paths within) the script before the
 /// TRIGSTR pass makes its own final pass over the same files.
@@ -673,6 +673,12 @@ export AssetObfuscationResult run_asset_obfuscation(const fs::path& temp_dir) {
 			return step;
 		}
 		if (const AssetObfuscationResult step = rewrite_toc_references(temp_dir, candidates); !step.success) {
+			return step;
+		}
+		if (const AssetObfuscationResult step = rewrite_fdf_references(temp_dir, candidates); !step.success) {
+			return step;
+		}
+		if (const AssetObfuscationResult step = rewrite_war3mapskin_references(temp_dir, candidates); !step.success) {
 			return step;
 		}
 		if (const AssetObfuscationResult step = rewrite_script_asset_references(temp_dir, candidates); !step.success) {

@@ -41,6 +41,19 @@ TEST_CASE("asset_match_key normalizes case, separators, and .mdl/.mdx") {
 	CHECK(asset_match_key("Textures/Icon.blp") == "textures/icon.blp");
 }
 
+TEST_CASE("asset_match_key normalizes .tga and .png to .blp") {
+	// WC3 resolves a texture path against .blp/.tga/.png somewhat interchangeably, the same class of
+	// fallback as .mdl/.mdx for models - a real map's war3mapSkin.txt CustomSkin override named a
+	// texture ".tga" when the actual imported file was ".blp", and separately a Reforged UI Designer
+	// (RUI) generated UI referenced every frame's texture by its design-time ".png" filename even
+	// though the map only ships the compiled ".blp".
+	CHECK(asset_match_key("UI/AttNin.tga") == "ui/attnin.blp");
+	CHECK(asset_match_key("UI\\AttNin.TGA") == "ui/attnin.blp");
+	CHECK(asset_match_key("UI/AttNin.blp") == "ui/attnin.blp");
+	CHECK(asset_match_key("UI/NCOW_UI_ContainerWhiteWBlueBorder.png") == "ui/ncow_ui_containerwhitewblueborder.blp");
+	CHECK(asset_match_key("UI\\NCOW_UI_ContainerWhiteWBlueBorder.PNG") == "ui/ncow_ui_containerwhitewblueborder.blp");
+}
+
 TEST_CASE("enumerate_rename_candidates excludes blacklisted core files") {
 	const fs::path dir = make_scratch_dir("blacklist");
 	write_file(dir / "war3map.w3i");
@@ -68,6 +81,44 @@ TEST_CASE("enumerate_rename_candidates excludes stock-override paths") {
 	CHECK(find_by_original(candidates, "war3mapImported/Custom.blp") != nullptr);
 	CHECK(find_by_original(candidates, "TerrainArt/Blight/Blight0.blp") == nullptr);
 	CHECK(find_by_original(candidates, "ReplaceableTextures/TeamColor/TeamColor00.blp") == nullptr);
+}
+
+TEST_CASE("enumerate_rename_candidates pairs a BTN icon with its DISBTN counterpart under a matching hex name") {
+	// WC3 derives a button's disabled-state icon purely from the enabled icon's own filename at
+	// runtime (strip "BTN", prepend "DISBTN", look in ReplaceableTextures/CommandButtonsDisabled/) -
+	// nothing in the map's data ever references the disabled icon directly. Both halves must end up
+	// sharing the same generated identifier or the derivation breaks and the button shows as a
+	// missing-texture green box whenever it's disabled/on cooldown/not yet unlocked.
+	const fs::path dir = make_scratch_dir("btn_disbtn_pairing");
+	write_file(dir / "Images" / "Spells" / "BTNNCOW_Icon_Amaterasu1.blp");
+	write_file(dir / "ReplaceableTextures" / "CommandButtonsDisabled" / "DISBTNNCOW_Icon_Amaterasu1.blp");
+	write_file(dir / "war3mapImported" / "Unrelated.blp");
+
+	const auto candidates = enumerate_rename_candidates(dir, {}, {});
+	CHECK(candidates.size() == 3);
+
+	const RenameCandidate* enabled = find_by_original(candidates, "Images/Spells/BTNNCOW_Icon_Amaterasu1.blp");
+	const RenameCandidate* disabled = find_by_original(candidates, "ReplaceableTextures/CommandButtonsDisabled/DISBTNNCOW_Icon_Amaterasu1.blp");
+	REQUIRE(enabled != nullptr);
+	REQUIRE(disabled != nullptr);
+
+	const std::string enabled_new_name = enabled->new_relative_path.filename().string();
+	CHECK(enabled_new_name.starts_with("BTN"));
+	CHECK(enabled->new_relative_path.parent_path().empty()); // flattened to the archive root like everything else
+
+	const std::string expected_disabled_name = "DISBTN" + enabled_new_name.substr(3);
+	CHECK(disabled->new_relative_path.filename().string() == expected_disabled_name);
+	// The disabled icon must stay exactly where the engine always looks for it, not be flattened.
+	CHECK(disabled->new_relative_path.generic_string() == "ReplaceableTextures/CommandButtonsDisabled/" + expected_disabled_name);
+}
+
+TEST_CASE("enumerate_rename_candidates leaves an unpaired BTN icon flat with no DISBTN counterpart") {
+	const fs::path dir = make_scratch_dir("btn_no_pair");
+	write_file(dir / "Images" / "Spells" / "BTNNCOW_Icon_Lonely.blp");
+
+	const auto candidates = enumerate_rename_candidates(dir, {}, {});
+	REQUIRE(candidates.size() == 1);
+	CHECK_FALSE(candidates.front().new_relative_path.filename().string().starts_with("BTN"));
 }
 
 TEST_CASE("enumerate_rename_candidates excludes files reported as stock assets") {
@@ -377,6 +428,103 @@ TEST_CASE("rewrite_mdx_references leaves a model untouched when no texture match
 	std::ifstream in(mdx_path, std::ios::binary);
 	const std::vector<char> after_bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 	CHECK(original_bytes == after_bytes); // untouched, byte for byte
+}
+
+TEST_CASE("rewrite_fdf_references rewrites a texture path referenced from a custom UI frame") {
+	const fs::path dir = make_scratch_dir("rewrite_fdf");
+	write_file(
+		dir / "CustomSkin.fdf",
+		"Frame \"BACKDROP\" \"HealthBarBackdrop\" {\n"
+		"\tBackdropBackground \"war3mapImported\\\\HealthBar.blp\",\n"
+		"\tBackdropCornerFlags \"UL|UR|BL|BR\",\n"
+		"}\n"
+	);
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/HealthBar.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("war3mapImported/HealthBar.blp");
+
+	const AssetObfuscationResult result = rewrite_fdf_references(dir, { candidate });
+	CHECK(result.success);
+
+	const std::string rewritten = read_text_file(dir / "CustomSkin.fdf");
+	CHECK(rewritten.find("a3f9c1e2.blp") != std::string::npos);
+	CHECK(rewritten.find("HealthBar.blp") == std::string::npos);
+	CHECK(rewritten.find("BackdropCornerFlags \"UL|UR|BL|BR\"") != std::string::npos); // unrelated literal untouched
+}
+
+TEST_CASE("rewrite_fdf_references leaves a frame untouched when no literal matches a candidate") {
+	const fs::path dir = make_scratch_dir("rewrite_fdf_no_match");
+	const std::string original = "Frame \"BACKDROP\" \"Unrelated\" {\n\tBackdropBackground \"Textures\\\\Other.blp\",\n}\n";
+	write_file(dir / "CustomSkin.fdf", original);
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/HealthBar.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("war3mapImported/HealthBar.blp");
+
+	const AssetObfuscationResult result = rewrite_fdf_references(dir, { candidate });
+	CHECK(result.success);
+	CHECK(read_text_file(dir / "CustomSkin.fdf") == original);
+}
+
+TEST_CASE("verify_no_dangling_text_references catches a reference left in an .fdf file") {
+	const fs::path dir = make_scratch_dir("verify_dangling_fdf");
+	write_file(dir / "CustomSkin.fdf", "Frame \"BACKDROP\" \"X\" {\n\tBackdropBackground \"war3mapImported\\\\HealthBar.blp\",\n}\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/HealthBar.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("war3mapImported/HealthBar.blp");
+
+	const AssetObfuscationResult result = verify_no_dangling_text_references(dir, { candidate });
+	CHECK_FALSE(result.success);
+	CHECK(result.error.find("CustomSkin.fdf") != std::string::npos);
+}
+
+TEST_CASE("rewrite_war3mapskin_references rewrites a CustomSkin override, including a .tga/.blp extension mismatch") {
+	const fs::path dir = make_scratch_dir("rewrite_skin");
+	write_file(
+		dir / "war3mapSkin.txt",
+		"[CustomSkin]\n"
+		"BuildTimeIndicator=UI\\Widgets\\EscMenu\\Human\\blank-background.blp\n"
+		"GoldIcon=UI/NCOW_UI_IconCoin.tga\n"
+		"ConsoleTexture01=NONE\n"
+		"\n"
+		"[FrameDef]\n"
+		"AGILITY=TRIGSTR_1066\n"
+	);
+
+	// The real imported file is .blp even though the override names it .tga - asset_match_key()'s
+	// .tga->.blp normalization is what makes this match at all.
+	RenameCandidate candidate;
+	candidate.original_relative_path = "UI/NCOW_UI_IconCoin.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("UI/NCOW_UI_IconCoin.blp");
+
+	const AssetObfuscationResult result = rewrite_war3mapskin_references(dir, { candidate });
+	CHECK(result.success);
+
+	const std::string rewritten = read_text_file(dir / "war3mapSkin.txt");
+	CHECK(rewritten.find("GoldIcon=a3f9c1e2.blp") != std::string::npos);
+	CHECK(rewritten.find("NCOW_UI_IconCoin") == std::string::npos);
+	// Everything else - including the TRIGSTR reference and the NONE/stock-path lines - untouched.
+	CHECK(rewritten.find("BuildTimeIndicator=UI\\Widgets\\EscMenu\\Human\\blank-background.blp") != std::string::npos);
+	CHECK(rewritten.find("ConsoleTexture01=NONE") != std::string::npos);
+	CHECK(rewritten.find("AGILITY=TRIGSTR_1066") != std::string::npos);
+}
+
+TEST_CASE("rewrite_war3mapskin_references is a no-op when the file does not exist") {
+	const fs::path dir = make_scratch_dir("rewrite_skin_missing");
+	RenameCandidate candidate;
+	candidate.original_relative_path = "UI/Icon.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("UI/Icon.blp");
+
+	const AssetObfuscationResult result = rewrite_war3mapskin_references(dir, { candidate });
+	CHECK(result.success);
+	CHECK_FALSE(fs::exists(dir / "war3mapSkin.txt"));
 }
 
 TEST_CASE("verify_no_dangling_text_references catches a reference in a text format nothing else rewrites") {
