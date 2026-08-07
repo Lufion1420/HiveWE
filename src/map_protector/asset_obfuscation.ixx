@@ -1,5 +1,6 @@
 module;
 
+#include <cstdlib>
 #include <filesystem>
 
 export module AssetObfuscation;
@@ -88,6 +89,149 @@ bool contains_path_reference(const std::string& content, const std::string& need
 	return false;
 }
 
+/// Escapes text for embedding as the body of a JASS or Lua double-quoted string literal. Both
+/// languages accept the same core escapes (\\, \", \n) for this purpose. Control bytes other
+/// than newline are dropped rather than risking an escape sequence the game's script parser
+/// doesn't accept - trigger string text is always printable text in practice (WC3 itself uses
+/// the literal 2-character sequence "|n", not a real newline byte, for tooltip line breaks).
+export std::string escape_script_string(const std::string& text) {
+	std::string result;
+	result.reserve(text.size());
+	for (const char c : text) {
+		switch (c) {
+			case '\\':
+				result += "\\\\";
+				break;
+			case '"':
+				result += "\\\"";
+				break;
+			case '\n':
+				result += "\\n";
+				break;
+			case '\r':
+				break; // dropped: a lone \n is already a valid escaped line break
+			default:
+				if (static_cast<unsigned char>(c) >= 0x20) {
+					result += c;
+				}
+				break;
+		}
+	}
+	return result;
+}
+
+/// Inverse of escape_script_string(): turns a string literal's raw, still-escaped source content
+/// back into the plain text it represents (\\ -> \, \" -> ", \n -> a real newline byte). Needed
+/// because asset paths inside a literal are written pre-escaped in the script (e.g. a single
+/// backslash path separator appears as the two-character sequence \\), and asset_match_key() must
+/// compare against the real path text, not its escaped-for-source-code form, or every backslash
+/// would be mis-read as two separate characters and never match a candidate. An unrecognized escape
+/// sequence is left as-is (the backslash is kept, nothing is consumed) rather than guessed at.
+export std::string unescape_script_string(const std::string& raw) {
+	std::string result;
+	result.reserve(raw.size());
+	for (size_t i = 0; i < raw.size(); ++i) {
+		if (raw[i] == '\\' && i + 1 < raw.size()) {
+			switch (raw[i + 1]) {
+				case '\\':
+					result += '\\';
+					++i;
+					continue;
+				case '"':
+					result += '"';
+					++i;
+					continue;
+				case 'n':
+					result += '\n';
+					++i;
+					continue;
+				default:
+					break;
+			}
+		}
+		result += raw[i];
+	}
+	return result;
+}
+
+/// One quoted string literal found by find_string_literals(), exported alongside it so both
+/// protection_pipeline.ixx's TRIGSTR/asset-literal rewrite passes and this file's own
+/// verify_no_dangling_text_references() safety net share one JASS/Lua-aware scan instead of each
+/// maintaining its own.
+export struct StringLiteralSpan {
+	size_t start; // index of the opening quote
+	size_t end; // index one past the closing quote
+	std::string raw_content; // between the quotes, still escaped as it appears in source
+};
+
+/// Scans `text` (a JASS or Lua source file's full contents) for quoted string literals, skipping
+/// both languages' line/block comment styles ("//", "/* */", "--", "--[[ ]]") so a quote character
+/// inside a comment can't desynchronize the scan for everything after it. Respects \\ and the
+/// matching quote character so an escaped quote doesn't end a literal early.
+///
+/// allow_single_quote_strings must be true for Lua and false for JASS: Lua accepts '...' and "..."
+/// interchangeably for strings (a real map was found using '...' for several AddSpecialEffect-style
+/// calls, which this scanner originally missed entirely since it only recognized "..."), but in JASS
+/// '...' is not a string at all - it's a 4-character rawcode literal (e.g. 'hfoo') that compiles to
+/// an integer constant. Treating a JASS rawcode as a string here would misclassify it, and rewriting
+/// it as one would corrupt the script.
+export std::vector<StringLiteralSpan> find_string_literals(const std::string& text, const bool allow_single_quote_strings) {
+	std::vector<StringLiteralSpan> spans;
+	size_t i = 0;
+
+	const auto scan_literal = [&](const char quote) {
+		const size_t start = i;
+		std::string content;
+		++i;
+		bool terminated = false;
+		while (i < text.size() && text[i] != '\n') {
+			if (text[i] == quote) {
+				terminated = true;
+				++i;
+				break;
+			}
+			if (text[i] == '\\' && i + 1 < text.size()) {
+				content += text[i];
+				content += text[i + 1];
+				i += 2;
+			} else {
+				content += text[i];
+				++i;
+			}
+		}
+		if (terminated) {
+			spans.push_back({ start, i, content });
+		}
+		// Unterminated literal (shouldn't happen in valid generated script): leave it out of the
+		// results rather than guessing where it ends.
+	};
+
+	while (i < text.size()) {
+		if (text.compare(i, 2, "//") == 0) {
+			while (i < text.size() && text[i] != '\n') {
+				++i;
+			}
+		} else if (text.compare(i, 2, "/*") == 0) {
+			const size_t close = text.find("*/", i + 2);
+			i = (close == std::string::npos) ? text.size() : close + 2;
+		} else if (text.compare(i, 4, "--[[") == 0) {
+			const size_t close = text.find("]]", i + 4);
+			i = (close == std::string::npos) ? text.size() : close + 2;
+		} else if (text.compare(i, 2, "--") == 0) {
+			while (i < text.size() && text[i] != '\n') {
+				++i;
+			}
+		} else if (text[i] == '"') {
+			scan_literal('"');
+		} else if (allow_single_quote_strings && text[i] == '\'') {
+			scan_literal('\'');
+		} else {
+			++i;
+		}
+	}
+	return spans;
+}
+
 /// A single loose file under temp_dir that Asset Path Obfuscation will rename. new_relative_path is
 /// always a flat, single-segment name directly under the archive root (e.g. "a3f9c1e2.mdx") -
 /// nothing about WC3's asset loading depends on folder structure, only on every reference to a file
@@ -140,6 +284,18 @@ namespace {
 /// Sound files are excluded by the caller (not filtered here) since exclusion in v1 is driven by
 /// which files are referenced by a Sound object, which this file-system-only enumeration can't know
 /// - that cross-reference is resolved once the object-data/w3s reference-discovery phases exist.
+///
+/// TEMPORARY BISECTION HOOKS (2026-08-07, tracking an unresolved in-game crash on real map data that
+/// survives every static/archive-level check tried so far): two env vars, read once, read only here,
+/// both no-ops unless set, so production behavior is unchanged by default.
+/// - HIVEWE_MP_EXCLUDE_EXTS: comma-separated extensions (no dot, case-insensitive, e.g. "mdx,blp")
+///   to exclude from candidacy entirely - those files keep their real name/content untouched, same as
+///   a blacklist entry, letting a test narrow down whether renaming one specific asset *kind* is what
+///   triggers the crash without needing a full rebuild per hypothesis.
+/// - HIVEWE_MP_KEEP_DIRS: if set to any non-empty value, new names keep the file's original relative
+///   directory instead of flattening to the archive root - isolates "renamed" from "flattened" as
+///   separate variables.
+/// Remove both once the crash is root-caused; not meant to be permanent, user-facing behavior.
 export std::vector<RenameCandidate> enumerate_rename_candidates(
 	const fs::path& temp_dir,
 	const std::unordered_set<std::string>& never_rename_file_names,
@@ -153,6 +309,29 @@ export std::vector<RenameCandidate> enumerate_rename_candidates(
 		return candidates;
 	}
 
+	const auto read_env = [](const char* name) -> std::optional<std::string> {
+		char* value = nullptr;
+		size_t length = 0;
+		if (_dupenv_s(&value, &length, name) != 0 || !value) {
+			return std::nullopt;
+		}
+		std::string result(value);
+		free(value);
+		return result;
+	};
+
+	std::unordered_set<std::string> excluded_extensions;
+	if (const std::optional<std::string> raw = read_env("HIVEWE_MP_EXCLUDE_EXTS")) {
+		for (const auto part : std::views::split(std::string_view(*raw), ',')) {
+			std::string ext(part.begin(), part.end());
+			std::ranges::transform(ext, ext.begin(), [](const unsigned char c) { return std::tolower(c); });
+			if (!ext.empty()) {
+				excluded_extensions.insert(std::move(ext));
+			}
+		}
+	}
+	const bool keep_dirs = read_env("HIVEWE_MP_KEEP_DIRS").has_value();
+
 	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
 		if (!entry.is_regular_file()) {
 			continue;
@@ -162,6 +341,17 @@ export std::vector<RenameCandidate> enumerate_rename_candidates(
 		const std::string file_name = entry.path().filename().string();
 		if (never_rename_file_names.contains(file_name) || is_os_metadata_filename(file_name)) {
 			continue;
+		}
+
+		if (!excluded_extensions.empty()) {
+			std::string ext = entry.path().extension().string();
+			if (!ext.empty() && ext.front() == '.') {
+				ext.erase(ext.begin());
+			}
+			std::ranges::transform(ext, ext.begin(), [](const unsigned char c) { return std::tolower(c); });
+			if (excluded_extensions.contains(ext)) {
+				continue;
+			}
 		}
 
 		const std::string key = asset_match_key(relative_path.string());
@@ -175,8 +365,9 @@ export std::vector<RenameCandidate> enumerate_rename_candidates(
 		RenameCandidate candidate;
 		candidate.original_relative_path = relative_path;
 		candidate.match_key = key;
-		candidate.new_relative_path = generate_garbage_name(entry.path().extension(), rng, taken_names);
-		taken_names.insert(candidate.new_relative_path.string());
+		const fs::path new_name = generate_garbage_name(entry.path().extension(), rng, taken_names);
+		candidate.new_relative_path = keep_dirs ? (relative_path.parent_path() / new_name) : new_name;
+		taken_names.insert(new_name.string());
 		candidates.push_back(std::move(candidate));
 	}
 
@@ -403,22 +594,92 @@ export AssetObfuscationResult rewrite_map_info_references(const fs::path& temp_d
 	return result;
 }
 
-/// Rewrites paths stored *inside* MDX model files themselves - a model's own texture list
-/// (Texture::file_name), attachment paths (Attachment::path), and Emitter1 particle paths
-/// (ParticleEmitter1::path) are literal path strings independent of whatever file the model itself
-/// was renamed to. Reads/writes temp_dir files directly via plain file I/O rather than through
-/// Hierarchy, since every .mdx worth checking here is already a loose file physically present in
-/// temp_dir (guaranteed by enumerate_rename_candidates()'s walk) - no override/CASC lookup needed.
+/// Rewrites Texture::file_name entries directly inside a raw .mdx buffer's TEXS chunk, without
+/// parsing or re-serializing anything else in the file. Texture is a fixed 268-byte record
+/// (replaceable_id: u32, file_name: 260-byte null-padded buffer, flags: u32 - see read_TEXS()/
+/// write_TEXS() in mdx_reader.cpp/mdx_writer.cpp), so the rename is a pure byte-level find/replace:
+/// locate the top-level "TEXS" chunk by walking chunk headers (tag + u32 size, like every other
+/// top-level MDX chunk), then for each fixed-size entry, read the null-terminated name out of its
+/// 260-byte slot, check it against the candidate table, and if it matches, zero the slot and write
+/// the new (always much shorter) name back into it. Every other byte in the file - every other
+/// chunk, and anything about TEXS this pipeline doesn't otherwise care about - is left untouched.
 ///
-/// No cross-file ordering dependency: every MDX is rewritten independently against the same fixed
-/// candidate table built once in enumerate_rename_candidates(), so it doesn't matter whether model A
-/// (which might reference model B as an attachment) is visited before or after model B - neither
-/// rewrite depends on the other's *new* name being already known, only on the fixed original->new
-/// mapping. Explicitly re-serializes at the model's own original version (not to_mdx()'s
-/// LATEST_MDX_VERSION default) so an untouched model's version isn't silently bumped as a side
-/// effect of an unrelated rename. Deliberately does not call MDX::validate() - that's meant for
-/// editor-authored models being exported and can restructure things (e.g. add a bone if none exist);
-/// this step should only ever change the handful of path strings it found a candidate for.
+/// Added after discovering, via a real-map diagnostic dump, that MDX::to_mdx() does not round-trip
+/// production models byte-for-byte even with zero content changes: confirmed causes include write_GEOS()
+/// only emitting the TANG/SKIN chunk headers when the vector is non-empty (`if (geoset.tangents.size())`/
+/// `if (geoset.skin.size())` in mdx_writer.cpp), which silently drops an originally-present-but-empty
+/// TANG/SKIN chunk's 8-byte header on any save, plus MDX::validate()'s zero-extent "fix-up" and
+/// unpreserved trailing bytes after a fixed string buffer's null terminator. Real-world bisection
+/// testing isolated an in-game crash to exactly the code path that used to force a full model
+/// reserialization for a texture-only rename (renaming .blp/.tga touches nearly every model's TEXS
+/// chunk) - this function exists specifically to avoid that reserialization for the common case.
+bool rewrite_mdx_textures_in_place(std::string& bytes, const std::unordered_map<std::string, const RenameCandidate*>& candidates_by_match_key) {
+	if (bytes.size() < 4 || bytes.compare(0, 4, "MDLX") != 0) {
+		return false;
+	}
+
+	bool changed = false;
+	size_t pos = 4;
+	while (pos + 8 <= bytes.size()) {
+		const std::string_view tag(bytes.data() + pos, 4);
+		uint32_t chunk_size = 0;
+		std::memcpy(&chunk_size, bytes.data() + pos + 4, 4);
+		const size_t data_start = pos + 8;
+		if (data_start + chunk_size > bytes.size()) {
+			break; // malformed/truncated chunk table - bail without touching anything further
+		}
+
+		if (tag == "TEXS") {
+			const size_t entry_end = data_start + chunk_size;
+			for (size_t entry_pos = data_start; entry_pos + 268 <= entry_end; entry_pos += 268) {
+				const size_t name_offset = entry_pos + 4; // skip replaceable_id (u32)
+				const size_t terminator = bytes.find('\0', name_offset);
+				const size_t name_length = std::min(terminator == std::string::npos ? size_t{ 260 } : terminator - name_offset, size_t{ 260 });
+				const std::string current_name = bytes.substr(name_offset, name_length);
+
+				const auto found = candidates_by_match_key.find(asset_match_key(current_name));
+				if (found == candidates_by_match_key.end()) {
+					continue;
+				}
+				const std::string new_name = found->second->new_relative_path.string();
+				if (new_name.size() >= 260) {
+					continue; // can't happen for a generated hex name, but never overrun the fixed slot
+				}
+				bytes.replace(name_offset, 260, std::string(260, '\0'));
+				bytes.replace(name_offset, new_name.size(), new_name);
+				changed = true;
+			}
+		}
+
+		pos = data_start + chunk_size;
+	}
+
+	return changed;
+}
+
+/// Rewrites paths stored *inside* MDX model files themselves - a model's own texture list
+/// (Texture::file_name, handled surgically by rewrite_mdx_textures_in_place() above), attachment
+/// paths (Attachment::path), and Emitter1 particle paths (ParticleEmitter1::path) are literal path
+/// strings independent of whatever file the model itself was renamed to. Reads/writes temp_dir files
+/// directly via plain file I/O rather than through Hierarchy, since every .mdx worth checking here is
+/// already a loose file physically present in temp_dir (guaranteed by enumerate_rename_candidates()'s
+/// walk) - no override/CASC lookup needed.
+///
+/// Only falls back to a full MDX::to_mdx() reserialization (with its known round-trip fidelity gaps -
+/// see rewrite_mdx_textures_in_place()'s comment) when an attachment or particle path actually needs
+/// rewriting, which needs the full structured parse since Attachment/ParticleEmitter1 records are
+/// variable-length (interleaved animation tracks) and can't be located by fixed offset the way TEXS
+/// entries can. That's a strictly rarer case than texture renames (it needs another *.mdx to itself be
+/// a rename candidate, referenced as an attachment/particle model) and was not implicated by real-world
+/// bisection testing, so accepting its residual round-trip risk here is a deliberate, narrower
+/// trade-off than doing it for every model with any texture at all.
+///
+/// Skips (does not touch) any file that doesn't start with the "MDLX" magic - found via the same
+/// real-map diagnostic: a same-named-but-different-extension text-format .MDL file was previously
+/// being matched by this function's `.ends_with(".mdx")` filter (asset_match_key() normalizes .mdl to
+/// .mdx for *candidate matching* purposes, but that normalization was leaking into "which files this
+/// function treats as binary MDX to parse"), silently parsed as if it were binary MDX (failing the
+/// magic check inside MDX::load() but not stopping there), and reserialized into a near-empty shell.
 export AssetObfuscationResult rewrite_mdx_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
 	if (candidates.empty()) {
 		return { true, "" };
@@ -448,34 +709,106 @@ export AssetObfuscationResult rewrite_mdx_references(const fs::path& temp_dir, c
 		}
 
 		try {
+			std::string bytes;
+			{
+				std::ifstream in(entry.path(), std::ios::binary);
+				bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+			}
+
+			if (bytes.size() < 4 || bytes.compare(0, 4, "MDLX") != 0) {
+				continue; // not a binary MDX file (e.g. a same-named .MDL text file) - leave it alone
+			}
+
+			const bool texture_patched = rewrite_mdx_textures_in_place(bytes, candidates_by_match_key);
+			if (texture_patched) {
+				std::ofstream out(entry.path(), std::ios::binary | std::ios::trunc);
+				out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+			}
+
+			// Attachment/particle paths still need the full structured parse - re-read from disk so
+			// this sees the texture patch above if one was just applied.
 			auto file_result = read_file(entry.path());
 			if (!file_result) {
 				return { false, std::format("Failed to read '{}': {}", entry.path().filename().string(), file_result.error()) };
 			}
 			mdx::MDX model(file_result.value());
 
-			bool changed = false;
-			for (mdx::Texture& texture : model.textures) {
-				std::string path_string = texture.file_name.string();
-				if (rewrite_if_match(path_string)) {
-					texture.file_name = path_string;
-					changed = true;
-				}
-			}
+			bool other_changed = false;
 			for (auto& attachment : model.attachments) {
-				changed |= rewrite_if_match(attachment.path);
+				other_changed |= rewrite_if_match(attachment.path);
 			}
 			for (auto& emitter : model.emitters1) {
-				changed |= rewrite_if_match(emitter.path);
+				other_changed |= rewrite_if_match(emitter.path);
 			}
 
-			if (changed) {
+			if (other_changed) {
 				const BinaryWriter writer = model.to_mdx(model.version);
 				std::ofstream out(entry.path(), std::ios::binary | std::ios::trunc);
 				out.write(reinterpret_cast<const char*>(writer.buffer.data()), static_cast<std::streamsize>(writer.buffer.size()));
 			}
 		} catch (const std::exception& e) {
 			return { false, std::format("Failed to rewrite asset references in '{}': {}", entry.path().filename().string(), e.what()) };
+		}
+	}
+
+	return { true, "" };
+}
+
+/// Rewrites path references inside .toc (table-of-contents) files - a plain-text format where each
+/// non-empty line is a path to a .fdf UI-template file, used by BlzLoadTOCFile() to batch-load a set
+/// of custom frame definitions in one call (e.g. a map's custom UI system lists its own CodeEditor.fdf,
+/// CodeEditorButton.fdf, etc. alongside stock UI\FrameDef\... paths in one .toc file). Found via a
+/// real map: nothing else in this pipeline understands the .toc format, so a renamed .fdf listed
+/// inside one would go stale - BlzLoadTOCFile silently skips a line it can't resolve, so the failure
+/// doesn't surface until later and confusingly, when whatever that .fdf defined fails to load (that
+/// map's own script even had a dedicated error message anticipating exactly this: "Missing import:
+/// CodeEditor.fdf.", which is coincidentally what tripped verify_no_dangling_text_references before
+/// .toc handling existed - the message text, not an actual reference, since nothing rewrote or
+/// scanned .toc files at the time).
+export AssetObfuscationResult rewrite_toc_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
+	if (candidates.empty() || !fs::exists(temp_dir)) {
+		return { true, "" };
+	}
+
+	std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key;
+	for (const RenameCandidate& candidate : candidates) {
+		candidates_by_match_key[candidate.match_key] = &candidate;
+	}
+
+	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
+		if (!entry.is_regular_file() || !asset_match_key(entry.path().filename().string()).ends_with(".toc")) {
+			continue;
+		}
+
+		std::string text;
+		{
+			std::ifstream in(entry.path(), std::ios::binary);
+			text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		}
+
+		std::vector<std::string> lines = absl::StrSplit(text, '\n');
+		bool changed = false;
+		for (std::string& line : lines) {
+			const std::string_view content = trimmed(line);
+			if (content.empty()) {
+				continue;
+			}
+			const auto found = candidates_by_match_key.find(asset_match_key(std::string(content)));
+			if (found == candidates_by_match_key.end()) {
+				continue;
+			}
+			const bool has_cr = line.ends_with('\r');
+			line = found->second->new_relative_path.string();
+			if (has_cr) {
+				line += '\r';
+			}
+			changed = true;
+		}
+
+		if (changed) {
+			const std::string rebuilt = absl::StrJoin(lines, "\n");
+			std::ofstream out(entry.path(), std::ios::binary | std::ios::trunc);
+			out.write(rebuilt.data(), static_cast<std::streamsize>(rebuilt.size()));
 		}
 	}
 
@@ -512,13 +845,39 @@ export AssetObfuscationResult rewrite_mdx_references(const fs::path& temp_dir, c
 /// reason: a real map's war3mapSkin.txt legitimately reads "blank-background.blp" for a UI element,
 /// which a naive substring check flagged as referencing an unrelated candidate named "ground.blp"
 /// (background.blp contains "...ground.blp" as a byte sequence purely by coincidence).
+///
+/// .j/.lua are the one exception to the contains_path_reference() substring scan above: a filename
+/// can legitimately appear as a *fragment* of a much larger, human-readable string literal there (an
+/// error/debug message that happens to mention an asset by name) without that string ever being used
+/// as a load path - found via a real map whose custom code-editor UI throws
+/// "Missing import: CodeEditor.fdf." if its .fdf failed to load, which a substring scan can't tell
+/// apart from an actual reference. rewrite_script_asset_references() already rewrites every literal
+/// whose *entire* unescaped content is exactly a candidate's path, so script files are instead
+/// checked the same way here via find_string_literals() - only a whole literal matching a candidate
+/// counts as a dangling reference, not a candidate's path merely appearing somewhere inside one.
 export AssetObfuscationResult verify_no_dangling_text_references(const fs::path& temp_dir, const std::vector<RenameCandidate>& candidates) {
 	if (candidates.empty() || !fs::exists(temp_dir)) {
 		return { true, "" };
 	}
 
-	static constexpr std::array<std::string_view, 11> text_extensions = {
-		".txt", ".ini", ".j", ".lua", ".w3u", ".w3t", ".w3a", ".w3b", ".w3h", ".w3q", ".w3d",
+	std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key;
+	for (const RenameCandidate& candidate : candidates) {
+		candidates_by_match_key[candidate.match_key] = &candidate;
+	}
+
+	const auto dangling_error = [](const std::string& file_name, const fs::path& original_relative_path) {
+		return AssetObfuscationResult{
+			false,
+			std::format(
+				"'{}' still references '{}', which is not a reference kind this pipeline rewrites - aborting rather "
+				"than renaming a file something else still points at by its old name.",
+				file_name, original_relative_path.string()
+			)
+		};
+	};
+
+	static constexpr std::array<std::string_view, 12> text_extensions = {
+		".txt", ".ini", ".j", ".lua", ".w3u", ".w3t", ".w3a", ".w3b", ".w3h", ".w3q", ".w3d", ".toc",
 	};
 
 	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
@@ -536,20 +895,24 @@ export AssetObfuscationResult verify_no_dangling_text_references(const fs::path&
 			std::ifstream in(entry.path(), std::ios::binary);
 			content.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 		}
+
+		if (extension == ".j" || extension == ".lua") {
+			for (const StringLiteralSpan& span : find_string_literals(content, extension == ".lua")) {
+				const auto found = candidates_by_match_key.find(asset_match_key(unescape_script_string(span.raw_content)));
+				if (found != candidates_by_match_key.end()) {
+					return dangling_error(entry.path().filename().string(), found->second->original_relative_path);
+				}
+			}
+			continue;
+		}
+
 		std::ranges::transform(content, content.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
 		for (const RenameCandidate& candidate : candidates) {
 			std::string backward_key = candidate.match_key;
 			std::ranges::replace(backward_key, '/', '\\');
 			if (contains_path_reference(content, candidate.match_key) || contains_path_reference(content, backward_key)) {
-				return {
-					false,
-					std::format(
-						"'{}' still references '{}', which is not a reference kind this pipeline rewrites - aborting rather "
-						"than renaming a file something else still points at by its old name.",
-						entry.path().filename().string(), candidate.original_relative_path.string()
-					)
-				};
+				return dangling_error(entry.path().filename().string(), candidate.original_relative_path);
 			}
 		}
 	}

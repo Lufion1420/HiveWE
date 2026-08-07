@@ -390,71 +390,6 @@ std::unordered_map<std::string, std::string> parse_trigger_strings_file(const fs
 	return table;
 }
 
-/// Escapes text for embedding as the body of a JASS or Lua double-quoted string literal. Both
-/// languages accept the same core escapes (\\, \", \n) for this purpose. Control bytes other
-/// than newline are dropped rather than risking an escape sequence the game's script parser
-/// doesn't accept - trigger string text is always printable text in practice (WC3 itself uses
-/// the literal 2-character sequence "|n", not a real newline byte, for tooltip line breaks).
-export std::string escape_script_string(const std::string& text) {
-	std::string result;
-	result.reserve(text.size());
-	for (const char c : text) {
-		switch (c) {
-			case '\\':
-				result += "\\\\";
-				break;
-			case '"':
-				result += "\\\"";
-				break;
-			case '\n':
-				result += "\\n";
-				break;
-			case '\r':
-				break; // dropped: a lone \n is already a valid escaped line break
-			default:
-				if (static_cast<unsigned char>(c) >= 0x20) {
-					result += c;
-				}
-				break;
-		}
-	}
-	return result;
-}
-
-/// Inverse of escape_script_string(): turns a string literal's raw, still-escaped source content
-/// back into the plain text it represents (\\ -> \, \" -> ", \n -> a real newline byte). Needed
-/// because asset paths inside a literal are written pre-escaped in the script (e.g. a single
-/// backslash path separator appears as the two-character sequence \\), and asset_match_key() must
-/// compare against the real path text, not its escaped-for-source-code form, or every backslash
-/// would be mis-read as two separate characters and never match a candidate. An unrecognized escape
-/// sequence is left as-is (the backslash is kept, nothing is consumed) rather than guessed at.
-export std::string unescape_script_string(const std::string& raw) {
-	std::string result;
-	result.reserve(raw.size());
-	for (size_t i = 0; i < raw.size(); ++i) {
-		if (raw[i] == '\\' && i + 1 < raw.size()) {
-			switch (raw[i + 1]) {
-				case '\\':
-					result += '\\';
-					++i;
-					continue;
-				case '"':
-					result += '"';
-					++i;
-					continue;
-				case 'n':
-					result += '\n';
-					++i;
-					continue;
-				default:
-					break;
-			}
-		}
-		result += raw[i];
-	}
-	return result;
-}
-
 /// If `literal` (a string literal's raw, still-escaped content as it appears in source) is a
 /// trigger string reference, returns its canonical zero-padded key (e.g. "TRIGSTR_007").
 /// WC3 recognizes a string value as a trigger string reference if it *starts* with "TRIGSTR_"
@@ -485,87 +420,18 @@ std::optional<std::string> trigstr_key_from_literal(const std::string& literal) 
 	return "TRIGSTR_" + digits;
 }
 
-struct StringLiteralSpan {
-	size_t start; // index of the opening quote
-	size_t end; // index one past the closing quote
-	std::string raw_content; // between the quotes, still escaped as it appears in source
-};
-
-/// Scans `text` (a JASS or Lua source file's full contents) for quoted string literals, skipping
-/// both languages' line/block comment styles ("//", "/* */", "--", "--[[ ]]") so a quote character
-/// inside a comment can't desynchronize the scan for everything after it. Respects \\ and the
-/// matching quote character so an escaped quote doesn't end a literal early.
-///
-/// allow_single_quote_strings must be true for Lua and false for JASS: Lua accepts '...' and "..."
-/// interchangeably for strings (a real map was found using '...' for several AddSpecialEffect-style
-/// calls, which this scanner originally missed entirely since it only recognized "..."), but in JASS
-/// '...' is not a string at all - it's a 4-character rawcode literal (e.g. 'hfoo') that compiles to
-/// an integer constant. Treating a JASS rawcode as a string here would misclassify it, and rewriting
-/// it as one would corrupt the script.
-std::vector<StringLiteralSpan> find_string_literals(const std::string& text, const bool allow_single_quote_strings) {
-	std::vector<StringLiteralSpan> spans;
-	size_t i = 0;
-
-	const auto scan_literal = [&](const char quote) {
-		const size_t start = i;
-		std::string content;
-		++i;
-		bool terminated = false;
-		while (i < text.size() && text[i] != '\n') {
-			if (text[i] == quote) {
-				terminated = true;
-				++i;
-				break;
-			}
-			if (text[i] == '\\' && i + 1 < text.size()) {
-				content += text[i];
-				content += text[i + 1];
-				i += 2;
-			} else {
-				content += text[i];
-				++i;
-			}
-		}
-		if (terminated) {
-			spans.push_back({ start, i, content });
-		}
-		// Unterminated literal (shouldn't happen in valid generated script): leave it out of the
-		// results rather than guessing where it ends.
-	};
-
-	while (i < text.size()) {
-		if (text.compare(i, 2, "//") == 0) {
-			while (i < text.size() && text[i] != '\n') {
-				++i;
-			}
-		} else if (text.compare(i, 2, "/*") == 0) {
-			const size_t close = text.find("*/", i + 2);
-			i = (close == std::string::npos) ? text.size() : close + 2;
-		} else if (text.compare(i, 4, "--[[") == 0) {
-			const size_t close = text.find("]]", i + 4);
-			i = (close == std::string::npos) ? text.size() : close + 2;
-		} else if (text.compare(i, 2, "--") == 0) {
-			while (i < text.size() && text[i] != '\n') {
-				++i;
-			}
-		} else if (text[i] == '"') {
-			scan_literal('"');
-		} else if (allow_single_quote_strings && text[i] == '\'') {
-			scan_literal('\'');
-		} else {
-			++i;
-		}
-	}
-	return spans;
-}
-
 /// Resolves TRIGSTR references in war3map.w3i's own text fields (name, author, description,
-/// loading screen text/title/subtitle) and rewrites the file if anything changed. These are plain
-/// strings that can themselves literally read "TRIGSTR_XXX" - the World Editor writes that when a
-/// field is set via a localized/custom-text string picker, which is the common case for the
-/// loading screen fields and sometimes the map name. Left unpatched, they go dangling the instant
-/// war3map.wts is deleted: the map name and/or loading screen text then show up blank in-game,
-/// even with every "Metadata Sanitization" checkbox left off, since that's a separate code path.
+/// loading screen text/title/subtitle, plus every player's and force's custom name) and rewrites
+/// the file if anything changed. These are plain strings that can themselves literally read
+/// "TRIGSTR_XXX" - the World Editor writes that when a field is set via a localized/custom-text
+/// string picker, which is the common case for the loading screen fields and sometimes the map
+/// name - and exactly the same applies to a force's custom name (e.g. "Konoha", "Otogakure"): found
+/// via a real map whose forces all read the World-Editor-default "Team 1"/"Team 2" labels in-game
+/// after protection despite the .w3i itself listing real custom names, because those names were
+/// stored as TRIGSTR_XXX placeholders this function didn't resolve. Left unpatched, any of these
+/// fields go dangling the instant war3map.wts is deleted: the map name/loading screen text/force
+/// names then show up blank or revert to their default in-game, even with every "Metadata
+/// Sanitization" checkbox left off, since that's a separate code path.
 /// Fails (does not delete war3map.wts) if a referenced key has no entry in the wts table, mirroring
 /// the script-patching behavior below - a dangling reference here is unrecoverable once wts is gone.
 SyncSaveResult inline_map_info_trigger_strings(const fs::path& temp_dir, const std::unordered_map<std::string, std::string>& trigger_string_table) {
@@ -604,11 +470,18 @@ SyncSaveResult inline_map_info_trigger_strings(const fs::path& temp_dir, const s
 			return true;
 		};
 
-		const bool ok = resolve(info.name) && resolve(info.author) && resolve(info.description)
+		bool ok = resolve(info.name) && resolve(info.author) && resolve(info.description)
 			&& resolve(info.loading_screen_text) && resolve(info.loading_screen_title) && resolve(info.loading_screen_subtitle);
 
+		for (auto& player : info.players) {
+			ok = ok && resolve(player.name);
+		}
+		for (auto& force : info.forces) {
+			ok = ok && resolve(force.name);
+		}
+
 		if (!ok) {
-			result = { false, std::format("war3map.w3i references {} which has no entry in war3map.wts - aborting rather than shipping a map with unresolved map name/loading screen text.", unresolved_key) };
+			result = { false, std::format("war3map.w3i references {} which has no entry in war3map.wts - aborting rather than shipping a map with unresolved map name/loading screen/force text.", unresolved_key) };
 		} else if (changed) {
 			info.save(tileset);
 		}
@@ -761,9 +634,10 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 /// thread once run_sync_save_and_restore() has returned. Mirrors HiveWE::export_mpq()'s raw
 /// StormLib usage; the MPQ wrapper in mpq.ixx has no archive-creation support.
 /// Runs the full Asset Path Obfuscation pipeline: enumerate rename candidates, rewrite every known
-/// reference kind (object data, war3map.w3i, MDX-internal paths, script literals), verify nothing
-/// was missed, then physically rename the files - strictly in that order, aborting immediately (and
-/// renaming nothing) if any step fails, since a partially-applied rename is worse than none at all.
+/// reference kind (object data, war3map.w3i, MDX-internal paths, .toc file listings, script
+/// literals), verify nothing was missed, then physically rename the files - strictly in that order,
+/// aborting immediately (and renaming nothing) if any step fails, since a partially-applied rename is
+/// worse than none at all.
 /// Runs before strip_trigger_strings_step() in the pipeline below: both steps can touch
 /// war3map.j/war3map.lua, and this one should see (and rewrite paths within) the script before the
 /// TRIGSTR pass makes its own final pass over the same files.
@@ -796,6 +670,9 @@ export AssetObfuscationResult run_asset_obfuscation(const fs::path& temp_dir) {
 			return step;
 		}
 		if (const AssetObfuscationResult step = rewrite_mdx_references(temp_dir, candidates); !step.success) {
+			return step;
+		}
+		if (const AssetObfuscationResult step = rewrite_toc_references(temp_dir, candidates); !step.success) {
 			return step;
 		}
 		if (const AssetObfuscationResult step = rewrite_script_asset_references(temp_dir, candidates); !step.success) {
