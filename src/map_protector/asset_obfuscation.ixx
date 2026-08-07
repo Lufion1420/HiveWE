@@ -476,6 +476,38 @@ export struct FileRewriteResult {
 	bool changed = false;
 };
 
+/// Resolves a rename candidate for an object-data field value, tolerating a missing file extension.
+/// Root cause of a real map's ability icon fields (e.g. "art"/"Icon - Normal", read in-game via
+/// BlzGetAbilityStringLevelField) staying missing-texture after protection: the Object Editor lets an
+/// icon/model field omit its extension entirely (confirmed directly against a real map's LNI-exported
+/// object data - most custom "art" values were bare, e.g. "Images/Spells/Foo/BTNBar" for an actual
+/// on-disk "BTNBar.blp"), and the client resolves it implicitly - the same convention HiveWE's own
+/// Texture loader relies on (texture.ixx's replace_extension probing of .tga/.blp/.dds, which is a
+/// no-op-turned-append when the path has no extension to begin with). A rename candidate's match_key
+/// always carries the real file's actual extension (built from the file on disk), so an extensionless
+/// field value would otherwise never match anything and silently keep pointing at the pre-rename name.
+/// The type-classification diagnostic (HIVEWE_MP_TYPE_DEBUG) never caught this because it only logs
+/// meta-resolution/type failures, not a correctly-typed field whose value simply fails to match.
+const RenameCandidate* find_object_data_candidate(
+	const std::string& value,
+	const std::string_view type,
+	const std::unordered_map<std::string, const RenameCandidate*>& candidates_by_match_key
+) {
+	const std::string key = asset_match_key(value);
+	if (const auto found = candidates_by_match_key.find(key); found != candidates_by_match_key.end()) {
+		return found->second;
+	}
+
+	static constexpr std::array<std::string_view, 5> known_extensions = { ".blp", ".tga", ".png", ".mdx", ".mdl" };
+	if (std::ranges::any_of(known_extensions, [&](std::string_view ext) { return key.ends_with(ext); })) {
+		return nullptr;
+	}
+
+	const std::string_view default_extension = (type == "model" || type == "modelList") ? ".mdx" : ".blp";
+	const auto found = candidates_by_match_key.find(key + std::string(default_extension));
+	return found != candidates_by_match_key.end() ? found->second : nullptr;
+}
+
 export FileRewriteResult rewrite_object_data_file(
 	const fs::path& file_path,
 	const std::string_view file_name,
@@ -561,9 +593,8 @@ export FileRewriteResult rewrite_object_data_file(
 				std::vector<std::string> segments = absl::StrSplit(value, ',');
 				bool any_segment_changed = false;
 				for (std::string& segment : segments) {
-					const auto found = candidates_by_match_key.find(asset_match_key(segment));
-					if (found != candidates_by_match_key.end()) {
-						segment = found->second->new_relative_path.string();
+					if (const RenameCandidate* found = find_object_data_candidate(segment, type, candidates_by_match_key)) {
+						segment = found->new_relative_path.string();
 						any_segment_changed = true;
 					}
 				}
@@ -574,11 +605,11 @@ export FileRewriteResult rewrite_object_data_file(
 				continue;
 			}
 
-			const auto found = candidates_by_match_key.find(asset_match_key(value));
-			if (found == candidates_by_match_key.end()) {
+			const RenameCandidate* found = find_object_data_candidate(value, type, candidates_by_match_key);
+			if (!found) {
 				continue;
 			}
-			value = found->second->new_relative_path.string();
+			value = found->new_relative_path.string();
 			changed = true;
 		}
 	}

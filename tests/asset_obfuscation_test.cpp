@@ -358,6 +358,89 @@ TEST_CASE("rewrite_object_data_file rewrites a pathingTexture-typed field") {
 	hierarchy.map_directory = original_map_directory;
 }
 
+TEST_CASE("rewrite_object_data_file rewrites an icon-typed field whose value omits its file extension") {
+	// Real case: a real map's ability "art" (Icon - Normal, read in-game via
+	// BlzGetAbilityStringLevelField(..., ABILITY_SLF_ICON_NORMAL, 0)) fields commonly store a bare
+	// path with no extension at all (e.g. "Images/Spells/Foo/BTNBar" for an actual on-disk
+	// "BTNBar.blp") - the Object Editor/client resolves it implicitly. A rename candidate's match_key
+	// always carries the real file's actual extension, so this previously never matched and left the
+	// field pointing at the pre-rename path, producing a missing-texture icon in-game.
+	const fs::path dir = make_scratch_dir("rewrite_icon_field_no_extension");
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = dir;
+
+	slk::SLK meta;
+	meta.add_row("aart");
+	meta.set_shadow_data("field", "aart", "art");
+	meta.set_shadow_data("type", "aart", "icon");
+	meta.set_shadow_data("data", "aart", "0");
+	meta.build_meta_map();
+	const slk::SLK template_slk = make_test_template("Afoo");
+
+	slk::SLK modification_data;
+	modification_data.add_row("Afoo");
+	modification_data.set_shadow_data("art", "Afoo", "Images/Spells/Foo/BTNBar");
+	const std::vector<u8> buffer = build_modification_file_buffer(modification_data, meta, false, false);
+
+	const fs::path w3a_path = dir / "war3map.w3a";
+	{
+		std::ofstream out(w3a_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "Images/Spells/Foo/BTNBar.blp";
+	candidate.new_relative_path = "a3f9c1e2.blp";
+	candidate.match_key = asset_match_key("Images/Spells/Foo/BTNBar.blp");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(w3a_path, "war3map.w3a", template_slk, meta, false, false, candidates_by_match_key);
+	CHECK(result.success);
+	CHECK(result.changed);
+
+	const auto reloaded = extract_modification_shadow_map_path(w3a_path, template_slk, meta, false);
+	REQUIRE(reloaded.has_value());
+	CHECK(reloaded->at("Afoo").at("art") == "a3f9c1e2.blp");
+
+	hierarchy.map_directory = original_map_directory;
+}
+
+TEST_CASE("rewrite_object_data_file rewrites a model-typed field whose value omits its extension, defaulting to .mdx") {
+	const fs::path dir = make_scratch_dir("rewrite_model_field_no_extension");
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = dir;
+
+	const slk::SLK meta = make_test_meta();
+	const slk::SLK template_slk = make_test_template("hfoo");
+
+	slk::SLK modification_data;
+	modification_data.add_row("hfoo");
+	modification_data.set_shadow_data("file", "hfoo", "war3mapImported\\Custom");
+	const std::vector<u8> buffer = build_modification_file_buffer(modification_data, meta, false, false);
+
+	const fs::path w3u_path = dir / "war3map.w3u";
+	{
+		std::ofstream out(w3u_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(w3u_path, "war3map.w3u", template_slk, meta, false, false, candidates_by_match_key);
+	CHECK(result.success);
+	CHECK(result.changed);
+
+	const auto reloaded = extract_modification_shadow_map_path(w3u_path, template_slk, meta, false);
+	REQUIRE(reloaded.has_value());
+	CHECK(reloaded->at("hfoo").at("file") == "a3f9c1e2.mdx");
+
+	hierarchy.map_directory = original_map_directory;
+}
+
 TEST_CASE("rewrite_object_data_file is a no-op success when the file does not exist") {
 	const slk::SLK meta = make_test_meta();
 	const slk::SLK template_slk = make_test_template("hfoo");
