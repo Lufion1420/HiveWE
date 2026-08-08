@@ -37,11 +37,13 @@ private:
 
 	QTabWidget* tabs = nullptr;
 	QTableWidget* validation_table = nullptr;
+	QTableWidget* addition_table = nullptr;
 	QTableWidget* conflict_table = nullptr;
 	QCheckBox* proceed_with_warnings = nullptr;
 	QPushButton* import_button = nullptr;
 
 	void populate_validation_table(const ImportValidationReport& report);
+	void populate_addition_table();
 	void populate_conflict_table();
 	std::unordered_set<std::string> selected_overwrite_ids() const;
 	void update_import_enabled();

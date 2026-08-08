@@ -100,6 +100,7 @@ export struct ObjectDataImportPackage {
 export struct ObjectDataApplyPlan {
 	hive::unordered_map<ObjectDataCategory, ModificationShadowMap> merged;
 	std::vector<ImportConflict> conflicts;
+	std::vector<ImportConflict> additions;
 	ImportValidationReport validation;
 };
 
@@ -510,6 +511,38 @@ export std::vector<ImportConflict> detect_import_conflicts(
 	return conflicts;
 }
 
+export std::vector<ImportConflict> detect_import_additions(
+	const ObjectCategoryDescriptor& descriptor,
+	const ModificationShadowMap& imported
+) {
+	std::vector<ImportConflict> additions;
+	for (const auto& [object_id, fields] : imported) {
+		if (descriptor.slk->shadow_data.contains(object_id)) {
+			continue;
+		}
+
+		ImportConflict addition;
+		addition.category = descriptor.category;
+		addition.id = object_id;
+		addition.is_custom = fields.contains("oldid");
+
+		// The object isn't applied to the map's SLK yet, so pull its display
+		// name straight out of the imported fields instead of the live table.
+		for (const char* name_field : { "name", "editorname", "bufftip" }) {
+			if (const auto found = fields.find(name_field); found != fields.end() && !found->second.empty()) {
+				addition.display_name = found->second;
+				break;
+			}
+		}
+		if (addition.display_name.empty()) {
+			addition.display_name = object_id;
+		}
+
+		additions.push_back(std::move(addition));
+	}
+	return additions;
+}
+
 export ModificationShadowMap merge_import_category(
 	const ModificationShadowMap& current,
 	const ModificationShadowMap& imported,
@@ -564,6 +597,10 @@ export ObjectDataApplyPlan build_import_plan(
 
 		for (ImportConflict conflict : detect_import_conflicts(descriptor, imported->second)) {
 			plan.conflicts.push_back(std::move(conflict));
+		}
+
+		for (ImportConflict addition : detect_import_additions(descriptor, imported->second)) {
+			plan.additions.push_back(std::move(addition));
 		}
 
 		ImportValidationReport category_report = validate_shadow_map(descriptor, imported->second, true);

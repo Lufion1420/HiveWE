@@ -54,6 +54,19 @@ ObjectDataImportDialog::ObjectDataImportDialog(ObjectDataImportPackage package, 
 	validation_table->setSelectionBehavior(QAbstractItemView::SelectRows);
 	validation_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
+	addition_table = new QTableWidget(0, 3, this);
+	addition_table->setHorizontalHeaderLabels({ "Category", "Name", "ID" });
+	addition_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+	addition_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	addition_table->setWordWrap(false);
+	addition_table->setTextElideMode(Qt::ElideNone);
+
+	auto* addition_header = addition_table->horizontalHeader();
+	addition_header->setStretchLastSection(false);
+	addition_header->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+	addition_header->setSectionResizeMode(1, QHeaderView::Stretch);
+	addition_header->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+
 	conflict_table = new QTableWidget(0, 4, this);
 	conflict_table->setHorizontalHeaderLabels({ "Category", "Name", "ID", "Overwrite" });
 	conflict_table->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -69,6 +82,7 @@ ObjectDataImportDialog::ObjectDataImportDialog(ObjectDataImportPackage package, 
 	conflict_header->resizeSection(3, 88);
 
 	tabs->addTab(validation_table, "Validation");
+	tabs->addTab(addition_table, "New Objects");
 	tabs->addTab(conflict_table, "Conflicts");
 
 	proceed_with_warnings = new QCheckBox("Proceed despite warnings", this);
@@ -115,12 +129,15 @@ ObjectDataImportDialog::ObjectDataImportDialog(ObjectDataImportPackage package, 
 
 	*apply_plan = build_import_plan(*import_package, {});
 	populate_validation_table(apply_plan->validation);
+	populate_addition_table();
 	populate_conflict_table();
 	update_import_enabled();
 
 	if (apply_plan->validation.has_blocking_errors()) {
 		tabs->setCurrentIndex(0);
 	} else if (!apply_plan->conflicts.empty()) {
+		tabs->setCurrentIndex(2);
+	} else if (!apply_plan->additions.empty()) {
 		tabs->setCurrentIndex(1);
 	}
 }
@@ -135,6 +152,27 @@ void ObjectDataImportDialog::populate_validation_table(const ImportValidationRep
 		validation_table->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(issue.field)));
 		validation_table->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(issue.message)));
 	}
+}
+
+void ObjectDataImportDialog::populate_addition_table() {
+	addition_table->setRowCount(static_cast<int>(apply_plan->additions.size()));
+	for (int row = 0; row < static_cast<int>(apply_plan->additions.size()); ++row) {
+		const ImportConflict& addition = apply_plan->additions.at(row);
+		addition_table->setItem(row, 0, new QTableWidgetItem(category_label(addition.category)));
+		addition_table->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(addition.display_name)));
+		addition_table->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(addition.id)));
+	}
+
+	int name_column_width = 320;
+	const QFontMetrics name_metrics(addition_table->font());
+	for (int row = 0; row < addition_table->rowCount(); ++row) {
+		if (const QTableWidgetItem* name_item = addition_table->item(row, 1)) {
+			name_column_width = std::max(name_column_width, name_metrics.horizontalAdvance(name_item->text()) + 24);
+		}
+	}
+	addition_table->setColumnWidth(1, name_column_width);
+
+	tabs->setTabText(1, QString("New Objects (%1)").arg(apply_plan->additions.size()));
 }
 
 void ObjectDataImportDialog::populate_conflict_table() {
@@ -159,6 +197,8 @@ void ObjectDataImportDialog::populate_conflict_table() {
 		}
 	}
 	conflict_table->setColumnWidth(1, name_column_width);
+
+	tabs->setTabText(2, QString("Conflicts (%1)").arg(apply_plan->conflicts.size()));
 }
 
 std::unordered_set<std::string> ObjectDataImportDialog::selected_overwrite_ids() const {
