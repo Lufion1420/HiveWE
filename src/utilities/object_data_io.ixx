@@ -14,6 +14,7 @@ import Hierarchy;
 import SLK;
 import ModificationTables;
 import ObjectDataText;
+import ScenarioDataIo;
 import TableModel;
 import TriggerStrings;
 import Utilities;
@@ -95,6 +96,7 @@ export struct ObjectDataImportPackage {
 	std::string source_locale;
 	std::string source_game_version;
 	hive::unordered_map<ObjectDataCategory, ModificationShadowMap> categories;
+	std::optional<ScenarioImportData> scenario;
 };
 
 export struct ObjectDataApplyPlan {
@@ -248,6 +250,31 @@ std::expected<void, std::string> write_bytes_file(const fs::path& path, const st
 		return std::unexpected("Error writing file: " + path.string());
 	}
 	return {};
+}
+
+/// Reads and parses directory/"scenario.json" if it exists, storing the result on report/package.
+/// A missing file is not an error (older packages simply don't offer scenario import);
+/// a malformed file is reported as a blocking validation error.
+void load_scenario_data_if_present(const fs::path& directory, ObjectDataImportPackage& package, ImportValidationReport& report) {
+	const fs::path scenario_path = directory / "scenario.json";
+	if (!fs::exists(scenario_path)) {
+		return;
+	}
+
+	const auto scenario_file = read_file(scenario_path);
+	if (!scenario_file) {
+		report.add(ValidationSeverity::error, "scenario", scenario_file.error());
+		return;
+	}
+
+	const std::string json_text(reinterpret_cast<const char*>(scenario_file->buffer.data()), scenario_file->buffer.size());
+	const auto parsed = parse_scenario_json(json_text);
+	if (!parsed) {
+		report.add(ValidationSeverity::error, "scenario", parsed.error());
+		return;
+	}
+
+	package.scenario = *parsed;
 }
 
 bool is_valid_object_id(const std::string_view id) {
@@ -720,7 +747,9 @@ export std::expected<ObjectDataImportPackage, ImportValidationReport> load_binar
 		}
 	}
 
-	if (package.categories.empty()) {
+	load_scenario_data_if_present(directory, package, report);
+
+	if (package.categories.empty() && !package.scenario.has_value()) {
 		report.add(ValidationSeverity::error, "package", "No object modification data was found.");
 	}
 
@@ -791,7 +820,9 @@ export std::expected<ObjectDataImportPackage, ImportValidationReport> load_text_
 		}
 	}
 
-	if (package.categories.empty()) {
+	load_scenario_data_if_present(directory, package, report);
+
+	if (package.categories.empty() && !package.scenario.has_value()) {
 		report.add(ValidationSeverity::error, "package", "No object modification data was found.");
 	}
 
@@ -850,15 +881,18 @@ export std::expected<void, std::string> export_binary_object_data(const fs::path
 		}
 	}
 
-	if (categories.empty()) {
-		return std::unexpected("No object modification data is present in the current map.");
-	}
-
 	manifest["categories"] = categories;
 	manifest["files"] = files;
 
 	const std::string manifest_text = manifest.dump(2);
 	if (const auto result = write_bytes_file(directory / "manifest.json", std::span<const u8>(reinterpret_cast<const u8*>(manifest_text.data()), manifest_text.size())); !result) {
+		return std::unexpected(result.error());
+	}
+
+	// Players/Forces have no SLK backing and aren't gated by modification_table_has_data() above —
+	// every map always has some, so this rides along unconditionally.
+	const std::string scenario_text = build_scenario_json(map->info, map->trigger_strings);
+	if (const auto result = write_bytes_file(directory / "scenario.json", std::span<const u8>(reinterpret_cast<const u8*>(scenario_text.data()), scenario_text.size())); !result) {
 		return std::unexpected(result.error());
 	}
 
@@ -905,13 +939,16 @@ export std::expected<void, std::string> export_text_object_data(const fs::path& 
 		}
 	}
 
-	if (categories.empty()) {
-		return std::unexpected("No object modification data is present in the current map.");
-	}
-
 	manifest["categories"] = categories;
 	const std::string manifest_text = manifest.dump(2);
 	if (const auto result = write_bytes_file(directory / "manifest.json", std::span<const u8>(reinterpret_cast<const u8*>(manifest_text.data()), manifest_text.size())); !result) {
+		return std::unexpected(result.error());
+	}
+
+	// Players/Forces have no SLK backing and aren't gated by modification_table_has_data() above —
+	// every map always has some, so this rides along unconditionally.
+	const std::string scenario_text = build_scenario_json(map->info, map->trigger_strings);
+	if (const auto result = write_text_file(directory / "scenario.json", scenario_text); !result) {
 		return std::unexpected(result.error());
 	}
 

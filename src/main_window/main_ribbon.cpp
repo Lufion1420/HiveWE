@@ -359,6 +359,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 			 map_options,
 			 gameplay_constants,
 			 item_tables,
+			 scenario_properties,
 			 import_heightmap,
 			 change_tileset,
 			 change_tile_pathing,
@@ -504,6 +505,10 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	item_tables->setText("Item\nTables");
 	set_tooltip(item_tables, "Open the map item tables editor.");
 
+	scenario_properties->setIcon(QIcon("data/icons/ribbon/units.png"));
+	scenario_properties->setText("Players /\nForces");
+	set_tooltip(scenario_properties, "Open the Players and Forces editor.");
+
 	import_heightmap->setIcon(QIcon("data/icons/ribbon/heightmap.png"));
 	import_heightmap->setText("Import\nHeightmap");
 
@@ -636,10 +641,14 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	map_section->addWidget(map_options);
 	map_section->addWidget(gameplay_constants);
 
+	auto* scenario_section = make_section("Scenario");
+	scenario_section->addWidget(scenario_properties);
+
 	auto* tools_section = make_section("Game");
 	tools_section->addWidget(switch_warcraft);
 
 	map_tab->addSection(map_section);
+	map_tab->addSection(scenario_section);
 	map_tab->addSection(tools_section);
 
 	home_tab_index = addTab(home_tab, "Home");

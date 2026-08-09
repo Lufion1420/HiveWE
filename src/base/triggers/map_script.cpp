@@ -486,7 +486,7 @@ void generate_players(MapScriptWriter& script, const MapInfo& map_info) {
 
 			script.call("SetPlayerColor", player, "ConvertPlayerColor(" + std::to_string(i.internal_number) + ")");
 			script.call("SetPlayerRacePreference", player, races[static_cast<int>(i.race)]);
-			script.call("SetPlayerRaceSelectable", player, true);
+			script.call("SetPlayerRaceSelectable", player, i.race == PlayerRace::selectable);
 			script.call("SetPlayerController", player, players[static_cast<int>(i.type)]);
 
 			if (i.type == PlayerType::rescuable) {

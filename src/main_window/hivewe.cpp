@@ -40,10 +40,15 @@ import "trigger_editor.h";
 #include "QKeySequence"
 #include "QString"
 #include <QApplication>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QFrame>
+#include <QLabel>
+#include <QListWidget>
+#include <QPushButton>
 #include <QStyle>
 #include <QFileInfo>
 #include <QMenu>
@@ -52,11 +57,14 @@ import "trigger_editor.h";
 #include <QTextDocument>
 import "menus/gameplay_constants_editor.h";
 import "menus/item_tables_editor.h";
+import "menus/scenario_properties_editor.h";
 import "asset_manager/asset_manager.h";
 import "tooltip_editor/tooltip_editor.h";
 import "map_protector/map_protector.h";
 #include "object_data_import_dialog.h"
 import ObjectDataIo;
+import ScenarioDataIo;
+import MapInfo;
 
 namespace fs = std::filesystem;
 
@@ -280,6 +288,11 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->item_tables, &QRibbonButton::clicked, [this]() {
 		bool created = false;
 		window_handler.create_or_raise<ItemTablesEditor>(nullptr, created);
+	});
+
+	connect(ui->ribbon->scenario_properties, &QRibbonButton::clicked, [this]() {
+		bool created = false;
+		window_handler.create_or_raise<ScenarioPropertiesEditor>(nullptr, created);
 	});
 
 	connect(ui->ribbon->asset_manager, &QRibbonButton::clicked, [this]() {
@@ -1094,6 +1107,200 @@ void show_import_validation_failure(QWidget* parent, const ImportValidationRepor
 	QMessageBox::warning(parent, "Import Blocked", lines.join("\n"));
 }
 
+QString scenario_controller_label(const PlayerType type) {
+	switch (type) {
+		case PlayerType::human:
+			return "User";
+		case PlayerType::computer:
+			return "Computer";
+		case PlayerType::neutral:
+			return "None";
+		case PlayerType::rescuable:
+			return "Rescuable";
+	}
+	return "?";
+}
+
+QString scenario_race_label(const PlayerRace race) {
+	switch (race) {
+		case PlayerRace::selectable:
+			return "Selectable";
+		case PlayerRace::human:
+			return "Human";
+		case PlayerRace::orc:
+			return "Orc";
+		case PlayerRace::undead:
+			return "Undead";
+		case PlayerRace::night_elf:
+			return "Night Elf";
+	}
+	return "?";
+}
+
+/// Field-by-field diff between the live map->info and a parsed scenario.json, so the import
+/// prompt can show what will actually change instead of a bare "N players, M forces" count.
+/// Players match by internal_number (stable slot identity); forces have no persistent ID, so
+/// they're matched positionally (by index) as a best-effort heuristic — accurate for the common
+/// case of hand-editing an exported file without reordering entries.
+QStringList compute_scenario_import_changes(const ScenarioImportData& scenario) {
+	QStringList changes;
+
+	for (const auto& imported_player : scenario.players) {
+		const auto found = std::ranges::find_if(map->info.players, [&](const PlayerData& player) {
+			return player.internal_number == imported_player.internal_number;
+		});
+		if (found == map->info.players.end()) {
+			continue;
+		}
+
+		QStringList field_changes;
+		const std::string current_name(map->trigger_strings.string(found->name));
+		if (current_name != imported_player.name) {
+			field_changes << QString("name '%1' → '%2'").arg(QString::fromStdString(current_name), QString::fromStdString(imported_player.name));
+		}
+		if (found->type != imported_player.controller) {
+			field_changes << QString("controller %1 → %2")
+								  .arg(scenario_controller_label(found->type), scenario_controller_label(imported_player.controller));
+		}
+		if (found->race != imported_player.race) {
+			field_changes << QString("race %1 → %2").arg(scenario_race_label(found->race), scenario_race_label(imported_player.race));
+		}
+		const bool current_fixed_start = found->fixed_start_position != 0;
+		if (current_fixed_start != imported_player.fixed_start_location) {
+			field_changes << QString("fixed start %1 → %2")
+								  .arg(current_fixed_start ? "on" : "off", imported_player.fixed_start_location ? "on" : "off");
+		}
+
+		if (!field_changes.isEmpty()) {
+			changes << QString("Player %1 (%2): %3")
+							.arg(imported_player.internal_number + 1)
+							.arg(QString::fromStdString(current_name), field_changes.join(", "));
+		}
+	}
+
+	const auto member_names = [](const std::set<int>& members) {
+		QStringList names;
+		for (const int internal_number : members) {
+			const auto found = std::ranges::find_if(map->info.players, [&](const PlayerData& player) {
+				return player.internal_number == internal_number;
+			});
+			names << (found != map->info.players.end() ? QString::fromStdString(std::string(map->trigger_strings.string(found->name)))
+														 : QString("Player %1").arg(internal_number + 1));
+		}
+		return names.join(", ");
+	};
+
+	const size_t force_count = std::max(map->info.forces.size(), scenario.forces.size());
+	for (size_t i = 0; i < force_count; ++i) {
+		if (i >= map->info.forces.size()) {
+			changes << QString("Force added: '%1'").arg(QString::fromStdString(scenario.forces[i].name));
+			continue;
+		}
+		if (i >= scenario.forces.size()) {
+			const std::string removed_force_name(map->trigger_strings.string(map->info.forces[i].name));
+			changes << QString("Force removed: '%1'").arg(QString::fromStdString(removed_force_name));
+			continue;
+		}
+
+		const auto& current_force = map->info.forces[i];
+		const auto& imported_force = scenario.forces[i];
+
+		QStringList force_changes;
+		const std::string current_force_name(map->trigger_strings.string(current_force.name));
+		if (current_force_name != imported_force.name) {
+			force_changes << QString("name '%1' → '%2'").arg(QString::fromStdString(current_force_name), QString::fromStdString(imported_force.name));
+		}
+
+		std::set<int> current_members;
+		for (const auto& player : map->info.players) {
+			if (current_force.player_masks & (1 << player.internal_number)) {
+				current_members.insert(player.internal_number);
+			}
+		}
+		const std::set<int> imported_members(imported_force.players.begin(), imported_force.players.end());
+		if (current_members != imported_members) {
+			force_changes << QString("members [%1] → [%2]").arg(member_names(current_members), member_names(imported_members));
+		}
+
+		if (current_force.allied != imported_force.allied) {
+			force_changes << QString("Allied %1").arg(imported_force.allied ? "enabled" : "disabled");
+		}
+		if (current_force.allied_victory != imported_force.allied_victory) {
+			force_changes << QString("Allied Victory %1").arg(imported_force.allied_victory ? "enabled" : "disabled");
+		}
+		if (current_force.share_vision != imported_force.share_vision) {
+			force_changes << QString("Share Vision %1").arg(imported_force.share_vision ? "enabled" : "disabled");
+		}
+		if (current_force.share_unit_control != imported_force.share_unit_control) {
+			force_changes << QString("Share Unit Control %1").arg(imported_force.share_unit_control ? "enabled" : "disabled");
+		}
+		if (current_force.share_advanced_unit_control != imported_force.share_advanced_unit_control) {
+			force_changes << QString("Share Adv. Unit Control %1").arg(imported_force.share_advanced_unit_control ? "enabled" : "disabled");
+		}
+
+		if (!force_changes.isEmpty()) {
+			changes << QString("Force %1: %2").arg(QString::fromStdString(current_force_name), force_changes.join(", "));
+		}
+	}
+
+	if (map->info.custom_forces != scenario.custom_forces) {
+		changes << QString("Use Custom Forces %1").arg(scenario.custom_forces ? "enabled" : "disabled");
+	}
+	if (map->info.fixed_player_settings != scenario.fixed_player_settings) {
+		changes << QString("Fixed Player Settings %1").arg(scenario.fixed_player_settings ? "enabled" : "disabled");
+	}
+
+	return changes;
+}
+
+/// Shows the actual field-level diff (not just a player/force count) and lets the user confirm
+/// or cancel before anything is applied.
+bool show_scenario_import_preview(QWidget* parent, const ScenarioImportData& scenario) {
+	const QStringList changes = compute_scenario_import_changes(scenario);
+
+	QDialog dialog(parent);
+	dialog.setWindowTitle("Import Scenario Data");
+	dialog.resize(700, 480);
+
+	auto* layout = new QVBoxLayout(&dialog);
+	layout->addWidget(new QLabel(
+		changes.isEmpty() ? "This package's Scenario data (Players/Forces) is identical to the current map — nothing would change."
+						  : "This package contains the following Players/Forces changes:"
+	));
+
+	auto* changes_list = new QListWidget;
+	changes_list->addItems(changes);
+	layout->addWidget(changes_list, 1);
+
+	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+	buttons->button(QDialogButtonBox::Ok)->setText("Apply");
+	buttons->button(QDialogButtonBox::Ok)->setEnabled(!changes.isEmpty());
+	layout->addWidget(buttons);
+	QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+	QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+	return dialog.exec() == QDialog::Accepted;
+}
+
+/// Scenario (Players/Forces) data has no per-object conflict/merge semantics like the SLK-backed
+/// object categories do, so it rides along as an optional wholesale-replace prompt instead of
+/// going through ObjectDataImportDialog's per-object conflict review.
+void prompt_apply_scenario_import(QWidget* parent, const std::optional<ScenarioImportData>& scenario) {
+	if (!scenario || !map) {
+		return;
+	}
+
+	if (!show_scenario_import_preview(parent, *scenario)) {
+		return;
+	}
+
+	apply_scenario_import(*scenario, map->info, map->trigger_strings);
+
+	if (const auto open_editor = window_handler.get_open<ScenarioPropertiesEditor>(); open_editor.has_value() && *open_editor) {
+		(*open_editor)->refresh_all();
+	}
+}
+
 } // namespace
 
 void HiveWE::export_object_data_binary() {
@@ -1148,10 +1355,14 @@ void HiveWE::import_object_data_binary() {
 		return;
 	}
 
+	const std::optional<ScenarioImportData> scenario = loaded->scenario;
+
 	ObjectDataImportDialog dialog(std::move(*loaded), this);
 	if (dialog.exec() == QDialog::Accepted && dialog.dialog_result() == ObjectDataImportDialog::Result::applied) {
 		show_transient_notice("Imported Object Editor data.");
 	}
+
+	prompt_apply_scenario_import(this, scenario);
 }
 
 void HiveWE::import_object_data_map_folder() {
@@ -1170,10 +1381,14 @@ void HiveWE::import_object_data_map_folder() {
 		return;
 	}
 
+	const std::optional<ScenarioImportData> scenario = loaded->scenario;
+
 	ObjectDataImportDialog dialog(std::move(*loaded), this);
 	if (dialog.exec() == QDialog::Accepted && dialog.dialog_result() == ObjectDataImportDialog::Result::applied) {
 		show_transient_notice("Imported Object Editor data from map folder.");
 	}
+
+	prompt_apply_scenario_import(this, scenario);
 }
 
 void HiveWE::import_object_data_text() {
@@ -1192,10 +1407,14 @@ void HiveWE::import_object_data_text() {
 		return;
 	}
 
+	const std::optional<ScenarioImportData> scenario = loaded->scenario;
+
 	ObjectDataImportDialog dialog(std::move(*loaded), this);
 	if (dialog.exec() == QDialog::Accepted && dialog.dialog_result() == ObjectDataImportDialog::Result::applied) {
 		show_transient_notice("Imported Object Editor text data.");
 	}
+
+	prompt_apply_scenario_import(this, scenario);
 }
 
 void HiveWE::save_window_state() {
