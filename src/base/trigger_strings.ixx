@@ -9,7 +9,7 @@ import Hierarchy;
 export class TriggerStrings {
 	std::map<std::string, std::string> strings; // ToDo change back to unordered_map?
 
-	size_t next_id;
+	size_t next_id = 0;
 
   public:
 	void load() {
@@ -47,7 +47,11 @@ export class TriggerStrings {
 				strings.emplace(key, value);
 			} else {
 				size_t found = line.find(' ') + 1;
-				next_id = std::max(next_id, found);
+				try {
+					next_id = std::max(next_id, static_cast<size_t>(std::stoul(line.substr(found))));
+				} catch (const std::exception&) {
+					// malformed "STRING <n>" header; leave next_id as-is
+				}
 				int padsize = std::max(0, 3 - ((int)line.size() - (int)found));
 				key = "TRIGSTR_" + std::string(padsize, '0') + line.substr(found);
 			}
