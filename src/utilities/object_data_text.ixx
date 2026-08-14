@@ -188,7 +188,15 @@ bool looks_like_property_line(std::string_view line) {
 		return false;
 	}
 
-	const std::string_view key = line.substr(0, equals);
+	// Export format is "key = value" — allow trailing spaces before '=' so a
+	// following property line is not mistaken for multiline value continuation.
+	std::string_view key = line.substr(0, equals);
+	while (!key.empty() && std::isspace(static_cast<unsigned char>(key.back()))) {
+		key.remove_suffix(1);
+	}
+	if (key.empty()) {
+		return false;
+	}
 	for (const char ch : key) {
 		if (std::isspace(static_cast<unsigned char>(ch))) {
 			return false;
