@@ -1685,13 +1685,13 @@ void HiveWE::update_map_context(const QString& status, const QString& detail_ove
 
 	if (!map->filesystem_path.empty()) {
 		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
-		setWindowTitle("HiveWE 0.11 - " + QString::fromStdString(map->filesystem_path.string()));
+		setWindowTitle("HiveWE 0.21 - " + QString::fromStdString(map->filesystem_path.string()));
 		map_title = map_info.fileName().isEmpty() ? map_title : map_info.fileName();
 		if (detail.isEmpty()) {
 			detail = map_info.absoluteFilePath();
 		}
 	} else {
-		setWindowTitle("HiveWE 0.11 - " + map_title + " (Unsaved)");
+		setWindowTitle("HiveWE 0.21 - " + map_title + " (Unsaved)");
 		if (detail.isEmpty()) {
 			detail = "Unsaved map";
 		}

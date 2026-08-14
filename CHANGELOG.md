@@ -4,6 +4,49 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's
 own numbering; `v0.20` is the first packaged release of the fork and builds on
 upstream HiveWE `v0.10`.
 
+## v0.21
+
+Highlights since `v0.20`:
+
+### Map Protector
+- New **Map Protector** window (Config ribbon) that exports a hardened copy of the current map or an external `.w3x` / `.w3m` / folder. The source is never modified.
+- MPQ hardening: remove listfile, remove attributes, per-file encryption, and optional junk-file injection.
+- Trigger/script hardening: remove GUI trigger data (`war3map.wtg`), and optional trigger-string inlining (strip `war3map.wts` after resolving `TRIGSTR_*` in the script and map info).
+- Optional metadata sanitization (author, description, loading-screen text, map name).
+- Asset path obfuscation: rename custom imports to flat random-hex names and rewrite matching references in object data, map info, MDX internals, and script string literals, with a dangling-reference safety check before packing.
+- Fixes for listfile-less archives (core-file extraction + `war3map.imp` recovery), StormLib fabricated-name packing crashes, and several object-data field types (`model` / `icon` / `modelList` / `pathingTexture`, plus icon/model paths that omit extensions).
+
+### Object Data Export / Import
+- Export Object Editor modifications (units, items, abilities, buffs, upgrades, destructibles, doodads) as a binary or human-readable text package from the Home ribbon.
+- Import with validation and conflict preview, per-object overwrite controls, and transactional apply with rollback on failure.
+- Also supports importing raw `war3map.w3*` files from another map folder.
+- Newly created objects from an import now appear correctly in a new Object Editor tab.
+
+### Scenario Properties
+- New **Players / Forces** editor (Map ribbon) matching World Editor fields: controller, race, fixed start location, color, and force alliance flags.
+- Always shows all 24 player slots; inactive (None) rows are dimmed.
+- Players/Forces can be exported/imported as `scenario.json` alongside Object Data packages, with a field-level change preview.
+- Fixed force share-vision bit loading and race lobby-selectability generation.
+
+### Asset Manager
+- Reworked into a stronger unused-file cleanup tool: stats header, type column, All / Unused filter, and bulk delete to the recycle bin.
+- Full MDX scan (not only Object Editor–reachable models), override detection for stock game paths, and case-insensitive used/unused matching.
+
+### Rendering
+- Fixed opaque SD models rendering invisible (alpha test incorrectly applied to Filtermode None).
+- Fixed black models caused by missing mipmaps on non-DDS (TGA/PNG) textures.
+- Fixed tiling textures collapsing due to limited UV packing range (now half-float UVs).
+
+### Fixes & Polish
+- Window title version updated to **0.21**.
+- Doodad and unit palettes now sort alphabetically.
+- Fixed Object Editor left-panel search focus stealing.
+- Fixed `TRIGSTR` next-id tracking that could collide with newly created strings.
+- Opening listfile-less `.w3x` maps is more reliable (extracts core `war3map.*` files by name).
+
+### Running
+Download the zip, extract it, and run `HiveWE.exe`. A Warcraft III installation is required.
+
 ## v0.20
 
 First packaged release of the fork. Highlights since upstream HiveWE `v0.10`:
