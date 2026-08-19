@@ -1290,6 +1290,11 @@ void prompt_apply_scenario_import(QWidget* parent, const std::optional<ScenarioI
 		return;
 	}
 
+	// Skip the dialog entirely when nothing would change — no need to force a confirmation.
+	if (compute_scenario_import_changes(*scenario).isEmpty()) {
+		return;
+	}
+
 	if (!show_scenario_import_preview(parent, *scenario)) {
 		return;
 	}
