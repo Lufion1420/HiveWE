@@ -469,6 +469,12 @@ export ImportValidationReport validate_shadow_map(
 		}
 
 		const bool is_custom = fields.contains("oldid");
+		// For custom (newly created) objects the object_id is not yet in the SLK, so
+		// field_to_meta_id() can't look up the ability code/alias it needs to resolve
+		// useSpecific fields (e.g. "name", "editorsuffix", "hero" for abilities).
+		// Using the parent ID instead gives a SLK entry whose code IS known, which is
+		// correct because a custom object inherits its field set from its parent.
+		const std::string& lookup_id = is_custom ? fields.at("oldid") : object_id;
 		if (is_custom) {
 			const std::string& parent = fields.at("oldid");
 			if (!is_valid_object_id(parent)) {
@@ -486,12 +492,12 @@ export ImportValidationReport validate_shadow_map(
 				continue;
 			}
 			field_count++;
-			if (!descriptor.slk->field_to_meta_id(*descriptor.meta_slk, field, object_id)) {
+			if (!descriptor.slk->field_to_meta_id(*descriptor.meta_slk, field, lookup_id)) {
 				report.add(ValidationSeverity::error, descriptor.key, std::format("Unknown field '{}'.", field), object_id, field);
 				continue;
 			}
 
-			const std::string type = field_type_for(*descriptor.slk, *descriptor.meta_slk, object_id, field);
+			const std::string type = field_type_for(*descriptor.slk, *descriptor.meta_slk, lookup_id, field);
 			if (!validate_field_value(type, value)) {
 				report.add(ValidationSeverity::error, descriptor.key, std::format("Value '{}' is invalid for type '{}'.", value, type), object_id, field);
 			}

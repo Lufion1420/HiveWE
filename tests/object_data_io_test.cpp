@@ -137,6 +137,58 @@ TEST_CASE("merge_import_category respects overwrite selection") {
 	CHECK(merged_overwrite.at("Abcd").at("name") == "Imported");
 }
 
+TEST_CASE("validate_shadow_map accepts new custom ability with useSpecific fields") {
+	// Abilities use useSpecific in their meta SLK, meaning field lookup builds keys like
+	// "nameANfy" where "ANfy" is the ability's code. A brand-new custom object (e.g. A060
+	// based on ANcl) is NOT yet in the SLK, so its code can't be looked up via the object_id.
+	// validate_shadow_map must use the parent (oldid) for the field lookup instead.
+	slk::SLK meta;
+	// Simulate an ability-style meta entry: field "name" with useSpecific="ANcl"
+	meta.add_row("anam");
+	meta.set_shadow_data("field", "anam", "name");
+	meta.set_shadow_data("type", "anam", "string");
+	// No useSpecific — simpler test, but confirms the parent-lookup path works.
+	// The real ability meta stores "nameANcl" → "anam" in the meta_map via useSpecific.
+	// Here we use no useSpecific so "name" resolves directly, and add a second field that
+	// requires the alias path (useSpecific = "ANcl").
+	meta.add_row("aub1");
+	meta.set_shadow_data("field", "aub1", "ubertip");
+	meta.set_shadow_data("type", "aub1", "string");
+	meta.set_shadow_data("usespecific", "aub1", "ANcl");
+	meta.build_meta_map();
+
+	slk::SLK data;
+	// ANcl is the parent in the SLK; its code column makes useSpecific lookups work.
+	data.add_row("ANcl");
+	data.set_shadow_data("code", "ANcl", "ANcl");
+
+	// A060 is a brand-new custom object — not present in the SLK at all.
+	ModificationShadowMap shadow_map;
+	shadow_map["A060"]["oldid"] = "ANcl";
+	shadow_map["A060"]["name"] = "My Ability";
+	shadow_map["A060"]["ubertip"] = "Extended tooltip";
+
+	ObjectCategoryDescriptor descriptor{
+		ObjectDataCategory::ability,
+		"ability",
+		"Ability",
+		"war3map.w3a",
+		"war3mapSkin.w3a",
+		"ability.ini",
+		&data,
+		&meta,
+		nullptr,
+		true,
+	};
+
+	const ImportValidationReport report = validate_shadow_map(descriptor, shadow_map, false);
+	// Should have no blocking errors — both fields must resolve via the parent's code.
+	for (const auto& issue : report.issues) {
+		MESSAGE(issue.object_id << " / " << issue.field << ": " << issue.message);
+	}
+	CHECK_FALSE(report.has_blocking_errors());
+}
+
 TEST_CASE("detect_import_conflicts ignores unchanged objects and new objects") {
 	slk::SLK meta;
 	meta.add_row("unam");
