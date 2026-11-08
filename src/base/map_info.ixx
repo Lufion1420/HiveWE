@@ -28,6 +28,7 @@ export struct PlayerData {
 	int internal_number;
 	PlayerType type;
 	PlayerRace race;
+	uint32_t hud_skin = 64; // Only in the file for v39 from editor 6140 on.
 	int fixed_start_position;
 	std::string name;
 	glm::vec2 starting_position;
@@ -45,6 +46,7 @@ export struct ForceData {
 	bool share_advanced_unit_control;
 	int player_masks;
 	std::string name;
+	uint32_t unknown_flags = 0; // Bits without a field above, written back as they were read.
 };
 
 struct UpgradeAvailability {
@@ -79,6 +81,9 @@ struct RandomItemTable {
 
 export class MapInfo {
   public:
+	/// The version the file was read as. A v39 map saves as v39 with its own editor and game stamps;
+	/// anything older saves as write_version.
+	int format_version = write_version;
 	int map_version;
 	int editor_version;
 	int game_version_major;
@@ -100,7 +105,7 @@ export class MapInfo {
 	int playable_width;
 	int playable_height;
 
-	int all_flags;
+	int all_flags = 0;
 	bool hide_minimap_preview;
 	bool modif_ally_priorities;
 	bool melee_map;
@@ -126,6 +131,7 @@ export class MapInfo {
 	bool force_min_zoom;
 
 	int loading_screen_number;
+	uint32_t race_hud = 0; // v39
 	std::string loading_screen_model;
 	std::string loading_screen_text;
 	std::string loading_screen_title;
@@ -138,24 +144,44 @@ export class MapInfo {
 	std::string prologue_title;
 	std::string prologue_subtitle;
 
-	int fog_style;
-	float fog_start_z_height;
-	float fog_end_z_height;
-	float fog_density;
-	glm::u8vec4 fog_color;
+	int fog_style = 0;
+	float fog_start_z_height = 0.f;
+	float fog_end_z_height = 0.f;
+	float fog_density = 0.f;
+	glm::u8vec4 fog_color = glm::u8vec4(0);
 
-	int weather_id;
+	// v39
+	float fog_height_start = 0.f;
+	float fog_height_end = 0.f;
+	float fog_linear_start = 0.f;
+	float fog_linear_end = 0.f;
+	float fog_max_opacity = 0.f;
+	int fog_draw_over_sky = 0;
+
+	int weather_id = 0;
 	std::string custom_sound_environment;
 	char custom_light_tileset;
-	glm::u8vec4 water_color;
+	glm::u8vec4 water_color = glm::u8vec4(0);
 
-	bool lua;
-	uint32_t supported_modes;
-	uint32_t game_data_version;
+	bool lua = false;
+	uint32_t supported_modes = 0;
+	uint32_t game_data_version = 0;
 
-	uint32_t default_cam_distance;
-	uint32_t max_cam_distance;
-	uint32_t min_cam_distance;
+	uint32_t default_cam_distance = 0;
+	uint32_t max_cam_distance = 0;
+	uint32_t min_cam_distance = 0;
+
+	// v39
+	int hd_water_min_opacity = 0;
+	int hd_water_max_opacity = 0;
+	int hd_water_reflectivity = 0;
+	int hd_water_emissivity = 0;
+	int hd_water_edge_softness = 0;
+	int hd_water_waves_vertex_displacement = 0;
+	int hd_water_waves_normal_map_strength = 0;
+	glm::u8vec4 hd_water_override_color = glm::u8vec4(0);
+	int hd_water_envmap_reflectivity = 0;
+	glm::u8vec4 alpha_tile_minimap_color = glm::u8vec4(0);
 
 	std::vector<PlayerData> players;
 	std::vector<ForceData> forces;
@@ -171,16 +197,33 @@ export class MapInfo {
 	static constexpr int write_game_version_patch = 3;
 	static constexpr int write_game_version_build = 22978;
 
+	/// Editors 6128-6139 are refused by map_format::require_known_w3i_editor, so this never guesses for them.
+	bool has_player_hud_skin() const {
+		return format_version == 39 && static_cast<uint32_t>(editor_version) >= 6140;
+	}
+
 	void load() {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3i").value();
 
 		const int version = reader.read<uint32_t>();
 
 		map_format::require_accepted("war3map.w3i", map_format::w3i_versions, version);
+		format_version = version;
+		const bool v39 = version == 39;
+
+		// Only v39 is held to this. Older files keep the leniency they always had.
+		const auto read_count = [&](const uint64_t smallest_record_size) -> uint32_t {
+			const uint32_t count = reader.read<uint32_t>();
+			if (v39 && count * smallest_record_size > static_cast<uint64_t>(reader.remaining())) {
+				throw std::runtime_error(std::format("war3map.w3i is damaged: a count of {} does not fit in the file.", count));
+			}
+			return count;
+		};
 
 		if (version >= 18) {
 			map_version = reader.read<uint32_t>();
 			editor_version = reader.read<uint32_t>();
+			map_format::require_known_w3i_editor(version, editor_version);
 
 			if (version >= 28) {
 				game_version_major = reader.read<uint32_t>();
@@ -205,6 +248,7 @@ export class MapInfo {
 		playable_height = reader.read<uint32_t>();
 
 		const int flags = reader.read<uint32_t>();
+		all_flags = flags;
 		hide_minimap_preview = flags & 0x0001;
 		modif_ally_priorities = flags & 0x0002;
 		melee_map = flags & 0x0004;
@@ -234,6 +278,9 @@ export class MapInfo {
 
 		if (version >= 25) { // TFT
 			loading_screen_number = reader.read<uint32_t>();
+			if (v39) {
+				race_hud = reader.read<uint32_t>();
+			}
 			loading_screen_model = reader.read_c_string();
 			loading_screen_text = reader.read_c_string();
 			loading_screen_title = reader.read_c_string();
@@ -251,6 +298,15 @@ export class MapInfo {
 			fog_end_z_height = reader.read<float>();
 			fog_density = reader.read<float>();
 			fog_color = reader.read<glm::u8vec4>();
+
+			if (v39) {
+				fog_height_start = reader.read<float>();
+				fog_height_end = reader.read<float>();
+				fog_linear_start = reader.read<float>();
+				fog_linear_end = reader.read<float>();
+				fog_max_opacity = reader.read<float>();
+				fog_draw_over_sky = reader.read<int32_t>();
+			}
 
 			weather_id = reader.read<uint32_t>();
 			custom_sound_environment = reader.read_c_string();
@@ -272,6 +328,18 @@ export class MapInfo {
 					min_cam_distance = reader.read<uint32_t>();
 				}
 			}
+			if (v39) {
+				hd_water_min_opacity = reader.read<int32_t>();
+				hd_water_max_opacity = reader.read<int32_t>();
+				hd_water_reflectivity = reader.read<int32_t>();
+				hd_water_emissivity = reader.read<int32_t>();
+				hd_water_edge_softness = reader.read<int32_t>();
+				hd_water_waves_vertex_displacement = reader.read<int32_t>();
+				hd_water_waves_normal_map_strength = reader.read<int32_t>();
+				hd_water_override_color = reader.read<glm::u8vec4>();
+				hd_water_envmap_reflectivity = reader.read<int32_t>();
+				alpha_tile_minimap_color = reader.read<glm::u8vec4>();
+			}
 		} else if (version == 18) { // RoC
 			loading_screen_number = reader.read<uint32_t>();
 			loading_screen_text = reader.read_c_string();
@@ -292,11 +360,14 @@ export class MapInfo {
 			reader.advance(4); // prologue stuff?
 		}
 
-		players.resize(reader.read<uint32_t>());
+		players.resize(read_count(has_player_hud_skin() ? 45 : 41));
 		for (auto&& i : players) {
 			i.internal_number = reader.read<uint32_t>();
 			i.type = static_cast<PlayerType>(reader.read<uint32_t>() - 1);
 			i.race = static_cast<PlayerRace>(reader.read<uint32_t>());
+			if (has_player_hud_skin()) {
+				i.hud_skin = reader.read<uint32_t>();
+			}
 			i.fixed_start_position = reader.read<uint32_t>();
 			i.name = reader.read_c_string();
 			i.starting_position = reader.read<glm::vec2>();
@@ -308,7 +379,7 @@ export class MapInfo {
 			}
 		}
 
-		forces.resize(reader.read<uint32_t>());
+		forces.resize(read_count(9));
 		for (auto&& i : forces) {
 			const uint32_t force_flags = reader.read<uint32_t>();
 			i.allied = force_flags & 0b00000001;
@@ -316,16 +387,17 @@ export class MapInfo {
 			i.share_vision = force_flags & 0b00000100;
 			i.share_unit_control = force_flags & 0b00010000;
 			i.share_advanced_unit_control = force_flags & 0b00100000;
+			i.unknown_flags = force_flags & ~0b00110111u;
 
 			i.player_masks = reader.read<uint32_t>();
 			i.name = reader.read_c_string();
 		}
 
-		if (reader.remaining() < 4) {
+		if (!v39 && reader.remaining() < 4) {
 			return;
 		}
 
-		available_upgrades.resize(reader.read<uint32_t>());
+		available_upgrades.resize(read_count(16));
 		for (auto&& i : available_upgrades) {
 			i.player_flags = reader.read<uint32_t>();
 			i.id = reader.read_string(4);
@@ -333,27 +405,27 @@ export class MapInfo {
 			i.availability = reader.read<uint32_t>();
 		}
 
-		if (reader.remaining() < 4) {
+		if (!v39 && reader.remaining() < 4) {
 			return;
 		}
 
-		available_tech.resize(reader.read<uint32_t>());
+		available_tech.resize(read_count(8));
 		for (auto&& i : available_tech) {
 			i.player_flags = reader.read<uint32_t>();
 			i.id = reader.read_string(4);
 		}
 
-		if (reader.remaining() < 4) {
+		if (!v39 && reader.remaining() < 4) {
 			return;
 		}
 
-		random_unit_tables.resize(reader.read<uint32_t>());
+		random_unit_tables.resize(read_count(13));
 		for (auto&& i : random_unit_tables) {
 			i.creation_number = reader.read<uint32_t>();
 			i.name = reader.read_c_string();
 			i.positions = reader.read_vector<int>(reader.read<uint32_t>());
 
-			i.lines.resize(reader.read<uint32_t>());
+			i.lines.resize(read_count(4 + 4 * i.positions.size()));
 			for (auto&& j : i.lines) {
 				j.chance = reader.read<uint32_t>();
 				for (size_t k = 0; k < i.positions.size(); k++) {
@@ -362,18 +434,18 @@ export class MapInfo {
 			}
 		}
 
-		if (reader.remaining() < 4) {
+		if (!v39 && reader.remaining() < 4) {
 			return;
 		}
 
 		if (version >= 25) {
-			random_item_tables.resize(reader.read<uint32_t>());
+			random_item_tables.resize(read_count(9));
 			for (auto&& i : random_item_tables) {
 				i.creation_number = reader.read<uint32_t>();
 				i.name = reader.read_c_string();
-				i.item_sets.resize(reader.read<uint32_t>());
+				i.item_sets.resize(read_count(4));
 				for (auto&& j : i.item_sets) {
-					j.items.resize(reader.read<uint32_t>());
+					j.items.resize(read_count(8));
 					for (auto&& [chance, id] : j.items) {
 						chance = reader.read<uint32_t>();
 						id = reader.read_string(4);
@@ -381,18 +453,24 @@ export class MapInfo {
 				}
 			}
 		}
+
+		if (v39 && reader.remaining() != 0) {
+			throw std::runtime_error(std::format("war3map.w3i is damaged: {} bytes follow the last section.", reader.remaining()));
+		}
 	}
 
 	void save(char tileset) const {
 		BinaryWriter writer;
 
-		writer.write(write_version);
+		const bool v39 = format_version == 39;
+
+		writer.write(v39 ? 39 : write_version);
 		writer.write(map_version);
-		writer.write(write_editor_version);
-		writer.write(write_game_version_major);
-		writer.write(write_game_version_minor);
-		writer.write(write_game_version_patch);
-		writer.write(write_game_version_build);
+		writer.write(v39 ? editor_version : write_editor_version);
+		writer.write(v39 ? game_version_major : write_game_version_major);
+		writer.write(v39 ? game_version_minor : write_game_version_minor);
+		writer.write(v39 ? game_version_patch : write_game_version_patch);
+		writer.write(v39 ? game_version_build : write_game_version_build);
 		writer.write_c_string(name);
 		writer.write_c_string(author);
 		writer.write_c_string(description);
@@ -408,18 +486,21 @@ export class MapInfo {
 		writer.write(playable_width);
 		writer.write(playable_height);
 
-		const int flags = hide_minimap_preview * 0x0001 | modif_ally_priorities * 0x0002 | melee_map * 0x0004 | unknown * 0x0008
+		const int known_flags = hide_minimap_preview * 0x0001 | modif_ally_priorities * 0x0002 | melee_map * 0x0004 | unknown * 0x0008
 			| masked_area_partially_visible * 0x0010 | fixed_player_settings * 0x0020 | custom_forces * 0x0040 | custom_techtree * 0x0080
 			| custom_abilities * 0x0100 | custom_upgrades * 0x0200 | unknown2 * 0x0400 | cliff_shore_waves * 0x0800
 			| rolling_shore_waves * 0x1000 | unknown3 * 0x2000 | unknown4 * 0x4000 | item_classification * 0x8000 | water_tinting * 0x10000
 			| accurate_probability_for_calculations * 0x20000 | custom_ability_skins * 0x40000 | disable_deny_icon * 0x80000
 			| force_default_zoom * 0x100000 | force_max_zoom * 0x200000 | force_min_zoom * 0x400000;
 
-		writer.write(flags);
+		writer.write((all_flags & ~0x7FFFFF) | known_flags);
 
 		writer.write(tileset);
 
 		writer.write(loading_screen_number);
+		if (v39) {
+			writer.write(race_hud);
+		}
 		writer.write_c_string(loading_screen_model);
 		writer.write_c_string(loading_screen_text);
 		writer.write_c_string(loading_screen_title);
@@ -438,6 +519,15 @@ export class MapInfo {
 		writer.write(fog_density);
 		writer.write(fog_color);
 
+		if (v39) {
+			writer.write(fog_height_start);
+			writer.write(fog_height_end);
+			writer.write(fog_linear_start);
+			writer.write(fog_linear_end);
+			writer.write(fog_max_opacity);
+			writer.write(fog_draw_over_sky);
+		}
+
 		writer.write(weather_id);
 		writer.write_c_string(custom_sound_environment);
 		writer.write(custom_light_tileset);
@@ -452,11 +542,27 @@ export class MapInfo {
 		writer.write(max_cam_distance);
 		writer.write(min_cam_distance);
 
+		if (v39) {
+			writer.write(hd_water_min_opacity);
+			writer.write(hd_water_max_opacity);
+			writer.write(hd_water_reflectivity);
+			writer.write(hd_water_emissivity);
+			writer.write(hd_water_edge_softness);
+			writer.write(hd_water_waves_vertex_displacement);
+			writer.write(hd_water_waves_normal_map_strength);
+			writer.write(hd_water_override_color);
+			writer.write(hd_water_envmap_reflectivity);
+			writer.write(alpha_tile_minimap_color);
+		}
+
 		writer.write<uint32_t>(players.size());
 		for (const auto& i : players) {
 			writer.write(i.internal_number);
 			writer.write(static_cast<int>(i.type) + 1);
 			writer.write(static_cast<int>(i.race));
+			if (has_player_hud_skin()) {
+				writer.write(i.hud_skin);
+			}
 			writer.write(i.fixed_start_position);
 			writer.write_c_string(i.name);
 			writer.write(i.starting_position);
@@ -469,7 +575,7 @@ export class MapInfo {
 		writer.write<uint32_t>(forces.size());
 		for (const auto& i : forces) {
 			const uint32_t force_flags = i.allied * 0b00000001 | i.allied_victory * 0b00000010 | i.share_vision * 0b00000100
-				| i.share_unit_control * 0b00010000 | i.share_advanced_unit_control * 0b00100000;
+				| i.share_unit_control * 0b00010000 | i.share_advanced_unit_control * 0b00100000 | i.unknown_flags;
 			writer.write(force_flags);
 
 			writer.write(i.player_masks);
@@ -479,7 +585,7 @@ export class MapInfo {
 		writer.write<uint32_t>(available_upgrades.size());
 		for (const auto& i : available_upgrades) {
 			writer.write(i.player_flags);
-			writer.write_string(i.id);
+			writer.write_c_string_padded(i.id, 4);
 			writer.write(i.level);
 			writer.write(i.availability);
 		}
@@ -487,19 +593,22 @@ export class MapInfo {
 		writer.write<uint32_t>(available_tech.size());
 		for (const auto& i : available_tech) {
 			writer.write(i.player_flags);
-			writer.write_string(i.id);
+			writer.write_c_string_padded(i.id, 4);
 		}
 
 		writer.write<uint32_t>(random_unit_tables.size());
 		for (const auto& i : random_unit_tables) {
 			writer.write(i.creation_number);
 			writer.write_c_string(i.name);
+			writer.write<uint32_t>(i.positions.size());
 			writer.write_vector(i.positions);
 
 			writer.write<uint32_t>(i.lines.size());
 			for (const auto& j : i.lines) {
 				writer.write(j.chance);
-				writer.write_vector(j.ids);
+				for (const auto& id : j.ids) {
+					writer.write_c_string_padded(id, 4);
+				}
 			}
 		}
 
@@ -513,7 +622,7 @@ export class MapInfo {
 				writer.write<uint32_t>(j.items.size());
 				for (const auto& [chance, id] : j.items) {
 					writer.write(chance);
-					writer.write_string(id);
+					writer.write_c_string_padded(id, 4);
 				}
 			}
 		}

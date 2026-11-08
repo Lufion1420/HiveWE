@@ -652,6 +652,16 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 /// failing this one export gracefully is categorically worse than the export simply not succeeding.
 export AssetObfuscationResult run_asset_obfuscation(const fs::path& temp_dir) {
 	try {
+		// The rewrites below are not verified against 3.0 maps. Only the version is read, so a map lacking
+		// required files is not newly refused here the way a full preflight would refuse it.
+		{
+			std::uint32_t w3i_version = 0;
+			std::ifstream w3i(temp_dir / "war3map.w3i", std::ios::binary);
+			if (w3i.read(reinterpret_cast<char*>(&w3i_version), sizeof(w3i_version)) && w3i_version >= 39) {
+				return { false, std::format("Asset Path Obfuscation does not support war3map.w3i version {} yet.", w3i_version) };
+			}
+		}
+
 		static const Imports imports;
 		const std::vector<RenameCandidate> candidates = enumerate_rename_candidates(
 			temp_dir, imports.blacklist, [](const fs::path& path) { return hierarchy.game_file_exists(path); }

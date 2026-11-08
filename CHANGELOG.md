@@ -10,6 +10,12 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **LNI import: new custom abilities no longer rejected** — `validate_shadow_map` was calling `field_to_meta_id` with the custom object's own ID (e.g. `A060`), which is not yet in the SLK for brand-new objects. `AbilityMetaData.slk` keys most fields via `useSpecific` (e.g. `nameANfy`), so the code lookup failed and every such field was reported as "Unknown field", blocking the whole import. Fixed by using the parent (`oldid`) ID for field lookup on custom objects. Regression test added.
 - **Scenario import dialog no longer appears when nothing changed** — `prompt_apply_scenario_import` now skips the dialog entirely when `compute_scenario_import_changes` returns empty. The Apply button was already disabled in this case, but the dialog still forced a confirmation click.
 - **Maps with an unreadable format version are refused instead of crashing or corrupting data** — Opening a map HiveWE cannot read, such as a Warcraft III 3.0 map, used to crash the editor or load wrong data that a save would write back. HiveWE now shows a dialog naming the files and versions and leaves the open map and its unsaved edits intact; a refused .w3x writes nothing to your folders, and HiveWE also refuses to unpack over the folder of the map that is open. Opening 3.0 maps is not supported yet.
+- **Saving a map no longer loses or corrupts map info data** — Map flag bits and force flag bits HiveWE does not recognize are now kept instead of dropped, and random unit tables are saved with their position count and keep their full size when a table ID is empty. Previously these could write a corrupted `war3map.w3i`.
+- **Map Protector writes clean values for fields older maps do not store** — These fields are now written as 0 instead of garbage.
+- **Map Protector refuses asset obfuscation on Warcraft III 3.0 maps** — It stops with a clear failure message instead of producing a damaged map.
+
+### New Features
+- **Warcraft III 3.0 map info (`war3map.w3i` v39) can be read and saved** — HiveWE keeps the map's own version stamps when saving it. Real 3.0 maps are still refused on open until their doodad, unit, region and camera files are supported.
 
 ---
 

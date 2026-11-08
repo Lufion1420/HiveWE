@@ -28,12 +28,16 @@ namespace {
 		const std::string_view verdict = is_newer_than_accepted(accepted, found) ? "needs a newer version of HiveWE" : "HiveWE does not support";
 		return std::format("{} is {} {}, which {} (this version reads {}).", file, field, found, verdict, join_versions(accepted));
 	}
+
+	auto describe_unknown_w3i_editor(const std::uint32_t version, const std::uint32_t editor) -> std::string {
+		return std::format("war3map.w3i is version {} from editor build {}, whose layout HiveWE does not support.", version, editor);
+	}
 }
 
 /// The one definition of the map file versions HiveWE can read. The readers and the preflight below both
 /// use these, so they cannot disagree. Only versions the reader actually parses correctly belong here.
 export namespace map_format {
-	inline constexpr std::array<std::uint32_t, 8> w3i_versions = { 15, 18, 25, 26, 28, 31, 32, 33 };
+	inline constexpr std::array<std::uint32_t, 9> w3i_versions = { 15, 18, 25, 26, 28, 31, 32, 33, 39 };
 	inline constexpr std::array<std::uint32_t, 2> doo_versions = { 7, 8 };
 	inline constexpr std::array<std::uint32_t, 2> units_versions = { 7, 8 };
 	inline constexpr std::array<std::uint32_t, 2> units_subversions = { 9, 11 };
@@ -56,6 +60,18 @@ export namespace map_format {
 	) {
 		if (!is_accepted(accepted, version)) {
 			throw std::runtime_error(describe_unsupported(file, field, accepted, version));
+		}
+	}
+
+	/// Editors 6128-6139 have no v39 samples, so whether their players hold a hud_skin is unknown (6127 and
+	/// below do not, 6140 and up do). Guessing would misread the player names, so they are refused.
+	auto is_known_w3i_editor(const std::uint32_t version, const std::uint32_t editor) -> bool {
+		return version != 39 || editor < 6128 || editor > 6139;
+	}
+
+	void require_known_w3i_editor(const std::uint32_t version, const std::uint32_t editor) {
+		if (!is_known_w3i_editor(version, editor)) {
+			throw std::runtime_error(describe_unknown_w3i_editor(version, editor));
 		}
 	}
 }
@@ -166,6 +182,19 @@ namespace {
 		if (!map_format::is_accepted(format.versions, version)) {
 			problems.unsupported.push_back(describe_unsupported(format.file, "version", format.versions, version));
 			problems.any_newer |= is_newer_than_accepted(format.versions, version);
+			return;
+		}
+
+		// MapInfo::load refuses these too, but nothing around it in Map::load catches that.
+		if (format.file == "war3map.w3i" && version == 39) {
+			if (size < 12) {
+				report_short();
+				return;
+			}
+			const std::uint32_t editor = read_u32(8);
+			if (!map_format::is_known_w3i_editor(version, editor)) {
+				problems.unsupported.push_back(describe_unknown_w3i_editor(version, editor));
+			}
 			return;
 		}
 

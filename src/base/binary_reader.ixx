@@ -44,13 +44,14 @@ export class BinaryReader {
 	}
 
 	[[nodiscard]] std::string read_c_string() {
-		const std::string string(reinterpret_cast<char*>(buffer.data() + position));
-		position += string.size() + 1;
-
-		if (position > buffer.size()) {
+		const char* const start = reinterpret_cast<const char*>(buffer.data() + position);
+		const void* const end = position < buffer.size() ? std::memchr(start, '\0', buffer.size() - position) : nullptr;
+		if (end == nullptr) {
 			throw std::out_of_range("Trying to read out of range of buffer");
 		}
 
+		std::string string(start, static_cast<const char*>(end));
+		position += string.size() + 1;
 		return string;
 	}
 
