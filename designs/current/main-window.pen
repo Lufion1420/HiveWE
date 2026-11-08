@@ -34,7 +34,7 @@
               "name": "Ribbon/Button",
               "reusable": true,
               "width": 88,
-              "height": 68,
+              "height": 80,
               "fill": "#00000000",
               "cornerRadius": "$radius-ribbon-btn",
               "stroke": "#00000000",
@@ -77,7 +77,7 @@
               "name": "Ribbon/Button Checked",
               "reusable": true,
               "width": 88,
-              "height": 68,
+              "height": 80,
               "fill": "$ribbon-btn-checked",
               "cornerRadius": "$radius-ribbon-btn",
               "stroke": "$ribbon-btn-checked-border",
@@ -120,7 +120,7 @@
               "name": "Ribbon/Button Disabled",
               "reusable": true,
               "width": 88,
-              "height": 68,
+              "height": 80,
               "fill": "#00000000",
               "cornerRadius": "$radius-ribbon-btn",
               "stroke": "#00000000",
@@ -1257,7 +1257,7 @@
           "name": "Ribbon / Home",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -1266,7 +1266,7 @@
               "id": "GMBpD",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -1605,7 +1605,7 @@
               "id": "pQqD3",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -1927,7 +1927,7 @@
           "name": "Ribbon / Terrain",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -1936,7 +1936,7 @@
               "id": "c1advP",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -2275,7 +2275,7 @@
               "id": "RdsdJ",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -2415,7 +2415,7 @@
           "name": "Ribbon / Doodads",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -2424,7 +2424,7 @@
               "id": "L7uP8",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -2763,7 +2763,7 @@
               "id": "HA88m",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -2903,7 +2903,7 @@
           "name": "Ribbon / Units",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -2912,7 +2912,7 @@
               "id": "xqEbd",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -3251,7 +3251,7 @@
               "id": "l6YaI",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -3429,7 +3429,7 @@
           "name": "Ribbon / Pathing",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -3438,7 +3438,7 @@
               "id": "OzaTt",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -3777,7 +3777,7 @@
               "id": "h9vYj",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -3917,7 +3917,7 @@
           "name": "Ribbon / Regions",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -3926,7 +3926,7 @@
               "id": "sil6R",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -4265,7 +4265,7 @@
               "id": "fkmhu",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -4405,7 +4405,7 @@
           "name": "Ribbon / View",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -4414,7 +4414,7 @@
               "id": "XEaJK",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -4753,7 +4753,7 @@
               "id": "GQTkK",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -5061,7 +5061,7 @@
           "name": "Ribbon / Map",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -5070,7 +5070,7 @@
               "id": "GMVqs",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -5409,7 +5409,7 @@
               "id": "WIV9B",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -5646,7 +5646,7 @@
               "name": "Ribbon / Home",
               "clip": true,
               "width": 1600,
-              "height": 135,
+              "height": 136,
               "fill": "$ribbon-bg",
               "layout": "vertical",
               "children": [
@@ -5655,7 +5655,7 @@
                   "id": "NyytT",
                   "name": "Tab Bar",
                   "width": "fill_container",
-                  "height": 52,
+                  "height": 48,
                   "fill": "$ribbon-bg",
                   "alignItems": "end",
                   "children": [
@@ -5994,7 +5994,7 @@
                   "id": "SwY9r",
                   "name": "Pane",
                   "width": "fill_container",
-                  "height": 83,
+                  "height": 88,
                   "fill": "$ribbon-pane-bg",
                   "stroke": "$ribbon-border",
                   "strokeWidth": {
@@ -6627,7 +6627,7 @@
           "name": "Ribbon / Terrain Palette (contextual)",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -6636,7 +6636,7 @@
               "id": "HBxo9",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -6986,7 +6986,7 @@
               "id": "gqtvz",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -7293,7 +7293,7 @@
           "name": "Ribbon / Doodad Palette (contextual)",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -7302,7 +7302,7 @@
               "id": "ZELas",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -7652,7 +7652,7 @@
               "id": "Qs8m7",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -8663,7 +8663,7 @@
           "name": "Ribbon / Unit Palette (contextual)",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -8672,7 +8672,7 @@
               "id": "G7VUaY",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -9022,7 +9022,7 @@
               "id": "m5hq7m",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -9159,7 +9159,7 @@
           "name": "Ribbon / Pathing mode (stale Unit Palette tab, no Pathing Palette tab)",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -9168,7 +9168,7 @@
               "id": "UlGet",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -9518,7 +9518,7 @@
               "id": "Qa4re",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -9658,7 +9658,7 @@
           "name": "Ribbon / Region Palette (contextual)",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -9667,7 +9667,7 @@
               "id": "wqeaH",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -10017,7 +10017,7 @@
               "id": "zo4wY",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -16297,7 +16297,7 @@
           "name": "Ribbon (Doodad Palette tab active)",
           "clip": true,
           "width": 1600,
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -16306,7 +16306,7 @@
               "id": "YzTKX",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -16656,7 +16656,7 @@
               "id": "w6hFPk",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
@@ -19406,7 +19406,7 @@
           "name": "Ribbon (Terrain Palette tab active)",
           "clip": true,
           "width": "fill_container",
-          "height": 135,
+          "height": 136,
           "fill": "$ribbon-bg",
           "layout": "vertical",
           "children": [
@@ -19415,7 +19415,7 @@
               "id": "vqVWx",
               "name": "Tab Bar",
               "width": "fill_container",
-              "height": 52,
+              "height": 48,
               "fill": "$ribbon-bg",
               "alignItems": "end",
               "children": [
@@ -19765,7 +19765,7 @@
               "id": "HqqK3",
               "name": "Pane",
               "width": "fill_container",
-              "height": 83,
+              "height": 88,
               "fill": "$ribbon-pane-bg",
               "stroke": "$ribbon-border",
               "strokeWidth": {
