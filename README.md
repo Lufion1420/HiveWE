@@ -143,4 +143,4 @@ A dedicated Tooltip Editor with a template manager for working with WC3 tooltip 
 
 ## AI-assisted development
 
-Cursor agent guidance lives in [`AGENTS.md`](AGENTS.md) (index) and [`.cursor/`](.cursor/) (rules, skills, plans). Scoped rules load automatically when editing matching files; invoke skills explicitly for subsystem workflows.
+Claude Code guidance starts at [`CLAUDE.md`](CLAUDE.md): rules in [`.claude/rules/`](.claude/rules/) (scoped ones load when matching files are touched), skills in [`.claude/skills/`](.claude/skills/), feature plans in [`.claude/plans/`](.claude/plans/), and the agent harness in [`.claude/HARNESS.md`](.claude/HARNESS.md).

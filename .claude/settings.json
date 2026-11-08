@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/*.pen)",
+      "Grep(**/*.pen)",
+      "Bash(cmake --build --preset Release*)",
+      "PowerShell(cmake --build --preset Release*)",
+      "Bash(git push upstream*)",
+      "PowerShell(git push upstream*)"
+    ]
+  }
+}

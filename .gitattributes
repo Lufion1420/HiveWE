@@ -21,3 +21,4 @@
 *.dll binary
 *.exe binary
 *.ico binary
+*.pen binary
