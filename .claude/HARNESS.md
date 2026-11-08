@@ -39,7 +39,7 @@ Then the orchestrator commits and pushes. Internal-only changes get no changelog
 ## Gates
 - `reviewer` REJECT goes back to `cpp-dev`, then re-review. After 3 rejections, stop and ask the user.
 - `qa-verifier` FAIL goes back to `cpp-dev`, then `reviewer`, then QA again. COULD-NOT-RUN is not a pass.
-- Manual checks from QA go to the user as a short list. The change is described as unverified until they confirm.
+- QA tries every manual check itself first, with the ui-capture method, including finding test data and making edits (user request, 2026-11-08). Only what it cannot do, such as loading in the real game, goes to the user as a short list with exact inputs named. The change is described as unverified until they confirm.
 - Stop and ask on `NEEDS_DECISION` or `NEEDS_GAME_TEST`.
 - Keep the orchestrator's context small: subagents report under 25 lines and the orchestrator does not read build logs.
 

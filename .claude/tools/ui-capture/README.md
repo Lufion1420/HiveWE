@@ -23,13 +23,15 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - Posted client coordinates map to capture pixels at about x1.25 on a 125% DPI display, with a title-bar offset on dialogs. Hover does not render in `PrintWindow`. Calibrate per run; coordinates depend on DPI and the recent-map list.
 - Native dialogs: fill with `WM_SETTEXT` (Open File edit id 1148, folder picker edit id 1152), then `BM_CLICK` on OK (id 1). Dismiss with `WM_CLOSE`.
 - Qt dialogs: Alt+letter via `WM_SYSKEYDOWN` did nothing; a posted `WM_KEYDOWN` VK_RETURN accepted Create New Map.
+- Qt dialogs are reachable only through `AutomationElement.FromHandle`, not by top-level name lookup.
+- For an edit you can read back, toggle a checkbox such as Melee map in Map Description. Name, author and description edits may be dropped (ticket "Map Description drops edits when the name, author or description is a literal"). Needs verification: that this applies to `data/test map`.
 - A UIA walk of the whole main window can exceed 60 seconds. Run it detached or scope to a dialog HWND.
 
 ### Safety: recent maps (incident 2026-11-08)
 
 The File popup lists recent maps directly below Open Map (MPQ). A calibration click hit a recent entry and loaded the user's real map folder into the test instance. Before driving the File popup:
 
-1. Export `HKCU\Software\HiveWE`, then empty its `recentMaps` value so a mis-click cannot open a real map.
+1. Export `HKCU\Software\HiveWE`, then empty its `recentMaps` value so a mis-click cannot open a real map. In PowerShell 5.1 `reg add /d ""` drops the empty argument and blocks on a prompt. Use `[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(path, $true).SetValue('recentMaps',[string[]]@(),'MultiString')`.
 2. Restore the export at the end, also when the run fails.
 
 All helpers must refuse any HWND not owned by the started process ID. Never use SendInput or SendKeys.

@@ -28,4 +28,4 @@ Windows-first: Visual Studio 2022 17.14+, `VCPKG_ROOT`, overlay ports in `overla
 
 - Reconfigure after CMake or dependency changes.
 - Narrowest test first, then full preset if feasible.
-- For runtime/UI changes, the user launches the built app manually; `qa-verifier` hands over exact steps.
+- For runtime/UI changes, `qa-verifier` first drives the built app itself (ui-capture method, sandbox working directory, Agent build). It hands the user only what it cannot do, with exact steps. The Release preset ban and sandbox rules are unchanged.

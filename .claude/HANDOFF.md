@@ -3,18 +3,22 @@
 Written 2026-11-08. Overwritten at each handoff.
 
 ## State
-- Branch `main`, pushed to `origin`. No HiveWE process left running by the session. `HKCU\Software\HiveWE` matched its original state at QA's last check.
-- `[3.0] Refuse unknown map format versions` is committed. QA passed the automated tests (104/104) and the startup case on the real 3.0 map. The ticket stays open until the user does its manual checks, listed in the ticket: the file-dialog paths could not be driven.
-- World Editor inspection is finished; the audit is corrected (`.claude/plans/world-editor-parity.md`): 143 rows, 26 complete, 49 partial, 61 missing, 6 NO MENU, 1 unknown.
-- New Asana parent "Feature wishlist: what map makers want and what works badly" has 72 `[Wish]` subtasks. Research record: `.claude/plans/feature-wishlist.md`.
-- New ticket "Map Protector: Remove listfile option probably keeps the listfile": not run yet.
-- The user may have World Editor open with unsaved work. Do not touch it without new permission.
+- Branch `main`, pushed at 3a5c6ed plus the docs commit that carries this file. CI on 3a5c6ed: the orchestrator is watching it. fbf09a6 passed.
+- Closed: `[3.0] Refuse unknown map format versions`, `[3.0] Read and write w3i v39`.
+- New tickets: parent "Map load robustness: failures that crash or leave bad state" with subtasks "Map Protector: a war3map.w3e under 4 bytes leaves map_directory on the temp folder", "Truncated map file of an accepted version still crashes the editor", "Open Map (MPQ) ignores failed extraction". Also "Forces: shared vision uses the wrong flag bit" and "Map Description drops edits when the name, author or description is a literal".
+- World Editor: the user closed it themselves on 2026-11-08. If it is open, do not touch it without new permission.
 
 ## Next step
-Ask the user for the result of the manual checks on the refusal ticket. Then either close it, or send failures to `cpp-dev`.
-Then `[3.0] Read and write w3i v39`, the next 3.0 parser, or a top `[Wish]` bug if the user prefers. Ranks 2-5 are small data-safety fixes.
+1. Check CI on 3a5c6ed.
+2. The user chooses:
+   - `Truncated map file of an accepted version still crashes the editor`, then the 3.0 parsers for doodads, units, regions and cameras. The ticket must land first, because each accepted version turns damaged bodies into a `Map::load` crash. Asana's free plan has no dependencies, so this ordering is only in the ticket comment.
+   - Or a top `[Wish]` bug. Ranks 2-5 are small data-safety fixes.
 
 ## Decisions the user made
+- w3i keeps the source version on save: v39 stays v39, older maps save as v33. Revisit once the other 3.0 writers land.
+- Shared vision has its own ticket.
+- Obfuscation is refused on v39.
+- QA tries manual checks itself before asking the user (see `.claude/HARNESS.md` Gates).
 - 3.0 parsers: write our own against the verified layouts in `.claude/plans/wc3-3.0-compatibility.md`. Upstream is a reference only, because it has defects.
 - MPQ refusal: check before unpacking, so a refused map writes nothing.
 - Preflight also covers w3e, w3s and wpm.
@@ -24,7 +28,6 @@ Then `[3.0] Read and write w3i v39`, the next 3.0 parser, or a top `[Wish]` bug 
 - Standing rules: see "Session handoff" and "Self-updating guidance" in `.claude/rules/harness-guardrails.md`.
 
 ## Open questions
-- Reviewer's open item: `w3e->read_string(4)` sits outside the `try` in `src/map_protector/protection_pipeline.ixx` (`:263`, `:446`) and `asset_obfuscation.ixx:707`. A w3e under 4 bytes may leave `hierarchy.map_directory` on the temp directory. Not checked at runtime and not ticketed yet.
-- A truncated file of an accepted version still crashes, because `Map::load` has no catch. Not ticketed yet.
-- `load_mpq` ignores `unpack` and `extract_file` results. Not ticketed yet.
 - Waiting on the user: "User checks in the real 3.0.1 World Editor" and "User hand-checks of the UI baselines".
+- A v39 w3i beside doo 8 and w3r 5 is untested in the game.
+- v15/v18 fields `custom_light_tileset`, `game_data_set`, and v15 `map_version`, `loading_screen_number` are unset on stack `MapInfo`. Not ticketed.
