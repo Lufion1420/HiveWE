@@ -29,5 +29,5 @@ Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_threa
 
 ## Performance
 
-- `Map::load()` uses `std::async` — hot path.
+- `Map::load()` has no `std::async`. The async work is in `src/base/stock_object_data.ixx`, which rethrows through `.get()` on the main thread.
 - Large SLK/meta merges affect startup — avoid redundant work.
