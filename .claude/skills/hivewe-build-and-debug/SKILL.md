@@ -24,6 +24,13 @@ description: >-
 6. VS open-folder: post-build `data/` symlink may need Administrator.
 7. `LNK1104` on `HiveWE.exe` → often a running editor holding the lock.
 
+## Running HiveWE and CI
+
+- `src/main.cpp` always loads `data/test map/` relative to the working directory (line 154) and writes `data/tools/` (lines 108-111). **Never launch HiveWE with the repo as working directory.** Use a sandbox folder with a copy of `data/`.
+- To test any map without UI driving, replace the sandbox's `data/test map/` with the unpacked map. Stock map `(1)ForgottenHollow` crashed HiveWE (0xc0000409) about 2 seconds after start this way; an unmodified control loaded fine. Cause not investigated.
+- QSettings lives in `HKCU\Software\HiveWE` and holds the user's real layout and recent maps, so running HiveWE changes it. `reg export` before, `reg import` after.
+- CI (`.github/workflows/compile.yml`) builds and tests on every push to `main` and publishes nothing. New pushes cancel running ones. On a cold vcpkg cache, Configure CMake took about an hour on 2026-11-08.
+
 ## Verification checklist
 
 - [ ] Reconfigure after CMake/dependency edits

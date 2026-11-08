@@ -37,3 +37,5 @@ Return `NEEDS_DECISION:` with the question and a recommended default, or `NEEDS_
 3. References and files affected
 4. Risks and unknowns, each tagged
 5. Tests to add, and what to check in the real game
+
+End with `LEARNED:` and one line when you found something durable (a pattern, quirk or wrong assumption). If you could not follow part of your brief, say which part and why instead of skipping it silently.

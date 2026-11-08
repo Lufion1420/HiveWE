@@ -31,3 +31,5 @@ You own `.github/workflows/release.yml`. When it or the packaging changes, check
 
 ## Report (under 15 lines)
 Files touched, the entry text or version, release URL if any, and anything you could not verify.
+
+End with `LEARNED:` and one line when you found something durable (a pattern, quirk or wrong assumption). If you could not follow part of your brief, say which part and why instead of skipping it silently.

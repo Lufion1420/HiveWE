@@ -28,3 +28,5 @@ First line: `Status: DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT`. Use `
 - User-visible change in one sentence, for the changelog
 - UI to check by hand, as clicks in `data/test map`
 - Anything unverified or deliberately left out
+
+End with `LEARNED:` and one line when you found something durable (a pattern, quirk or wrong assumption). If you could not follow part of your brief, say which part and why instead of skipping it silently.

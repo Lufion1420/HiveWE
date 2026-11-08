@@ -2,7 +2,9 @@
 
 Created 2026-11-08, adapted from the Lendrill harness. The main Claude Code session is the orchestrator: it plans, delegates, owns the gates and git, and talks to the user. Subagents do the work. Subagents cannot spawn subagents, so the orchestrator runs each stage. Rules for everyone: [`rules/harness-guardrails.md`](rules/harness-guardrails.md).
 
-**Tickets:** [Asana project "HiveWE"](https://app.asana.com/1/1213523605265041/project/1220328345553589) (GID 1220328345553589). The orchestrator owns the board. When a ticket is finished, add a comment (what shipped, how it was verified, what was not), mark it complete, and move it to "Done — shipped".
+**Handoff:** `.claude/HANDOFF.md` holds the state for the next session; rules in the guardrails ("Session handoff"). **Tools:** `.claude/tools/ui-capture/` has the UIA and capture scripts the designer uses (see its README).
+
+**Tickets:** [Asana project "HiveWE"](https://app.asana.com/1/1213523605265041/project/1220328345553589) (GID 1220328345553589). The orchestrator owns the board. Asana MCP: `search_tasks` needs Premium, so use `get_tasks`. Tickets become subtasks with `update_tasks` (set parent, plus `remove_projects`). Subtasks come back in shuffled order, so names must not rely on list position. When a ticket is finished, add a comment (what shipped, how it was verified, what was not), mark it complete, and move it to "Done — shipped".
 
 ## Roster
 
@@ -15,9 +17,9 @@ Created 2026-11-08, adapted from the Lendrill harness. The main Claude Code sess
 | `designer` | `.pen` mockups for approval, and the as-built baseline | `designs/` only | Sonnet |
 | `wc3-format-specialist` | Sourced note on formats and compatibility before implementation | Nothing | Opus |
 | `build-engineer` | CMake, vcpkg, overlay ports, CI, ICE and linker failures | Build files | Sonnet |
-| `docs-keeper` | `.claude/rules/`, `.claude/skills/`, `.claude/plans/`, `CLAUDE.md` | Docs only | Sonnet |
+| `docs-keeper` | `.claude/rules/`, `.claude/skills/`, `.claude/plans/`, `.claude/agents/`, `.claude/HARNESS.md`, `CLAUDE.md` | Docs only | Sonnet |
 
-Built-in `Explore` and `Plan` handle scoping when ownership is unknown; launch two `Explore` agents in parallel when both the UI and format layers are unknown. Use Codegraph (`codegraph_explore`) before wide searches. Run the `security-review` skill only when the user asks (MPQ export, external `QProcess`, file I/O on user paths). Add `security-auditor` (untrusted map parsing, `QProcess`, Map Protector) and `perf-auditor` (Tracy, render loop, load times) when first needed.
+Built-in `Explore` and `Plan` handle scoping when ownership is unknown; launch two `Explore` agents in parallel when both the UI and format layers are unknown. Use Codegraph (`codegraph_explore`) before wide searches; it may need `projectPath` set to the repo path. Run the `security-review` skill only when the user asks (MPQ export, external `QProcess`, file I/O on user paths). Add `security-auditor` (untrusted map parsing, `QProcess`, Map Protector) and `perf-auditor` (Tracy, render loop, load times) when first needed.
 
 ## Pipeline
 

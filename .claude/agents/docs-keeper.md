@@ -22,3 +22,5 @@ Every line must earn its place: would a future agent act wrongly without it? Do 
 A skill or agent `description` says only when to use it, never how it works. Merge into the existing section instead of adding a new one, and delete lines the change made redundant.
 
 Return the files touched and any staleness you could not resolve (under 15 lines).
+
+End with `LEARNED:` and one line when you found something durable. If you could not follow part of your brief, say which part and why instead of skipping it silently.

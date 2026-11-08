@@ -29,3 +29,20 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - Report faithfully: failing tests, skipped checks and unknowns are stated plainly.
 - Subagents cannot ask the user. They return `NEEDS_DECISION:` with a recommended default, and the orchestrator asks.
 - Hitting a permission rule means stop and report. Never rephrase a command to get around it.
+
+## Session handoff
+- The orchestrator cannot measure context exactly, so it estimates: subagent reports so far, long tool results, whether the session was already summarized.
+- It suggests a new session when context looks high and at natural points such as a finished ticket. It does not stop mid-task to do so.
+- Before suggesting: commit and push finished work so the tree is clean, update the Asana board and guidance docs, and write `.claude/HANDOFF.md` (overwritten each time, committed). It covers current state, what is running or unfinished, next step, decisions the user made, and open questions.
+- Every suggestion includes a paste-ready prompt in the message.
+
+## Self-updating guidance
+- When work reveals something that helps later work (a bug pattern, a tool quirk, a better method, a wrong assumption), update the owning rule, skill or agent file without asking the user.
+- Subagents do not edit guidance outside their role. They end reports with a `LEARNED:` line when they have something durable, and the orchestrator runs `docs-keeper`.
+- Record verified facts only; label guesses `Needs verification`. Remove what turns out wrong. Do not record one-off details.
+- Never weakens safety: guardrails, build policy, the map data rules and `.claude/settings.json` permissions change only when the user asks.
+
+## Orchestrator habits
+- Do not hold work for a check the next step does not depend on (for example CI on an unrelated commit). Start it, watch in the background, report the result.
+- Spot-check subagent claims that drive decisions against the code before filing them. Designer runs have skipped parts of a brief: check that they launched the app.
+- Check paths before putting them in a brief.

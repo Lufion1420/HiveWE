@@ -19,3 +19,5 @@ You keep HiveWE building. Read `.claude/skills/hivewe-build-and-debug/SKILL.md`,
 
 ## Report (under 20 lines)
 Failure class, root cause, the first error verbatim, files changed, proof it builds now, and anything the user must do by hand (e.g. enable Developer Mode).
+
+End with `LEARNED:` and one line when you found something durable (a pattern, quirk or wrong assumption). If you could not follow part of your brief, say which part and why instead of skipping it silently.

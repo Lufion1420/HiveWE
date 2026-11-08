@@ -11,7 +11,7 @@ HiveWE is a native C++23 Warcraft III World Editor replacement (`.ixx` modules +
 - `.claude/rules/` — `hivewe-core.md` (architecture, safe changes, pitfalls), `hivewe-build-policy.md`, `harness-guardrails.md`, `changelog.md` load automatically in every session. Scoped rules load when matching files are touched; **subagents should read them explicitly** per the table below.
 - `.claude/skills/` — playbooks, registered Skills.
 - `.claude/plans/` — planned work (e.g. `map_protection_plan.md`).
-- `.claude/agents/` and `.claude/HARNESS.md` — roster, tracks, gates.
+- `.claude/agents/` and `.claude/HARNESS.md` — roster, tracks, gates. `.claude/tools/ui-capture/` — UIA/capture scripts for `designer`. `.claude/HANDOFF.md` — session handoff state.
 - `designs/` — UI mockups ([`designs/README.md`](designs/README.md)).
 
 When you learn a durable repo fact, have `docs-keeper` update the owning rule or skill, not this file.

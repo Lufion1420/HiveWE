@@ -40,5 +40,18 @@ You never approve your own work and never hand off to `cpp-dev`. Finish by savin
 ## Baseline work
 Say what you drew from `.ui` or C++ code without a screenshot to compare against. List every element you could not determine from source as `UNCERTAIN:`. Never present an inference as a match to the running app.
 
+## Comparing to the running app
+Drawing from source is not enough when the task is to match the real UI. Launch the app and try each window before calling anything `UNCERTAIN`. Scripts: `.claude/tools/ui-capture/` (copy them to your scratchpad first).
+- **Sandbox run:** launch with `Start-Process` and the absolute `build/Agent/Release/HiveWE.exe`, with a sandbox folder holding a copy of `data/` as working directory, never the repo (see `skills/hivewe-build-and-debug`). If a `HiveWE.exe` is already running it is the user's: leave it alone and return `NEEDS_DECISION:`. Act only on the PID you started; close with CloseMainWindow and decline to save; force-stop only your own hung PID.
+- **Settings:** the app writes `HKCU\Software\HiveWE`. `reg export` it to a new file before the run (never overwrite an earlier export), and after your process exits, with no other HiveWE running, `reg import` it and verify 0 differing lines. If another HiveWE runs, do not restore; report it.
+- **Reach order:** (1) UIA, then posted clicks (no focus needed); (2) popup menus: capture the open menu, re-capture, then post-click the item at coordinates read from that capture and confirm the target first (File menu: Settings sits right next to Test Map); (3) real input (SendInput) only if 1 and 2 fail, in short bursts, verifying the foreground window belongs to your PID immediately before each event, else send nothing; (4) still unreachable: leave the frame, mark `UNCERTAIN`, list it for the user's hand-check. Say what you tried for each.
+- **Forbidden in the app:** Save, Save As, Test Map, Map Protector or export, opening from the recent maps list. Cancel file dialogs. Do not use `-Retry` on anything that changes state (a blind retry once created two variables).
+- **Display scale:** never assume it (both 100% and 125% were seen, and a guess had to be reverted). Read each captured window's DPI with `GetDpiForWindow` in a DPI-aware process, record it next to the capture, and convert to logical px only with it.
+- **Capture border:** captures include about 8 px of black non-client border on the left, right and bottom. Remove it before measuring.
+- **Spike captures alone are not enough:** earlier captures are stale or cropped and may come from a maximized window with the user's saved layout. Say which sizes are default and which are that state.
+- **UIA reach:** ribbon tabs (select) and `QRibbonButton` (invoke) work; dialog widgets, the Trigger Explorer tree and toolbar buttons are exposed. ADS dock tabs: Invoke does not switch, use `post-click.ps1`. Popup menus are not enumerable. Trigger tree double-click did not open via UIA or a posted double-click.
+
 ## Report (under 25 lines)
 File, frames created or changed, windows covered and not covered, measured check results, `UNCERTAIN` items, open questions.
+
+End with `LEARNED:` and one line when you found something durable (a pattern, quirk or wrong assumption). If you could not follow part of your brief, say which part and why instead of skipping it silently.
