@@ -33,7 +33,7 @@ Stock root: `C:/Users/mauri/AppData/Local/Temp/claude/11cf287c6d13d22a/624d2e1b-
 - Units: random type 2 count and empty ids are fixed for all versions, in the units ticket.
 - Units: a sub 9 v12/v13 file saves as sub 11 only when a unit holds a non-default item table or str, agi or int. w3i flag 0x4000 is left alone. Whether the World Editor reads sub 11 with the flag unset is untested.
 - Units: an id over 4 bytes is checked before saving, with a dialog; the Object Editor counts bytes; the throw stays.
-- World Editor file: not waited for separately; the user supplied `Desktop/testAIHere.w3m` (read only). Its 361-byte units file is embedded as hex in the tests.
+- World Editor file: not waited for separately; the user supplied `Desktop/testAIHere.w3m` (read only). Its 361-byte units file is embedded as hex in the tests. User check: reopening it in the 3.0.1 World Editor resets the paladin's attributes and item table.
 - w3i keeps the source version on save: v39 stays v39, older maps save as v33. Revisit once the other 3.0 writers land.
 - Shared vision has its own ticket.
 - Obfuscation is refused on v39.
@@ -57,7 +57,6 @@ Stock root: `C:/Users/mauri/AppData/Local/Temp/claude/11cf287c6d13d22a/624d2e1b-
 - An id with bytes after its first NUL is refused on v12+, accepted on v8.
 
 ## Open questions
-- Waiting on the user: did the paladin's item table also reset on reopening `testAIHere.w3m`? They reported that the attributes reset, and did not mention the table.
 - Waiting on the user: three checks for the doodads v12/v13 ticket, listed on the ticket itself: copy/paste and undo on a crafted v13 map, placing a doodad with the brush and reopening, and loading HiveWE's v13 output in the real game and World Editor.
 - Waiting on the user: "User checks in the real 3.0.1 World Editor" and "User hand-checks of the UI baselines".
 - Waiting on the user: optional check that undo survives a refusal. In `build/Agent/Release/HiveWE.exe`, open a map with a placed unit, move it with the keypad, refuse a damaged map, then press Ctrl+Z; the move should undo. QA could not make a tracked edit without real mouse input. The fix is also not game-tested.
