@@ -26,12 +26,20 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - Qt dialogs are reachable only through `AutomationElement.FromHandle`, not by top-level name lookup.
 - For an edit you can read back, toggle a checkbox such as Melee map in Map Description. Name, author and description edits may be dropped (ticket "Map Description drops edits when the name, author or description is a literal"). Needs verification: that this applies to `data/test map`.
 - A UIA walk of the whole main window can exceed 60 seconds. Run it detached or scope to a dialog HWND.
+- Never name a PowerShell function `H` or `Cls`: they are built-in aliases, so the call silently runs something else.
+- Posted-message brush strokes only draw a brush preview and do not register in `world_undo`, so they cannot create a tracked unsaved edit.
+- UIA can Invoke ribbon buttons only on the selected tab, so select the tab first with `ui-act.ps1 select -Type TabItem`. Map Protector is on Home, Item Tables is on Units.
+- A `Start-Process` argument list needs the whole string quoted, or names with spaces are silently dropped.
+- Qt combo popups ignore posted mouse and key messages and UIA select, so a combo choice cannot be committed without real input.
+- No `world_undo`-tracked edit was reachable without real mouse input on `data/test map`: it has no doodads and Ctrl+A skips `sloc`. Map Options, Modify Map Bounds does reach `Map::resize` without the mouse.
+- Map Protector's saved settings can point at the user's real map. Reset the Source and Output fields and read them back before exporting.
+- MPQ test archives can be built with `StormLib.dll` through ctypes.
 
 ### Safety: recent maps (incident 2026-11-08)
 
 The File popup lists recent maps directly below Open Map (MPQ). A calibration click hit a recent entry and loaded the user's real map folder into the test instance. Before driving the File popup:
 
-1. Export `HKCU\Software\HiveWE`, then empty its `recentMaps` value so a mis-click cannot open a real map. In PowerShell 5.1 `reg add /d ""` drops the empty argument and blocks on a prompt. Use `[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(path, $true).SetValue('recentMaps',[string[]]@(),'MultiString')`.
+1. Export `HKCU\Software\HiveWE\HiveWE` (QSettings org and app; not `HKCU\Software\HiveWE`, which an emptied run left untouched while the popup showed real maps), then empty its `recentMaps` value so a mis-click cannot open a real map. Read the value back and confirm it is empty before driving the File popup. In PowerShell 5.1 `reg add /d ""` drops the empty argument and blocks on a prompt. Use `[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(path, $true).SetValue('recentMaps',[string[]]@(),'MultiString')`.
 2. Restore the export at the end, also when the run fails.
 
 All helpers must refuse any HWND not owned by the started process ID. Never use SendInput or SendKeys.
