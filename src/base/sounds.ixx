@@ -40,13 +40,16 @@ export class Sounds {
 
 	void load() {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3s").value();
+		load(reader);
+	}
 
+	void load(BinaryReader& reader) {
 		int version = reader.read<u32>();
 		if (!map_format::is_accepted(map_format::w3s_versions, version)) {
 			std::cout << "Unknown war3map.w3s version: " << version << " Attempting to load but may crash\n";
 		}
 
-		sounds.resize(reader.read<u32>());
+		sounds.resize(reader.read_count(71 + (version >= 2 ? 21 : 0) + (version >= 3 ? 4 : 0)));
 		for (auto& i : sounds) {
 			i.name = reader.read_c_string();
 			i.file = reader.read_c_string();

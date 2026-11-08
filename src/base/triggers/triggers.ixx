@@ -416,6 +416,10 @@ export class Triggers {
 	int trig_def_ver = 2;
 
   public:
+	/// Deeper nesting refuses the map, since overflowing the stack cannot be caught. The deepest of the 466
+	/// stock maps is 22 (campaign/reforged/roc/undead07).
+	static constexpr int max_parse_depth = 256;
+
 	ini::INI trigger_strings;
 	ini::INI trigger_data;
 
@@ -449,7 +453,14 @@ export class Triggers {
 		bool add_call
 	) const;
 
-	void parse_parameter_structure(BinaryReader& reader, TriggerParameter& parameter, uint32_t version) {
+	static void check_parse_depth(const int depth) {
+		if (depth > max_parse_depth) {
+			throw std::runtime_error(std::format("Triggers are nested more than {} levels deep", max_parse_depth));
+		}
+	}
+
+	void parse_parameter_structure(BinaryReader& reader, TriggerParameter& parameter, uint32_t version, int depth) {
+		check_parse_depth(depth);
 		parameter.type = static_cast<TriggerParameter::Type>(reader.read<uint32_t>());
 		parameter.value = reader.read_c_string();
 		parameter.has_sub_parameter = reader.read<uint32_t>();
@@ -462,7 +473,7 @@ export class Triggers {
 			if (has_parameters) {
 				parameter.sub_parameter.parameters.resize(argument_counts[parameter.sub_parameter.name]);
 				for (auto&& i : parameter.sub_parameter.parameters) {
-					parse_parameter_structure(reader, i, version);
+					parse_parameter_structure(reader, i, version, depth + 1);
 				}
 			}
 		}
@@ -480,11 +491,12 @@ export class Triggers {
 		}
 		if (parameter.is_array) {
 			parameter.parameters.resize(1);
-			parse_parameter_structure(reader, parameter.parameters.front(), version);
+			parse_parameter_structure(reader, parameter.parameters.front(), version, depth + 1);
 		}
 	}
 
-	void parse_eca_structure(BinaryReader& reader, ECA& eca, bool is_child, uint32_t version) {
+	void parse_eca_structure(BinaryReader& reader, ECA& eca, bool is_child, uint32_t version, int depth = 0) {
+		check_parse_depth(depth);
 		eca.type = static_cast<ECA::Type>(reader.read<uint32_t>());
 		if (is_child) {
 			eca.group = reader.read<uint32_t>();
@@ -493,12 +505,12 @@ export class Triggers {
 		eca.enabled = reader.read<uint32_t>();
 		eca.parameters.resize(argument_counts[eca.name]);
 		for (auto&& i : eca.parameters) {
-			parse_parameter_structure(reader, i, version);
+			parse_parameter_structure(reader, i, version, depth + 1);
 		}
 		if (version == 7) {
-			eca.ecas.resize(reader.read<uint32_t>());
+			eca.ecas.resize(reader.read_count(17));
 			for (auto&& i : eca.ecas) {
-				parse_eca_structure(reader, i, true, version);
+				parse_eca_structure(reader, i, true, version, depth + 1);
 			}
 		}
 	}
@@ -598,25 +610,25 @@ export class Triggers {
 		}
 
 		reader.advance(4); // map_count
-		reader.advance(4 * reader.read<uint32_t>()); // map ids of deleted maps
+		reader.advance(std::size_t { reader.read_count(4) } * 4); // map ids of deleted maps
 
 		reader.advance(4); // library_count
-		reader.advance(4 * reader.read<uint32_t>()); // library ids of deleted libraries
+		reader.advance(std::size_t { reader.read_count(4) } * 4); // library ids of deleted libraries
 
 		reader.advance(4); // category_count
-		reader.advance(4 * reader.read<uint32_t>()); // category ids of deleted categories
+		reader.advance(std::size_t { reader.read_count(4) } * 4); // category ids of deleted categories
 
 		reader.advance(4); // trigger_count
-		reader.advance(4 * reader.read<uint32_t>()); // trigger ids of deleted triggers
+		reader.advance(std::size_t { reader.read_count(4) } * 4); // trigger ids of deleted triggers
 
 		reader.advance(4); // comment_count
-		reader.advance(4 * reader.read<uint32_t>()); // comment ids of deleted comments
+		reader.advance(std::size_t { reader.read_count(4) } * 4); // comment ids of deleted comments
 
 		reader.advance(4); // script_count
-		reader.advance(4 * reader.read<uint32_t>()); // script ids of deleted scripts
+		reader.advance(std::size_t { reader.read_count(4) } * 4); // script ids of deleted scripts
 
 		reader.advance(4); // variable_count
-		reader.advance(4 * reader.read<uint32_t>()); // variable ids of deleted variables
+		reader.advance(std::size_t { reader.read_count(4) } * 4); // variable ids of deleted variables
 
 		unknown1 = reader.read<uint32_t>();
 		unknown2 = reader.read<uint32_t>();
@@ -679,7 +691,7 @@ export class Triggers {
 					trigger.initially_on = !reader.read<uint32_t>();
 					trigger.run_on_initialization = reader.read<uint32_t>();
 					trigger.parent_id = reader.read<uint32_t>();
-					trigger.ecas.resize(reader.read<uint32_t>());
+					trigger.ecas.resize(reader.read_count(9));
 					for (auto& j : trigger.ecas) {
 						parse_eca_structure(reader, j, false, sub_version);
 					}
@@ -702,7 +714,7 @@ export class Triggers {
 	void load_version_pre31(BinaryReader& reader, uint32_t version) {
 		std::print("Importing pre-1.31 trigger format\n");
 
-		categories.resize(reader.read<uint32_t>());
+		categories.resize(reader.read_count(5));
 		for (auto& i : categories) {
 			i.classifier = Classifier::category;
 			i.id = reader.read<uint32_t>();
@@ -724,7 +736,7 @@ export class Triggers {
 		categories.insert(categories.begin(), {Classifier::map, 0, "Map Header", true, false, -1});
 		categories.insert(categories.begin(), {Classifier::category, variable_category, "Variables", true, false, 0});
 
-		variables.resize(reader.read<uint32_t>());
+		variables.resize(reader.read_count(15));
 		for (auto& i : variables) {
 			i.name = reader.read_c_string();
 			i.type = reader.read_c_string();
@@ -740,7 +752,7 @@ export class Triggers {
 			i.parent_id = variable_category;
 		}
 
-		triggers.resize(reader.read<uint32_t>());
+		triggers.resize(reader.read_count(26));
 		for (auto& i : triggers) {
 			i.name = reader.read_c_string();
 			i.description = reader.read_c_string();
@@ -768,7 +780,7 @@ export class Triggers {
 			if (i.parent_id == 0) {
 				i.parent_id = -2;
 			}
-			i.ecas.resize(reader.read<uint32_t>());
+			i.ecas.resize(reader.read_count(9));
 			for (auto& j : i.ecas) {
 				parse_eca_structure(reader, j, false, version);
 			}
@@ -806,7 +818,7 @@ export class Triggers {
 
 		if (sub_version == 1) {
 			global_jass_comment = reader.read_c_string();
-			int size = reader.read<uint32_t>();
+			const uint32_t size = reader.read<uint32_t>();
 			if (size > 0) {
 				global_jass = reader.read_string(size);
 			}
@@ -814,7 +826,7 @@ export class Triggers {
 
 		for (auto& i : triggers) {
 			if (!i.is_comment) {
-				int size = reader.read<uint32_t>();
+				const uint32_t size = reader.read<uint32_t>();
 				if (size > 0) {
 					i.custom_text = reader.read_string(size);
 				}

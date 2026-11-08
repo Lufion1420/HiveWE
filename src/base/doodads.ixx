@@ -58,6 +58,26 @@ export class Doodads {
 	bool load(const Terrain& terrain, const MapInfo& info) {
 		BinaryReader reader = hierarchy.map_file_read("war3map.doo").value();
 
+		if (!read_records(reader, terrain.offset, info, doodads, special_doodads)) {
+			return false;
+		}
+
+		Doodad::auto_increment = 0;
+		for (const Doodad& i : doodads) {
+			Doodad::auto_increment = std::max(Doodad::auto_increment, i.creation_number);
+		}
+
+		return true;
+	}
+
+	/// Parses war3map.doo into the two vectors and touches nothing else. False when the magic number is wrong.
+	static bool read_records(
+		BinaryReader& reader,
+		const glm::vec2 terrain_offset,
+		const MapInfo& info,
+		std::vector<Doodad>& out_doodads,
+		std::vector<SpecialDoodad>& out_special_doodads
+	) {
 		const std::string magic_number = reader.read_string(4);
 		if (magic_number != "W3do") {
 			std::println("Invalid war3map.doo file: Magic number is not W3do");
@@ -70,16 +90,21 @@ export class Doodads {
 		const uint32_t subversion = reader.read<uint32_t>();
 		// ToDO check subversion
 
-		Doodad::auto_increment = 0;
-		doodads.resize(reader.read<uint32_t>());
-		for (auto&& i : doodads) {
+		const bool has_skin = info.game_version_major * 100 + info.game_version_minor >= 132;
+
+		out_doodads.resize(reader.read_count(42 + (has_skin ? 4 : 0) + (version >= 8 ? 8 : 0)));
+		for (auto&& i : out_doodads) {
 			i.id = reader.read_string(4);
 			i.variation = reader.read<uint32_t>();
-			i.position = (reader.read<glm::vec3>() - glm::vec3(terrain.offset, 0)) / 128.f;
+			const glm::vec3 position = reader.read<glm::vec3>();
+			if (!std::isfinite(position.x) || !std::isfinite(position.y)) {
+				throw std::runtime_error(std::format("Doodad {} has a position that is not a number", i.id));
+			}
+			i.position = (position - glm::vec3(terrain_offset, 0)) / 128.f;
 			i.angle = reader.read<float>();
 			i.scale = reader.read<glm::vec3>();
 
-			if (info.game_version_major * 100 + info.game_version_minor >= 132) {
+			if (has_skin) {
 				i.skin_id = reader.read_string(4);
 			} else {
 				i.skin_id = i.id;
@@ -92,9 +117,9 @@ export class Doodads {
 
 			if (version >= 8) {
 				i.item_table_pointer = reader.read<int32_t>();
-				i.item_sets.resize(reader.read<uint32_t>());
+				i.item_sets.resize(reader.read_count(4));
 				for (auto&& j : i.item_sets) {
-					j.items.resize(reader.read<uint32_t>());
+					j.items.resize(reader.read_count(8));
 					for (auto& [chance, id] : j.items) {
 						id = reader.read_string(4);
 						chance = reader.read<uint32_t>();
@@ -103,14 +128,13 @@ export class Doodads {
 			}
 
 			i.creation_number = reader.read<uint32_t>();
-			Doodad::auto_increment = std::max(Doodad::auto_increment, i.creation_number);
 		}
 
 		// Terrain Doodads
 		const int special_format_version = reader.read<uint32_t>();
 
-		special_doodads.resize(reader.read<uint32_t>());
-		for (auto&& i : special_doodads) {
+		out_special_doodads.resize(reader.read_count(16));
+		for (auto&& i : out_special_doodads) {
 			i.id = reader.read_string(4);
 			i.variation = reader.read<uint32_t>();
 			i.position = glm::ivec3(reader.read<glm::ivec2>(), 0);

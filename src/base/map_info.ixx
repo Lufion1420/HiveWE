@@ -204,17 +204,19 @@ export class MapInfo {
 
 	void load() {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3i").value();
+		load(reader);
+	}
 
+	void load(BinaryReader& reader) {
 		const int version = reader.read<uint32_t>();
 
 		map_format::require_accepted("war3map.w3i", map_format::w3i_versions, version);
 		format_version = version;
 		const bool v39 = version == 39;
 
-		// Only v39 is held to this. Older files keep the leniency they always had.
 		const auto read_count = [&](const uint64_t smallest_record_size) -> uint32_t {
 			const uint32_t count = reader.read<uint32_t>();
-			if (v39 && count * smallest_record_size > static_cast<uint64_t>(reader.remaining())) {
+			if (count * smallest_record_size > static_cast<uint64_t>(reader.remaining())) {
 				throw std::runtime_error(std::format("war3map.w3i is damaged: a count of {} does not fit in the file.", count));
 			}
 			return count;
@@ -360,7 +362,7 @@ export class MapInfo {
 			reader.advance(4); // prologue stuff?
 		}
 
-		players.resize(read_count(has_player_hud_skin() ? 45 : 41));
+		players.resize(read_count(has_player_hud_skin() ? 45 : version >= 31 ? 41 : 33));
 		for (auto&& i : players) {
 			i.internal_number = reader.read<uint32_t>();
 			i.type = static_cast<PlayerType>(reader.read<uint32_t>() - 1);

@@ -59,7 +59,7 @@ export class BinaryReader {
 	[[nodiscard]] std::vector<T> read_vector(const size_t size) {
 		static_assert(std::is_trivial_v<T>, "T must be of trivial type.");
 
-		if (position + sizeof(T) * size > buffer.size()) {
+		if (size > (buffer.size() - position) / sizeof(T)) {
 			throw std::out_of_range("Trying to read out of range of buffer");
 		}
 		std::vector<T> result(reinterpret_cast<T*>(&buffer[position]), reinterpret_cast<T*>(&buffer[position]) + size);
@@ -79,10 +79,22 @@ export class BinaryReader {
 	}
 
 	void advance_c_string() {
-		position += std::string(reinterpret_cast<char*>(buffer.data() + position)).size() + 1;
-
-		if (position > buffer.size()) {
+		const char* const start = reinterpret_cast<const char*>(buffer.data() + position);
+		const void* const end = position < buffer.size() ? std::memchr(start, '\0', buffer.size() - position) : nullptr;
+		if (end == nullptr) {
 			throw std::out_of_range("Trying to read out of range of buffer");
 		}
+
+		position += static_cast<const char*>(end) - start + 1;
+	}
+
+	/// Reads a u32 record count. Throws when that many records of at least smallest_record bytes each cannot
+	/// fit in what is left, so a damaged count fails here instead of allocating from it.
+	[[nodiscard]] std::uint32_t read_count(const std::size_t smallest_record) {
+		const std::uint32_t count = read<std::uint32_t>();
+		if (count > (buffer.size() - position) / smallest_record) {
+			throw std::out_of_range(std::format("A count of {} does not fit in the file", count));
+		}
+		return count;
 	}
 };

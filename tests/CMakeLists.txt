@@ -9,6 +9,7 @@ add_executable(HiveWE_tests
 	asset_obfuscation_test.cpp
 	protection_pipeline_test.cpp
 	map_format_check_test.cpp
+	map_body_check_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

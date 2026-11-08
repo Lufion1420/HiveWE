@@ -131,6 +131,28 @@ export class Units {
 	void load(const Terrain& terrain, const MapInfo& info) {
 		BinaryReader reader = hierarchy.map_file_read("war3mapUnits.doo").value();
 
+		read_records(reader, terrain.offset, info, [&](Unit& i) {
+			i.update_terrain_height(terrain);
+
+			// Either a unit or an item
+			if (units_slk.row_headers.contains(i.id) || i.id == "sloc" || i.id == "uDNR" || i.id == "bDNR") {
+				units.push_back(i);
+			} else {
+				items.push_back(i);
+			}
+
+			Unit::auto_increment = std::max(Unit::auto_increment, i.creation_number);
+		});
+	}
+
+	/// Parses war3mapUnits.doo, handing each record to on_record. Constructing a Unit bumps Unit::auto_increment;
+	/// apart from that this touches nothing, and reads no SLK and no terrain.
+	static void read_records(
+		BinaryReader& reader,
+		const glm::vec2 terrain_offset,
+		const MapInfo& info,
+		const std::function<void(Unit&)>& on_record
+	) {
 		const std::string magic_number = reader.read_string(4);
 		if (magic_number != "W3do") {
 			std::cout << "Invalid war3mapUnits.w3e file: Magic number is not W3do\n";
@@ -142,16 +164,22 @@ export class Units {
 		const int subversion = reader.read<uint32_t>();
 		map_format::require_accepted("war3mapUnits.doo", map_format::units_subversions, subversion, "subversion");
 
-		const int unit_count = reader.read<uint32_t>();
-		for (int k = 0; k < unit_count; k++) {
+		const bool has_skin = info.game_version_major * 100 + info.game_version_minor >= 132;
+
+		const uint32_t unit_count = reader.read_count(91 + (has_skin ? 4 : 0) + (subversion >= 11 ? 16 : 0));
+		for (uint32_t k = 0; k < unit_count; k++) {
 			Unit i;
 			i.id = reader.read_string(4);
 			i.variation = reader.read<uint32_t>();
-			i.position = (reader.read<glm::vec3>() - glm::vec3(terrain.offset, 0)) / 128.f;
+			const glm::vec3 position = reader.read<glm::vec3>();
+			if (!std::isfinite(position.x) || !std::isfinite(position.y)) {
+				throw std::runtime_error(std::format("Unit {} has a position that is not a number", i.id));
+			}
+			i.position = (position - glm::vec3(terrain_offset, 0)) / 128.f;
 			i.angle = reader.read<float>();
 			i.scale = reader.read<glm::vec3>() / 128.f;
 
-			if (info.game_version_major * 100 + info.game_version_minor >= 132) {
+			if (has_skin) {
 				i.skin_id = reader.read_string(4);
 			} else {
 				i.skin_id = i.id;
@@ -174,9 +202,9 @@ export class Units {
 				i.item_table_pointer = reader.read<uint32_t>();
 			}
 
-			i.item_sets.resize(reader.read<uint32_t>());
+			i.item_sets.resize(reader.read_count(4));
 			for (auto&& j : i.item_sets) {
-				j.items.resize(reader.read<uint32_t>());
+				j.items.resize(reader.read_count(8));
 				for (auto&& [chance, id] : j.items) {
 					id = reader.read_string(4);
 					chance = reader.read<uint32_t>();
@@ -194,13 +222,13 @@ export class Units {
 				i.intelligence = reader.read<uint32_t>();
 			}
 
-			i.items.resize(reader.read<uint32_t>());
+			i.items.resize(reader.read_count(8));
 			for (auto&& [slot, id] : i.items) {
 				slot = reader.read<uint32_t>();
 				id = reader.read_string(4);
 			}
 
-			i.abilities.resize(reader.read<uint32_t>());
+			i.abilities.resize(reader.read_count(12));
 			for (auto&& [id, autocast, level] : i.abilities) {
 				id = reader.read_string(4);
 				autocast = reader.read<uint32_t>();
@@ -216,7 +244,7 @@ export class Units {
 					i.random = reader.read_vector<uint8_t>(8);
 					break;
 				case 2:
-					i.random = reader.read_vector<uint8_t>(reader.read<uint32_t>() * 8);
+					i.random = reader.read_vector<uint8_t>(std::size_t { reader.read_count(8) } * 8);
 					break;
 			}
 
@@ -224,16 +252,7 @@ export class Units {
 			i.waygate = reader.read<uint32_t>();
 			i.creation_number = reader.read<uint32_t>();
 
-			i.update_terrain_height(terrain);
-
-			// Either a unit or an item
-			if (units_slk.row_headers.contains(i.id) || i.id == "sloc" || i.id == "uDNR" || i.id == "bDNR") {
-				units.push_back(i);
-			} else {
-				items.push_back(i);
-			}
-
-			Unit::auto_increment = std::max(Unit::auto_increment, i.creation_number);
+			on_record(i);
 		}
 	}
 

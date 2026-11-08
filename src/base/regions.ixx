@@ -27,11 +27,14 @@ export class Regions {
 
 	bool load(float terrain_offset_x, float terrain_offset_y) {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3r").value();
+		return load(reader, terrain_offset_x, terrain_offset_y);
+	}
 
+	bool load(BinaryReader& reader, float terrain_offset_x, float terrain_offset_y) {
 		const int version = reader.read<uint32_t>();
 		map_format::require_accepted("war3map.w3r", map_format::w3r_versions, version);
 
-		regions.resize(reader.read<uint32_t>());
+		regions.resize(reader.read_count(30));
 		for (auto& i : regions) {
 			// change coordinate system to [0, terrain_width] x [0, terrain_height]
 			// as used by other objects in HiveWE

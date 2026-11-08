@@ -29,11 +29,15 @@ export class GameCameras {
 
 	void load(int game_version_major, int game_version_minor, float terrain_offset_x, float terrain_offset_y) {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3c").value();
+		load(reader, game_version_major, game_version_minor, terrain_offset_x, terrain_offset_y);
+	}
 
+	void load(BinaryReader& reader, int game_version_major, int game_version_minor, float terrain_offset_x, float terrain_offset_y) {
 		int version = reader.read<u32>();
 		map_format::require_accepted("war3map.w3c", map_format::w3c_versions, version);
 
-		cameras.resize(reader.read<u32>());
+		const bool has_local_rotation = game_version_major * 100 + game_version_minor >= 131;
+		cameras.resize(reader.read_count(has_local_rotation ? 53 : 41));
 		for (auto& i : cameras) {
 			// change coordinate system to [0, terrain_width] x [0, terrain_height]
 			// as used by other objects in HiveWE
@@ -49,7 +53,7 @@ export class GameCameras {
 			i.far_z = reader.read<float>();
 			i.near_z = reader.read<float>();
 
-			if (game_version_major * 100 + game_version_minor >= 131) {
+			if (has_local_rotation) {
 				i.local_pitch = reader.read<float>();
 				i.local_yaw = reader.read<float>();
 				i.local_roll = reader.read<float>();

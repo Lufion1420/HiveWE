@@ -66,6 +66,7 @@ import "map_protector/map_protector.h";
 import ObjectDataIo;
 import ScenarioDataIo;
 import MapInfo;
+import MapBodyCheck;
 import MapFormatCheck;
 import MapArchiveCheck;
 
@@ -558,7 +559,7 @@ void HiveWE::setup_palette_sidebar() {
 
 void HiveWE::load_map(const fs::path& directory) {
 	// Before any teardown: a refused map must leave the open map and its unsaved edits intact.
-	if (const auto check = check_map_format_versions(directory); !check) {
+	if (const auto check = check_map_for_opening(directory); !check) {
 		QMessageBox::critical(this, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
 		return;
 	}
@@ -633,6 +634,12 @@ void HiveWE::open_recent_map(int index) {
 		return;
 	}
 
+	// Before the save prompt, so a refusal does not ask anything first.
+	if (const auto check = check_map_for_opening(directory); !check) {
+		QMessageBox::critical(this, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
+		return;
+	}
+
 	if (!confirm_map_replacement("open another map")) {
 		return;
 	}
@@ -661,7 +668,7 @@ void HiveWE::load_folder() {
 	}
 
 	// Before the save prompt and the loading box, so a refusal does not ask or show anything else.
-	if (const auto check = check_map_format_versions(directory); !check) {
+	if (const auto check = check_map_for_opening(directory); !check) {
 		QMessageBox::critical(this, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
 		return;
 	}
@@ -712,7 +719,7 @@ void HiveWE::load_mpq() {
 			QMessageBox::critical(this, "Opening map failed", "Could not create a temporary folder to check the map in.");
 			return;
 		}
-		if (const auto check = check_archive_format_versions(mpq, header_directory.path().toStdWString()); !check) {
+		if (const auto check = check_archive_for_opening(mpq, header_directory.path().toStdWString()); !check) {
 			QMessageBox::critical(this, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
 			return;
 		}
@@ -765,11 +772,11 @@ void HiveWE::load_mpq() {
 		mpq.extract_file(name, final_directory / name);
 	}
 
-	// The archive passed, but the folder can hold files from before that the archive did not replace, and
-	// the results of the extraction above are not checked. Files were written, so this must not say otherwise.
-	if (const auto check = check_map_format_versions(final_directory); !check) {
+	// The archive check skips the triggers, the folder can hold files from before that the archive did not replace,
+	// and the results of the extraction above are not checked. Files were written, so this must not say otherwise.
+	if (const auto check = check_map_for_opening(final_directory); !check) {
 		const QString message = "The map was extracted to\n" + QString::fromStdWString(final_directory.wstring())
-			+ "\nbut that folder cannot be opened: files already there, or files that failed to unpack, may be the cause.\n\n"
+			+ "\nbut that folder cannot be opened. A file in the map may be damaged, or files already there or files that failed to unpack may be the cause.\n\n"
 			+ QString::fromStdString(check.error());
 		QMessageBox::critical(this, "Opening map failed", message);
 		return;
@@ -922,7 +929,7 @@ void HiveWE::create_new_map() {
 		return;
 	}
 
-	if (const auto check = check_map_format_versions(template_directory); !check) {
+	if (const auto check = check_map_for_opening(template_directory); !check) {
 		QMessageBox::critical(this, "Template map unusable", QString::fromStdString(check.error()));
 		return;
 	}

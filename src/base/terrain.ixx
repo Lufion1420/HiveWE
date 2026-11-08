@@ -1193,8 +1193,9 @@ export class Terrain: public QObject {
 		const int y = static_cast<int>(std::round(j / 4.0));
 		const size_t closest_idx = ci(x, y);
 
-		if (tile_pathing) {
-			mask = pathing_options[tileset_ids[corner_ground_texture[closest_idx]]].mask();
+		// A ground index past the tile table names no tile, so it adds no tile pathing. A saved map can hold one.
+		if (const uint8_t ground = corner_ground_texture[closest_idx]; tile_pathing && ground < tileset_ids.size()) {
+			mask = pathing_options[tileset_ids[ground]].mask();
 		}
 
 		// cliffs are unbuildable and unwalkable

@@ -26,6 +26,11 @@ export class Hierarchy {
 	fs::path warcraft_directory;
 	fs::path root_directory;
 
+	/// While set, map_file_read and map_file_exists on this thread resolve against this folder instead of map_directory, for
+	/// reading a map that is not open. map_directory itself is off limits for that: the Map Protector's pack
+	/// thread redirects it, so saving and restoring it on the UI thread could restore the wrong value.
+	static inline thread_local const fs::path* map_read_override = nullptr;
+
 	bool ptr = false;
 	bool hd = true;
 	bool teen = false;
@@ -157,7 +162,7 @@ export class Hierarchy {
 
 	[[nodiscard]]
 	auto map_file_read(const fs::path& path) const -> std::expected<BinaryReader, std::string> {
-		return read_file(map_directory / path);
+		return read_file((map_read_override != nullptr ? *map_read_override : map_directory) / path);
 	}
 
 	/// source somewhere on disk, destination relative to the map
@@ -180,7 +185,7 @@ export class Hierarchy {
 	}
 
 	bool map_file_exists(const fs::path& path) const {
-		return fs::exists(map_directory / path);
+		return fs::exists((map_read_override != nullptr ? *map_read_override : map_directory) / path);
 	}
 
 	void map_file_rename(const fs::path& original, const fs::path& renamed) const {

@@ -13,6 +13,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Saving a map no longer loses or corrupts map info data** — Map flag bits and force flag bits HiveWE does not recognize are now kept instead of dropped, and random unit tables are saved with their position count and keep their full size when a table ID is empty. Previously these could write a corrupted `war3map.w3i`.
 - **Map Protector writes clean values for fields older maps do not store** — These fields are now written as 0 instead of garbage.
 - **Map Protector refuses asset obfuscation on Warcraft III 3.0 maps** — It stops with a clear failure message instead of producing a damaged map.
+- **Truncated or corrupt map files no longer crash the editor** — Opening a map with a damaged file (such as `war3map.w3i`, `war3map.w3e`, the doodad and unit files, triggers, regions, cameras, sounds, pathing or object data) now shows an error naming the file instead of crashing, and your open map keeps its unsaved edits. Invalid terrain offsets, out-of-range cliff or ground texture indices, and a pathing map too small for its terrain are refused the same way, and editing a map whose ground texture index equals its texture count no longer reads out of bounds in pathing. Not game-tested.
 
 ### New Features
 - **Warcraft III 3.0 map info (`war3map.w3i` v39) can be read and saved** — HiveWE keeps the map's own version stamps when saving it. Real 3.0 maps are still refused on open until their doodad, unit, region and camera files are supported.

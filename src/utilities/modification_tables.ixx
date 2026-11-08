@@ -20,7 +20,23 @@ export struct ModificationSerializeError {
 	std::string message;
 };
 
-export void load_modification_table(BinaryReader& reader, const uint32_t version, slk::SLK& slk, const slk::SLK& meta_slk, const bool modification, const bool optional_ints) {
+namespace {
+
+/// The layout of one modification table, with what is done with it left to the callbacks.
+void walk_modification_table(
+	BinaryReader& reader,
+	const uint32_t version,
+	const bool optional_ints,
+	const std::function<void(const std::string& original_id, const std::string& modified_id)>& on_object,
+	const std::function<void(
+		const std::string& original_id,
+		const std::string& modified_id,
+		const std::string& modification_id,
+		uint32_t level_variation,
+		uint32_t data_pointer,
+		std::string data
+	)>& on_field
+) {
 	const uint32_t objects = reader.read<uint32_t>();
 	for (size_t i = 0; i < objects; i++) {
 		const std::string original_id = reader.read_string(4);
@@ -33,9 +49,7 @@ export void load_modification_table(BinaryReader& reader, const uint32_t version
 			}
 			const uint32_t set_flag = reader.read<uint32_t>();
 		}
-		if (modification && !slk.base_data.contains(modified_id)) {
-			slk.copy_row(original_id, modified_id, false);
-		}
+		on_object(original_id, modified_id);
 
 		const uint32_t modifications = reader.read<uint32_t>();
 
@@ -43,16 +57,11 @@ export void load_modification_table(BinaryReader& reader, const uint32_t version
 			const std::string modification_id = reader.read_string(4);
 			const uint32_t type = reader.read<uint32_t>();
 
-			std::string column_header = to_lowercase_copy(meta_slk.data<std::string_view>("field", modification_id));
+			uint32_t level_variation = 0;
+			uint32_t data_pointer = 0;
 			if (optional_ints) {
-				const uint32_t level_variation = reader.read<uint32_t>();
-				const uint32_t data_pointer = reader.read<uint32_t>();
-				if (data_pointer != 0) {
-					column_header += static_cast<char>('a' + data_pointer - 1);
-				}
-				if (meta_slk.data<std::string_view>("repeat", modification_id) != "0") {
-					column_header += std::to_string(level_variation);
-				}
+				level_variation = reader.read<uint32_t>();
+				data_pointer = reader.read<uint32_t>();
 			}
 
 			std::string data;
@@ -72,9 +81,42 @@ export void load_modification_table(BinaryReader& reader, const uint32_t version
 			}
 			reader.advance(4);
 
+			on_field(original_id, modified_id, modification_id, level_variation, data_pointer, std::move(data));
+		}
+	}
+}
+
+} // namespace
+
+export void load_modification_table(BinaryReader& reader, const uint32_t version, slk::SLK& slk, const slk::SLK& meta_slk, const bool modification, const bool optional_ints) {
+	walk_modification_table(
+		reader,
+		version,
+		optional_ints,
+		[&](const std::string& original_id, const std::string& modified_id) {
+			if (modification && !slk.base_data.contains(modified_id)) {
+				slk.copy_row(original_id, modified_id, false);
+			}
+		},
+		[&](const std::string& original_id,
+			const std::string& modified_id,
+			const std::string& modification_id,
+			const uint32_t level_variation,
+			const uint32_t data_pointer,
+			std::string data) {
+			std::string column_header = to_lowercase_copy(meta_slk.data<std::string_view>("field", modification_id));
+			if (optional_ints) {
+				if (data_pointer != 0) {
+					column_header += static_cast<char>('a' + data_pointer - 1);
+				}
+				if (meta_slk.data<std::string_view>("repeat", modification_id) != "0") {
+					column_header += std::to_string(level_variation);
+				}
+			}
+
 			if (column_header == "") {
 				std::println("Unknown mod id: {}", modification_id);
-				continue;
+				return;
 			}
 
 			if (modification) {
@@ -83,6 +125,20 @@ export void load_modification_table(BinaryReader& reader, const uint32_t version
 				slk.set_shadow_data(column_header, original_id, data);
 			}
 		}
+	);
+}
+
+/// Walks a whole object data file the way load_modification_file does, without an SLK to apply it to.
+export void check_modification_file_layout(BinaryReader& reader, const bool optional_ints) {
+	const uint32_t version = reader.read<uint32_t>();
+	for (int table = 0; table < 2; table++) {
+		walk_modification_table(
+			reader,
+			version,
+			optional_ints,
+			[](const std::string&, const std::string&) {},
+			[](const std::string&, const std::string&, const std::string&, uint32_t, uint32_t, std::string) {}
+		);
 	}
 }
 

@@ -28,7 +28,7 @@ __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 
 import std;
 import Map;
-import MapFormatCheck;
+import MapBodyCheck;
 import Timer;
 import MapGlobal;
 import Globals;
@@ -152,7 +152,7 @@ int main(int argc, char* argv[]) {
 	const fs::path startup_map = "data/test map/";
 
 	// Before the window exists: without a loaded map the object tables stay null while the ribbon is live.
-	if (const auto check = check_map_format_versions(startup_map); !check) {
+	if (const auto check = check_map_for_opening(startup_map); !check) {
 		QMessageBox::critical(nullptr, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
 		return 1;
 	}
