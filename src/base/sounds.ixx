@@ -4,6 +4,7 @@ import std;
 import types;
 import BinaryReader;
 import Hierarchy;
+import MapFormatCheck;
 
 struct Sound {
 	std::string name;
@@ -41,7 +42,7 @@ export class Sounds {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3s").value();
 
 		int version = reader.read<u32>();
-		if (version != 1 && version != 2 && version != 3) {
+		if (!map_format::is_accepted(map_format::w3s_versions, version)) {
 			std::cout << "Unknown war3map.w3s version: " << version << " Attempting to load but may crash\n";
 		}
 

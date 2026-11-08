@@ -7,6 +7,7 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QFont>
+#include <QMessageBox>
 #include <QPalette>
 #include <QSurfaceFormat>
 #include <QSettings>
@@ -27,6 +28,7 @@ __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 
 import std;
 import Map;
+import MapFormatCheck;
 import Timer;
 import MapGlobal;
 import Globals;
@@ -147,11 +149,19 @@ int main(int argc, char* argv[]) {
 		load_files();
 	}
 
+	const fs::path startup_map = "data/test map/";
+
+	// Before the window exists: without a loaded map the object tables stay null while the ribbon is live.
+	if (const auto check = check_map_format_versions(startup_map); !check) {
+		QMessageBox::critical(nullptr, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
+		return 1;
+	}
+
 	HiveWE w;
 
 	std::println("Application start: {}ms", start_timer.elapsed_ms());
 
-	map->load("data/test map/");
+	map->load(startup_map);
 	// map->load("C:/Users/User/Desktop/MCFC.w3x");
 
 	return QApplication::exec();

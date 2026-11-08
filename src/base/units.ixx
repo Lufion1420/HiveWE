@@ -11,6 +11,7 @@ import Utilities;
 import SkinnedMesh;
 import SkeletalModelInstance;
 import MapInfo;
+import MapFormatCheck;
 import BinaryReader;
 import BinaryWriter;
 import ResourceManager;
@@ -135,17 +136,11 @@ export class Units {
 			std::cout << "Invalid war3mapUnits.w3e file: Magic number is not W3do\n";
 		}
 		const uint32_t version = reader.read<uint32_t>();
-		if (version != 7 && version != 8) {
-			std::cout << "Unknown war3mapUnits.doo version: " << version
-					  << " Attempting to load but may crash\nPlease send this map to eejin\n";
-		}
+		map_format::require_accepted("war3mapUnits.doo", map_format::units_versions, version);
 
 		// Subversion
 		const int subversion = reader.read<uint32_t>();
-		if (subversion != 9 && subversion != 11) {
-			std::cout << "Unknown war3mapUnits.doo subversion: " << subversion
-					  << " Attempting to load but may crash\nPlease send this map to eejin\n";
-		}
+		map_format::require_accepted("war3mapUnits.doo", map_format::units_subversions, subversion, "subversion");
 
 		const int unit_count = reader.read<uint32_t>();
 		for (int k = 0; k < unit_count; k++) {

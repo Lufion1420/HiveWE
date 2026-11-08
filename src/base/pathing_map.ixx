@@ -12,6 +12,7 @@ import BinaryWriter;
 import PathingTexture;
 import OpenGLUtilities;
 import Hierarchy;
+import MapFormatCheck;
 import <glm/glm.hpp>;
 
 export class PathingMap {
@@ -45,7 +46,7 @@ export class PathingMap {
 		}
 
 		const int version = reader.read<uint32_t>();
-		if (version != 0) {
+		if (!map_format::is_accepted(map_format::wpm_versions, version)) {
 			std::print("Unknown war3map.wpm version, expected 0 but got {}. Attempting to load, but may crash.\n", version);
 		}
 

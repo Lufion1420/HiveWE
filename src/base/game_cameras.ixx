@@ -4,6 +4,7 @@ import std;
 import types;
 import BinaryReader;
 import Hierarchy;
+import MapFormatCheck;
 
 export struct GameCamera {
 	float target_x;
@@ -30,9 +31,7 @@ export class GameCameras {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3c").value();
 
 		int version = reader.read<u32>();
-		if (version != 0) {
-			std::cout << "Unknown war3map.w3c version: " << version << " Attempting to load but may crash\n";
-		}
+		map_format::require_accepted("war3map.w3c", map_format::w3c_versions, version);
 
 		cameras.resize(reader.read<u32>());
 		for (auto& i : cameras) {

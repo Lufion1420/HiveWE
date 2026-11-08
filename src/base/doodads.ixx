@@ -20,6 +20,7 @@ import PathingTexture;
 import Utilities;
 import Globals;
 import MapInfo;
+import MapFormatCheck;
 import UnorderedMap;
 import SLK;
 import PathingMap;
@@ -63,9 +64,7 @@ export class Doodads {
 			return false;
 		}
 		const uint32_t version = reader.read<uint32_t>();
-		if (version != 7 && version != 8) {
-			std::println("Unknown war3map.doo version: {} Attempting to load but may crash\nPlease send this map to eejin\n", version);
-		}
+		map_format::require_accepted("war3map.doo", map_format::doo_versions, version);
 
 		// Subversion
 		const uint32_t subversion = reader.read<uint32_t>();

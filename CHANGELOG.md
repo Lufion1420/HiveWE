@@ -9,6 +9,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ### Bug Fixes
 - **LNI import: new custom abilities no longer rejected** — `validate_shadow_map` was calling `field_to_meta_id` with the custom object's own ID (e.g. `A060`), which is not yet in the SLK for brand-new objects. `AbilityMetaData.slk` keys most fields via `useSpecific` (e.g. `nameANfy`), so the code lookup failed and every such field was reported as "Unknown field", blocking the whole import. Fixed by using the parent (`oldid`) ID for field lookup on custom objects. Regression test added.
 - **Scenario import dialog no longer appears when nothing changed** — `prompt_apply_scenario_import` now skips the dialog entirely when `compute_scenario_import_changes` returns empty. The Apply button was already disabled in this case, but the dialog still forced a confirmation click.
+- **Maps with an unreadable format version are refused instead of crashing or corrupting data** — Opening a map HiveWE cannot read, such as a Warcraft III 3.0 map, used to crash the editor or load wrong data that a save would write back. HiveWE now shows a dialog naming the files and versions and leaves the open map and its unsaved edits intact; a refused .w3x writes nothing to your folders, and HiveWE also refuses to unpack over the folder of the map that is open. Opening 3.0 maps is not supported yet.
 
 ---
 

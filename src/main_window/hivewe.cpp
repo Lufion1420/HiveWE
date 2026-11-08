@@ -54,6 +54,7 @@ import "trigger_editor.h";
 #include <QMenu>
 #include <QRegularExpression>
 #include <QStringList>
+#include <QTemporaryDir>
 #include <QTextDocument>
 import "menus/gameplay_constants_editor.h";
 import "menus/item_tables_editor.h";
@@ -65,6 +66,8 @@ import "map_protector/map_protector.h";
 import ObjectDataIo;
 import ScenarioDataIo;
 import MapInfo;
+import MapFormatCheck;
+import MapArchiveCheck;
 
 namespace fs = std::filesystem;
 
@@ -554,6 +557,12 @@ void HiveWE::setup_palette_sidebar() {
 }
 
 void HiveWE::load_map(const fs::path& directory) {
+	// Before any teardown: a refused map must leave the open map and its unsaved edits intact.
+	if (const auto check = check_map_format_versions(directory); !check) {
+		QMessageBox::critical(this, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
+		return;
+	}
+
 	window_handler.close_all();
 	ui->widget->makeCurrent();
 	reset_map_session();
@@ -651,6 +660,12 @@ void HiveWE::load_folder() {
 		return;
 	}
 
+	// Before the save prompt and the loading box, so a refusal does not ask or show anything else.
+	if (const auto check = check_map_format_versions(directory); !check) {
+		QMessageBox::critical(this, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
+		return;
+	}
+
 	if (!confirm_map_replacement("open another map")) {
 		return;
 	}
@@ -681,15 +696,29 @@ void HiveWE::load_mpq() {
 
 	fs::path mpq_path = file_name.toStdWString();
 
-	if (!confirm_map_replacement("open another map")) {
-		return;
-	}
-
 	mpq::MPQ mpq;
-	bool opened = mpq.open(mpq_path);
+	bool opened = mpq.open(mpq_path, MPQ_OPEN_READ_ONLY);
 	if (!opened) {
 		const auto message = std::format("Opening the map archive failed. It might be opened in another program.\nError Code {}", GetLastError());
 		QMessageBox::critical(this, "Opening map failed", QString::fromStdString(message));
+		return;
+	}
+
+	// Before asking for a location: a refused map must write nothing to any folder of the user's. The
+	// target may hold an earlier unpack of this map, since Foo next to Foo.w3x is what export_mpq leaves.
+	{
+		const QTemporaryDir header_directory;
+		if (!header_directory.isValid()) {
+			QMessageBox::critical(this, "Opening map failed", "Could not create a temporary folder to check the map in.");
+			return;
+		}
+		if (const auto check = check_archive_format_versions(mpq, header_directory.path().toStdWString()); !check) {
+			QMessageBox::critical(this, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
+			return;
+		}
+	}
+
+	if (!confirm_map_replacement("open another map")) {
 		return;
 	}
 
@@ -704,6 +733,13 @@ void HiveWE::load_mpq() {
 	}
 
 	fs::path final_directory = unpack_location / mpq_path.stem();
+
+	if (is_open_map_folder(final_directory, map->filesystem_path)) {
+		const QString message = "This would unpack over the map that is open now, in\n" + QString::fromStdWString(final_directory.wstring())
+			+ "\n\nChoose another unpacking location. Nothing was changed.";
+		QMessageBox::critical(this, "Opening map failed", message);
+		return;
+	}
 
 	try {
 		fs::create_directory(final_directory);
@@ -727,6 +763,16 @@ void HiveWE::load_mpq() {
 	// presence.
 	for (const std::string& name : map->imports.blacklist) {
 		mpq.extract_file(name, final_directory / name);
+	}
+
+	// The archive passed, but the folder can hold files from before that the archive did not replace, and
+	// the results of the extraction above are not checked. Files were written, so this must not say otherwise.
+	if (const auto check = check_map_format_versions(final_directory); !check) {
+		const QString message = "The map was extracted to\n" + QString::fromStdWString(final_directory.wstring())
+			+ "\nbut that folder cannot be opened: files already there, or files that failed to unpack, may be the cause.\n\n"
+			+ QString::fromStdString(check.error());
+		QMessageBox::critical(this, "Opening map failed", message);
+		return;
 	}
 
 	load_map(final_directory);
@@ -873,6 +919,11 @@ void HiveWE::create_new_map() {
 	const fs::path template_directory = fs::path("data") / "test map";
 	if (!fs::exists(template_directory / "war3map.w3i")) {
 		QMessageBox::critical(this, "Template map missing", "The bundled blank map template could not be found in data/test map.");
+		return;
+	}
+
+	if (const auto check = check_map_format_versions(template_directory); !check) {
+		QMessageBox::critical(this, "Template map unusable", QString::fromStdString(check.error()));
 		return;
 	}
 

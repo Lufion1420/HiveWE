@@ -5,6 +5,7 @@ import types;
 import BinaryReader;
 import BinaryWriter;
 import Hierarchy;
+import MapFormatCheck;
 import Utilities;
 import <glm/glm.hpp>;
 
@@ -175,9 +176,7 @@ export class MapInfo {
 
 		const int version = reader.read<uint32_t>();
 
-		if (version != 33 && version != 32 && version != 31 && version != 28 && version != 25 && version != 18 && version != 15) {
-			std::cout << "Unknown war3map.w3i version\n";
-		}
+		map_format::require_accepted("war3map.w3i", map_format::w3i_versions, version);
 
 		if (version >= 18) {
 			map_version = reader.read<uint32_t>();

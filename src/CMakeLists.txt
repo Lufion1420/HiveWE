@@ -4,6 +4,8 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"globals.ixx"
 
 	"base/map/map.ixx"
+	"base/map/map_format_check.ixx"
+	"base/map/map_archive_check.ixx"
 	"base/map/resize.cpp"
 	"base/map/unused_files.cpp"
 	"base/binary_reader.ixx"

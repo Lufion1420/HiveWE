@@ -4,6 +4,7 @@ import std;
 import BinaryReader;
 import BinaryWriter;
 import Hierarchy;
+import MapFormatCheck;
 import <glm/glm.hpp>;
 
 export struct Region {
@@ -28,9 +29,7 @@ export class Regions {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3r").value();
 
 		const int version = reader.read<uint32_t>();
-		if (version != 5) {
-			std::cout << "Unknown Regions file version. Attempting to load, but may crash.";
-		}
+		map_format::require_accepted("war3map.w3r", map_format::w3r_versions, version);
 
 		regions.resize(reader.read<uint32_t>());
 		for (auto& i : regions) {
