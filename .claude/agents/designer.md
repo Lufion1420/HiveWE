@@ -50,6 +50,7 @@ Drawing from source is not enough when the task is to match the real UI. Launch 
 - **Capture border:** captures include about 8 px of black non-client border on the left, right and bottom. Remove it before measuring.
 - **Spike captures alone are not enough:** earlier captures are stale or cropped and may come from a maximized window with the user's saved layout. Say which sizes are default and which are that state.
 - **UIA reach:** ribbon tabs (select) and `QRibbonButton` (invoke) work; dialog widgets, the Trigger Explorer tree and toolbar buttons are exposed. ADS dock tabs: Invoke does not switch, use `post-click.ps1`. Popup menus are not enumerable. Trigger tree double-click did not open via UIA or a posted double-click.
+- **Real World Editor (WE) as reference:** only inspect it with the user's permission, never save, and note that Test Map also saves when a map is open. Its menu bar is not in UIA: read it with `GetMenu`/`GetMenuItemInfo` (mask `ID|STATE|SUBMENU|FTYPE|STRING`; adding `MIIM_TYPE` makes the call fail silently) and open items with `PostMessage(WM_COMMAND, wID)`. `WM_CLOSE` hides module windows. Asset Manager takes about 15 s and the process reports not responding meanwhile. Details: `.claude/tools/ui-capture/README.md`.
 
 ## Report (under 25 lines)
 File, frames created or changed, windows covered and not covered, measured check results, `UNCERTAIN` items, open questions.
