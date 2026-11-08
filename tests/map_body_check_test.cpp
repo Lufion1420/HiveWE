@@ -180,6 +180,9 @@ namespace {
 	struct PlacedFile {
 		Bytes bytes;
 		std::size_t x_offset = 0;
+		std::size_t flags_offset = 0;
+		std::size_t roll_offset = 0;
+		std::size_t special_version_offset = 0;
 	};
 
 	PlacedFile doo_file(const std::uint32_t version) {
@@ -194,6 +197,10 @@ namespace {
 		file.x_offset = b.data.size();
 		b.u32s(3 + 1 + 3); // position, angle, scale
 		b.raw("LTlt"); // skin
+		if (version >= 12) {
+			b.u32(0xFFFFFFFF); // group id
+		}
+		file.flags_offset = b.data.size();
 		b.raw(std::string(2, '\0')); // flags, life
 		if (version >= 8) {
 			b.u32(); // item table
@@ -202,7 +209,17 @@ namespace {
 			b.raw("ratc");
 			b.u32();
 		}
+		if (version >= 13) {
+			b.u32(0xFFFFFFFF); // unknown
+		}
 		b.u32(7); // creation number
+		if (version >= 12) {
+			file.roll_offset = b.data.size();
+			b.u32s(2); // roll, pitch
+			b.count(1); // lights
+			b.raw(std::string(36, '\0'));
+		}
+		file.special_version_offset = b.data.size();
 		b.u32(); // special format version
 		b.count(1); // special doodads
 		b.raw("LTlt");
@@ -713,8 +730,19 @@ TestCall=0,0,integer,integer
 		return value;
 	}
 
+	/// The doodad version a war3map.doo says it is.
+	std::uint32_t doo_version(const fs::path& path) {
+		const std::string bytes = read_all(path);
+		std::uint32_t value = 0;
+		if (bytes.size() >= 8) {
+			std::memcpy(&value, bytes.data() + 4, 4);
+		}
+		return value;
+	}
+
 	/// A copy of a map the version check refuses, with the files in a format no parser exists for replaced or
-	/// dropped, so that the check can reach the bodies of everything else in it.
+	/// dropped, so that the check can reach the bodies of everything else in it. A war3map.doo of v12 or v13 has
+	/// a parser now, so it stays, and these passes read its real body.
 	fs::path copy_with_readable_formats_only(const fs::path& directory) {
 		const fs::path copy = make_scratch_dir("stock_readable_formats");
 		for (const auto& entry : fs::directory_iterator(directory)) {
@@ -746,6 +774,7 @@ TestCall=0,0,integer,integer
 		std::size_t accepted = 0;
 		std::size_t refused = 0;
 		std::size_t readable_parts_passed = 0;
+		std::size_t readable_parts_with_real_doo = 0;
 		int deepest = 0;
 		std::string deepest_map;
 		const int trigger_next_id = Trigger::next_id;
@@ -767,8 +796,16 @@ TestCall=0,0,integer,integer
 				}
 
 				if (version_refusal) {
-					if (const auto readable = check_map_bodies(copy_with_readable_formats_only(directory)); readable) {
+					const fs::path readable_copy = copy_with_readable_formats_only(directory);
+					if (const auto readable = check_map_bodies(readable_copy); readable) {
 						readable_parts_passed++;
+						// From the copy, since that is what was checked: a stub in it would not be a real doo at all.
+						const std::uint32_t real_doo = doo_version(directory / "war3map.doo");
+						if ((real_doo == 12 || real_doo == 13) && read_all(readable_copy / "war3map.doo") == read_all(directory / "war3map.doo")) {
+							readable_parts_with_real_doo++;
+						} else {
+							unexpected.push_back(name);
+						}
 					} else {
 						std::string readable_line = readable.error();
 						std::ranges::replace(readable_line, '\n', ' ');
@@ -805,12 +842,22 @@ TestCall=0,0,integer,integer
 
 		std::println("{}: stock maps checked: {}, accepted {}, refused {}", label, index.size(), accepted, refused);
 		std::println("{}: version refusals whose readable parts passed the body check: {}", label, readable_parts_passed);
+		std::println("{}: of those, passes that parsed a real war3map.doo v12 or v13: {}", label, readable_parts_with_real_doo);
 		for (const auto& [kind, amount] : refusals_by_kind) {
 			std::println("{}: refused as {}: {}", label, kind, amount);
 		}
 		std::println("{}: deepest trigger nesting {} in {}", label, deepest, deepest_map);
 		CHECK_MESSAGE(unexpected.empty(), std::format("{} unexpected refusals", unexpected.size()));
 		CHECK(deepest <= Triggers::max_parse_depth);
+
+		// The stock maps of 3.0.1, so that an extraction that lost maps or a stubbed doo cannot pass unnoticed.
+		CHECK(index.size() == 466);
+		CHECK(accepted == 275);
+		CHECK(refused == 191);
+		CHECK(refusals_by_kind["version"] == 191);
+		CHECK(readable_parts_passed == 190);
+		CHECK(readable_parts_with_real_doo == 190);
+		CHECK(refusals_by_kind["undead02 wtg, behind a version refusal"] == 1);
 	}
 }
 
@@ -1008,6 +1055,8 @@ TEST_CASE("a damaged count is refused in every file") {
 	SUBCASE("war3map.doo") {
 		check_every_count_refused(dir, "war3map.doo", doo_file(7).bytes);
 		check_every_count_refused(dir, "war3map.doo", doo_file(8).bytes);
+		check_every_count_refused(dir, "war3map.doo", doo_file(12).bytes);
+		check_every_count_refused(dir, "war3map.doo", doo_file(13).bytes);
 	}
 	SUBCASE("war3mapUnits.doo") {
 		check_every_count_refused(dir, "war3mapUnits.doo", units_file(7).bytes);
@@ -1493,6 +1542,577 @@ TEST_CASE("a position that is not a number is refused") {
 	check_accepted(dir);
 }
 
+namespace {
+	/// A fresh World Editor 3.0.1 save, editor 7003, with two doodads. Not fixed-Z, so it is only read here.
+	constexpr std::string_view fresh_world_editor_doo =
+		"5733646f0d0000000b000000020000004c54627800000000000020c3000020c3000000006037bc40436b943f436b943f436b943f4c546278ffffffff0264"
+		"ffffffff00000000ffffffff000000000000000000000000000000004c546734000000000000d0430000004200000000db0f49400000803f0000803f0000"
+		"803f4c546734ffffffff0264ffffffff00000000ffffffff010000000000000000000000000000000000000000000000";
+
+	std::string from_hex(const std::string_view hex) {
+		std::string bytes;
+		for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
+			bytes += static_cast<char>(std::stoi(std::string(hex.substr(i, 2)), nullptr, 16));
+		}
+		return bytes;
+	}
+
+	BinaryReader reader_over(const std::string& bytes) {
+		std::vector<u8, default_init_allocator<u8>> buffer(bytes.size());
+		std::memcpy(buffer.data(), bytes.data(), bytes.size());
+		return BinaryReader(std::move(buffer));
+	}
+
+	std::string le_f32(const float value) {
+		std::string bytes(4, '\0');
+		std::memcpy(bytes.data(), &value, 4);
+		return bytes;
+	}
+
+	std::string with_f32_at(std::string bytes, const std::size_t offset, const float value) {
+		std::memcpy(bytes.data() + offset, &value, 4);
+		return bytes;
+	}
+
+	std::string with_byte_at(std::string bytes, const std::size_t offset, const std::uint8_t value) {
+		bytes[offset] = static_cast<char>(value);
+		return bytes;
+	}
+
+	std::uint32_t read_u32_at(const std::string& bytes, const std::size_t offset) {
+		std::uint32_t value = 0;
+		std::memcpy(&value, bytes.data() + offset, 4);
+		return value;
+	}
+
+	MapInfo game_version(const int major, const int minor) {
+		MapInfo info {};
+		info.game_version_major = major;
+		info.game_version_minor = minor;
+		return info;
+	}
+
+	struct ScopedMapDirectory {
+		fs::path previous = hierarchy.map_directory;
+		explicit ScopedMapDirectory(const fs::path& dir) {
+			hierarchy.map_directory = dir;
+		}
+		~ScopedMapDirectory() {
+			hierarchy.map_directory = previous;
+		}
+	};
+
+	/// Terrain's destructor calls GL, which does not exist here, so the instance is kept for the process. Saving a fixed-Z
+	/// doodad reads only the offset. Its corners are for the ones that are not: 2 by 2 and flat at height 0.
+	const Terrain& terrain_without_gl() {
+		static const Terrain* const terrain = [] {
+			Terrain* const created = new Terrain();
+			created->width = 2;
+			created->height = 2;
+			created->resize_corner_arrays(4);
+			return created;
+		}();
+		return *terrain;
+	}
+
+	/// Holds a value other than the default in every field, and fixed-Z doodads, so that a save reads no terrain.
+	std::string doo_every_field(const std::uint32_t version, const int lights = 2) {
+		const auto add_light = [](Bytes& b, const std::uint32_t index, const std::array<float, 6>& floats) {
+			b.u32(index);
+			b.u32(index + 1);
+			b.raw("\x10\x20\x30\x40");
+			for (const float value : floats) {
+				b.raw(le_f32(value));
+			}
+		};
+
+		Bytes b;
+		b.raw("W3do");
+		b.u32(version);
+		b.u32(11);
+		b.u32(2);
+
+		b.raw("LTlt");
+		b.u32(3);
+		for (const float value : { 128.f, -256.f, 512.5f, 1.5f, 0.5f, 2.f, 3.f }) {
+			b.raw(le_f32(value)); // position, angle, scale
+		}
+		b.raw("LTsk");
+		if (version >= 12) {
+			b.u32(0x12345678); // group id
+		}
+		b.raw(std::string(1, '\x0E')); // state 2, fixed-Z and the bit nobody knows
+		b.raw(std::string(1, '\x4D')); // life
+		b.u32(5); // item table
+		b.u32(1); // item sets
+		b.u32(1); // items
+		b.raw("ratc");
+		b.u32(100);
+		if (version >= 13) {
+			b.u32(0x07654321); // unknown
+		}
+		b.u32(41); // creation number
+		if (version >= 12) {
+			b.raw(le_f32(0.25f));
+			b.raw(le_f32(-0.5f));
+			b.u32(lights);
+			for (int i = 0; i < lights; i++) {
+				add_light(b, i, { 1.f, 2.f, 3.f, 4.f, 5.f, 6.f });
+			}
+		}
+
+		b.raw("YTlb");
+		b.u32();
+		for (const float value : { 0.f, 1024.f, 0.f, 0.f, 1.f, 1.f, 1.f }) {
+			b.raw(le_f32(value));
+		}
+		b.raw("YTlb");
+		if (version >= 12) {
+			b.u32(0xFFFFFFFF);
+		}
+		b.raw(std::string(1, '\xF7')); // state 3, fixed-Z and unknown high bits
+		b.raw(std::string(1, '\x64'));
+		b.u32(0xFFFFFFFF);
+		b.u32();
+		if (version >= 13) {
+			b.u32(0xFFFFFFFF);
+		}
+		b.u32(42);
+		if (version >= 12) {
+			b.u32s(2);
+			b.u32();
+		}
+
+		b.u32(); // special format version
+		b.u32(1);
+		b.raw("ZZab");
+		b.u32(2);
+		b.u32(3);
+		b.u32(static_cast<std::uint32_t>(-4));
+		return b.data;
+	}
+
+	/// Loads and saves through the real paths and returns what the save wrote.
+	std::string load_and_save(const std::string& name, const std::string& bytes, const MapInfo& info, const std::function<void(Doodads&)>& check) {
+		const fs::path dir = make_scratch_dir(name);
+		write_all(dir / "war3map.doo", bytes);
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		REQUIRE(doodads.load(terrain_without_gl(), info));
+		check(doodads);
+		doodads.save(terrain_without_gl());
+		return read_all(dir / "war3map.doo");
+	}
+
+	std::string load_and_save(const std::string& name, const std::string& bytes, const MapInfo& info) {
+		return load_and_save(name, bytes, info, [](Doodads&) {});
+	}
+
+	/// A crafted map whose war3map.doo is the given file.
+	fs::path crafted_map_with_doo(const std::string& name, const std::string& doo) {
+		const fs::path dir = make_crafted_map(name);
+		write_all(dir / "war3map.doo", doo);
+		return dir;
+	}
+
+	void check_doo_refused_saying(const fs::path& dir, const std::vector<std::string>& parts) {
+		const auto result = check_map_bodies(dir);
+		REQUIRE_FALSE(result.has_value());
+		CHECK_MESSAGE(contains(result.error(), "war3map.doo"), result.error());
+		for (const std::string& part : parts) {
+			CHECK_MESSAGE(contains(result.error(), part), result.error());
+		}
+	}
+}
+
+TEST_CASE("a fresh World Editor v13 war3map.doo reads as what it holds") {
+	const std::string bytes = from_hex(fresh_world_editor_doo);
+	REQUIRE(bytes.size() == 172);
+
+	BinaryReader reader = reader_over(bytes);
+	std::vector<Doodad> doodads;
+	std::vector<SpecialDoodad> special_doodads;
+	std::uint32_t version = 0;
+	REQUIRE(Doodads::read_records(reader, {}, game_version(3, 0), doodads, special_doodads, version));
+	CHECK(version == 13);
+	CHECK(reader.remaining() == 0);
+	CHECK(special_doodads.empty());
+
+	REQUIRE(doodads.size() == 2);
+	CHECK(doodads[0].id == "LTbx");
+	CHECK(doodads[0].skin_id == "LTbx");
+	CHECK(doodads[1].id == "LTg4");
+	CHECK(doodads[1].skin_id == "LTg4");
+	CHECK(doodads[0].position.x == -1.25f);
+	CHECK(doodads[1].position.y == 0.25f);
+	for (int i = 0; i < 2; i++) {
+		CAPTURE(i);
+		CHECK(doodads[i].creation_number == i);
+		CHECK(doodads[i].file_flags == 0x02);
+		CHECK(doodads[i].flags() == 0x02);
+		CHECK(doodads[i].life == 100);
+		CHECK(doodads[i].group_id == 0xFFFFFFFF);
+		CHECK(doodads[i].unknown_v13 == -1);
+		CHECK(doodads[i].stored_roll == 0.f);
+		CHECK(doodads[i].stored_pitch == 0.f);
+		CHECK(doodads[i].lights.empty());
+	}
+
+	const fs::path dir = crafted_map_with_doo("doo_fresh", bytes);
+	check_accepted(dir);
+
+	const ScopedMapDirectory open_map(dir);
+	Doodads loaded;
+	REQUIRE(loaded.load(terrain_without_gl(), game_version(3, 0)));
+	CHECK(loaded.format_version == 13);
+}
+
+TEST_CASE("the test terrain has an offset of 0, which the byte-exact round trips below rely on") {
+	CHECK(terrain_without_gl().offset.x == 0.f);
+	CHECK(terrain_without_gl().offset.y == 0.f);
+}
+
+TEST_CASE("a v12 or v13 war3map.doo saves as the same bytes") {
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const std::string bytes = doo_every_field(version);
+		const std::string saved = load_and_save("doo_round_trip", bytes, game_version(3, 0), [&](Doodads& doodads) {
+			CHECK(doodads.format_version == static_cast<int>(version));
+			REQUIRE(doodads.doodads.size() == 2);
+			const Doodad& first = doodads.doodads[0];
+			CHECK(first.group_id == 0x12345678u);
+			CHECK(first.unknown_v13 == (version >= 13 ? 0x07654321 : -1));
+			CHECK(first.stored_roll == 0.25f);
+			CHECK(first.stored_pitch == -0.5f);
+			REQUIRE(first.lights.size() == 2);
+			CHECK(first.lights[1].index == 1u);
+			CHECK(first.lights[1].is_shadow_casting == 2u);
+			const std::array<std::uint8_t, 4> color = { 0x10, 0x20, 0x30, 0x40 };
+			CHECK(first.lights[1].color == color);
+			CHECK(first.lights[1].intensity == 1.f);
+			CHECK(first.lights[1].shadow_start == 2.f);
+			CHECK(first.lights[1].shadow_end == 3.f);
+			CHECK(first.lights[1].quadratic_falloff == 4.f);
+			CHECK(first.lights[1].linear_falloff == 5.f);
+			CHECK(first.lights[1].damping == 6.f);
+			CHECK(first.flags() == 14);
+			CHECK(doodads.doodads[1].flags() == 0xF7);
+		});
+		CHECK(saved == bytes);
+	}
+}
+
+TEST_CASE("flags keeps the file's byte unless the doodad changed") {
+	const auto loaded_with = [](const std::uint8_t flags) {
+		Doodad doodad;
+		doodad.file_flags = flags;
+		doodad.state = Doodad::state_from_flags(flags);
+		doodad.fixed_z = flags & Doodad::fixed_z_flag;
+		return doodad;
+	};
+
+	SUBCASE("unchanged") {
+		for (const std::uint8_t flags : { std::uint8_t { 3 }, std::uint8_t { 7 }, std::uint8_t { 10 }, std::uint8_t { 14 }, std::uint8_t { 0xF7 } }) {
+			CAPTURE(int { flags });
+			CHECK(int { loaded_with(flags).flags() } == int { flags });
+		}
+	}
+	SUBCASE("a changed state takes effect and keeps the other bits") {
+		Doodad doodad = loaded_with(14);
+		doodad.state = Doodad::State::invisible_non_solid;
+		CHECK(int { doodad.flags() } == 12);
+		doodad.state = Doodad::State::visible_non_solid;
+		CHECK(int { doodad.flags() } == 13);
+
+		Doodad state_three = loaded_with(3);
+		state_three.state = Doodad::State::visible_non_solid;
+		CHECK(int { state_three.flags() } == 1);
+		state_three.state = Doodad::State::visible_solid;
+		CHECK(int { state_three.flags() } == 3);
+	}
+	SUBCASE("a changed height flag takes effect") {
+		Doodad fixed = loaded_with(14);
+		fixed.snap_to_terrain(terrain_without_gl());
+		CHECK(int { fixed.flags() } == 10);
+
+		Doodad following = loaded_with(3);
+		following.set_absolute_height(2.f);
+		CHECK(int { following.flags() } == 7);
+	}
+	SUBCASE("a placed doodad has the brush's state and no other bits") {
+		Doodad doodad;
+		CHECK(int { doodad.flags() } == 2);
+		doodad.state = Doodad::State::invisible_non_solid;
+		CHECK(int { doodad.flags() } == 0);
+		doodad.state = Doodad::State::visible_non_solid;
+		CHECK(int { doodad.flags() } == 1);
+		doodad.fixed_z = true;
+		CHECK(int { doodad.flags() } == 5);
+		CHECK(doodad.group_id == 0xFFFFFFFF);
+		CHECK(doodad.unknown_v13 == -1);
+		CHECK(doodad.stored_roll == 0.f);
+		CHECK(doodad.stored_pitch == 0.f);
+		CHECK(doodad.lights.empty());
+	}
+}
+
+TEST_CASE("a v8 war3map.doo stays v8 with no new fields and keeps its flags") {
+	const PlacedFile v8 = doo_file(8);
+	for (const std::uint8_t flags : { std::uint8_t { 2 }, std::uint8_t { 3 }, std::uint8_t { 7 }, std::uint8_t { 10 }, std::uint8_t { 14 } }) {
+		CAPTURE(int { flags });
+		const std::string bytes = with_byte_at(v8.bytes.data, v8.flags_offset, flags);
+		const std::string saved = load_and_save("doo_v8", bytes, game_version(2, 0), [&](Doodads& doodads) {
+			CHECK(doodads.format_version == 8);
+		});
+		CHECK(saved == bytes);
+	}
+}
+
+TEST_CASE("what a war3map.doo saves as depends on what it was") {
+	const auto check_saved_as_8_11 = [](const std::string& saved) {
+		CHECK(read_u32_at(saved, 4) == 8u);
+		CHECK(read_u32_at(saved, 8) == 11u);
+	};
+
+	SUBCASE("v7 saves as v8") {
+		const std::string v7 = doo_file(7).bytes.data;
+		const std::string saved = load_and_save("doo_saves_v7", v7, game_version(2, 0));
+		check_saved_as_8_11(saved);
+		CHECK(saved.size() == v7.size() + 8); // Only the item table and the item set count are added.
+	}
+	SUBCASE("a v8 subversion is written as 11") {
+		const std::string v8 = with_u32_at(doo_file(8).bytes.data, 8, 9);
+		check_saved_as_8_11(load_and_save("doo_saves_v8", v8, game_version(2, 0)));
+	}
+	SUBCASE("a new map saves as v8") {
+		const fs::path dir = make_scratch_dir("doo_saves_new");
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		CHECK(doodads.format_version == 8);
+		doodads.save(terrain_without_gl());
+		check_saved_as_8_11(read_all(dir / "war3map.doo"));
+	}
+	SUBCASE("a file that fails on its magic number leaves no stale version behind") {
+		const fs::path dir = make_scratch_dir("doo_saves_stale");
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		write_all(dir / "war3map.doo", doo_every_field(13));
+		REQUIRE(doodads.load(terrain_without_gl(), game_version(3, 0)));
+		CHECK(doodads.format_version == 13);
+		write_all(dir / "war3map.doo", "XXXX");
+		CHECK_FALSE(doodads.load(terrain_without_gl(), game_version(3, 0)));
+		CHECK(doodads.format_version == 8);
+	}
+}
+
+TEST_CASE("a v12 file read with v13 gates and the reverse are refused") {
+	const auto check_swapped = [](const std::string& bytes, const std::uint32_t wrong_version) {
+		const fs::path dir = crafted_map_with_doo("doo_wrong_gate", bytes);
+		check_accepted(dir);
+		write_all(dir / "war3map.doo", with_u32_at(bytes, 4, wrong_version));
+		check_refused(dir, "war3map.doo");
+	};
+
+	for (const int lights : { 0, 1, 2 }) {
+		CAPTURE(lights);
+		check_swapped(doo_every_field(12, lights), 13);
+		check_swapped(doo_every_field(13, lights), 12);
+	}
+	check_swapped(doo_file(12).bytes.data, 13);
+	check_swapped(doo_file(13).bytes.data, 12);
+	check_swapped(from_hex(fresh_world_editor_doo), 12);
+}
+
+TEST_CASE("every prefix of a v12 or v13 war3map.doo is refused") {
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const fs::path dir = crafted_map_with_doo("doo_prefix", doo_every_field(version));
+		check_every_prefix_refused(dir, "war3map.doo");
+	}
+}
+
+TEST_CASE("the smallest v12 and v13 records are exactly what the doodad count is measured against") {
+	// The count is refused for the record size alone, with the file holding just too little for it. A file that big
+	// would also fail further on, so the message is what tells that the count check caught it.
+	for (const auto& [version, smallest] : { std::pair { 12u, 70u }, std::pair { 13u, 74u } }) {
+		CAPTURE(version);
+		const std::string header = "W3do" + le32(version) + le32(11) + le32(2);
+		BinaryReader too_small = reader_over(header + std::string(2 * smallest - 1, '\0'));
+		std::vector<Doodad> doodads;
+		std::vector<SpecialDoodad> special_doodads;
+		std::uint32_t read_version = 0;
+		CHECK_THROWS_WITH_AS(
+			(void)Doodads::read_records(too_small, {}, game_version(3, 0), doodads, special_doodads, read_version),
+			doctest::Contains("does not fit in the file"),
+			std::out_of_range
+		);
+
+		// One byte more and the count passes. All that is missing then is the trailer after the two zeroed records.
+		BinaryReader big_enough = reader_over(header + std::string(2 * smallest, '\0'));
+		CHECK_THROWS_WITH_AS(
+			(void)Doodads::read_records(big_enough, {}, game_version(3, 0), doodads, special_doodads, read_version),
+			doctest::Contains("out of range"),
+			std::out_of_range
+		);
+	}
+}
+
+TEST_CASE("v12 and v13 refusals reach the user naming war3map.doo") {
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	const float infinity = std::numeric_limits<float>::infinity();
+
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const PlacedFile file = doo_file(version);
+		const std::string& valid = file.bytes.data;
+		const fs::path dir = crafted_map_with_doo("doo_refusals", valid);
+		check_accepted(dir);
+
+		// A light count that cannot fit
+		write_all(dir / "war3map.doo", with_u32_at(valid, file.roll_offset + 8, 2));
+		check_doo_refused_saying(dir, { "A count of 2 does not fit" });
+
+		// A roll or pitch that is not a number
+		for (const float value : { nan, infinity, -infinity }) {
+			for (const std::size_t offset : { file.roll_offset, file.roll_offset + 4 }) {
+				CAPTURE(offset);
+				write_all(dir / "war3map.doo", with_f32_at(valid, offset, value));
+				check_doo_refused_saying(dir, { "roll or pitch" });
+			}
+		}
+
+		// A subversion that has not been seen
+		for (const std::uint32_t subversion : { 0u, 9u, 10u, 12u }) {
+			write_all(dir / "war3map.doo", with_u32_at(valid, 8, subversion));
+			check_doo_refused_saying(dir, { "subversion " + std::to_string(subversion), "has not been seen" });
+		}
+
+		// A special version that has not been seen
+		write_all(dir / "war3map.doo", with_u32_at(valid, file.special_version_offset, 1));
+		check_doo_refused_saying(dir, { "special doodad version 1", "has not been seen" });
+
+		// Bytes left after the last special doodad
+		write_all(dir / "war3map.doo", valid + std::string(1, '\0'));
+		check_doo_refused_saying(dir, { "leftover bytes after its last special doodad: 1" });
+		write_all(dir / "war3map.doo", valid + std::string(4, '\0'));
+		check_doo_refused_saying(dir, { "leftover bytes after its last special doodad: 4" });
+
+		// A w3i game version below 1.32
+		write_all(dir / "war3map.doo", valid);
+		check_accepted(dir);
+		const std::string w3i = w3i_file(33).data;
+		write_all(dir / "war3map.w3i", with_u32_at(with_u32_at(w3i, 12, 1), 16, 31));
+		check_doo_refused_saying(dir, { "1.31", "has not been seen" });
+		write_all(dir / "war3map.w3i", with_u32_at(with_u32_at(w3i, 12, 1), 16, 32));
+		check_accepted(dir);
+	}
+}
+
+TEST_CASE("v7 and v8 get none of the v12 and v13 refusals") {
+	for (const std::uint32_t version : { 7u, 8u }) {
+		CAPTURE(version);
+		const PlacedFile file = doo_file(version);
+		const fs::path dir = crafted_map_with_doo("doo_old_lenient", file.bytes.data);
+		check_accepted(dir);
+
+		write_all(dir / "war3map.doo", file.bytes.data + std::string(4, '\0'));
+		check_accepted(dir);
+		write_all(dir / "war3map.doo", with_u32_at(file.bytes.data, 8, 9));
+		check_accepted(dir);
+		write_all(dir / "war3map.doo", with_u32_at(file.bytes.data, file.special_version_offset, 1));
+		check_accepted(dir);
+
+		// Below 1.32 the record has no skin. The other files of a crafted map assume one, so this reads just the doo.
+		std::string no_skin = file.bytes.data;
+		no_skin.erase(file.flags_offset - 4, 4);
+		BinaryReader reader = reader_over(no_skin);
+		std::vector<Doodad> doodads;
+		std::vector<SpecialDoodad> special_doodads;
+		std::uint32_t read_version = 0;
+		CHECK(Doodads::read_records(reader, {}, game_version(1, 31), doodads, special_doodads, read_version));
+		REQUIRE(doodads.size() == 1);
+		CHECK(doodads[0].skin_id == doodads[0].id);
+		CHECK(reader.remaining() == 0);
+	}
+}
+
+TEST_CASE("float bit patterns in a v12 or v13 war3map.doo survive a save") {
+	constexpr std::uint32_t negative_zero = 0x80000000;
+	constexpr std::array<std::array<std::uint32_t, 6>, 2> patterns = { {
+		{ 0x7FA00001, 0xFFA12345, 0x7FC00001, 0xFFC12345, negative_zero, 0x7F800000 }, // signalling, quiet, -0, +inf
+		{ 0xFF800000, 0x7F800001, 0x7FFFFFFF, 0xFFFFFFFF, 0x00000001, 0x80000001 }, // -inf, edge NaNs, denormals
+	} };
+
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const PlacedFile file = doo_file(version);
+		const std::size_t light_floats = file.roll_offset + 8 + 4 + 12; // Past roll, pitch, light count and the light's first 3 fields.
+
+		std::string zero_angles = with_u32_at(file.bytes.data, file.roll_offset, negative_zero);
+		zero_angles = with_u32_at(zero_angles, file.roll_offset + 4, negative_zero);
+		check_accepted(crafted_map_with_doo("doo_bits_roll", zero_angles));
+		const std::string saved_angles = load_and_save("doo_bits_roll_save", zero_angles, game_version(3, 0));
+		CHECK(read_u32_at(saved_angles, file.roll_offset) == negative_zero);
+		CHECK(read_u32_at(saved_angles, file.roll_offset + 4) == negative_zero);
+
+		for (const auto& floats : patterns) {
+			std::string bytes = file.bytes.data;
+			for (std::size_t i = 0; i < floats.size(); i++) {
+				bytes = with_u32_at(bytes, light_floats + i * 4, floats[i]);
+			}
+			check_accepted(crafted_map_with_doo("doo_bits_light", bytes));
+			const std::string saved = load_and_save("doo_bits_light_save", bytes, game_version(3, 0));
+			REQUIRE(saved.size() == bytes.size());
+			for (std::size_t i = 0; i < floats.size(); i++) {
+				CAPTURE(i);
+				CHECK(read_u32_at(saved, light_floats + i * 4) == floats[i]);
+			}
+		}
+	}
+}
+
+TEST_CASE("the template a new map starts from has a war3map.doo that saves as v8") {
+	// HiveWE loads this folder for a new map and only clears the doodads, so format_version comes from this file.
+	const std::string bytes = read_all(fs::path(TEST_MAP_DIR) / "war3map.doo");
+	REQUIRE(bytes.size() >= 8);
+	CHECK(bytes.substr(0, 4) == "W3do");
+	const std::uint32_t version = read_u32_at(bytes, 4);
+	CAPTURE(version);
+	CHECK((version == 7 || version == 8));
+}
+
+TEST_CASE("values whose meaning is unknown are preserved and not refused") {
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	const float infinity = std::numeric_limits<float>::infinity();
+
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+
+		// Non-finite light floats
+		std::string light_floats = doo_every_field(version, 1);
+		const std::size_t first_float = light_floats.find(std::string("\x10\x20\x30\x40")) + 4;
+		light_floats = with_f32_at(light_floats, first_float, nan);
+		light_floats = with_f32_at(light_floats, first_float + 4, infinity);
+		light_floats = with_f32_at(light_floats, first_float + 8, -infinity);
+		check_accepted(crafted_map_with_doo("doo_light_floats", light_floats));
+		CHECK(load_and_save("doo_light_floats_save", light_floats, game_version(3, 0)) == light_floats);
+
+		// More than 2 lights
+		const std::string many_lights = doo_every_field(version, 5);
+		check_accepted(crafted_map_with_doo("doo_many_lights", many_lights));
+		CHECK(load_and_save("doo_many_lights_save", many_lights, game_version(3, 0)) == many_lights);
+
+		// Unknown flag bits
+		const PlacedFile file = doo_file(version);
+		for (const std::uint8_t flags : { std::uint8_t { 0x0C }, std::uint8_t { 0x0F }, std::uint8_t { 0xFF }, std::uint8_t { 0xF4 } }) {
+			CAPTURE(int { flags });
+			const std::string bytes = with_byte_at(file.bytes.data, file.flags_offset, flags);
+			check_accepted(crafted_map_with_doo("doo_flag_bits", bytes));
+			CHECK(load_and_save("doo_flag_bits_save", bytes, game_version(3, 0)) == bytes);
+		}
+	}
+}
+
 TEST_CASE("trigger nesting is limited deep enough for stock and shallow enough for the stack") {
 	const fs::path dir = make_crafted_map("nesting");
 	fs::remove(dir / "war3map.wct");
@@ -1652,6 +2272,230 @@ TEST_CASE("every extracted stock map below HIVEWE_STOCK_BODY_ROOT is accepted ex
 	const LocalTriggerDefinitions local(definitions);
 	sweep_stock_maps(root, "extracted TriggerData");
 	open_map.check_unchanged();
+}
+
+namespace {
+	/// Walks both files of a v12 or v13 war3map.doo by itself rather than through the reader, which wrote one of them.
+	/// Every byte must match except the position, which rounds at a non-zero terrain offset, and flag bit 0x04.
+	/// Returns what differs first, or nothing.
+	std::string first_raw_doo_difference(const std::string& original, const std::string& saved, const std::uint32_t version) {
+		if (original.size() != saved.size()) {
+			return std::format("size {} became {}", original.size(), saved.size());
+		}
+
+		std::size_t at = 0;
+		std::string difference;
+		const auto same = [&](const std::size_t size, const std::string_view field) {
+			if (!difference.empty()) {
+				return;
+			}
+			if (size > original.size() - at) {
+				difference = std::format("{} at {} runs past the end", field, at);
+			} else if (original.compare(at, size, saved, at, size) != 0) {
+				difference = std::format("{} at {} changed", field, at);
+			} else {
+				at += size;
+			}
+		};
+		const auto count_at = [&] {
+			return difference.empty() && original.size() - at >= 4 ? read_u32_at(original, at) : 0;
+		};
+		const auto count_field = [&](const std::string_view field) {
+			const std::uint32_t count = count_at();
+			same(4, field);
+			return count;
+		};
+		const auto skip = [&](const std::size_t size, const std::string_view field) {
+			if (difference.empty() && size > original.size() - at) {
+				difference = std::format("{} at {} runs past the end", field, at);
+			} else if (difference.empty()) {
+				at += size;
+			}
+		};
+
+		same(12, "header");
+		const std::uint32_t doodads = count_field("doodad count");
+		for (std::uint32_t i = 0; i < doodads && difference.empty(); i++) {
+			same(8, "id, variation");
+			skip(12, "position");
+			same(4 + 12 + 4, "angle, scale, skin");
+			same(4, "group_id");
+			if (difference.empty() && at < original.size()
+				&& (original[at] & ~Doodad::fixed_z_flag) != (saved[at] & ~Doodad::fixed_z_flag)) {
+				difference = std::format("flags at {} changed", at);
+			}
+			skip(1, "flags");
+			same(1, "life");
+			same(4, "item table");
+			const std::uint32_t sets = count_field("item set count");
+			for (std::uint32_t j = 0; j < sets && difference.empty(); j++) {
+				const std::uint32_t items = count_field("item count");
+				same(std::size_t { items } * 8, "items");
+			}
+			if (version >= 13) {
+				same(4, "unk");
+			}
+			same(4, "creation number");
+			same(4, "roll");
+			same(4, "pitch");
+			const std::uint32_t lights = count_field("light count");
+			same(std::size_t { lights } * 36, "lights");
+		}
+		same(original.size() - at, "special doodads");
+		return difference;
+	}
+}
+
+TEST_CASE("the raw war3map.doo comparison notices each field it is there for") {
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const PlacedFile file = doo_file(version);
+		const std::string& valid = file.bytes.data;
+		CHECK(first_raw_doo_difference(valid, valid, version).empty());
+
+		// What it must let through.
+		CHECK(first_raw_doo_difference(valid, with_byte_at(valid, file.flags_offset, Doodad::fixed_z_flag), version).empty());
+		CHECK(first_raw_doo_difference(valid, with_u32_at(valid, file.x_offset, 0x80000000), version).empty());
+
+		// -0 and another NaN are what a comparison of float values would not see.
+		const auto check_noticed = [&](const std::string& changed, const std::string& field) {
+			CAPTURE(field);
+			CHECK(contains(first_raw_doo_difference(valid, changed, version), field));
+		};
+		check_noticed(with_byte_at(valid, file.flags_offset, 0x08), "flags");
+		check_noticed(with_u32_at(valid, file.flags_offset - 4, 0), "group_id");
+		check_noticed(with_u32_at(valid, file.roll_offset, 0x80000000), "roll");
+		check_noticed(with_u32_at(valid, file.roll_offset + 4, 0x80000000), "pitch");
+		check_noticed(with_u32_at(valid, file.roll_offset + 12 + 12, 0x7FA00001), "lights");
+		check_noticed(with_u32_at(valid, file.roll_offset + 12 + 32, 0x7FC00001), "lights");
+		check_noticed(valid + std::string(1, '\0'), "size");
+		if (version >= 13) {
+			check_noticed(with_u32_at(valid, file.roll_offset - 8, 0), "unk");
+		}
+
+		// A NaN pair that compares as equal floats in the original and the saved file is still a difference.
+		const std::string one_nan = with_u32_at(valid, file.roll_offset + 24, 0x7FC00001);
+		CHECK(contains(first_raw_doo_difference(one_nan, with_u32_at(valid, file.roll_offset + 24, 0x7FC00002), version), "lights"));
+	}
+}
+
+TEST_CASE("every stock war3map.doo v12 or v13 below HIVEWE_STOCK_BODY_ROOT survives a save") {
+	const std::string root_text = env("HIVEWE_STOCK_BODY_ROOT");
+	if (root_text.empty()) {
+		MESSAGE("skipped: HIVEWE_STOCK_BODY_ROOT is not set");
+		return;
+	}
+	const fs::path root = root_text;
+
+	const auto same_float = [](const float a, const float b) {
+		return a == b || (std::isnan(a) && std::isnan(b));
+	};
+	const auto same_doodad = [&](const Doodad& a, const Doodad& b) {
+		bool same = a.id == b.id && a.skin_id == b.skin_id && a.variation == b.variation && a.life == b.life
+			&& a.item_table_pointer == b.item_table_pointer && a.creation_number == b.creation_number && a.group_id == b.group_id
+			&& a.unknown_v13 == b.unknown_v13 && a.state == b.state && (a.file_flags & ~Doodad::fixed_z_flag) == (b.file_flags & ~Doodad::fixed_z_flag)
+			&& same_float(a.position.x, b.position.x) && same_float(a.position.y, b.position.y) && same_float(a.position.z, b.position.z)
+			&& same_float(a.angle, b.angle) && same_float(a.scale.x, b.scale.x) && same_float(a.scale.y, b.scale.y)
+			&& same_float(a.scale.z, b.scale.z) && same_float(a.stored_roll, b.stored_roll) && same_float(a.stored_pitch, b.stored_pitch)
+			&& a.item_sets.size() == b.item_sets.size() && a.lights.size() == b.lights.size();
+		for (std::size_t i = 0; same && i < a.item_sets.size(); i++) {
+			same = a.item_sets[i].items == b.item_sets[i].items;
+		}
+		for (std::size_t i = 0; same && i < a.lights.size(); i++) {
+			const DoodadLight& x = a.lights[i];
+			const DoodadLight& y = b.lights[i];
+			same = x.index == y.index && x.is_shadow_casting == y.is_shadow_casting && x.color == y.color && same_float(x.intensity, y.intensity)
+				&& same_float(x.shadow_start, y.shadow_start) && same_float(x.shadow_end, y.shadow_end)
+				&& same_float(x.quadratic_falloff, y.quadratic_falloff) && same_float(x.linear_falloff, y.linear_falloff)
+				&& same_float(x.damping, y.damping);
+		}
+		return same;
+	};
+
+	const fs::path scratch = make_scratch_dir("stock_doo_round_trip");
+	const ScopedMapDirectory open_map(scratch);
+
+	std::map<std::uint32_t, std::size_t> files_by_version;
+	std::size_t doodads_compared = 0;
+	std::size_t lights_compared = 0;
+	std::vector<std::string> failures;
+
+	const std::map<std::string, std::string> index = read_sweep_index(root / "index.json");
+	for (const auto& [key, name] : index) {
+		// 0 is a file that is missing or too short. No stock map may be skipped for that.
+		const std::uint32_t version = doo_version(root / key / "war3map.doo");
+		if (version == 8) {
+			files_by_version[version]++;
+			continue;
+		}
+		if (version != 12 && version != 13) {
+			failures.push_back(std::format("{}: war3map.doo version {}", name, version));
+			continue;
+		}
+		CAPTURE(name);
+
+		MapInfo info {};
+		{
+			BinaryReader reader = reader_over(read_all(root / key / "war3map.w3i"));
+			info.load(reader);
+		}
+
+		const std::string original = read_all(root / key / "war3map.doo");
+		write_all(scratch / "war3map.doo", original);
+
+		Doodads first;
+		REQUIRE(first.load(terrain_without_gl(), info));
+		REQUIRE(first.format_version == static_cast<int>(version));
+		for (Doodad& doodad : first.doodads) {
+			doodad.fixed_z = true; // Saving a doodad that follows the terrain would read this test's terrain instead.
+		}
+		first.save(terrain_without_gl());
+
+		const std::string saved = read_all(scratch / "war3map.doo");
+		Doodads second;
+		REQUIRE(second.load(terrain_without_gl(), info));
+		REQUIRE(second.format_version == static_cast<int>(version));
+
+		const std::string raw_difference = first_raw_doo_difference(original, saved, version);
+		if (!raw_difference.empty()) {
+			failures.push_back(std::format("{}: raw bytes: {}", name, raw_difference));
+		}
+
+		bool same = first.doodads.size() == second.doodads.size() && first.special_doodads.size() == second.special_doodads.size();
+		for (std::size_t i = 0; same && i < first.doodads.size(); i++) {
+			same = same_doodad(first.doodads[i], second.doodads[i]);
+			lights_compared += first.doodads[i].lights.size();
+			doodads_compared++;
+		}
+		for (std::size_t i = 0; same && i < first.special_doodads.size(); i++) {
+			const SpecialDoodad& a = first.special_doodads[i];
+			const SpecialDoodad& b = second.special_doodads[i];
+			same = a.id == b.id && a.variation == b.variation && a.old_position.x == b.old_position.x && a.old_position.y == b.old_position.y;
+		}
+		if (!same) {
+			failures.push_back(name);
+		}
+		files_by_version[version]++;
+	}
+
+	std::println(
+		"stock doo round trip: v12 files {}, v13 files {}, doodads compared {}, lights compared {}, failures {}",
+		files_by_version[12],
+		files_by_version[13],
+		doodads_compared,
+		lights_compared,
+		failures.size()
+	);
+	for (const std::string& failure : failures) {
+		std::println("stock doo round trip failed: {}", failure);
+	}
+	CHECK(index.size() == 466);
+	CHECK(files_by_version[8] == 275);
+	CHECK(files_by_version[12] == 130);
+	CHECK(files_by_version[13] == 61);
+	CHECK(doodads_compared == 546722);
+	CHECK(lights_compared == 4597);
+	CHECK_MESSAGE(failures.empty(), std::format("{} stock files changed on save", failures.size()));
 }
 
 TEST_CASE("HIVEWE_BODY_CHECK_CASC gives real TriggerData from the game for the sweep and for timing") {

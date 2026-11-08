@@ -475,7 +475,7 @@ TEST_CASE("check_map_format_versions accepts and refuses war3map.w3i versions") 
 
 TEST_CASE("check_map_format_versions accepts and refuses war3map.doo versions, ignoring the subversion") {
 	const fs::path dir = make_valid_map("doo");
-	for (const std::uint32_t version : { 7u, 8u }) {
+	for (const std::uint32_t version : { 7u, 8u, 12u, 13u }) {
 		for (const std::uint32_t subversion : { 0u, 9u, 11u, 99u }) {
 			CAPTURE(version);
 			CAPTURE(subversion);
@@ -485,11 +485,13 @@ TEST_CASE("check_map_format_versions accepts and refuses war3map.doo versions, i
 	}
 	write_all(dir / "war3map.doo", doo_bytes(6));
 	check_refused_as_unsupported(dir, "war3map.doo", "6");
-	for (const std::uint32_t version : { 9u, 12u, 13u }) {
+	for (const std::uint32_t version : { 9u, 10u, 11u }) {
 		CAPTURE(version);
 		write_all(dir / "war3map.doo", doo_bytes(version));
-		check_refused_as_newer(dir, "war3map.doo", std::to_string(version));
+		check_refused_as_unsupported(dir, "war3map.doo", std::to_string(version));
 	}
+	write_all(dir / "war3map.doo", doo_bytes(14));
+	check_refused_as_newer(dir, "war3map.doo", "14");
 }
 
 TEST_CASE("check_map_format_versions accepts and refuses war3mapUnits.doo versions and subversions") {
@@ -650,14 +652,14 @@ TEST_CASE("check_map_format_versions does not newly refuse a wrong magic where t
 TEST_CASE("check_map_format_versions reports every failing file") {
 	const fs::path dir = make_valid_map("all_failures");
 	write_all(dir / "war3map.w3i", w3i_bytes(40));
-	write_all(dir / "war3map.doo", doo_bytes(13));
+	write_all(dir / "war3map.doo", doo_bytes(14));
 	write_all(dir / "war3mapUnits.doo", doo_bytes(13));
 	write_all(dir / "war3map.w3r", count_file_bytes(7));
 	write_all(dir / "war3map.w3c", count_file_bytes(3));
 	write_all(dir / "war3map.w3s", "");
 	const auto result = check_map_format_versions(dir);
 	REQUIRE_FALSE(result.has_value());
-	for (const std::string part : { "war3map.w3i", "version 40", "war3map.doo", "war3mapUnits.doo", "version 13", "war3map.w3r", "version 7",
+	for (const std::string part : { "war3map.w3i", "version 40", "war3map.doo", "version 14", "war3mapUnits.doo", "version 13", "war3map.w3r", "version 7",
 									"war3map.w3c", "version 3", "war3map.w3s" }) {
 		CAPTURE(part);
 		CHECK(contains(result.error(), part));
@@ -819,7 +821,7 @@ TEST_CASE("check_archive_format_versions refuses a bad version in each checked f
 	const std::map<std::string, std::string> bad_files = {
 		{ "war3map.w3i", w3i_bytes(40) },
 		{ "war3map.w3e", w3e_bytes(13) },
-		{ "war3map.doo", doo_bytes(13) },
+		{ "war3map.doo", doo_bytes(14) },
 		{ "war3mapUnits.doo", doo_bytes(13) },
 		{ "war3map.w3r", count_file_bytes(7) },
 		{ "war3map.w3c", count_file_bytes(3) },
@@ -925,10 +927,10 @@ TEST_CASE("GameCameras::load refuses an unknown war3map.w3c version and reads ac
 TEST_CASE("Doodads::load refuses an unknown war3map.doo version") {
 	const fs::path dir = make_scratch_dir("reader_doo");
 	const ScopedMapDirectory open_map(dir);
-	write_all(dir / "war3map.doo", doo_bytes(13));
+	write_all(dir / "war3map.doo", doo_bytes(14));
 	Doodads doodads;
 	MapInfo info;
-	check_reader_refuses([&] { doodads.load(terrain_without_gl(), info); }, "war3map.doo", "13");
+	check_reader_refuses([&] { doodads.load(terrain_without_gl(), info); }, "war3map.doo", "14");
 }
 
 TEST_CASE("Units::load refuses an unknown war3mapUnits.doo version or subversion") {

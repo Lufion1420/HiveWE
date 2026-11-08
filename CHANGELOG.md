@@ -15,8 +15,12 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Map Protector refuses asset obfuscation on Warcraft III 3.0 maps** — It stops with a clear failure message instead of producing a damaged map.
 - **Truncated or corrupt map files no longer crash the editor** — Opening a map with a damaged file (such as `war3map.w3i`, `war3map.w3e`, the doodad and unit files, triggers, regions, cameras, sounds, pathing or object data) now shows an error naming the file instead of crashing, and your open map keeps its unsaved edits. Invalid terrain offsets, out-of-range cliff or ground texture indices, and a pathing map too small for its terrain are refused the same way, and editing a map whose ground texture index equals its texture count no longer reads out of bounds in pathing. Not game-tested.
 
+- **Saving no longer changes a doodad's flag byte** — Doodads with flag state 3 were written back as 2, and flag bit 0x08 was dropped, on every save including v8 maps. Both are now preserved.
+- **Damaged v12 or v13 doodad files are refused with a dialog** — Opening one shows an error and leaves your open map usable.
+
 ### New Features
-- **Warcraft III 3.0 map info (`war3map.w3i` v39) can be read and saved** — HiveWE keeps the map's own version stamps when saving it. Real 3.0 maps are still refused on open until their doodad, unit, region and camera files are supported.
+- **Warcraft III 3.0 map info (`war3map.w3i` v39) can be read and saved** — HiveWE keeps the map's own version stamps when saving it. Real 3.0 maps are still refused on open until their unit, region and camera files are supported.
+- **Doodad files (`war3map.doo`) v12 and v13 can be read and saved** — The new doodad fields (group id, roll, pitch, lights) are kept, and a v12 or v13 file saves back as the same version. Roll, pitch and lights are not rendered or editable yet, and maps saved by Warcraft III 3.0 still do not open because their unit, region and camera files are not supported yet.
 
 ---
 

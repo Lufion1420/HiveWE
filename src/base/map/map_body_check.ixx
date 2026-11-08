@@ -371,7 +371,8 @@ export auto check_map_bodies(const fs::path& directory, const BodyScope scope = 
 			BinaryReader reader = read_map_file(directory / current_file);
 			std::vector<Doodad> doodads;
 			std::vector<SpecialDoodad> special_doodads;
-			Doodads::read_records(reader, glm::vec2(0.f), info, doodads, special_doodads);
+			std::uint32_t version = 0;
+			Doodads::read_records(reader, glm::vec2(0.f), info, doodads, special_doodads, version);
 		}
 
 		parse_objects(objects_before_units);

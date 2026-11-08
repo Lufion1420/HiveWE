@@ -17,6 +17,20 @@ import Utilities;
 import <glm/glm.hpp>;
 import <glm/gtc/quaternion.hpp>;
 
+/// 36 bytes in war3map.doo v12 and up. The field names rest on War3Net: only the total size is verified.
+export struct DoodadLight {
+	uint32_t index = 0;
+	uint32_t is_shadow_casting = 0;
+	/// Four raw bytes in file order.
+	std::array<uint8_t, 4> color {};
+	float intensity = 0.f;
+	float shadow_start = 0.f;
+	float shadow_end = 0.f;
+	float quadratic_falloff = 0.f;
+	float linear_falloff = 0.f;
+	float damping = 0.f;
+};
+
 export struct Doodad {
 	static inline int auto_increment;
 
@@ -41,6 +55,17 @@ export struct Doodad {
 
 	int creation_number;
 
+	// Read from war3map.doo v12 and up and only written back. Their meaning is unknown, so other values are preserved.
+	// The defaults are what a fresh 3.0.1 World Editor save and all stock doodads have.
+	uint32_t group_id = 0xFFFFFFFF;
+	int32_t unknown_v13 = -1;
+	float stored_roll = 0.f;
+	float stored_pitch = 0.f;
+	std::vector<DoodadLight> lights;
+
+	/// The flag byte as read, because `state` cannot hold state 3 and nothing holds the other bits.
+	uint8_t file_flags = 0;
+
 	// Auxiliary data
 	SkeletalModelInstance skeleton;
 	std::shared_ptr<SkinnedMesh> mesh;
@@ -56,7 +81,8 @@ export struct Doodad {
 	}
 
 	uint8_t flags() const {
-		return static_cast<uint8_t>(state) | (fixed_z ? fixed_z_flag : 0);
+		const uint8_t state_bits = state_from_flags(file_flags) == state ? (file_flags & state_mask) : static_cast<uint8_t>(state);
+		return (file_flags & ~(state_mask | fixed_z_flag)) | state_bits | (fixed_z ? fixed_z_flag : 0);
 	}
 
 	float terrain_height(const Terrain& terrain) const {

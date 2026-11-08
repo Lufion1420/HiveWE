@@ -55,12 +55,19 @@ export class Doodads {
 	std::vector<SpecialDoodad> special_doodads;
 	std::vector<Doodad> doodads;
 
+	/// The version save writes. A file of v12 or up saves as what it was, so its fields survive. Anything older saves as write_version.
+	int format_version = write_version;
+
 	bool load(const Terrain& terrain, const MapInfo& info) {
+		format_version = write_version;
+
 		BinaryReader reader = hierarchy.map_file_read("war3map.doo").value();
 
-		if (!read_records(reader, terrain.offset, info, doodads, special_doodads)) {
+		std::uint32_t version = write_version;
+		if (!read_records(reader, terrain.offset, info, doodads, special_doodads, version)) {
 			return false;
 		}
+		format_version = version >= 12 ? static_cast<int>(version) : write_version;
 
 		Doodad::auto_increment = 0;
 		for (const Doodad& i : doodads) {
@@ -76,7 +83,8 @@ export class Doodads {
 		const glm::vec2 terrain_offset,
 		const MapInfo& info,
 		std::vector<Doodad>& out_doodads,
-		std::vector<SpecialDoodad>& out_special_doodads
+		std::vector<SpecialDoodad>& out_special_doodads,
+		std::uint32_t& out_version
 	) {
 		const std::string magic_number = reader.read_string(4);
 		if (magic_number != "W3do") {
@@ -85,14 +93,30 @@ export class Doodads {
 		}
 		const uint32_t version = reader.read<uint32_t>();
 		map_format::require_accepted("war3map.doo", map_format::doo_versions, version);
+		out_version = version;
 
-		// Subversion
+		// The new fields exist from v12 on and the unknown int from v13 on. v9 to v11 are refused above.
+		const bool has_v12_fields = version >= 12;
+		const bool has_v13_fields = version >= 13;
+
 		const uint32_t subversion = reader.read<uint32_t>();
-		// ToDO check subversion
+		if (has_v12_fields && subversion != 11) {
+			throw std::runtime_error(std::format("war3map.doo version {} has subversion {}, which has not been seen", version, subversion));
+		}
 
 		const bool has_skin = info.game_version_major * 100 + info.game_version_minor >= 132;
+		if (has_v12_fields && !has_skin) {
+			throw std::runtime_error(std::format(
+				"war3map.doo version {} is paired with a war3map.w3i game version of {}.{}, which has not been seen",
+				version,
+				info.game_version_major,
+				info.game_version_minor
+			));
+		}
 
-		out_doodads.resize(reader.read_count(42 + (has_skin ? 4 : 0) + (version >= 8 ? 8 : 0)));
+		out_doodads.resize(
+			reader.read_count(42 + (has_skin ? 4 : 0) + (version >= 8 ? 8 : 0) + (has_v12_fields ? 16 : 0) + (has_v13_fields ? 4 : 0))
+		);
 		for (auto&& i : out_doodads) {
 			i.id = reader.read_string(4);
 			i.variation = reader.read<uint32_t>();
@@ -110,7 +134,12 @@ export class Doodads {
 				i.skin_id = i.id;
 			}
 
+			if (has_v12_fields) {
+				i.group_id = reader.read<uint32_t>();
+			}
+
 			const uint8_t flags = reader.read<uint8_t>();
+			i.file_flags = flags;
 			i.state = Doodad::state_from_flags(flags);
 			i.fixed_z = flags & Doodad::fixed_z_flag;
 			i.life = reader.read<uint8_t>();
@@ -127,11 +156,43 @@ export class Doodads {
 				}
 			}
 
+			if (has_v13_fields) {
+				i.unknown_v13 = reader.read<int32_t>();
+			}
+
 			i.creation_number = reader.read<uint32_t>();
+
+			if (has_v12_fields) {
+				i.stored_roll = reader.read<float>();
+				i.stored_pitch = reader.read<float>();
+				if (!std::isfinite(i.stored_roll) || !std::isfinite(i.stored_pitch)) {
+					throw std::runtime_error(std::format("Doodad {} has a roll or pitch that is not a number", i.id));
+				}
+
+				i.lights.resize(reader.read_count(36));
+				for (auto& light : i.lights) {
+					light.index = reader.read<uint32_t>();
+					light.is_shadow_casting = reader.read<uint32_t>();
+					light.color = reader.read<std::array<uint8_t, 4>>();
+					light.intensity = reader.read<float>();
+					light.shadow_start = reader.read<float>();
+					light.shadow_end = reader.read<float>();
+					light.quadratic_falloff = reader.read<float>();
+					light.linear_falloff = reader.read<float>();
+					light.damping = reader.read<float>();
+				}
+			}
 		}
 
 		// Terrain Doodads
-		const int special_format_version = reader.read<uint32_t>();
+		const uint32_t special_format_version = reader.read<uint32_t>();
+		if (has_v12_fields && special_format_version != 0) {
+			throw std::runtime_error(std::format(
+				"war3map.doo version {} has special doodad version {}, which has not been seen",
+				version,
+				special_format_version
+			));
+		}
 
 		out_special_doodads.resize(reader.read_count(16));
 		for (auto&& i : out_special_doodads) {
@@ -141,14 +202,23 @@ export class Doodads {
 			i.old_position = i.position;
 		}
 
+		if (has_v12_fields && reader.remaining() != 0) {
+			throw std::runtime_error(
+				std::format("war3map.doo version {} has leftover bytes after its last special doodad: {}", version, reader.remaining())
+			);
+		}
+
 		return true;
 	}
 
 	void save(const Terrain& terrain) const {
 		BinaryWriter writer;
 		writer.write_string("W3do");
-		writer.write<uint32_t>(write_version);
+		writer.write<uint32_t>(format_version);
 		writer.write<uint32_t>(write_subversion);
+
+		const bool has_v12_fields = format_version >= 12;
+		const bool has_v13_fields = format_version >= 13;
 
 		writer.write<uint32_t>(doodads.size());
 		for (auto&& i : doodads) {
@@ -159,6 +229,10 @@ export class Doodads {
 			writer.write<glm::vec3>(i.scale);
 
 			writer.write_string(i.skin_id);
+
+			if (has_v12_fields) {
+				writer.write<uint32_t>(i.group_id);
+			}
 
 			writer.write<uint8_t>(i.flags());
 			writer.write<uint8_t>(i.life);
@@ -173,7 +247,28 @@ export class Doodads {
 				}
 			}
 
+			if (has_v13_fields) {
+				writer.write<int32_t>(i.unknown_v13);
+			}
+
 			writer.write<uint32_t>(i.creation_number);
+
+			if (has_v12_fields) {
+				writer.write<float>(i.stored_roll);
+				writer.write<float>(i.stored_pitch);
+				writer.write<uint32_t>(i.lights.size());
+				for (const auto& light : i.lights) {
+					writer.write<uint32_t>(light.index);
+					writer.write<uint32_t>(light.is_shadow_casting);
+					writer.write<std::array<uint8_t, 4>>(light.color);
+					writer.write<float>(light.intensity);
+					writer.write<float>(light.shadow_start);
+					writer.write<float>(light.shadow_end);
+					writer.write<float>(light.quadratic_falloff);
+					writer.write<float>(light.linear_falloff);
+					writer.write<float>(light.damping);
+				}
+			}
 		}
 
 		writer.write<uint32_t>(write_special_version);
