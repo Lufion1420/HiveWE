@@ -40,6 +40,8 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - doo save policy: v7 and v8 save as (8,11), v12 as (12,11), v13 as (13,11), a new map as (8,11). This keeps the w3i and doo pairings seen in stock. The new-map case relies on `data/test map/war3map.doo` being v7 or v8; a test guards that.
 - A doodad without the fixed-Z flag gets its z re-derived from terrain on save, so byte-exact round-trip checks need fixed-Z doodads or must exclude z (QA: 10.0 became 0.0).
 - `Doodads::read_records` resizes without clearing, so reusing a `Doodads` object keeps per-record fields the new version does not read. Production always uses a fresh `Map`.
+- A byte-exact claim for placed objects must be tested through `Units::load` or the doodad equivalent with a non-zero terrain offset. Load re-derives z from terrain, splits units from items, and x and y lose float bits through the offset, so `read_records`-only round trips prove the writer only.
+- `BinaryReader::read_string` cuts at the first NUL, so a fixed 4-byte id written with `write_string` can lose bytes.
 - Terrain offset is an input to every placed-object position, so a finite-position check on raw unit and doodad coordinates does not stop NaN reaching `interpolated_height`. `std::clamp` passes NaN through.
 - `Terrain::change_tileset` leaves undo actions and the terrain clipboard holding stale ground indices, so "HiveWE never writes X" must be checked through undo and clipboard replay, not just the brush. A w3e ground index equal to the ground count can therefore come from HiveWE itself, and is accepted on load.
 - `TerrainRect` inherits `QRect`, so `right()` and `bottom()` are inclusive. Check this before mirroring terrain loops.
@@ -62,5 +64,7 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - The stock sweeps in `tests/map_body_check_test.cpp` pass silently unless `HIVEWE_STOCK_BODY_ROOT` and `HIVEWE_BODY_CHECK_CASC` are set. Confirm the printed "stock maps checked" line.
 - The stock v39 sweep in `tests/map_format_check_test.cpp` passes silently when `HIVEWE_STOCK_W3I_ROOT` is unset. Confirm the "stock v39 files checked: N" message.
 - `Doodads::load` and `Units::load` can be tested without GL if the `Terrain` is heap-allocated and never destroyed (its destructor calls GL). Both readers refuse unknown versions before using it. `new Terrain()` has a 0 offset because `Terrain` has no user-provided constructor, so it is value-initialized.
+- `ctest` runs each doctest case in its own process. Stock tests report pass with 0 assertions when their root variable is unset, so check the printed counts, not the pass status.
+- `stock_object_data::load()` needs `world_edit_strings` and `world_edit_game_strings` loaded, and reads `data/overrides` relative to the working directory, which under ctest is not the repository root.
 - A sweep check that a real file was parsed must read the checked copy, not the source folder, or a stubbed copy still passes.
 - doctest `SUBCASE` inside a `for` loop is unreliable, so looped refusal tests use plain blocks.
