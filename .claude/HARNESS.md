@@ -2,6 +2,8 @@
 
 Created 2026-11-08, adapted from the Lendrill harness. The main Claude Code session is the orchestrator: it plans, delegates, owns the gates and git, and talks to the user. Subagents do the work. Subagents cannot spawn subagents, so the orchestrator runs each stage. Rules for everyone: [`rules/harness-guardrails.md`](rules/harness-guardrails.md).
 
+**Tickets:** [Asana project "HiveWE"](https://app.asana.com/1/1213523605265041/project/1220328345553589) (GID 1220328345553589). The orchestrator owns the board. When a ticket is finished, add a comment (what shipped, how it was verified, what was not), mark it complete, and move it to "Done — shipped".
+
 ## Roster
 
 | Agent | Job | Edits | Model |
