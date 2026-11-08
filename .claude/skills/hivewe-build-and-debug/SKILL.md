@@ -27,7 +27,10 @@ description: >-
 ## Running HiveWE and CI
 
 - `src/main.cpp` always loads `data/test map/` relative to the working directory (line 154) and writes `data/tools/` (lines 108-111). **Never launch HiveWE with the repo as working directory.** Use a sandbox folder with a copy of `data/`.
-- To test any map without UI driving, replace the sandbox's `data/test map/` with the unpacked map. Stock map `(1)ForgottenHollow` crashed HiveWE (0xc0000409) about 2 seconds after start this way; an unmodified control loaded fine. Cause not investigated.
+- To test any map without UI driving, replace the sandbox's `data/test map/` with the unpacked map. A stock 3.0 map (e.g. `(1)ForgottenHollow`) used to crash HiveWE (0xc0000409) about 2 seconds after start; it now shows the refusal dialog and exits with code 1 (see `rules/hivewe-file-formats.md`).
+- Crash debugging: the `Agent` preset produces no PDB. `cdbX64.exe` from the WindowsApps alias works, and `.exr -1` names the C++ exception class.
+- Use PowerShell for `reg`: Git Bash rewrites `HKCU\Software\HiveWE` into an invalid key.
+- `CloseMainWindow` can be swallowed by an open ribbon popup, so confirm the process really exited.
 - QSettings lives in `HKCU\Software\HiveWE` and holds the user's real layout and recent maps, so running HiveWE changes it. `reg export` before, `reg import` after.
 - CI (`.github/workflows/compile.yml`) builds and tests on every push to `main` and publishes nothing. New pushes cancel running ones. On a cold vcpkg cache, Configure CMake took about an hour on 2026-11-08.
 

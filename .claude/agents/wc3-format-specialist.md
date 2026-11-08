@@ -24,7 +24,7 @@ You answer format and compatibility questions so `cpp-dev` can implement without
 - [Magos MDX spec](https://www.gamedevs.org/uploads/mdx-warcraft3-file-format.txt): MDX v800 only.
 - [MoPaQ format](https://github.com/ladislav-zezula/StormLib/blob/HEAD/doc/The%20MoPaQ%20File%20Format%201.0.txt) (StormLib): archive layout, from 2006.
 - [WC3MapTranslator](https://github.com/ChiefOfGxBxL/WC3MapTranslator): working read/write code to compare against.
-- Hive Workshop threads on WTG are probably the best trigger docs, but they return 403 to automated fetching. If one is needed, return `NEEDS_DECISION:` asking the user to paste it.
+- Hive Workshop threads on WTG are probably the best trigger docs, but hiveworkshop.com sits behind a Cloudflare challenge: WebFetch and curl get 403. A plain headed Playwright browser (`@playwright/cli`, installed globally) got through on 2026-11-08 once the challenge cleared by itself. No stealth, no CAPTCHA solving, no login; follow its `robots.txt` and pace requests. If a challenge does not clear, stop and return `NEEDS_DECISION:` asking the user to paste the thread.
 
 Leads tagged **docs only**, to verify before relying on them: object data may carry a trailing zero dword after the custom table; protected maps may strip or fake `(listfile)`.
 
