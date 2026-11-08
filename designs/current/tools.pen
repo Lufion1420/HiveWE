@@ -26,18 +26,18 @@
               "id": "Df27m",
               "name": "Qt/Check Box",
               "reusable": true,
-              "gap": 6,
+              "gap": 5,
               "alignItems": "center",
               "children": [
                 {
                   "type": "frame",
                   "id": "aQeiF",
                   "name": "Indicator",
-                  "width": 14,
-                  "height": 14,
-                  "fill": "$input-bg",
+                  "width": 13,
+                  "height": 13,
+                  "fill": "$qt-indicator-bg",
                   "cornerRadius": 2,
-                  "stroke": "$qt-button-border",
+                  "stroke": "$qt-indicator-border",
                   "strokeWidth": 1,
                   "justifyContent": "center",
                   "alignItems": "center"
@@ -46,7 +46,7 @@
                   "type": "text",
                   "id": "D1NcHm",
                   "name": "Label",
-                  "fill": "$text-secondary",
+                  "fill": "$qt-text",
                   "content": "Texture Paint",
                   "fontFamily": "$font-ui",
                   "fontSize": "$font-size-body",
@@ -59,18 +59,18 @@
               "id": "FFB6F",
               "name": "Qt/Check Box Checked",
               "reusable": true,
-              "gap": 6,
+              "gap": 5,
               "alignItems": "center",
               "children": [
                 {
                   "type": "frame",
                   "id": "mdoDg",
                   "name": "Indicator",
-                  "width": 14,
-                  "height": 14,
-                  "fill": "$accent-fill",
+                  "width": 13,
+                  "height": 13,
+                  "fill": "$qt-indicator-bg",
                   "cornerRadius": 2,
-                  "stroke": "$accent",
+                  "stroke": "$qt-indicator-border",
                   "strokeWidth": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
@@ -79,8 +79,8 @@
                       "type": "icon",
                       "id": "GrBuz",
                       "name": "Check",
-                      "width": 11,
-                      "height": 11,
+                      "width": 10,
+                      "height": 10,
                       "icon": "check",
                       "library": "lucide",
                       "fill": "#FFFFFF"
@@ -91,7 +91,7 @@
                   "type": "text",
                   "id": "q7hDn",
                   "name": "Label",
-                  "fill": "$text-secondary",
+                  "fill": "$qt-text",
                   "content": "Texture Paint",
                   "fontFamily": "$font-ui",
                   "fontSize": "$font-size-body",
@@ -104,18 +104,18 @@
               "id": "kIjLo",
               "name": "Qt/Radio",
               "reusable": true,
-              "gap": 6,
+              "gap": 5,
               "alignItems": "center",
               "children": [
                 {
                   "type": "frame",
                   "id": "wGac4",
                   "name": "Indicator",
-                  "width": 14,
-                  "height": 14,
-                  "fill": "$input-bg",
+                  "width": 13,
+                  "height": 13,
+                  "fill": "$qt-indicator-bg",
                   "cornerRadius": 7,
-                  "stroke": "$qt-button-border",
+                  "stroke": "$qt-indicator-border",
                   "strokeWidth": 1,
                   "justifyContent": "center",
                   "alignItems": "center"
@@ -124,7 +124,7 @@
                   "type": "text",
                   "id": "Wg2rO",
                   "name": "Label",
-                  "fill": "$text-secondary",
+                  "fill": "$qt-text",
                   "content": "Texture Paint",
                   "fontFamily": "$font-ui",
                   "fontSize": "$font-size-body",
@@ -137,18 +137,18 @@
               "id": "KmWqA",
               "name": "Qt/Radio Checked",
               "reusable": true,
-              "gap": 6,
+              "gap": 5,
               "alignItems": "center",
               "children": [
                 {
                   "type": "frame",
                   "id": "ksdB6",
                   "name": "Indicator",
-                  "width": 14,
-                  "height": 14,
-                  "fill": "$accent-fill",
+                  "width": 13,
+                  "height": 13,
+                  "fill": "$qt-indicator-bg",
                   "cornerRadius": 7,
-                  "stroke": "$accent",
+                  "stroke": "$qt-indicator-border",
                   "strokeWidth": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
@@ -157,7 +157,7 @@
                       "type": "ellipse",
                       "id": "HwmpZ",
                       "name": "Dot",
-                      "fill": "#FFFFFF",
+                      "fill": "$qt-radio-dot",
                       "width": 6,
                       "height": 6
                     }
@@ -167,7 +167,7 @@
                   "type": "text",
                   "id": "INFya",
                   "name": "Label",
-                  "fill": "$text-secondary",
+                  "fill": "$qt-text",
                   "content": "Texture Paint",
                   "fontFamily": "$font-ui",
                   "fontSize": "$font-size-body",
@@ -189,11 +189,10 @@
               "id": "Blzxk",
               "name": "Qt/Button",
               "reusable": true,
-              "width": 75,
               "fill": "#00000000",
-              "stroke": "$qt-button-border",
+              "stroke": "#00000000",
               "strokeWidth": 1,
-              "padding": 5,
+              "padding": 1,
               "justifyContent": "center",
               "alignItems": "center",
               "children": [
@@ -214,11 +213,10 @@
               "id": "Us6pY",
               "name": "Qt/Button Disabled",
               "reusable": true,
-              "width": 75,
               "fill": "#00000000",
-              "stroke": "$qt-button-border",
+              "stroke": "#00000000",
               "strokeWidth": 1,
-              "padding": 5,
+              "padding": 1,
               "justifyContent": "center",
               "alignItems": "center",
               "children": [
@@ -239,11 +237,10 @@
               "id": "QJv7r",
               "name": "Qt/Button Checked",
               "reusable": true,
-              "width": 75,
               "fill": "$qt-button-checked",
               "stroke": "$qt-button-checked-border",
               "strokeWidth": 1,
-              "padding": 5,
+              "padding": 1,
               "justifyContent": "center",
               "alignItems": "center",
               "children": [
@@ -266,11 +263,12 @@
               "reusable": true,
               "width": 140,
               "fill": "$qt-field-bg",
-              "stroke": "$qt-field-border",
+              "cornerRadius": 3,
+              "stroke": "$qt-field-edge",
               "strokeWidth": 1,
               "padding": [
                 3,
-                5
+                4
               ],
               "alignItems": "center",
               "children": [
@@ -291,8 +289,9 @@
               "name": "Qt/Combo",
               "reusable": true,
               "width": 200,
-              "fill": "$qt-field-bg",
-              "stroke": "$qt-field-border",
+              "fill": "$qt-raised-bg",
+              "cornerRadius": 3,
+              "stroke": "$qt-raised-border",
               "strokeWidth": 1,
               "padding": [
                 3,
@@ -330,7 +329,8 @@
               "reusable": true,
               "width": 100,
               "fill": "$qt-field-bg",
-              "stroke": "$qt-field-border",
+              "cornerRadius": 3,
+              "stroke": "$qt-field-edge",
               "strokeWidth": 1,
               "gap": 4,
               "padding": [
@@ -386,8 +386,9 @@
               "id": "BeuKq",
               "name": "Qt/Group Box",
               "reusable": true,
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
+              "fill": "$qt-group-bg",
+              "cornerRadius": 3,
+              "stroke": "$qt-group-border",
               "strokeWidth": 1,
               "layout": "vertical",
               "gap": 6,
@@ -410,12 +411,11 @@
               "id": "HoZPs",
               "name": "Qt/Header Cell",
               "reusable": true,
-              "height": 24,
+              "height": 19,
               "fill": "$qt-table-header",
-              "stroke": "$qt-table-grid",
+              "stroke": "$qt-header-sep",
               "strokeWidth": {
-                "right": 1,
-                "bottom": 1
+                "right": 1
               },
               "padding": [
                 0,
@@ -450,26 +450,29 @@
               "name": "Window/Title Bar",
               "reusable": true,
               "width": 600,
-              "height": 32,
+              "height": 30,
               "fill": "$titlebar-bg",
-              "gap": 8,
+              "gap": 3,
               "padding": [
                 0,
                 0,
                 0,
-                10
+                9
               ],
               "alignItems": "center",
               "children": [
                 {
-                  "type": "icon",
-                  "id": "L7TGzE",
+                  "type": "rectangle",
+                  "id": "EedtL",
                   "name": "App Icon",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/tools/app-icon.png",
+                    "mode": "contain"
+                  },
                   "width": 16,
-                  "height": 16,
-                  "icon": "hexagon",
-                  "library": "lucide",
-                  "fill": "#E6B422"
+                  "height": 16
                 },
                 {
                   "type": "text",
@@ -493,7 +496,7 @@
                   "id": "R0eul",
                   "name": "Minimize",
                   "width": 46,
-                  "height": 32,
+                  "height": 30,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
@@ -514,7 +517,7 @@
                   "id": "Yarun",
                   "name": "Maximize",
                   "width": 46,
-                  "height": 32,
+                  "height": 30,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
@@ -535,7 +538,7 @@
                   "id": "qt78b",
                   "name": "Close",
                   "width": 46,
-                  "height": 32,
+                  "height": 30,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
@@ -643,10 +646,11 @@
               "id": "Ezm05",
               "name": "ADS/Browse Button",
               "reusable": true,
-              "width": 110,
-              "height": 28,
-              "fill": "#3D3D3D",
-              "stroke": "$qt-button-border",
+              "width": 108,
+              "height": 25,
+              "fill": "$qt-raised-bg",
+              "cornerRadius": 2,
+              "stroke": "$qt-raised-border",
               "strokeWidth": 1,
               "justifyContent": "center",
               "alignItems": "center",
@@ -1111,7 +1115,7 @@
                   "type": "frame",
                   "id": "U58DN",
                   "name": "Cell Type",
-                  "width": 90,
+                  "width": 55,
                   "height": 20,
                   "padding": [
                     0,
@@ -1137,7 +1141,7 @@
                   "type": "frame",
                   "id": "GVZHq",
                   "name": "Cell Usage",
-                  "width": 80,
+                  "width": 69,
                   "height": 20,
                   "padding": [
                     0,
@@ -1259,7 +1263,7 @@
                   "type": "frame",
                   "id": "e4SJMl",
                   "name": "Cell Type",
-                  "width": 90,
+                  "width": 55,
                   "height": 20,
                   "padding": [
                     0,
@@ -1285,7 +1289,7 @@
                   "type": "frame",
                   "id": "Rf8mD",
                   "name": "Cell Usage",
-                  "width": 80,
+                  "width": 69,
                   "height": 20,
                   "padding": [
                     0,
@@ -1512,7 +1516,12 @@
               "strokeWidth": {
                 "bottom": 2
               },
-              "alignItems": "end",
+              "padding": [
+                2,
+                0,
+                0,
+                11
+              ],
               "children": [
                 {
                   "id": "ZjDGF",
@@ -1534,26 +1543,18 @@
                 {
                   "type": "rectangle",
                   "id": "yUOtU",
-                  "x": 440,
-                  "y": 260,
-                  "name": "Background art slot",
-                  "fill": "#00000000",
-                  "width": 400,
-                  "height": 240,
-                  "stroke": "$qt-table-grid",
-                  "strokeWidth": 1
-                },
-                {
-                  "type": "text",
-                  "id": "oQ8vh",
-                  "x": 455,
-                  "y": 370,
-                  "name": "Background label",
-                  "fill": "$qt-text-disabled",
-                  "content": "data/icons/model_editor/background.png (QLabel pixmap, centered)",
-                  "fontFamily": "$font-ui",
-                  "fontSize": "$font-size-body",
-                  "fontWeight": "normal"
+                  "x": 384,
+                  "y": 112,
+                  "name": "Background pixmap 512x512",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/tools/model-editor-background.png",
+                    "mode": "stretch"
+                  },
+                  "width": 512,
+                  "height": 512,
+                  "stroke": "$qt-table-grid"
                 }
               ]
             }
@@ -2034,9 +2035,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Browse Models"
             },
@@ -2367,9 +2365,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Opening model failed"
             },
@@ -2500,20 +2495,21 @@
           "width": "fill_container",
           "fill": "$window-bg",
           "layout": "vertical",
-          "gap": 6,
-          "padding": 9,
+          "gap": 8,
+          "padding": [
+            11,
+            10,
+            8,
+            10
+          ],
           "children": [
             {
               "type": "frame",
-              "id": "QICvd",
-              "name": "Source Group",
+              "id": "GWIJp",
+              "name": "Source Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -2526,79 +2522,102 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "YYhCn",
-                  "type": "ref",
-                  "ref": "KmWqA",
-                  "name": "Currently loaded map Radio",
-                  "descendants": {
-                    "INFya": {
-                      "content": "Currently loaded map",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "LBNCc",
-                  "type": "ref",
-                  "ref": "kIjLo",
-                  "name": "Map file or folder: Radio",
-                  "descendants": {
-                    "Wg2rO": {
-                      "content": "Map file or folder:",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "d0GNu",
-                  "name": "Source Path Row",
+                  "id": "QICvd",
+                  "name": "Source Group",
                   "width": "fill_container",
-                  "gap": 6,
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    12,
+                    11,
+                    11,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "id": "iQPHW",
+                      "id": "YYhCn",
                       "type": "ref",
-                      "ref": "oKtN1",
-                      "name": "Source Path Edit",
+                      "ref": "KmWqA",
+                      "name": "Currently loaded map Radio",
+                      "height": 20,
+                      "descendants": {
+                        "INFya": {
+                          "content": "Currently loaded map",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "LBNCc",
+                      "type": "ref",
+                      "ref": "kIjLo",
+                      "name": "Map file or folder: Radio",
+                      "height": 20,
+                      "descendants": {
+                        "Wg2rO": {
+                          "content": "Map file or folder:",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "d0GNu",
+                      "name": "Source Path Row",
                       "width": "fill_container",
-                      "descendants": {
-                        "jPMK8": {
-                          "content": "",
-                          "fill": "$qt-text-disabled"
+                      "height": 24,
+                      "gap": 7,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "iQPHW",
+                          "type": "ref",
+                          "ref": "oKtN1",
+                          "name": "Source Path Edit",
+                          "width": "fill_container",
+                          "descendants": {
+                            "jPMK8": {
+                              "content": "",
+                              "fill": "$qt-text-disabled"
+                            }
+                          }
+                        },
+                        {
+                          "id": "ftMkn",
+                          "type": "ref",
+                          "ref": "Us6pY",
+                          "name": "Browse File... Button",
+                          "width": 110,
+                          "descendants": {
+                            "jpOtl": {
+                              "content": "Browse File..."
+                            }
+                          }
+                        },
+                        {
+                          "id": "c2WdX8",
+                          "type": "ref",
+                          "ref": "Us6pY",
+                          "name": "Browse Folder... Button",
+                          "width": 120,
+                          "descendants": {
+                            "jpOtl": {
+                              "content": "Browse Folder..."
+                            }
+                          }
                         }
-                      }
-                    },
-                    {
-                      "id": "ftMkn",
-                      "type": "ref",
-                      "ref": "Us6pY",
-                      "name": "Browse File... Button",
-                      "width": 110,
-                      "descendants": {
-                        "jpOtl": {
-                          "content": "Browse File..."
-                        }
-                      }
-                    },
-                    {
-                      "id": "c2WdX8",
-                      "type": "ref",
-                      "ref": "Us6pY",
-                      "name": "Browse Folder... Button",
-                      "width": 120,
-                      "descendants": {
-                        "jpOtl": {
-                          "content": "Browse Folder..."
-                        }
-                      }
+                      ]
                     }
                   ]
                 }
@@ -2609,7 +2628,8 @@
               "id": "qY4FH",
               "name": "Output Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 24,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -2640,6 +2660,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Browse... Button",
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Browse..."
@@ -2650,15 +2672,11 @@
             },
             {
               "type": "frame",
-              "id": "e4Drt",
-              "name": "MPQ Archive Hardening Group",
+              "id": "p5gc6",
+              "name": "MPQ Archive Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -2671,87 +2689,111 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "qjUJo",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove listfile Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove listfile",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "L2Nuqd",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove attributes file Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove attributes file",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "UZmT8",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Encrypt MPQ files Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Encrypt MPQ files",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "BXwjU",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Inject junk files Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Inject junk files",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "iZdBe",
-                  "name": "Junk Count Row",
-                  "gap": 6,
+                  "id": "e4Drt",
+                  "name": "MPQ Archive Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    13,
+                    11,
+                    9,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "type": "text",
-                      "id": "w1zE5",
-                      "name": "Label",
-                      "fill": "$qt-text-disabled",
-                      "content": "Junk file count:",
-                      "fontFamily": "$font-ui",
-                      "fontSize": "$font-size-body",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "id": "g9D7K",
+                      "id": "qjUJo",
                       "type": "ref",
-                      "ref": "PQQpO",
-                      "name": "Junk File Count Spin Box",
+                      "ref": "FFB6F",
+                      "name": "Remove listfile Check Box",
+                      "height": 20,
                       "descendants": {
-                        "d6Ubj": {
-                          "content": "50",
-                          "fill": "$qt-text-disabled"
+                        "q7hDn": {
+                          "content": "Remove listfile",
+                          "fill": "$text-secondary"
                         }
                       }
+                    },
+                    {
+                      "id": "L2Nuqd",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove attributes file Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Remove attributes file",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "UZmT8",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Encrypt MPQ files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Encrypt MPQ files",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "BXwjU",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Inject junk files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Inject junk files",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iZdBe",
+                      "name": "Junk Count Row",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "w1zE5",
+                          "name": "Label",
+                          "fill": "$qt-text-disabled",
+                          "content": "Junk file count:",
+                          "fontFamily": "$font-ui",
+                          "fontSize": "$font-size-body",
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "g9D7K",
+                          "type": "ref",
+                          "ref": "PQQpO",
+                          "name": "Junk File Count Spin Box",
+                          "descendants": {
+                            "d6Ubj": {
+                              "content": "50",
+                              "fill": "$qt-text-disabled"
+                            }
+                          }
+                        }
+                      ]
                     }
                   ]
                 }
@@ -2759,15 +2801,11 @@
             },
             {
               "type": "frame",
-              "id": "LCEGy",
-              "name": "Trigger / Script Hardening Group",
+              "id": "JEP4Q",
+              "name": "Trigger / Script Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -2780,42 +2818,60 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "edBWb",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove GUI trigger data Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove GUI trigger data",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "LCEGy",
+                  "name": "Trigger / Script Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "edBWb",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove GUI trigger data Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Remove GUI trigger data",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "l3tn5",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Strip trigger strings Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Strip trigger strings",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "l3tn5",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Strip trigger strings Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Strip trigger strings",
-                      "fill": "$text-secondary"
-                    }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "sXs3C",
-              "name": "Asset Path Obfuscation Group",
+              "id": "H9rosV",
+              "name": "Asset Path Obfuscation Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -2828,30 +2884,47 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "n5SsdZ",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Rename imported files to random names Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Rename imported files to random names",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "sXs3C",
+                  "name": "Asset Path Obfuscation Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "n5SsdZ",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Rename imported files to random names Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Rename imported files to random names",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "nlfmk",
-              "name": "Metadata Sanitization Group",
+              "id": "pgiyv",
+              "name": "Metadata Sanitization Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -2864,68 +2937,86 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "uFjvu",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear map author Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear map author",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "nlfmk",
+                  "name": "Metadata Sanitization Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "uFjvu",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear map author Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear map author",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "yzTcm",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear map description Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear map description",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "PSHjv",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear loading screen text Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear loading screen text",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "asHDL",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Normalize map name Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Normalize map name",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "yzTcm",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear map description Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear map description",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "PSHjv",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear loading screen text Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear loading screen text",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "asHDL",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Normalize map name Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Normalize map name",
-                      "fill": "$text-secondary"
-                    }
-                  }
+                  ]
                 }
               ]
-            },
-            {
-              "type": "frame",
-              "id": "KxeKV",
-              "name": "Stretch",
-              "width": "fill_container",
-              "height": 1
             },
             {
               "type": "frame",
               "id": "AuL1d",
               "name": "Action Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 20,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -2933,7 +3024,7 @@
                   "id": "iiSoQ",
                   "name": "Status Label Cell",
                   "width": "fill_container",
-                  "height": 26,
+                  "height": 20,
                   "alignItems": "center",
                   "children": [
                     {
@@ -2953,7 +3044,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Export Protected Map Button",
-                  "width": 160,
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Export Protected Map"
@@ -3004,20 +3096,21 @@
           "width": "fill_container",
           "fill": "$window-bg",
           "layout": "vertical",
-          "gap": 6,
-          "padding": 9,
+          "gap": 8,
+          "padding": [
+            11,
+            10,
+            8,
+            10
+          ],
           "children": [
             {
               "type": "frame",
-              "id": "p6jikZ",
-              "name": "Source Group",
+              "id": "dAuDG",
+              "name": "Source Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3030,79 +3123,104 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "iozy1",
-                  "type": "ref",
-                  "ref": "kIjLo",
-                  "name": "Currently loaded map Radio",
-                  "descendants": {
-                    "Wg2rO": {
-                      "content": "Currently loaded map",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "tKWnr",
-                  "type": "ref",
-                  "ref": "KmWqA",
-                  "name": "Map file or folder: Radio",
-                  "descendants": {
-                    "INFya": {
-                      "content": "Map file or folder:",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "fSpBm",
-                  "name": "Source Path Row",
+                  "id": "p6jikZ",
+                  "name": "Source Group",
                   "width": "fill_container",
-                  "gap": 6,
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    12,
+                    11,
+                    11,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "id": "RJty2",
+                      "id": "iozy1",
                       "type": "ref",
-                      "ref": "oKtN1",
-                      "name": "Source Path Edit",
+                      "ref": "kIjLo",
+                      "name": "Currently loaded map Radio",
+                      "height": 20,
+                      "descendants": {
+                        "Wg2rO": {
+                          "content": "Currently loaded map",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "tKWnr",
+                      "type": "ref",
+                      "ref": "KmWqA",
+                      "name": "Map file or folder: Radio",
+                      "height": 20,
+                      "descendants": {
+                        "INFya": {
+                          "content": "Map file or folder:",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "fSpBm",
+                      "name": "Source Path Row",
                       "width": "fill_container",
-                      "descendants": {
-                        "jPMK8": {
-                          "content": "D:/Maps/Source/Footmen Wars.w3x",
-                          "fill": "$qt-text"
+                      "height": 24,
+                      "gap": 7,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "RJty2",
+                          "type": "ref",
+                          "ref": "oKtN1",
+                          "name": "Source Path Edit",
+                          "width": "fill_container",
+                          "descendants": {
+                            "jPMK8": {
+                              "content": "D:/Maps/Source/Footmen Wars.w3x",
+                              "fill": "$qt-text"
+                            }
+                          }
+                        },
+                        {
+                          "id": "cdxjF",
+                          "type": "ref",
+                          "ref": "Blzxk",
+                          "name": "Browse File... Button",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "descendants": {
+                            "sSuY6": {
+                              "content": "Browse File..."
+                            }
+                          }
+                        },
+                        {
+                          "id": "F70kR",
+                          "type": "ref",
+                          "ref": "Blzxk",
+                          "name": "Browse Folder... Button",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "descendants": {
+                            "sSuY6": {
+                              "content": "Browse Folder..."
+                            }
+                          }
                         }
-                      }
-                    },
-                    {
-                      "id": "cdxjF",
-                      "type": "ref",
-                      "ref": "Blzxk",
-                      "name": "Browse File... Button",
-                      "width": 110,
-                      "descendants": {
-                        "sSuY6": {
-                          "content": "Browse File..."
-                        }
-                      }
-                    },
-                    {
-                      "id": "F70kR",
-                      "type": "ref",
-                      "ref": "Blzxk",
-                      "name": "Browse Folder... Button",
-                      "width": 120,
-                      "descendants": {
-                        "sSuY6": {
-                          "content": "Browse Folder..."
-                        }
-                      }
+                      ]
                     }
                   ]
                 }
@@ -3113,7 +3231,8 @@
               "id": "GKfXA",
               "name": "Output Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 24,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -3144,6 +3263,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Browse... Button",
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Browse..."
@@ -3154,15 +3275,11 @@
             },
             {
               "type": "frame",
-              "id": "yzMbd",
-              "name": "MPQ Archive Hardening Group",
+              "id": "I6wRJz",
+              "name": "MPQ Archive Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3175,87 +3292,111 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "eqTrf",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove listfile Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove listfile",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "LsGFP",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove attributes file Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove attributes file",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "PqeEU",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Encrypt MPQ files Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Encrypt MPQ files",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "jKTpO",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Inject junk files Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Inject junk files",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "Yegi3",
-                  "name": "Junk Count Row",
-                  "gap": 6,
+                  "id": "yzMbd",
+                  "name": "MPQ Archive Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    13,
+                    11,
+                    9,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "type": "text",
-                      "id": "icUkX",
-                      "name": "Label",
-                      "fill": "$qt-text",
-                      "content": "Junk file count:",
-                      "fontFamily": "$font-ui",
-                      "fontSize": "$font-size-body",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "id": "D6oITc",
+                      "id": "eqTrf",
                       "type": "ref",
-                      "ref": "PQQpO",
-                      "name": "Junk File Count Spin Box",
+                      "ref": "FFB6F",
+                      "name": "Remove listfile Check Box",
+                      "height": 20,
                       "descendants": {
-                        "d6Ubj": {
-                          "content": "50",
-                          "fill": "$qt-text"
+                        "q7hDn": {
+                          "content": "Remove listfile",
+                          "fill": "$text-secondary"
                         }
                       }
+                    },
+                    {
+                      "id": "LsGFP",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove attributes file Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Remove attributes file",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "PqeEU",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Encrypt MPQ files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Encrypt MPQ files",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "jKTpO",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Inject junk files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Inject junk files",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Yegi3",
+                      "name": "Junk Count Row",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "icUkX",
+                          "name": "Label",
+                          "fill": "$qt-text",
+                          "content": "Junk file count:",
+                          "fontFamily": "$font-ui",
+                          "fontSize": "$font-size-body",
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "D6oITc",
+                          "type": "ref",
+                          "ref": "PQQpO",
+                          "name": "Junk File Count Spin Box",
+                          "descendants": {
+                            "d6Ubj": {
+                              "content": "50",
+                              "fill": "$qt-text"
+                            }
+                          }
+                        }
+                      ]
                     }
                   ]
                 }
@@ -3263,15 +3404,11 @@
             },
             {
               "type": "frame",
-              "id": "xpkpQ",
-              "name": "Trigger / Script Hardening Group",
+              "id": "ojFNC",
+              "name": "Trigger / Script Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3284,42 +3421,60 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "Z1DLH",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove GUI trigger data Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove GUI trigger data",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "xpkpQ",
+                  "name": "Trigger / Script Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "Z1DLH",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove GUI trigger data Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Remove GUI trigger data",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "z7pJtm",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Strip trigger strings Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Strip trigger strings",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "z7pJtm",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Strip trigger strings Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Strip trigger strings",
-                      "fill": "$text-secondary"
-                    }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "qSDti",
-              "name": "Asset Path Obfuscation Group",
+              "id": "In7Vj",
+              "name": "Asset Path Obfuscation Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3332,30 +3487,47 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "ucQlI",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Rename imported files to random names Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Rename imported files to random names",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "qSDti",
+                  "name": "Asset Path Obfuscation Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "ucQlI",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Rename imported files to random names Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Rename imported files to random names",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "nWR00",
-              "name": "Metadata Sanitization Group",
+              "id": "nHiiV",
+              "name": "Metadata Sanitization Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3368,68 +3540,86 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "p8ptF",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Clear map author Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Clear map author",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "nWR00",
+                  "name": "Metadata Sanitization Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "p8ptF",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Clear map author Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Clear map author",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "aCyBc",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Clear map description Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Clear map description",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "D03SP6",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Clear loading screen text Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Clear loading screen text",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "r4UTmV",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Normalize map name Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Normalize map name",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "aCyBc",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Clear map description Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Clear map description",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "D03SP6",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Clear loading screen text Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Clear loading screen text",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "r4UTmV",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Normalize map name Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Normalize map name",
-                      "fill": "$text-secondary"
-                    }
-                  }
+                  ]
                 }
               ]
-            },
-            {
-              "type": "frame",
-              "id": "x7ZuX4",
-              "name": "Stretch",
-              "width": "fill_container",
-              "height": 1
             },
             {
               "type": "frame",
               "id": "s4dwhH",
               "name": "Action Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 20,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -3437,7 +3627,7 @@
                   "id": "ewSuw",
                   "name": "Status Label Cell",
                   "width": "fill_container",
-                  "height": 26,
+                  "height": 20,
                   "alignItems": "center",
                   "children": [
                     {
@@ -3457,7 +3647,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Export Protected Map Button",
-                  "width": 160,
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Export Protected Map"
@@ -3508,20 +3699,21 @@
           "width": "fill_container",
           "fill": "$window-bg",
           "layout": "vertical",
-          "gap": 6,
-          "padding": 9,
+          "gap": 8,
+          "padding": [
+            11,
+            10,
+            8,
+            10
+          ],
           "children": [
             {
               "type": "frame",
-              "id": "ivicz",
-              "name": "Source Group",
+              "id": "eWvKj",
+              "name": "Source Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3534,85 +3726,108 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "g0dTR",
-                  "type": "ref",
-                  "ref": "KmWqA",
-                  "name": "Currently loaded map Radio",
-                  "descendants": {
-                    "ksdB6": {
-                      "opacity": 0.5
-                    },
-                    "INFya": {
-                      "content": "Currently loaded map",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
-                },
-                {
-                  "id": "a487I",
-                  "type": "ref",
-                  "ref": "kIjLo",
-                  "name": "Map file or folder: Radio",
-                  "descendants": {
-                    "wGac4": {
-                      "opacity": 0.5
-                    },
-                    "Wg2rO": {
-                      "content": "Map file or folder:",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "Z5Qhj",
-                  "name": "Source Path Row",
+                  "id": "ivicz",
+                  "name": "Source Group",
                   "width": "fill_container",
-                  "gap": 6,
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    12,
+                    11,
+                    11,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "id": "l9OpB",
+                      "id": "g0dTR",
                       "type": "ref",
-                      "ref": "oKtN1",
-                      "name": "Source Path Edit",
-                      "width": "fill_container",
+                      "ref": "KmWqA",
+                      "name": "Currently loaded map Radio",
+                      "height": 20,
                       "descendants": {
-                        "jPMK8": {
-                          "content": "",
+                        "ksdB6": {
+                          "opacity": 0.5
+                        },
+                        "INFya": {
+                          "content": "Currently loaded map",
                           "fill": "$qt-text-disabled"
                         }
                       }
                     },
                     {
-                      "id": "VOFAn",
+                      "id": "a487I",
                       "type": "ref",
-                      "ref": "Us6pY",
-                      "name": "Browse File... Button",
-                      "width": 110,
+                      "ref": "kIjLo",
+                      "name": "Map file or folder: Radio",
+                      "height": 20,
                       "descendants": {
-                        "jpOtl": {
-                          "content": "Browse File..."
+                        "wGac4": {
+                          "opacity": 0.5
+                        },
+                        "Wg2rO": {
+                          "content": "Map file or folder:",
+                          "fill": "$qt-text-disabled"
                         }
                       }
                     },
                     {
-                      "id": "UqNv1",
-                      "type": "ref",
-                      "ref": "Us6pY",
-                      "name": "Browse Folder... Button",
-                      "width": 120,
-                      "descendants": {
-                        "jpOtl": {
-                          "content": "Browse Folder..."
+                      "type": "frame",
+                      "id": "Z5Qhj",
+                      "name": "Source Path Row",
+                      "width": "fill_container",
+                      "height": 24,
+                      "gap": 7,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "l9OpB",
+                          "type": "ref",
+                          "ref": "oKtN1",
+                          "name": "Source Path Edit",
+                          "width": "fill_container",
+                          "descendants": {
+                            "jPMK8": {
+                              "content": "",
+                              "fill": "$qt-text-disabled"
+                            }
+                          }
+                        },
+                        {
+                          "id": "VOFAn",
+                          "type": "ref",
+                          "ref": "Us6pY",
+                          "name": "Browse File... Button",
+                          "width": 110,
+                          "descendants": {
+                            "jpOtl": {
+                              "content": "Browse File..."
+                            }
+                          }
+                        },
+                        {
+                          "id": "UqNv1",
+                          "type": "ref",
+                          "ref": "Us6pY",
+                          "name": "Browse Folder... Button",
+                          "width": 120,
+                          "descendants": {
+                            "jpOtl": {
+                              "content": "Browse Folder..."
+                            }
+                          }
                         }
-                      }
+                      ]
                     }
                   ]
                 }
@@ -3623,7 +3838,8 @@
               "id": "xZiWh",
               "name": "Output Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 24,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -3664,15 +3880,11 @@
             },
             {
               "type": "frame",
-              "id": "j5PKU",
-              "name": "MPQ Archive Hardening Group",
+              "id": "tM41u",
+              "name": "MPQ Archive Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3685,99 +3897,123 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "y2jzp",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove listfile Check Box",
-                  "descendants": {
-                    "mdoDg": {
-                      "opacity": 0.5
-                    },
-                    "q7hDn": {
-                      "content": "Remove listfile",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
-                },
-                {
-                  "id": "anETE",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove attributes file Check Box",
-                  "descendants": {
-                    "mdoDg": {
-                      "opacity": 0.5
-                    },
-                    "q7hDn": {
-                      "content": "Remove attributes file",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
-                },
-                {
-                  "id": "eTQTC",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Encrypt MPQ files Check Box",
-                  "descendants": {
-                    "mdoDg": {
-                      "opacity": 0.5
-                    },
-                    "q7hDn": {
-                      "content": "Encrypt MPQ files",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
-                },
-                {
-                  "id": "UaRol",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Inject junk files Check Box",
-                  "descendants": {
-                    "aQeiF": {
-                      "opacity": 0.5
-                    },
-                    "D1NcHm": {
-                      "content": "Inject junk files",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "YmBMU",
-                  "name": "Junk Count Row",
-                  "gap": 6,
+                  "id": "j5PKU",
+                  "name": "MPQ Archive Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    13,
+                    11,
+                    9,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "type": "text",
-                      "id": "W8q4B",
-                      "name": "Label",
-                      "fill": "$qt-text-disabled",
-                      "content": "Junk file count:",
-                      "fontFamily": "$font-ui",
-                      "fontSize": "$font-size-body",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "id": "snU1v",
+                      "id": "y2jzp",
                       "type": "ref",
-                      "ref": "PQQpO",
-                      "name": "Junk File Count Spin Box",
+                      "ref": "FFB6F",
+                      "name": "Remove listfile Check Box",
+                      "height": 20,
                       "descendants": {
-                        "d6Ubj": {
-                          "content": "50",
+                        "mdoDg": {
+                          "opacity": 0.5
+                        },
+                        "q7hDn": {
+                          "content": "Remove listfile",
                           "fill": "$qt-text-disabled"
                         }
                       }
+                    },
+                    {
+                      "id": "anETE",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove attributes file Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "mdoDg": {
+                          "opacity": 0.5
+                        },
+                        "q7hDn": {
+                          "content": "Remove attributes file",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
+                    },
+                    {
+                      "id": "eTQTC",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Encrypt MPQ files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "mdoDg": {
+                          "opacity": 0.5
+                        },
+                        "q7hDn": {
+                          "content": "Encrypt MPQ files",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
+                    },
+                    {
+                      "id": "UaRol",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Inject junk files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "aQeiF": {
+                          "opacity": 0.5
+                        },
+                        "D1NcHm": {
+                          "content": "Inject junk files",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YmBMU",
+                      "name": "Junk Count Row",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "W8q4B",
+                          "name": "Label",
+                          "fill": "$qt-text-disabled",
+                          "content": "Junk file count:",
+                          "fontFamily": "$font-ui",
+                          "fontSize": "$font-size-body",
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "snU1v",
+                          "type": "ref",
+                          "ref": "PQQpO",
+                          "name": "Junk File Count Spin Box",
+                          "descendants": {
+                            "d6Ubj": {
+                              "content": "50",
+                              "fill": "$qt-text-disabled"
+                            }
+                          }
+                        }
+                      ]
                     }
                   ]
                 }
@@ -3785,15 +4021,11 @@
             },
             {
               "type": "frame",
-              "id": "whL9t",
-              "name": "Trigger / Script Hardening Group",
+              "id": "UpfMe",
+              "name": "Trigger / Script Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3806,48 +4038,66 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "CbnIT",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove GUI trigger data Check Box",
-                  "descendants": {
-                    "mdoDg": {
-                      "opacity": 0.5
+                  "type": "frame",
+                  "id": "whL9t",
+                  "name": "Trigger / Script Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "CbnIT",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove GUI trigger data Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "mdoDg": {
+                          "opacity": 0.5
+                        },
+                        "q7hDn": {
+                          "content": "Remove GUI trigger data",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
                     },
-                    "q7hDn": {
-                      "content": "Remove GUI trigger data",
-                      "fill": "$qt-text-disabled"
+                    {
+                      "id": "C3GoxY",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Strip trigger strings Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "aQeiF": {
+                          "opacity": 0.5
+                        },
+                        "D1NcHm": {
+                          "content": "Strip trigger strings",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "C3GoxY",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Strip trigger strings Check Box",
-                  "descendants": {
-                    "aQeiF": {
-                      "opacity": 0.5
-                    },
-                    "D1NcHm": {
-                      "content": "Strip trigger strings",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "Zo5dU",
-              "name": "Asset Path Obfuscation Group",
+              "id": "ip04W",
+              "name": "Asset Path Obfuscation Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3860,33 +4110,50 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "I2Bxh",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Rename imported files to random names Check Box",
-                  "descendants": {
-                    "aQeiF": {
-                      "opacity": 0.5
-                    },
-                    "D1NcHm": {
-                      "content": "Rename imported files to random names",
-                      "fill": "$qt-text-disabled"
+                  "type": "frame",
+                  "id": "Zo5dU",
+                  "name": "Asset Path Obfuscation Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "I2Bxh",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Rename imported files to random names Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "aQeiF": {
+                          "opacity": 0.5
+                        },
+                        "D1NcHm": {
+                          "content": "Rename imported files to random names",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
                     }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "T9epC",
-              "name": "Metadata Sanitization Group",
+              "id": "G9P6Y",
+              "name": "Metadata Sanitization Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -3899,80 +4166,98 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "NGabF",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear map author Check Box",
-                  "descendants": {
-                    "aQeiF": {
-                      "opacity": 0.5
+                  "type": "frame",
+                  "id": "T9epC",
+                  "name": "Metadata Sanitization Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "NGabF",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear map author Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "aQeiF": {
+                          "opacity": 0.5
+                        },
+                        "D1NcHm": {
+                          "content": "Clear map author",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
                     },
-                    "D1NcHm": {
-                      "content": "Clear map author",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
-                },
-                {
-                  "id": "Nis4q",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear map description Check Box",
-                  "descendants": {
-                    "aQeiF": {
-                      "opacity": 0.5
+                    {
+                      "id": "Nis4q",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear map description Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "aQeiF": {
+                          "opacity": 0.5
+                        },
+                        "D1NcHm": {
+                          "content": "Clear map description",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
                     },
-                    "D1NcHm": {
-                      "content": "Clear map description",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
-                },
-                {
-                  "id": "dbKh6",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear loading screen text Check Box",
-                  "descendants": {
-                    "aQeiF": {
-                      "opacity": 0.5
+                    {
+                      "id": "dbKh6",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear loading screen text Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "aQeiF": {
+                          "opacity": 0.5
+                        },
+                        "D1NcHm": {
+                          "content": "Clear loading screen text",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
                     },
-                    "D1NcHm": {
-                      "content": "Clear loading screen text",
-                      "fill": "$qt-text-disabled"
+                    {
+                      "id": "mXSJw",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Normalize map name Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "aQeiF": {
+                          "opacity": 0.5
+                        },
+                        "D1NcHm": {
+                          "content": "Normalize map name",
+                          "fill": "$qt-text-disabled"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "mXSJw",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Normalize map name Check Box",
-                  "descendants": {
-                    "aQeiF": {
-                      "opacity": 0.5
-                    },
-                    "D1NcHm": {
-                      "content": "Normalize map name",
-                      "fill": "$qt-text-disabled"
-                    }
-                  }
+                  ]
                 }
               ]
-            },
-            {
-              "type": "frame",
-              "id": "r9Hl1V",
-              "name": "Stretch",
-              "width": "fill_container",
-              "height": 1
             },
             {
               "type": "frame",
               "id": "aUHi2",
               "name": "Action Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 20,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -3980,7 +4265,7 @@
                   "id": "O7EEnw",
                   "name": "Status Label Cell",
                   "width": "fill_container",
-                  "height": 26,
+                  "height": 20,
                   "alignItems": "center",
                   "children": [
                     {
@@ -4057,20 +4342,21 @@
           "width": "fill_container",
           "fill": "$window-bg",
           "layout": "vertical",
-          "gap": 6,
-          "padding": 9,
+          "gap": 8,
+          "padding": [
+            11,
+            10,
+            8,
+            10
+          ],
           "children": [
             {
               "type": "frame",
-              "id": "idp0O",
-              "name": "Source Group",
+              "id": "U8qqe",
+              "name": "Source Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4083,79 +4369,102 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "z6N1c",
-                  "type": "ref",
-                  "ref": "KmWqA",
-                  "name": "Currently loaded map Radio",
-                  "descendants": {
-                    "INFya": {
-                      "content": "Currently loaded map",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "VhgvW",
-                  "type": "ref",
-                  "ref": "kIjLo",
-                  "name": "Map file or folder: Radio",
-                  "descendants": {
-                    "Wg2rO": {
-                      "content": "Map file or folder:",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "eYLyz",
-                  "name": "Source Path Row",
+                  "id": "idp0O",
+                  "name": "Source Group",
                   "width": "fill_container",
-                  "gap": 6,
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    12,
+                    11,
+                    11,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "id": "cctoN",
+                      "id": "z6N1c",
                       "type": "ref",
-                      "ref": "oKtN1",
-                      "name": "Source Path Edit",
+                      "ref": "KmWqA",
+                      "name": "Currently loaded map Radio",
+                      "height": 20,
+                      "descendants": {
+                        "INFya": {
+                          "content": "Currently loaded map",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "VhgvW",
+                      "type": "ref",
+                      "ref": "kIjLo",
+                      "name": "Map file or folder: Radio",
+                      "height": 20,
+                      "descendants": {
+                        "Wg2rO": {
+                          "content": "Map file or folder:",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "eYLyz",
+                      "name": "Source Path Row",
                       "width": "fill_container",
-                      "descendants": {
-                        "jPMK8": {
-                          "content": "",
-                          "fill": "$qt-text-disabled"
+                      "height": 24,
+                      "gap": 7,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "cctoN",
+                          "type": "ref",
+                          "ref": "oKtN1",
+                          "name": "Source Path Edit",
+                          "width": "fill_container",
+                          "descendants": {
+                            "jPMK8": {
+                              "content": "",
+                              "fill": "$qt-text-disabled"
+                            }
+                          }
+                        },
+                        {
+                          "id": "v2gte",
+                          "type": "ref",
+                          "ref": "Us6pY",
+                          "name": "Browse File... Button",
+                          "width": 110,
+                          "descendants": {
+                            "jpOtl": {
+                              "content": "Browse File..."
+                            }
+                          }
+                        },
+                        {
+                          "id": "liC1j",
+                          "type": "ref",
+                          "ref": "Us6pY",
+                          "name": "Browse Folder... Button",
+                          "width": 120,
+                          "descendants": {
+                            "jpOtl": {
+                              "content": "Browse Folder..."
+                            }
+                          }
                         }
-                      }
-                    },
-                    {
-                      "id": "v2gte",
-                      "type": "ref",
-                      "ref": "Us6pY",
-                      "name": "Browse File... Button",
-                      "width": 110,
-                      "descendants": {
-                        "jpOtl": {
-                          "content": "Browse File..."
-                        }
-                      }
-                    },
-                    {
-                      "id": "liC1j",
-                      "type": "ref",
-                      "ref": "Us6pY",
-                      "name": "Browse Folder... Button",
-                      "width": 120,
-                      "descendants": {
-                        "jpOtl": {
-                          "content": "Browse Folder..."
-                        }
-                      }
+                      ]
                     }
                   ]
                 }
@@ -4166,7 +4475,8 @@
               "id": "q0Scvb",
               "name": "Output Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 24,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -4197,6 +4507,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Browse... Button",
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Browse..."
@@ -4207,15 +4519,11 @@
             },
             {
               "type": "frame",
-              "id": "nDBSM",
-              "name": "MPQ Archive Hardening Group",
+              "id": "u7Y3C1",
+              "name": "MPQ Archive Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4228,87 +4536,111 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "w7esFu",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove listfile Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove listfile",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "PerXG",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove attributes file Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove attributes file",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "whdTA",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Encrypt MPQ files Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Encrypt MPQ files",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "K2ONuf",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Inject junk files Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Inject junk files",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "JtyjI",
-                  "name": "Junk Count Row",
-                  "gap": 6,
+                  "id": "nDBSM",
+                  "name": "MPQ Archive Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    13,
+                    11,
+                    9,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "type": "text",
-                      "id": "FdDh7",
-                      "name": "Label",
-                      "fill": "$qt-text-disabled",
-                      "content": "Junk file count:",
-                      "fontFamily": "$font-ui",
-                      "fontSize": "$font-size-body",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "id": "oJzpA",
+                      "id": "w7esFu",
                       "type": "ref",
-                      "ref": "PQQpO",
-                      "name": "Junk File Count Spin Box",
+                      "ref": "FFB6F",
+                      "name": "Remove listfile Check Box",
+                      "height": 20,
                       "descendants": {
-                        "d6Ubj": {
-                          "content": "50",
-                          "fill": "$qt-text-disabled"
+                        "q7hDn": {
+                          "content": "Remove listfile",
+                          "fill": "$text-secondary"
                         }
                       }
+                    },
+                    {
+                      "id": "PerXG",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove attributes file Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Remove attributes file",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "whdTA",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Encrypt MPQ files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Encrypt MPQ files",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "K2ONuf",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Inject junk files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Inject junk files",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JtyjI",
+                      "name": "Junk Count Row",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FdDh7",
+                          "name": "Label",
+                          "fill": "$qt-text-disabled",
+                          "content": "Junk file count:",
+                          "fontFamily": "$font-ui",
+                          "fontSize": "$font-size-body",
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "oJzpA",
+                          "type": "ref",
+                          "ref": "PQQpO",
+                          "name": "Junk File Count Spin Box",
+                          "descendants": {
+                            "d6Ubj": {
+                              "content": "50",
+                              "fill": "$qt-text-disabled"
+                            }
+                          }
+                        }
+                      ]
                     }
                   ]
                 }
@@ -4316,15 +4648,11 @@
             },
             {
               "type": "frame",
-              "id": "F2lz1y",
-              "name": "Trigger / Script Hardening Group",
+              "id": "BAOUA",
+              "name": "Trigger / Script Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4337,42 +4665,60 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "u54IV",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove GUI trigger data Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove GUI trigger data",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "F2lz1y",
+                  "name": "Trigger / Script Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "u54IV",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove GUI trigger data Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Remove GUI trigger data",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "UhpSU",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Strip trigger strings Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Strip trigger strings",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "UhpSU",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Strip trigger strings Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Strip trigger strings",
-                      "fill": "$text-secondary"
-                    }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "g736nc",
-              "name": "Asset Path Obfuscation Group",
+              "id": "HsMc7",
+              "name": "Asset Path Obfuscation Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4385,30 +4731,47 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "iFLzZ",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Rename imported files to random names Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Rename imported files to random names",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "g736nc",
+                  "name": "Asset Path Obfuscation Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "iFLzZ",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Rename imported files to random names Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Rename imported files to random names",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "Y0Yhx",
-              "name": "Metadata Sanitization Group",
+              "id": "I5LUT",
+              "name": "Metadata Sanitization Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4421,68 +4784,86 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "OGOGL",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear map author Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear map author",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "Y0Yhx",
+                  "name": "Metadata Sanitization Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "OGOGL",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear map author Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear map author",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "emYgN",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear map description Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear map description",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "c76En",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear loading screen text Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear loading screen text",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "ajhrj",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Normalize map name Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Normalize map name",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "emYgN",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear map description Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear map description",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "c76En",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear loading screen text Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear loading screen text",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "ajhrj",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Normalize map name Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Normalize map name",
-                      "fill": "$text-secondary"
-                    }
-                  }
+                  ]
                 }
               ]
-            },
-            {
-              "type": "frame",
-              "id": "DXl7M",
-              "name": "Stretch",
-              "width": "fill_container",
-              "height": 1
             },
             {
               "type": "frame",
               "id": "PDsTm",
               "name": "Action Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 20,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -4490,7 +4871,7 @@
                   "id": "B8zFuH",
                   "name": "Status Label Cell",
                   "width": "fill_container",
-                  "height": 26,
+                  "height": 20,
                   "alignItems": "center",
                   "children": [
                     {
@@ -4510,7 +4891,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Export Protected Map Button",
-                  "width": 160,
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Export Protected Map"
@@ -4561,20 +4943,21 @@
           "width": "fill_container",
           "fill": "$window-bg",
           "layout": "vertical",
-          "gap": 6,
-          "padding": 9,
+          "gap": 8,
+          "padding": [
+            11,
+            10,
+            8,
+            10
+          ],
           "children": [
             {
               "type": "frame",
-              "id": "xpJ2y",
-              "name": "Source Group",
+              "id": "ewLAk",
+              "name": "Source Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4587,79 +4970,102 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "ixRmL",
-                  "type": "ref",
-                  "ref": "KmWqA",
-                  "name": "Currently loaded map Radio",
-                  "descendants": {
-                    "INFya": {
-                      "content": "Currently loaded map",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "JnNuP",
-                  "type": "ref",
-                  "ref": "kIjLo",
-                  "name": "Map file or folder: Radio",
-                  "descendants": {
-                    "Wg2rO": {
-                      "content": "Map file or folder:",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "dNPiz",
-                  "name": "Source Path Row",
+                  "id": "xpJ2y",
+                  "name": "Source Group",
                   "width": "fill_container",
-                  "gap": 6,
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    12,
+                    11,
+                    11,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "id": "kXte9",
+                      "id": "ixRmL",
                       "type": "ref",
-                      "ref": "oKtN1",
-                      "name": "Source Path Edit",
+                      "ref": "KmWqA",
+                      "name": "Currently loaded map Radio",
+                      "height": 20,
+                      "descendants": {
+                        "INFya": {
+                          "content": "Currently loaded map",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "JnNuP",
+                      "type": "ref",
+                      "ref": "kIjLo",
+                      "name": "Map file or folder: Radio",
+                      "height": 20,
+                      "descendants": {
+                        "Wg2rO": {
+                          "content": "Map file or folder:",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "dNPiz",
+                      "name": "Source Path Row",
                       "width": "fill_container",
-                      "descendants": {
-                        "jPMK8": {
-                          "content": "",
-                          "fill": "$qt-text-disabled"
+                      "height": 24,
+                      "gap": 7,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "kXte9",
+                          "type": "ref",
+                          "ref": "oKtN1",
+                          "name": "Source Path Edit",
+                          "width": "fill_container",
+                          "descendants": {
+                            "jPMK8": {
+                              "content": "",
+                              "fill": "$qt-text-disabled"
+                            }
+                          }
+                        },
+                        {
+                          "id": "u8tup",
+                          "type": "ref",
+                          "ref": "Us6pY",
+                          "name": "Browse File... Button",
+                          "width": 110,
+                          "descendants": {
+                            "jpOtl": {
+                              "content": "Browse File..."
+                            }
+                          }
+                        },
+                        {
+                          "id": "SKHST",
+                          "type": "ref",
+                          "ref": "Us6pY",
+                          "name": "Browse Folder... Button",
+                          "width": 120,
+                          "descendants": {
+                            "jpOtl": {
+                              "content": "Browse Folder..."
+                            }
+                          }
                         }
-                      }
-                    },
-                    {
-                      "id": "u8tup",
-                      "type": "ref",
-                      "ref": "Us6pY",
-                      "name": "Browse File... Button",
-                      "width": 110,
-                      "descendants": {
-                        "jpOtl": {
-                          "content": "Browse File..."
-                        }
-                      }
-                    },
-                    {
-                      "id": "SKHST",
-                      "type": "ref",
-                      "ref": "Us6pY",
-                      "name": "Browse Folder... Button",
-                      "width": 120,
-                      "descendants": {
-                        "jpOtl": {
-                          "content": "Browse Folder..."
-                        }
-                      }
+                      ]
                     }
                   ]
                 }
@@ -4670,7 +5076,8 @@
               "id": "t2IqJ2",
               "name": "Output Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 24,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -4701,6 +5108,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Browse... Button",
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Browse..."
@@ -4711,15 +5120,11 @@
             },
             {
               "type": "frame",
-              "id": "iyYk6",
-              "name": "MPQ Archive Hardening Group",
+              "id": "Yumti",
+              "name": "MPQ Archive Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4732,87 +5137,111 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "F1bvT8",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove listfile Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove listfile",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "e4jji4",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove attributes file Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove attributes file",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "kJq9e",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Encrypt MPQ files Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Encrypt MPQ files",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "G6UHNX",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Inject junk files Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Inject junk files",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
                   "type": "frame",
-                  "id": "i0ApR",
-                  "name": "Junk Count Row",
-                  "gap": 6,
+                  "id": "iyYk6",
+                  "name": "MPQ Archive Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
                   "padding": [
-                    0,
-                    0,
-                    0,
-                    20
+                    13,
+                    11,
+                    9,
+                    11
                   ],
-                  "alignItems": "center",
                   "children": [
                     {
-                      "type": "text",
-                      "id": "pWZgQ",
-                      "name": "Label",
-                      "fill": "$qt-text-disabled",
-                      "content": "Junk file count:",
-                      "fontFamily": "$font-ui",
-                      "fontSize": "$font-size-body",
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "id": "JMFjV",
+                      "id": "F1bvT8",
                       "type": "ref",
-                      "ref": "PQQpO",
-                      "name": "Junk File Count Spin Box",
+                      "ref": "FFB6F",
+                      "name": "Remove listfile Check Box",
+                      "height": 20,
                       "descendants": {
-                        "d6Ubj": {
-                          "content": "50",
-                          "fill": "$qt-text-disabled"
+                        "q7hDn": {
+                          "content": "Remove listfile",
+                          "fill": "$text-secondary"
                         }
                       }
+                    },
+                    {
+                      "id": "e4jji4",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove attributes file Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Remove attributes file",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "kJq9e",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Encrypt MPQ files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Encrypt MPQ files",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "G6UHNX",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Inject junk files Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Inject junk files",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "i0ApR",
+                      "name": "Junk Count Row",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        0,
+                        0,
+                        19
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pWZgQ",
+                          "name": "Label",
+                          "fill": "$qt-text-disabled",
+                          "content": "Junk file count:",
+                          "fontFamily": "$font-ui",
+                          "fontSize": "$font-size-body",
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "JMFjV",
+                          "type": "ref",
+                          "ref": "PQQpO",
+                          "name": "Junk File Count Spin Box",
+                          "descendants": {
+                            "d6Ubj": {
+                              "content": "50",
+                              "fill": "$qt-text-disabled"
+                            }
+                          }
+                        }
+                      ]
                     }
                   ]
                 }
@@ -4820,15 +5249,11 @@
             },
             {
               "type": "frame",
-              "id": "LSgvz",
-              "name": "Trigger / Script Hardening Group",
+              "id": "r4zYbF",
+              "name": "Trigger / Script Hardening Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4841,42 +5266,60 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "bIhJ6",
-                  "type": "ref",
-                  "ref": "FFB6F",
-                  "name": "Remove GUI trigger data Check Box",
-                  "descendants": {
-                    "q7hDn": {
-                      "content": "Remove GUI trigger data",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "LSgvz",
+                  "name": "Trigger / Script Hardening Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "bIhJ6",
+                      "type": "ref",
+                      "ref": "FFB6F",
+                      "name": "Remove GUI trigger data Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "q7hDn": {
+                          "content": "Remove GUI trigger data",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "JegYH",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Strip trigger strings Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Strip trigger strings",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "JegYH",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Strip trigger strings Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Strip trigger strings",
-                      "fill": "$text-secondary"
-                    }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "LqgKD",
-              "name": "Asset Path Obfuscation Group",
+              "id": "ibTpc",
+              "name": "Asset Path Obfuscation Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4889,30 +5332,47 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "wWKDp",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Rename imported files to random names Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Rename imported files to random names",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "LqgKD",
+                  "name": "Asset Path Obfuscation Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "wWKDp",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Rename imported files to random names Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Rename imported files to random names",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
+                  ]
                 }
               ]
             },
             {
               "type": "frame",
-              "id": "sTS9D",
-              "name": "Metadata Sanitization Group",
+              "id": "ZeGO6",
+              "name": "Metadata Sanitization Wrapper",
               "width": "fill_container",
-              "cornerRadius": 2,
-              "stroke": "$qt-table-grid",
-              "strokeWidth": 1,
               "layout": "vertical",
-              "gap": 6,
-              "padding": 8,
+              "gap": 1,
               "children": [
                 {
                   "type": "text",
@@ -4925,68 +5385,86 @@
                   "fontWeight": "normal"
                 },
                 {
-                  "id": "zg0kY",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear map author Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear map author",
-                      "fill": "$text-secondary"
+                  "type": "frame",
+                  "id": "sTS9D",
+                  "name": "Metadata Sanitization Group",
+                  "width": "fill_container",
+                  "fill": "$qt-group-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-group-border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 7,
+                  "padding": [
+                    13,
+                    11,
+                    11,
+                    11
+                  ],
+                  "children": [
+                    {
+                      "id": "zg0kY",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear map author Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear map author",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "UxKyL",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear map description Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear map description",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "J6RFsW",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Clear loading screen text Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Clear loading screen text",
+                          "fill": "$text-secondary"
+                        }
+                      }
+                    },
+                    {
+                      "id": "rkyRY",
+                      "type": "ref",
+                      "ref": "Df27m",
+                      "name": "Normalize map name Check Box",
+                      "height": 20,
+                      "descendants": {
+                        "D1NcHm": {
+                          "content": "Normalize map name",
+                          "fill": "$text-secondary"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "id": "UxKyL",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear map description Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear map description",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "J6RFsW",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Clear loading screen text Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Clear loading screen text",
-                      "fill": "$text-secondary"
-                    }
-                  }
-                },
-                {
-                  "id": "rkyRY",
-                  "type": "ref",
-                  "ref": "Df27m",
-                  "name": "Normalize map name Check Box",
-                  "descendants": {
-                    "D1NcHm": {
-                      "content": "Normalize map name",
-                      "fill": "$text-secondary"
-                    }
-                  }
+                  ]
                 }
               ]
-            },
-            {
-              "type": "frame",
-              "id": "MjjNb",
-              "name": "Stretch",
-              "width": "fill_container",
-              "height": 1
             },
             {
               "type": "frame",
               "id": "LYL3L",
               "name": "Action Row",
               "width": "fill_container",
-              "gap": 6,
+              "height": 20,
+              "gap": 7,
               "alignItems": "center",
               "children": [
                 {
@@ -4994,7 +5472,7 @@
                   "id": "LYjZk",
                   "name": "Status Label Cell",
                   "width": "fill_container",
-                  "height": 26,
+                  "height": 20,
                   "alignItems": "center",
                   "children": [
                     {
@@ -5014,7 +5492,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Export Protected Map Button",
-                  "width": 160,
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Export Protected Map"
@@ -5047,9 +5526,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Map Protector"
             },
@@ -5162,9 +5638,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Map Protector"
             },
@@ -5277,9 +5750,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Map Protector"
             },
@@ -5392,9 +5862,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Map Protector"
             },
@@ -6061,9 +6528,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Asset Manager"
             },
@@ -6084,13 +6548,17 @@
           "fill": "$window-bg",
           "layout": "vertical",
           "gap": 6,
-          "padding": 9,
+          "padding": [
+            10,
+            11
+          ],
           "children": [
             {
               "type": "frame",
               "id": "HYi8A",
               "name": "Header Row",
               "width": "fill_container",
+              "height": 20,
               "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
@@ -6108,23 +6576,25 @@
                   "type": "frame",
                   "id": "Iuimw",
                   "name": "Rescan Button",
-                  "width": 90,
-                  "stroke": "$qt-button-border",
+                  "stroke": "#00000000",
                   "strokeWidth": 1,
-                  "gap": 6,
-                  "padding": 5,
+                  "gap": 2,
+                  "padding": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "icon",
-                      "id": "AyLRM",
+                      "type": "rectangle",
+                      "id": "p66Hhh",
                       "name": "Refresh Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/refresh.png",
+                        "mode": "contain"
+                      },
                       "width": 16,
-                      "height": 16,
-                      "icon": "refresh-cw",
-                      "library": "lucide",
-                      "fill": "$qt-text"
+                      "height": 16
                     },
                     {
                       "type": "text",
@@ -6145,6 +6615,7 @@
               "id": "e2zOQ",
               "name": "Search Row",
               "width": "fill_container",
+              "height": 23,
               "gap": 6,
               "alignItems": "center",
               "children": [
@@ -6153,12 +6624,14 @@
                   "id": "SIp0T",
                   "name": "Search Edit",
                   "width": "fill_container",
+                  "height": 23,
                   "fill": "$qt-field-bg",
-                  "stroke": "$qt-field-border",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-field-edge",
                   "strokeWidth": 1,
                   "padding": [
                     3,
-                    5
+                    4
                   ],
                   "justifyContent": "space_between",
                   "alignItems": "center",
@@ -6180,7 +6653,8 @@
                   "type": "ref",
                   "ref": "YdjiK",
                   "name": "Filter Combo",
-                  "width": 110,
+                  "width": 92,
+                  "height": 23,
                   "descendants": {
                     "iLe5i": {
                       "content": "All files"
@@ -6188,14 +6662,17 @@
                   }
                 },
                 {
-                  "type": "icon",
-                  "id": "U8Eb7U",
+                  "type": "rectangle",
+                  "id": "Qu5LF",
                   "name": "Info Icon",
-                  "width": 16,
-                  "height": 16,
-                  "icon": "info",
-                  "library": "lucide",
-                  "fill": "#2A82DA"
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/tools/info-icon-capture.png",
+                    "mode": "contain"
+                  },
+                  "width": 17,
+                  "height": 17
                 }
               ]
             },
@@ -6207,8 +6684,7 @@
               "width": "fill_container",
               "height": "fill_container",
               "fill": "$qt-field-bg",
-              "stroke": "$qt-field-border",
-              "strokeWidth": 1,
+              "stroke": "#00000000",
               "layout": "vertical",
               "children": [
                 {
@@ -6216,6 +6692,7 @@
                   "id": "NsgsR",
                   "name": "Header",
                   "width": "fill_container",
+                  "height": 19,
                   "children": [
                     {
                       "id": "qnmmj",
@@ -6234,7 +6711,7 @@
                       "type": "ref",
                       "ref": "HoZPs",
                       "name": "Header Type",
-                      "width": 90,
+                      "width": 55,
                       "descendants": {
                         "IHKhv": {
                           "content": "Type"
@@ -6245,13 +6722,12 @@
                       "type": "frame",
                       "id": "DpBMo",
                       "name": "Header Usages",
-                      "width": 80,
-                      "height": 24,
+                      "width": 69,
+                      "height": 19,
                       "fill": "$qt-table-header",
-                      "stroke": "$qt-table-grid",
+                      "stroke": "$qt-header-sep",
                       "strokeWidth": {
-                        "right": 1,
-                        "bottom": 1
+                        "right": 1
                       },
                       "gap": 4,
                       "padding": [
@@ -6909,6 +7385,7 @@
               "id": "lClTc",
               "name": "Action Row",
               "width": "fill_container",
+              "height": 21,
               "gap": 6,
               "alignItems": "center",
               "children": [
@@ -6934,7 +7411,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Select all unused Button",
-                  "width": 130,
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Select all unused"
@@ -6945,23 +7423,25 @@
                   "type": "frame",
                   "id": "Y9vXTb",
                   "name": "Delete Button",
-                  "width": 90,
-                  "stroke": "$qt-button-border",
+                  "stroke": "#00000000",
                   "strokeWidth": 1,
-                  "gap": 6,
-                  "padding": 5,
+                  "gap": 2,
+                  "padding": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "icon",
-                      "id": "twwia",
+                      "type": "rectangle",
+                      "id": "pC5Sa",
                       "name": "Trash Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/trash-icon-capture.png",
+                        "mode": "contain"
+                      },
                       "width": 16,
-                      "height": 16,
-                      "icon": "trash-2",
-                      "library": "lucide",
-                      "fill": "$qt-text-disabled"
+                      "height": 19
                     },
                     {
                       "type": "text",
@@ -7001,9 +7481,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Asset Manager"
             },
@@ -7024,13 +7501,17 @@
           "fill": "$window-bg",
           "layout": "vertical",
           "gap": 6,
-          "padding": 9,
+          "padding": [
+            10,
+            11
+          ],
           "children": [
             {
               "type": "frame",
               "id": "lLsiD",
               "name": "Header Row",
               "width": "fill_container",
+              "height": 20,
               "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
@@ -7048,23 +7529,25 @@
                   "type": "frame",
                   "id": "b41vP",
                   "name": "Rescan Button",
-                  "width": 90,
-                  "stroke": "$qt-button-border",
+                  "stroke": "#00000000",
                   "strokeWidth": 1,
-                  "gap": 6,
-                  "padding": 5,
+                  "gap": 2,
+                  "padding": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "icon",
-                      "id": "Vq7sb",
+                      "type": "rectangle",
+                      "id": "tSkFy",
                       "name": "Refresh Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/refresh.png",
+                        "mode": "contain"
+                      },
                       "width": 16,
-                      "height": 16,
-                      "icon": "refresh-cw",
-                      "library": "lucide",
-                      "fill": "$qt-text"
+                      "height": 16
                     },
                     {
                       "type": "text",
@@ -7085,6 +7568,7 @@
               "id": "x89ws",
               "name": "Search Row",
               "width": "fill_container",
+              "height": 23,
               "gap": 6,
               "alignItems": "center",
               "children": [
@@ -7093,12 +7577,14 @@
                   "id": "fm0xh",
                   "name": "Search Edit",
                   "width": "fill_container",
+                  "height": 23,
                   "fill": "$qt-field-bg",
-                  "stroke": "$qt-field-border",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-field-edge",
                   "strokeWidth": 1,
                   "padding": [
                     3,
-                    5
+                    4
                   ],
                   "justifyContent": "space_between",
                   "alignItems": "center",
@@ -7120,7 +7606,8 @@
                   "type": "ref",
                   "ref": "YdjiK",
                   "name": "Filter Combo",
-                  "width": 110,
+                  "width": 92,
+                  "height": 23,
                   "descendants": {
                     "iLe5i": {
                       "content": "Unused only"
@@ -7128,14 +7615,17 @@
                   }
                 },
                 {
-                  "type": "icon",
-                  "id": "wubH7",
+                  "type": "rectangle",
+                  "id": "G97quP",
                   "name": "Info Icon",
-                  "width": 16,
-                  "height": 16,
-                  "icon": "info",
-                  "library": "lucide",
-                  "fill": "#2A82DA"
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/tools/info-icon-capture.png",
+                    "mode": "contain"
+                  },
+                  "width": 17,
+                  "height": 17
                 }
               ]
             },
@@ -7147,8 +7637,7 @@
               "width": "fill_container",
               "height": "fill_container",
               "fill": "$qt-field-bg",
-              "stroke": "$qt-field-border",
-              "strokeWidth": 1,
+              "stroke": "#00000000",
               "layout": "vertical",
               "children": [
                 {
@@ -7156,6 +7645,7 @@
                   "id": "HVnNo",
                   "name": "Header",
                   "width": "fill_container",
+                  "height": 19,
                   "children": [
                     {
                       "id": "kGMBy",
@@ -7174,7 +7664,7 @@
                       "type": "ref",
                       "ref": "HoZPs",
                       "name": "Header Type",
-                      "width": 90,
+                      "width": 55,
                       "descendants": {
                         "IHKhv": {
                           "content": "Type"
@@ -7185,13 +7675,12 @@
                       "type": "frame",
                       "id": "dcjcR",
                       "name": "Header Usages",
-                      "width": 80,
-                      "height": 24,
+                      "width": 69,
+                      "height": 19,
                       "fill": "$qt-table-header",
-                      "stroke": "$qt-table-grid",
+                      "stroke": "$qt-header-sep",
                       "strokeWidth": {
-                        "right": 1,
-                        "bottom": 1
+                        "right": 1
                       },
                       "gap": 4,
                       "padding": [
@@ -7466,6 +7955,7 @@
               "id": "PZU78",
               "name": "Action Row",
               "width": "fill_container",
+              "height": 21,
               "gap": 6,
               "alignItems": "center",
               "children": [
@@ -7491,7 +7981,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Select all unused Button",
-                  "width": 130,
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Select all unused"
@@ -7502,23 +7993,25 @@
                   "type": "frame",
                   "id": "YnkyT",
                   "name": "Delete Button",
-                  "width": 90,
-                  "stroke": "$qt-button-border",
+                  "stroke": "#00000000",
                   "strokeWidth": 1,
-                  "gap": 6,
-                  "padding": 5,
+                  "gap": 2,
+                  "padding": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "icon",
-                      "id": "aEvHj",
+                      "type": "rectangle",
+                      "id": "a5ULF7",
                       "name": "Trash Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/trash-icon-capture.png",
+                        "mode": "contain"
+                      },
                       "width": 16,
-                      "height": 16,
-                      "icon": "trash-2",
-                      "library": "lucide",
-                      "fill": "$asset-delete"
+                      "height": 19
                     },
                     {
                       "type": "text",
@@ -7558,9 +8051,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Asset Manager"
             },
@@ -7581,13 +8071,17 @@
           "fill": "$window-bg",
           "layout": "vertical",
           "gap": 6,
-          "padding": 9,
+          "padding": [
+            10,
+            11
+          ],
           "children": [
             {
               "type": "frame",
               "id": "NRekA",
               "name": "Header Row",
               "width": "fill_container",
+              "height": 20,
               "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
@@ -7605,23 +8099,25 @@
                   "type": "frame",
                   "id": "RQFKb",
                   "name": "Rescan Button",
-                  "width": 90,
-                  "stroke": "$qt-button-border",
+                  "stroke": "#00000000",
                   "strokeWidth": 1,
-                  "gap": 6,
-                  "padding": 5,
+                  "gap": 2,
+                  "padding": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "icon",
-                      "id": "f3wi5Y",
+                      "type": "rectangle",
+                      "id": "vuvpY",
                       "name": "Refresh Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/refresh.png",
+                        "mode": "contain"
+                      },
                       "width": 16,
-                      "height": 16,
-                      "icon": "refresh-cw",
-                      "library": "lucide",
-                      "fill": "$qt-text"
+                      "height": 16
                     },
                     {
                       "type": "text",
@@ -7642,6 +8138,7 @@
               "id": "hhEtw",
               "name": "Search Row",
               "width": "fill_container",
+              "height": 23,
               "gap": 6,
               "alignItems": "center",
               "children": [
@@ -7650,12 +8147,14 @@
                   "id": "iurQ0",
                   "name": "Search Edit",
                   "width": "fill_container",
+                  "height": 23,
                   "fill": "$qt-field-bg",
-                  "stroke": "$qt-field-border",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-field-edge",
                   "strokeWidth": 1,
                   "padding": [
                     3,
-                    5
+                    4
                   ],
                   "justifyContent": "space_between",
                   "alignItems": "center",
@@ -7687,7 +8186,8 @@
                   "type": "ref",
                   "ref": "YdjiK",
                   "name": "Filter Combo",
-                  "width": 110,
+                  "width": 92,
+                  "height": 23,
                   "descendants": {
                     "iLe5i": {
                       "content": "All files"
@@ -7695,14 +8195,17 @@
                   }
                 },
                 {
-                  "type": "icon",
-                  "id": "i8Pze",
+                  "type": "rectangle",
+                  "id": "GivJ3",
                   "name": "Info Icon",
-                  "width": 16,
-                  "height": 16,
-                  "icon": "info",
-                  "library": "lucide",
-                  "fill": "#2A82DA"
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/tools/info-icon-capture.png",
+                    "mode": "contain"
+                  },
+                  "width": 17,
+                  "height": 17
                 }
               ]
             },
@@ -7714,8 +8217,7 @@
               "width": "fill_container",
               "height": "fill_container",
               "fill": "$qt-field-bg",
-              "stroke": "$qt-field-border",
-              "strokeWidth": 1,
+              "stroke": "#00000000",
               "layout": "vertical",
               "children": [
                 {
@@ -7723,6 +8225,7 @@
                   "id": "BgIHy",
                   "name": "Header",
                   "width": "fill_container",
+                  "height": 19,
                   "children": [
                     {
                       "id": "AUmgc",
@@ -7741,7 +8244,7 @@
                       "type": "ref",
                       "ref": "HoZPs",
                       "name": "Header Type",
-                      "width": 90,
+                      "width": 55,
                       "descendants": {
                         "IHKhv": {
                           "content": "Type"
@@ -7752,13 +8255,12 @@
                       "type": "frame",
                       "id": "rinui",
                       "name": "Header Usages",
-                      "width": 80,
-                      "height": 24,
+                      "width": 69,
+                      "height": 19,
                       "fill": "$qt-table-header",
-                      "stroke": "$qt-table-grid",
+                      "stroke": "$qt-header-sep",
                       "strokeWidth": {
-                        "right": 1,
-                        "bottom": 1
+                        "right": 1
                       },
                       "gap": 4,
                       "padding": [
@@ -7895,6 +8397,7 @@
               "id": "Q88YSf",
               "name": "Action Row",
               "width": "fill_container",
+              "height": 21,
               "gap": 6,
               "alignItems": "center",
               "children": [
@@ -7920,7 +8423,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Select all unused Button",
-                  "width": 130,
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Select all unused"
@@ -7931,23 +8435,25 @@
                   "type": "frame",
                   "id": "hcE4J",
                   "name": "Delete Button",
-                  "width": 90,
-                  "stroke": "$qt-button-border",
+                  "stroke": "#00000000",
                   "strokeWidth": 1,
-                  "gap": 6,
-                  "padding": 5,
+                  "gap": 2,
+                  "padding": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "icon",
-                      "id": "NZ8ql",
+                      "type": "rectangle",
+                      "id": "o7Xuk4",
                       "name": "Trash Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/trash-icon-capture.png",
+                        "mode": "contain"
+                      },
                       "width": 16,
-                      "height": 16,
-                      "icon": "trash-2",
-                      "library": "lucide",
-                      "fill": "$qt-text-disabled"
+                      "height": 19
                     },
                     {
                       "type": "text",
@@ -7987,9 +8493,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Asset Manager"
             },
@@ -8010,13 +8513,17 @@
           "fill": "$window-bg",
           "layout": "vertical",
           "gap": 6,
-          "padding": 9,
+          "padding": [
+            10,
+            11
+          ],
           "children": [
             {
               "type": "frame",
               "id": "KZuaD",
               "name": "Header Row",
               "width": "fill_container",
+              "height": 20,
               "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
@@ -8034,23 +8541,25 @@
                   "type": "frame",
                   "id": "oCZtk",
                   "name": "Rescan Button",
-                  "width": 90,
-                  "stroke": "$qt-button-border",
+                  "stroke": "#00000000",
                   "strokeWidth": 1,
-                  "gap": 6,
-                  "padding": 5,
+                  "gap": 2,
+                  "padding": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "icon",
-                      "id": "L5xRMJ",
+                      "type": "rectangle",
+                      "id": "k76I2",
                       "name": "Refresh Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/refresh.png",
+                        "mode": "contain"
+                      },
                       "width": 16,
-                      "height": 16,
-                      "icon": "refresh-cw",
-                      "library": "lucide",
-                      "fill": "$qt-text"
+                      "height": 16
                     },
                     {
                       "type": "text",
@@ -8071,6 +8580,7 @@
               "id": "cq1oN",
               "name": "Search Row",
               "width": "fill_container",
+              "height": 23,
               "gap": 6,
               "alignItems": "center",
               "children": [
@@ -8079,12 +8589,14 @@
                   "id": "QcM7u",
                   "name": "Search Edit",
                   "width": "fill_container",
+                  "height": 23,
                   "fill": "$qt-field-bg",
-                  "stroke": "$qt-field-border",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-field-edge",
                   "strokeWidth": 1,
                   "padding": [
                     3,
-                    5
+                    4
                   ],
                   "justifyContent": "space_between",
                   "alignItems": "center",
@@ -8116,7 +8628,8 @@
                   "type": "ref",
                   "ref": "YdjiK",
                   "name": "Filter Combo",
-                  "width": 110,
+                  "width": 92,
+                  "height": 23,
                   "descendants": {
                     "iLe5i": {
                       "content": "All files"
@@ -8124,14 +8637,17 @@
                   }
                 },
                 {
-                  "type": "icon",
-                  "id": "Hvi6X",
+                  "type": "rectangle",
+                  "id": "y1IS0r",
                   "name": "Info Icon",
-                  "width": 16,
-                  "height": 16,
-                  "icon": "info",
-                  "library": "lucide",
-                  "fill": "#2A82DA"
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/tools/info-icon-capture.png",
+                    "mode": "contain"
+                  },
+                  "width": 17,
+                  "height": 17
                 }
               ]
             },
@@ -8143,8 +8659,7 @@
               "width": "fill_container",
               "height": "fill_container",
               "fill": "$qt-field-bg",
-              "stroke": "$qt-field-border",
-              "strokeWidth": 1,
+              "stroke": "#00000000",
               "layout": "vertical",
               "children": [
                 {
@@ -8152,6 +8667,7 @@
                   "id": "Zzdwn",
                   "name": "Header",
                   "width": "fill_container",
+                  "height": 19,
                   "children": [
                     {
                       "id": "Q9HaT",
@@ -8170,7 +8686,7 @@
                       "type": "ref",
                       "ref": "HoZPs",
                       "name": "Header Type",
-                      "width": 90,
+                      "width": 55,
                       "descendants": {
                         "IHKhv": {
                           "content": "Type"
@@ -8181,13 +8697,12 @@
                       "type": "frame",
                       "id": "kJFUM",
                       "name": "Header Usages",
-                      "width": 80,
-                      "height": 24,
+                      "width": 69,
+                      "height": 19,
                       "fill": "$qt-table-header",
-                      "stroke": "$qt-table-grid",
+                      "stroke": "$qt-header-sep",
                       "strokeWidth": {
-                        "right": 1,
-                        "bottom": 1
+                        "right": 1
                       },
                       "gap": 4,
                       "padding": [
@@ -8236,6 +8751,7 @@
               "id": "Zuu5y",
               "name": "Action Row",
               "width": "fill_container",
+              "height": 21,
               "gap": 6,
               "alignItems": "center",
               "children": [
@@ -8261,7 +8777,8 @@
                   "type": "ref",
                   "ref": "Blzxk",
                   "name": "Select all unused Button",
-                  "width": 130,
+                  "width": "fit_content",
+                  "height": "fit_content",
                   "descendants": {
                     "sSuY6": {
                       "content": "Select all unused"
@@ -8272,23 +8789,25 @@
                   "type": "frame",
                   "id": "vAuU2",
                   "name": "Delete Button",
-                  "width": 90,
-                  "stroke": "$qt-button-border",
+                  "stroke": "#00000000",
                   "strokeWidth": 1,
-                  "gap": 6,
-                  "padding": 5,
+                  "gap": 2,
+                  "padding": 1,
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
                     {
-                      "type": "icon",
-                      "id": "oZTdE",
+                      "type": "rectangle",
+                      "id": "GXPVf",
                       "name": "Trash Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/trash-icon-capture.png",
+                        "mode": "contain"
+                      },
                       "width": 16,
-                      "height": 16,
-                      "icon": "trash-2",
-                      "library": "lucide",
-                      "fill": "$qt-text-disabled"
+                      "height": 19
                     },
                     {
                       "type": "text",
@@ -8328,9 +8847,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Delete files"
             },
@@ -8456,9 +8972,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Delete failed"
             },
@@ -8572,9 +9085,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Delete file"
             },
@@ -8700,9 +9210,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Delete failed"
             },
@@ -8899,9 +9406,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Import Scenario Data"
             },
@@ -9148,9 +9652,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Unsaved changes"
             },
@@ -9300,9 +9801,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Unsaved changes"
             },
@@ -9452,9 +9950,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Missing Start Locations"
             },
@@ -9604,9 +10099,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Missing Start Locations"
             },
@@ -9781,9 +10273,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "No Map Loaded"
             },
@@ -9897,9 +10386,6 @@
           "name": "Title Bar",
           "width": "fill_container",
           "descendants": {
-            "L7TGzE": {
-              "enabled": false
-            },
             "b4Kywc": {
               "content": "Import Blocked"
             },
@@ -9992,6 +10478,363 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "tBVPw",
+      "x": 2880,
+      "y": 4800,
+      "name": "Asset Manager / Empty - no map files (as captured, 0 files)",
+      "clip": true,
+      "width": 640,
+      "fill": "$window-bg",
+      "stroke": "#000000",
+      "strokeWidth": 1,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "zcJb0",
+          "type": "ref",
+          "ref": "Q17Ufv",
+          "name": "Title Bar",
+          "width": "fill_container",
+          "descendants": {
+            "b4Kywc": {
+              "content": "Asset Manager"
+            },
+            "R0eul": {
+              "enabled": false
+            },
+            "Yarun": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "cLvhf",
+          "name": "Client",
+          "width": "fill_container",
+          "height": 820,
+          "fill": "$window-bg",
+          "layout": "vertical",
+          "gap": 6,
+          "padding": [
+            10,
+            11
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "G03po",
+              "name": "Header Row",
+              "width": "fill_container",
+              "height": 20,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "nrjAP",
+                  "name": "Stats Label",
+                  "fill": "$qt-text",
+                  "content": "0 files · 0 unused · 0 B reclaimable",
+                  "fontFamily": "$font-ui",
+                  "fontSize": "$font-size-body",
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "frame",
+                  "id": "IyhLS",
+                  "name": "Rescan Button",
+                  "stroke": "#00000000",
+                  "strokeWidth": 1,
+                  "gap": 2,
+                  "padding": 1,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "C4Rc1U",
+                      "name": "Refresh Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/refresh.png",
+                        "mode": "contain"
+                      },
+                      "width": 16,
+                      "height": 16
+                    },
+                    {
+                      "type": "text",
+                      "id": "j2dBp",
+                      "name": "Label",
+                      "fill": "$qt-text",
+                      "content": "Rescan",
+                      "fontFamily": "$font-ui",
+                      "fontSize": "$font-size-body",
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "a1rR3",
+              "name": "Search Row",
+              "width": "fill_container",
+              "height": 23,
+              "gap": 6,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Omkep",
+                  "name": "Search Edit",
+                  "width": "fill_container",
+                  "height": 23,
+                  "fill": "$qt-field-bg",
+                  "cornerRadius": 3,
+                  "stroke": "$qt-field-edge",
+                  "strokeWidth": 1,
+                  "padding": [
+                    3,
+                    4
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ALedh",
+                      "name": "Text",
+                      "fill": "$qt-placeholder",
+                      "content": "Search files...",
+                      "fontFamily": "$font-ui",
+                      "fontSize": "$font-size-body",
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "AKYqr",
+                      "x": 481,
+                      "y": 5.5,
+                      "name": "Clear Button",
+                      "enabled": false,
+                      "width": 12,
+                      "height": 12,
+                      "icon": "x",
+                      "library": "lucide",
+                      "fill": "$qt-text"
+                    }
+                  ]
+                },
+                {
+                  "id": "R7fG3",
+                  "type": "ref",
+                  "ref": "YdjiK",
+                  "name": "Filter Combo",
+                  "width": 92,
+                  "height": 23,
+                  "descendants": {
+                    "iLe5i": {
+                      "content": "All files"
+                    }
+                  }
+                },
+                {
+                  "type": "rectangle",
+                  "id": "Crdjb",
+                  "name": "Info Icon",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/tools/info-icon-capture.png",
+                    "mode": "contain"
+                  },
+                  "width": 17,
+                  "height": 17
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "GM6Pt",
+              "name": "Tree View",
+              "clip": true,
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "$qt-field-bg",
+              "stroke": "#00000000",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ft4at",
+                  "name": "Header",
+                  "width": "fill_container",
+                  "height": 19,
+                  "children": [
+                    {
+                      "id": "w21kAE",
+                      "type": "ref",
+                      "ref": "HoZPs",
+                      "name": "Header File",
+                      "width": "fill_container",
+                      "descendants": {
+                        "IHKhv": {
+                          "content": "File"
+                        }
+                      }
+                    },
+                    {
+                      "id": "w4KEzd",
+                      "type": "ref",
+                      "ref": "HoZPs",
+                      "name": "Header Type",
+                      "width": 55,
+                      "descendants": {
+                        "IHKhv": {
+                          "content": "Type"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "C09sI",
+                      "name": "Header Usages",
+                      "width": 69,
+                      "height": 19,
+                      "fill": "$qt-table-header",
+                      "stroke": "$qt-header-sep",
+                      "strokeWidth": {
+                        "right": 1
+                      },
+                      "gap": 4,
+                      "padding": [
+                        0,
+                        6
+                      ],
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "cmyMe",
+                          "name": "Label",
+                          "fill": "$qt-text",
+                          "content": "Usages",
+                          "fontFamily": "$font-ui",
+                          "fontSize": "$font-size-body",
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "PcC7Q",
+                          "name": "Sort Indicator",
+                          "width": 8,
+                          "height": 8,
+                          "icon": "chevron-up",
+                          "library": "lucide",
+                          "fill": "$qt-text"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZARPJ",
+                  "name": "Rows",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "zNG2O",
+              "name": "Action Row",
+              "width": "fill_container",
+              "height": 21,
+              "gap": 6,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fGnZU",
+                  "name": "Selection Label",
+                  "fill": "$qt-text",
+                  "content": "No files selected",
+                  "fontFamily": "$font-ui",
+                  "fontSize": "$font-size-body",
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "gdutB",
+                  "name": "Spacer",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "id": "M50oj",
+                  "type": "ref",
+                  "ref": "Blzxk",
+                  "name": "Select all unused Button",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "descendants": {
+                    "sSuY6": {
+                      "content": "Select all unused"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "Nd2Nj",
+                  "name": "Delete Button",
+                  "stroke": "#00000000",
+                  "strokeWidth": 1,
+                  "gap": 2,
+                  "padding": 1,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "rtt8k",
+                      "name": "Trash Icon",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "assets/tools/trash-icon-capture.png",
+                        "mode": "contain"
+                      },
+                      "width": 16,
+                      "height": 19
+                    },
+                    {
+                      "type": "text",
+                      "id": "rBc0f",
+                      "name": "Label",
+                      "fill": "$qt-text-disabled",
+                      "content": "Delete",
+                      "fontFamily": "$font-ui",
+                      "fontSize": "$font-size-body",
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "variables": {
@@ -10009,7 +10852,7 @@
     },
     "titlebar-bg": {
       "type": "color",
-      "value": "#202020"
+      "value": "#1A2228"
     },
     "titlebar-text": {
       "type": "color",
@@ -10093,7 +10936,7 @@
     },
     "qt-table-header": {
       "type": "color",
-      "value": "#2E2E2E"
+      "value": "#3F3F3F"
     },
     "qt-table-grid": {
       "type": "color",
@@ -10170,6 +11013,42 @@
     "qt-placeholder": {
       "type": "color",
       "value": "#A0A0A4"
+    },
+    "qt-indicator-bg": {
+      "type": "color",
+      "value": "#000000"
+    },
+    "qt-indicator-border": {
+      "type": "color",
+      "value": "#1A1A1A"
+    },
+    "qt-group-bg": {
+      "type": "color",
+      "value": "#343434"
+    },
+    "qt-group-border": {
+      "type": "color",
+      "value": "#404040"
+    },
+    "qt-radio-dot": {
+      "type": "color",
+      "value": "#969696"
+    },
+    "qt-raised-bg": {
+      "type": "color",
+      "value": "#454545"
+    },
+    "qt-raised-border": {
+      "type": "color",
+      "value": "#262626"
+    },
+    "qt-field-edge": {
+      "type": "color",
+      "value": "#262626"
+    },
+    "qt-header-sep": {
+      "type": "color",
+      "value": "#565656"
     }
   },
   "fileToken": "3eec4fa2-a4d3-4106-9a5e-004fb11e52e0"
