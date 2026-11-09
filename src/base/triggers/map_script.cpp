@@ -51,23 +51,15 @@ void generate_global_variables(
 	}
 
 	for (const auto& i : regions.regions) {
-		std::string region_name = i.name;
-		trim(region_name);
-		std::replace(region_name.begin(), region_name.end(), ' ', '_');
-		script.global("rect", "gg_rct_" + region_name, script.null());
+		script.global("rect", prefixed_script_identifier("gg_rct_", i.name), script.null());
 	}
 
 	for (const auto& i : cameras.cameras) {
-		std::string camera_name = i.name;
-		trim(camera_name);
-		std::replace(camera_name.begin(), camera_name.end(), ' ', '_');
-		script.global("camerasetup", "gg_cam_" + camera_name, script.null());
+		script.global("camerasetup", prefixed_script_identifier("gg_cam_", i.name), script.null());
 	}
 
 	for (const auto& i : sounds.sounds) {
-		std::string sound_name = i.name;
-		trim(sound_name);
-		std::replace(sound_name.begin(), sound_name.end(), ' ', '_');
+		const std::string sound_name = prefixed_script_identifier("", i.name);
 
 		if (i.music) {
 			// Music files are stored as just a file path string
@@ -78,14 +70,11 @@ void generate_global_variables(
 	}
 
 	for (const auto& i : triggers) {
-		if (i.is_comment || !i.is_enabled) {
+		if (!emits_trigger_identifier(i, script.mode)) {
 			continue;
 		}
 
-		std::string trigger_name = i.name;
-		trim(trigger_name);
-		std::ranges::replace(trigger_name, ' ', '_');
-		script.global("trigger", "gg_trg_" + trigger_name, script.null());
+		script.global("trigger", prefixed_script_identifier("gg_trg_", i.name), script.null());
 	}
 
 	for (const auto& [creation_number, type] : unit_variables) {
@@ -352,9 +341,7 @@ void generate_regions(MapScriptWriter& script, const Regions& regions, const Ter
 	script.function("CreateRegions", [&]() {
 		script.local("weathereffect", "we", script.null());
 		for (const auto& i : regions.regions) {
-			std::string region_name = "gg_rct_" + i.name;
-			trim(region_name);
-			std::ranges::replace(region_name, ' ', '_');
+			const std::string region_name = prefixed_script_identifier("gg_rct_", i.name);
 
 			const auto to_wc3_x = [&](float x) {
 				return x * 128.f + terrain.offset.x;
@@ -386,9 +373,7 @@ void generate_regions(MapScriptWriter& script, const Regions& regions, const Ter
 void generate_cameras(MapScriptWriter& script, const GameCameras& cameras) {
 	script.function("CreateCameras", [&]() {
 		for (const auto& i : cameras.cameras) {
-			std::string camera_name = "gg_cam_" + i.name;
-			trim(camera_name);
-			std::ranges::replace(camera_name, ' ', '_');
+			const std::string camera_name = prefixed_script_identifier("gg_cam_", i.name);
 
 			script.set_variable(camera_name, "CreateCameraSetup()");
 			script.call("CameraSetupSetField", camera_name, "CAMERA_FIELD_ZOFFSET", i.z_offset, 0.0);
@@ -411,9 +396,7 @@ void generate_cameras(MapScriptWriter& script, const GameCameras& cameras) {
 void generate_sounds(MapScriptWriter& script, const Sounds& sounds) {
 	script.function("InitSounds", [&]() {
 		for (const auto& i : sounds.sounds) {
-			std::string sound_name = i.name;
-			trim(sound_name);
-			std::ranges::replace(sound_name, ' ', '_');
+			const std::string sound_name = prefixed_script_identifier("", i.name);
 
 			if (i.music) {
 				// I suppose music files can't be muted?
@@ -450,14 +433,11 @@ void generate_trigger_initialization(
 ) {
 	script.function("InitCustomTriggers", [&]() {
 		for (const auto& i : triggers) {
-			if (i.is_comment || !i.is_enabled) {
+			if (!emits_trigger_identifier(i, script.mode)) {
 				continue;
 			}
-			std::string trigger_name = i.name;
-			trim(trigger_name);
-			std::replace(trigger_name.begin(), trigger_name.end(), ' ', '_');
 
-			script.call("InitTrig_" + trigger_name);
+			script.call(prefixed_script_identifier("InitTrig_", i.name));
 		}
 	});
 

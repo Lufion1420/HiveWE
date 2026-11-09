@@ -36,6 +36,27 @@ export std::unordered_map<int, int> start_location_indices(const MapInfo& map_in
 	return result;
 }
 
+/// Turns a trigger, region, camera or sound name into the identifier part used in generated scripts: every character that is
+/// not [A-Za-z0-9_] (spaces, apostrophes, '=', non-ASCII bytes) becomes '_'. Callers trim the name first.
+export std::string script_identifier(std::string name) {
+	for (char& c : name) {
+		const bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+		if (!valid) {
+			c = '_';
+		}
+	}
+	return name;
+}
+
+/// Joins an event's resolved parameters into the call arguments after the trigger variable. An event without parameters
+/// yields just the trigger variable, with no trailing separator.
+export std::string event_call_arguments(const std::string_view trigger_variable, const std::string_view parameters) {
+	if (parameters.empty()) {
+		return std::string(trigger_variable);
+	}
+	return std::string(trigger_variable) + ", " + std::string(parameters);
+}
+
 /// TriggerData stores operator presets quoted (`"!="`) and null handle presets as `null`. Script output needs the bare
 /// operator, and `nil` in Lua. `preset_type` is the preset's TriggerParams type (e.g. EqualNotEqualOperator).
 export std::string normalize_preset_value(const std::string_view preset_type, std::string value, const ScriptMode mode) {
@@ -409,6 +430,22 @@ export struct Trigger {
 
 	static inline int next_id = 0;
 };
+
+/// Whether a trigger gets a `gg_trg_` global and an `InitTrig_` call. Disabled triggers and comments never do. In Lua the
+/// World Editor emits neither for custom-text triggers (they are plain library code); JASS custom text defines its own
+/// InitTrig_ function, so JASS keeps both.
+export bool emits_trigger_identifier(const Trigger& trigger, const ScriptMode mode) {
+	if (trigger.is_comment || !trigger.is_enabled) {
+		return false;
+	}
+	return !(mode == ScriptMode::lua && !trigger.custom_text.empty());
+}
+
+/// prefix + the trimmed, sanitized name, e.g. gg_rct_ for a region. Used for both the global and every use of it.
+export std::string prefixed_script_identifier(const std::string_view prefix, std::string name) {
+	trim(name);
+	return std::string(prefix) + script_identifier(std::move(name));
+}
 
 export struct TriggerVariable {
 	std::string name;

@@ -66,6 +66,8 @@ std::string Triggers::resolve_parameter(
 
 			if (!output.starts_with("gg_")) {
 				output = "udg_" + output;
+				} else {
+					output = script_identifier(output);
 			}
 
 			if (parameter.is_array) {
@@ -412,7 +414,7 @@ std::string Triggers::convert_eca_to_script(
 std::string Triggers::convert_gui_to_jass(const Trigger& trigger, std::vector<std::string>& map_initializations, ScriptMode mode) const {
 	std::string trigger_name = trigger.name;
 	trim(trigger_name);
-	std::ranges::replace(trigger_name, ' ', '_');
+	trigger_name = script_identifier(trigger_name);
 
 	const std::string trigger_variable_name = "gg_trg_" + trigger_name;
 	const std::string trigger_action_name = "Trig_" + trigger_name + "_Actions";
@@ -452,7 +454,7 @@ std::string Triggers::convert_gui_to_jass(const Trigger& trigger, std::vector<st
 					}
 				}
 
-				events.call(i.name, trigger_variable_name, arguments);
+				events.call(i.name, event_call_arguments(trigger_variable_name, arguments));
 
 				break;
 			}
