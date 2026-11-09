@@ -38,7 +38,9 @@ std::string Triggers::resolve_parameter(
 			const std::string preset_type = trigger_data.data("TriggerParams", parameter.value, 1);
 
 			if (get_base_type(preset_type, trigger_data) == "string") {
-				return string_replaced(trigger_data.data("TriggerParams", parameter.value, 2), "`", "\"");
+				return normalize_preset_value(
+						preset_type, string_replaced(trigger_data.data("TriggerParams", parameter.value, 2), "`", "\""), mode
+					);
 			}
 
 			if (preset_type == "timedlifebuffcode" // ToDo this seems like a hack?
@@ -51,7 +53,7 @@ std::string Triggers::resolve_parameter(
 				return writer.four_cc(stripped);
 			}
 
-			return trigger_data.data("TriggerParams", parameter.value, 2);
+			return normalize_preset_value(preset_type, trigger_data.data("TriggerParams", parameter.value, 2), mode);
 		}
 		case TriggerParameter::Type::function:
 			if (parameter.has_sub_parameter) {
@@ -337,12 +339,7 @@ std::string Triggers::convert_eca_to_script(
 	}
 
 	if (eca.name.starts_with("OperatorCompare") || eca.name == "OperatorInt" || eca.name == "OperatorReal") {
-		auto result_operator = resolved_parameters[1];
-		if (result_operator == "!=" && mode == ScriptMode::lua) {
-			result_operator = "~=";
-		}
-
-		return std::format("{} {} {}", resolved_parameters[0], result_operator, resolved_parameters[2]);
+		return std::format("{} {} {}", resolved_parameters[0], resolved_parameters[1], resolved_parameters[2]);
 	}
 
 	if (eca.name == "OperatorString") {

@@ -36,6 +36,22 @@ export std::unordered_map<int, int> start_location_indices(const MapInfo& map_in
 	return result;
 }
 
+/// TriggerData stores operator presets quoted (`"!="`) and null handle presets as `null`. Script output needs the bare
+/// operator, and `nil` in Lua. `preset_type` is the preset's TriggerParams type (e.g. EqualNotEqualOperator).
+export std::string normalize_preset_value(const std::string_view preset_type, std::string value, const ScriptMode mode) {
+	if (preset_type.ends_with("Operator") && value.size() >= 2 && value.front() == '"' && value.back() == '"') {
+		value = value.substr(1, value.size() - 2);
+	}
+	if (mode == ScriptMode::lua) {
+		if (value == "null") {
+			value = "nil";
+		} else if (value == "!=") {
+			value = "~=";
+		}
+	}
+	return value;
+}
+
 /// A minimal utility wrapper around a std::string that manages newlines, indentation and closing braces
 struct MapScriptWriter {
 	std::string script;
