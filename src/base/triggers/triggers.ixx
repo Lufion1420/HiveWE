@@ -24,6 +24,15 @@ export enum class ScriptMode {
 	jass
 };
 
+/// Creation numbers in gg_unit_/gg_dest_ names are zero padded to at least 4 digits ("0144"); longer numbers stay as is.
+export std::string padded_creation_number(const int creation_number) {
+	return std::format("{:0>4}", creation_number);
+}
+
+export std::string destructable_global_name(const std::string_view id, const int creation_number) {
+	return std::format("gg_dest_{}_{}", id, padded_creation_number(creation_number));
+}
+
 /// The game numbers start locations 0..n-1 in map_info.players order, not by player number. DefineStartLocation,
 /// SetPlayerStartLocation and SetStartLocPrio must all use this mapping. A player without a start location unit still
 /// owns its index (the index is its position in the list).

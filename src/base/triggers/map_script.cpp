@@ -279,8 +279,8 @@ void generate_destructables(
 		for (const auto& i : doodads.doodads) {
 			std::string id = "d";
 
-			if (destructable_variables.contains(std::to_string(i.creation_number))) {
-				id = "gg_dest_" + i.id + "_" + std::to_string(i.creation_number);
+			if (destructable_variables.contains(padded_creation_number(i.creation_number))) {
+				id = destructable_global_name(i.id, i.creation_number);
 			}
 
 			if (id == "d" && i.item_sets.empty() && i.item_table_pointer == -1) {

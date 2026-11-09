@@ -59,6 +59,17 @@ TEST_CASE("prefixed identifiers trim before sanitizing, so global and use agree"
 	CHECK(prefixed_script_identifier("", "gg_snd_A B") == "gg_snd_A_B");
 }
 
+TEST_CASE("destructable creation numbers are padded the same in lookup and name") {
+	CHECK(padded_creation_number(144) == "0144");
+	CHECK(padded_creation_number(1220) == "1220");
+	CHECK(padded_creation_number(12345) == "12345");
+	CHECK(destructable_global_name("B000", 144) == "gg_dest_B000_0144");
+	CHECK(destructable_global_name("B000", 12345) == "gg_dest_B000_12345");
+	// The trigger text holds "gg_dest_B000_0144"; the parsed key must equal the lookup key.
+	const std::string text = "gg_dest_B000_0144";
+	CHECK(text.substr(13) == padded_creation_number(144));
+}
+
 TEST_CASE("Lua global defaults match the World Editor") {
 	CHECK(lua_global_default("integer", false) == "0");
 	CHECK(lua_global_default("real", false) == "0.0");
