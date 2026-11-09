@@ -136,6 +136,7 @@ set(HIVEWE_UI_FILES
 
 target_sources(HiveWE PRIVATE
 	"main.cpp"
+	"headless_resave.cpp"
 	${HIVEWE_UI_FILES}
 	"main_window/hivewe.rc"
 )

@@ -58,6 +58,11 @@ export class Map: public QObject {
 
   public:
 	bool loaded = false;
+	/// Set by `HiveWE.exe --resave`: save refusals and warnings print to stderr instead of opening a dialog, and missing start
+	/// locations refuse the save instead of asking.
+	bool headless = false;
+	/// Set by save(): the generated script did not compile, so the old war3map.j was kept.
+	bool script_compile_failed = false;
 
 	TriggerStrings trigger_strings;
 	Triggers triggers;
@@ -391,6 +396,12 @@ export class Map: public QObject {
 			return true;
 		}
 
+		if (headless) {
+			std::println(stderr, "Save refused: the {} id \"{}\" of a placed {} is longer than 4 bytes.", overlong->field, overlong->id,
+						 overlong->owner_id);
+			return false;
+		}
+
 		QMessageBox message_box;
 		message_box.setIcon(QMessageBox::Warning);
 		message_box.setWindowTitle("Id Too Long");
@@ -413,6 +424,10 @@ export class Map: public QObject {
 			try {
 				fs::copy(filesystem_path, fs::absolute(path), fs::copy_options::recursive);
 			} catch (fs::filesystem_error& e) {
+				if (headless) {
+					std::println(stderr, "Save failed: copying the map folder: {}", e.what());
+					return false;
+				}
 				QMessageBox msgbox;
 				msgbox.setText(e.what());
 				msgbox.exec();
@@ -463,7 +478,10 @@ export class Map: public QObject {
 		}
 
 		const auto result = triggers.generate_map_script(terrain, units, doodads, info, sounds, regions, cameras, mode);
-		if (!result.has_value()) {
+		script_compile_failed = !result.has_value();
+		if (!result.has_value() && headless) {
+			std::println(stderr, "Script compilation errors:\n{}", result.error());
+		} else if (!result.has_value()) {
 			QMessageBox::information(
 				nullptr,
 				"vJass output",
@@ -697,6 +715,11 @@ export class Map: public QObject {
 				player_names += '\n';
 			}
 			player_names += QString("Player %1: ").arg(player->internal_number + 1) + QString::fromStdString(name);
+		}
+
+		if (headless) {
+			std::println(stderr, "Save refused: active player slots are missing start locations:\n{}", player_names.toStdString());
+			return false;
 		}
 
 		QMessageBox message_box;

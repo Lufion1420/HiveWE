@@ -33,3 +33,14 @@ set_target_properties(HiveWE_tests PROPERTIES INTERPROCEDURAL_OPTIMIZATION OFF)
 
 include(doctest)
 doctest_discover_tests(HiveWE_tests)
+
+# Smoke check of `HiveWE --resave` (src/headless_resave.cpp): saves a copy of data/test map into the build folder, checks the
+# output and the refusals (bad arguments, non-empty output, output inside the input). Reported as skipped when there is no
+# data folder next to the exe, no Warcraft III CASC or no OpenGL 4.5 (exit 4), for example on CI.
+add_test(NAME resave_smoke COMMAND ${CMAKE_COMMAND}
+	-DHIVEWE_EXE=$<TARGET_FILE:HiveWE>
+	"-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../data/test map"
+	-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/resave_smoke_out
+	-P ${CMAKE_CURRENT_SOURCE_DIR}/resave_smoke.cmake
+)
+set_tests_properties(resave_smoke PROPERTIES SKIP_REGULAR_EXPRESSION "RESAVE_SMOKE_SKIPPED" TIMEOUT 300)

@@ -178,6 +178,11 @@ export class Hierarchy {
 		}
 
 		outfile.write(reinterpret_cast<char const*>(data.data()), data.size());
+		outfile.close();
+		// A short write or a failed flush must not let the save report success.
+		if (!outfile) {
+			throw std::runtime_error("Error writing file " + path.string() + ": the write or close failed");
+		}
 	}
 
 	void map_file_remove(const fs::path& path) const {

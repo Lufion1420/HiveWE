@@ -14,6 +14,7 @@
 #include <QStyleFactory>
 
 #include "main_window/hivewe.h"
+#include "headless_resave.h"
 #include "DockManager.h"
 
 #ifdef WIN32
@@ -89,6 +90,14 @@ int main(int argc, char* argv[]) {
 
 	QApplication a(argc, argv);
 
+	// HiveWE.exe --resave <input_folder> <output_folder>: load and save one map folder without the editor window.
+	const QStringList arguments = QApplication::arguments();
+	const bool resave = arguments.size() >= 2 && arguments[1] == "--resave";
+	if (resave && arguments.size() != 4) {
+		std::println(stderr, "Usage: HiveWE --resave <input_folder> <output_folder>");
+		return 2;
+	}
+
 	ads::CDockManager::setConfigFlag(ads::CDockManager::FocusHighlighting);
 	ads::CDockManager::setConfigFlag(ads::CDockManager::AllTabsHaveCloseButton);
 	ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility);
@@ -96,13 +105,16 @@ int main(int argc, char* argv[]) {
 	ads::CDockManager::setConfigFlag(ads::CDockManager::MiddleMouseButtonClosesTab);
 
 	QSettings settings;
-	QFile file("data/themes/" + settings.value("theme", "Dark").toString() + ".qss");
-	if (!file.open(QIODevice::ReadOnly)) {
-		qWarning() << "Error: Reading theme failed:" << file.error() << ": " << file.errorString();
-		return -1;
-	}
+	// --resave opens no window, so it does not need the theme.
+	if (!resave) {
+		QFile file("data/themes/" + settings.value("theme", "Dark").toString() + ".qss");
+		if (!file.open(QIODevice::ReadOnly)) {
+			qWarning() << "Error: Reading theme failed:" << file.error() << ": " << file.errorString();
+			return -1;
+		}
 
-	a.setStyleSheet(QLatin1String(file.readAll()));
+		a.setStyleSheet(QLatin1String(file.readAll()));
+	}
 
 	const auto load_files = [] {
 		// Place common.j and blizzard.j in the data folder. Required by JassHelper
@@ -135,6 +147,11 @@ int main(int argc, char* argv[]) {
 
 	casc_future.wait();
 
+	if (!is_casc_open && resave) {
+		std::println(stderr, "Resave failed: could not open the Warcraft III CASC storage");
+		return 4;
+	}
+
 	if (!is_casc_open) {
 		fs::path directory = find_warcraft_directory();
 
@@ -147,6 +164,14 @@ int main(int argc, char* argv[]) {
 		settings.setValue("warcraftDirectory", QString::fromStdString(directory.string()));
 
 		load_files();
+	}
+
+	if (resave) {
+		const int exit_code = run_headless_resave(arguments[2], arguments[3]);
+		// Skip static destructors: they free GL objects and join the GL worker threads after their contexts are gone.
+		std::fflush(stdout);
+		std::fflush(stderr);
+		std::_Exit(exit_code);
 	}
 
 	const fs::path startup_map = "data/test map/";
