@@ -1,30 +1,28 @@
 # Session handoff
 
-Written 2026-11-09 (late evening). Overwritten at each handoff.
+Written 2026-11-09 (night). Overwritten at each handoff.
 
 ## State
 - `main` holds all work; tree clean after the handoff commit. This session's commits:
-  - c71ea25 gg_item_ globals for trigger-referenced placed items (rings). User-confirmed in game.
-  - 2fe340c InitSounds like the World Editor (voice lines, music, combat sounds). User-confirmed in game.
-  - map-diff tools (fdiff, sdiff, simdiff), guidance commits, changelog commits.
-  - dc9763a `HiveWE.exe --resave <in> <out>` headless mode (exit 0 ok / 1 refused / 2 usage / 3 script compile error / 4 no CASC or GL) + `resave_smoke` ctest + checked map file writes. CI passed on 70288af (run 42698411034), which contains it.
-  - 1091957 first sweep report: `.claude/tools/map-diff/reports/2026-11-09-first-sweep.md` (237 maps, 76 kinds).
-  - 5eba4ca autocast orders as char lists (kind 1) + Lua converted-trigger init by wtg classifier (kind 2, also fixed the Cursed_Flute extra). QA PASS, 239/239. CI for 5eba4ca/2dc3186 not checked yet.
-- Closed in Asana: sound, rings, "3.0 map refused at Create", sweep ticket, headless round-trip test, kinds 1 and 2.
-- New tickets from the sweep (under "World Editor parity: map output on save" unless noted): SetGamePlacement/SetPlayerRaceSelectable vs w3i 0x20/0x40; SetUnitColor + gold SetResourceAmount dropped; SetWaterBaseColor + ally priorities; doodad skin id reset; JASS compile errors (ReturnAction() etc.); humanx03 load failure (under map load robustness). Also: skin fields moved into base object files + upor dropped; imp _Locales entries; Misc.txt case/BOM; BlzSetItemColor; labelled-sound SLK setters; .wav→.ogg paths; Map Protector TRIGSTR inlining; full string-literal escaping (from the security review); JASS nested helpers.
-- Test maps for the user: `C:\Users\mauri\Documents\Warcraft III\Maps\HiveWE test\` (1 original, 2 hivewe, 3 rings fix, 4 sound and rings fix). All checks there are done; the folder can be deleted when the user wants.
-- Stock root: `C:/Users/mauri/AppData/Local/Temp/claude/11cf287c6d13d22a/624d2e1b-c296-4804-9b85-76d3a36906f9/scratchpad/stock` (466 maps by number, 0239 = Forgotten Hollow). WE scripts: `.../scratchpad/stock_scripts/` (subset.tsv = 191 v39 maps; all.json = all, 49 Lua). Scratchpad folders may vanish; `extract_scripts.py` rebuilds stock_scripts from CASC.
+  - 729703e, 8615210, 0b59035: guidance (format rules for SetTeams/placement/race selectable, unit colour/gold, map-diff README notes on folder maps, warcraft-vscode bundles, drive.py quirks).
+  - 5d36284 report 2 (`.claude/tools/map-diff/reports/2026-11-09-second-sweep.md`): kinds 1 and 2 gone; new kind 78 (waygates).
+  - abad589 SetTeams = player count, SetGamePlacement = TEAMS_TOGETHER when >1 human, SetPlayerRaceSelectable = !(w3i 0x20) || dword bit 0x2 || race selectable, ForcePlayerStartLocation only on dword bit 0x1. Reviewed, QA PASS, report 3 (`2026-11-09-third-sweep.md`): kinds 3-5 at 0, nothing else changed. CI run 42712576202 passed.
+  - efc379b SetUnitColor (teamcolor, or placed colour when customteamcolor = 1) + SetResourceAmount for Agld/ugol types. Reviewed APPROVE, ctest 253/253. **Fourth sweep NOT run** (stopped at session end; its leftover processes are gone). CI for efc379b not checked yet.
+- Asana: placement ticket closed (still needs moving to "Done — shipped" section). Colour/gold ticket open until sweep 4. New tickets: scenario dword 0/1 bug and Map Info water red/blue swap (under "map settings windows"); waygates kind 78 and CreateBlightedGoldmine (under "map output on save"). Format notes for the next batch are pasted as comments on the water/ally ticket and the doodad skin ticket (scratchpad copies may vanish).
+- NCOW (user's map, Lua, warcraft-vscode project): `D:\Stuff\Warcraft_3_All_Assets\Projects\Naruto Clash of Worlds Content\Map\NCOW-Arena\` — folder map `NCOW_Spell_Dev.w3x`, packed `.build\release.w3x` + `.build\war3map.lua` (minified bundle; editor part is module `origwar3map.lua`). READ-ONLY: always work on a scratchpad copy; verify size+mtime of all files unchanged afterwards (4083 files, newest 2026-08-26 14:17:40). Round trip before abad589 was a fixed point (only war3map.imp gains `Images\Spells\Pein\2amfbody.blp`). After abad589 two config() lines change: `SetTeams(4)` → `SetTeams(24)`, placement → TEAMS_TOGETHER (= WE behaviour). User code wraps InitGlobals, InitCustomTriggers, RunInitializationTriggers; keep them global.
+- Stock root: `C:/Users/mauri/AppData/Local/Temp/claude/11cf287c6d13d22a/624d2e1b-c296-4804-9b85-76d3a36906f9/scratchpad/stock` (+ `stock_scripts`). The sweep kind classifier is a throwaway script in an earlier run's scratchpad (2f985a30-... session); if lost, rebuild from report 2/3 and say so.
 - Nothing running.
 
 ## Next step
-1. Check CI for 2dc3186 (covers 5eba4ca).
-2. Rerun the sweep (`.claude/tools/map-diff/sweep/resave.py` → fdiff/sdiff/simdiff, one map at a time, max-diffs 20000) to confirm kinds 1 and 2 are gone; write report 2.
-3. Fix the remaining Lua-affecting kinds in report order: SetTeams (222/49), SetGamePlacement + race selectable (48/47), SetUnitColor + SetResourceAmount (44/43), SetWaterBaseColor + ally priorities, doodad skin ids, then the known items (day/night models, HD water, race skin, item colours, skin fields). Rerun the sweep after each batch.
-4. JASS-only kinds are low priority (user is Lua-only).
+1. Check CI for efc379b (or the handoff commit after it, which cancels it).
+2. qa-verifier: fourth sweep (same 237 maps, method as report 3) → kinds 6/7 at 0 in Lua (JASS: only map 0070's 16 stale colour lines expected), no new kinds, no new simdiff errors; NCOW copy line diff; write `2026-11-09-fourth-sweep.md` (or dated the day it runs). Then close the colour/gold ticket.
+3. Next batch (cpp-dev on Opus, reviewer, QA+sweep): water colour + ally priorities + InitAllyPriorities omission, then doodad skin ids (load bug in `Doodad::init`). Exact rules are in the Asana comments on those tickets.
+4. Then the known items: day/night models, HD water, race skin, item colours, skin fields. JASS-only kinds stay low priority.
 
 ## Decisions the user made
 - 2026-11-09: user's maps are Lua-only; Lua first, JASS only must not break.
 - 2026-11-09: no more open-ended manual game testing; the differential sweep is the default bug finder. The user gets only short, specific in-game checklists for what the tools can't see.
+- 2026-11-09: run the sweep on sandbox copies of NCOW (folder map and `.build\release.w3x`); originals never written.
 - Units: random type 2 count and empty ids are fixed for all versions.
 - Units: a sub 9 v12/v13 file saves as sub 11 only when a unit holds a non-default item table or str, agi or int. w3i flag 0x4000 is left alone.
 - Units: an id over 4 bytes is checked before saving, with a dialog. The `write_id` throw stays.
@@ -38,12 +36,15 @@ Written 2026-11-09 (late evening). Overwritten at each handoff.
 - Script fixes target general save correctness; Forgotten Hollow is a reference, not the goal.
 
 ## Orchestrator calls the user can overrule
-- Labelled sounds write only duration and volume until the UI/SoundInfo SLKs are loaded (ticketed). A user's channel/pitch/distance change on a labelled sound is still lost.
+- Labelled sounds write only duration and volume until the UI/SoundInfo SLKs are loaded (ticketed).
 - Unknown sound duration (mp3, missing file) leaves SetSoundDuration out instead of writing 0.
 - No Blizzard files in the repo; stock tests read external files via env vars.
 - `--resave` exits 3 on script compile error.
 - Unit x, y, z and record order are not kept byte-exact on save.
 - Camera 3.0 script calls deferred to "[3.0] Emit 3.0 calls in the script generator".
+- efc379b committed to main before its sweep (tests + review passed) so the tree was clean at handoff.
+- JASS output keeps MapScriptWriter's spacing (`call X(a, b)`), not the WE's `call X( a, b )`.
+- Map 0070's 16 unexplained SetUnitColor lines are accepted as a stale WE script.
 
 ## Open questions (waiting on the user)
-- None. Optional: tell the agent whether to run the sweep on a sandbox copy of the user's own Lua map (NCOW); needs the map's path.
+- Optional, 30 s: in the World Editor, Scenario → Map Options on NCOW — is "Fixed Player Settings" ticked, and does your lobby rely on placement "use map settings"? If not, the new `SetTeams(24)` / TEAMS_TOGETHER lines can stay (they match what the WE writes).
