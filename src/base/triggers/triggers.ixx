@@ -74,6 +74,12 @@ export std::string generate_item_script(
 	ScriptMode mode
 );
 
+/// Returns the play length in milliseconds of a sound's audio file, or nullopt when it cannot be determined.
+export using SoundDurationLookup = std::function<std::optional<int>(const Sound&)>;
+
+/// Test seam: InitSounds as generate_map_script writes it, with durations taken from `duration`.
+export std::string generate_sound_script(const Sounds& sounds, ScriptMode mode, const SoundDurationLookup& duration);
+
 /// The game numbers start locations 0..n-1 in map_info.players order, not by player number. DefineStartLocation,
 /// SetPlayerStartLocation and SetStartLocPrio must all use this mapping. A player without a start location unit still
 /// owns its index (the index is its position in the list).

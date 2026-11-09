@@ -13,6 +13,7 @@ add_executable(HiveWE_tests
 	start_location_index_test.cpp
 	preset_value_test.cpp
 	item_globals_test.cpp
+	sounds_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

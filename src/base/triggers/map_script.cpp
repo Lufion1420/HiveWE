@@ -424,38 +424,154 @@ void generate_cameras(MapScriptWriter& script, const GameCameras& cameras) {
 	});
 }
 
-// Todo, missing fields, soundduration also wrong
-void generate_sounds(MapScriptWriter& script, const Sounds& sounds) {
+// Real arguments of the sound setters: one decimal, as every stock script writes them (1.04 becomes 1.0, 100000 becomes 100000.0).
+// The default "{}" formatting would write 100000.f as 1e+05, which JASS rejects.
+std::string sound_real(const float value) {
+	// Callers skip non-finite values (has_sound_value), which would print as nan or inf.
+	return std::format("{:.1f}", value);
+}
+
+// A w3s float that gets a setter: not the 2^32 "default" and finite. NaN or infinity from a damaged file is treated as default.
+bool has_sound_value(const float value) {
+	return std::isfinite(value) && !is_default_sound_float(value);
+}
+
+// Call order matches the World Editor (checked against the 469 stock 3.0.1 scripts). Without a label: duration, channel, volume, pitch,
+// and for 3D sounds distances, cutoff, cone angles, cone orientation. With a label the World Editor writes only the setters whose value
+// differs from the label's SLK entry; HiveWE does not load those SLKs, so it writes duration and volume only and lets
+// SetSoundParamsFromLabel supply the rest (a user override of a label value is therefore lost). The 2^32 "default" float and a -1
+// channel get no setter.
+void generate_sounds(MapScriptWriter& script, const Sounds& sounds, const SoundDurationLookup& duration) {
+	const auto quoted = [](const std::string_view text) {
+		return "\"" + string_replaced(std::string(text), "\\", "\\\\") + "\"";
+	};
+
 	script.function("InitSounds", [&]() {
 		for (const auto& i : sounds.sounds) {
 			const std::string sound_name = prefixed_script_identifier("", i.name);
 
 			if (i.music) {
 				// I suppose music files can't be muted?
-				script.set_variable(sound_name, "\"" + string_replaced(i.file, "\\", "\\\\") + "\"");
-			} else {
-				script.set_variable(
-					sound_name,
-					std::format(
-						"CreateSound(\"{}\", {}, {}, {}, {}, {}, \"{}\")",
-						string_replaced(i.file, "\\", "\\\\"),
-						i.looping ? "true" : "false",
-						i.is_3d ? "true" : "false",
-						i.stop_out_of_range ? "true" : "false",
-						i.fade_in_rate,
-						i.fade_out_rate,
-						string_replaced(i.eax_effect, "\\", "\\\\")
-					)
-				);
+				script.set_variable(sound_name, quoted(i.file));
+				continue;
+			}
 
-				// TODO how to determine duration. Load the file?
-				script.call("SetSoundDuration", sound_name, i.fade_in_rate);
+			script.set_variable(
+				sound_name,
+				std::format(
+					"CreateSound({}, {}, {}, {}, {}, {}, {})",
+					quoted(i.file),
+					i.looping ? "true" : "false",
+					i.is_3d ? "true" : "false",
+					i.stop_out_of_range ? "true" : "false",
+					i.fade_in_rate,
+					i.fade_out_rate,
+					quoted(i.eax_effect)
+				)
+			);
+
+			const bool has_label = !i.label.empty();
+			if (has_label) {
+				script.call("SetSoundParamsFromLabel", sound_name, quoted(i.label));
+			}
+			if (!i.facial_animation_label.empty()) {
+				script.call("SetSoundFacialAnimationLabel", sound_name, quoted(i.facial_animation_label));
+			}
+			if (!i.facial_animation_group_label.empty()) {
+				script.call("SetSoundFacialAnimationGroupLabel", sound_name, quoted(i.facial_animation_group_label));
+			}
+			if (!i.facial_animation_set_path.empty()) {
+				script.call("SetSoundFacialAnimationSetFilepath", sound_name, quoted(i.facial_animation_set_path));
+			}
+			if (i.speaker_key != -1) {
+				script.call("SetDialogueSpeakerNameKey", sound_name, quoted(std::format("TRIGSTR_{}", i.speaker_key)));
+			}
+			if (i.text_key != -1) {
+				script.call("SetDialogueTextKey", sound_name, quoted(std::format("TRIGSTR_{}", i.text_key)));
+			}
+
+			if (const auto milliseconds = duration(i)) {
+				script.call("SetSoundDuration", sound_name, *milliseconds);
+			} else {
+				std::println("InitSounds: could not determine the duration of {} ({}), SetSoundDuration omitted", i.name, i.file);
+			}
+			if (!has_label && i.channel != -1) {
 				script.call("SetSoundChannel", sound_name, i.channel);
-				script.call("SetSoundVolume", sound_name, i.volume);
-				script.call("SetSoundPitch", sound_name, i.pitch);
+			}
+			// Stock scripts write the volume even when it is -1.
+			script.call("SetSoundVolume", sound_name, i.volume);
+			if (has_label) {
+				continue;
+			}
+
+			if (has_sound_value(i.pitch)) {
+				script.call("SetSoundPitch", sound_name, sound_real(i.pitch));
+			}
+			if (!i.is_3d) {
+				continue;
+			}
+			if (has_sound_value(i.min_distance) && has_sound_value(i.max_distance)) {
+				script.call("SetSoundDistances", sound_name, sound_real(i.min_distance), sound_real(i.max_distance));
+			}
+			if (has_sound_value(i.distance_cutoff)) {
+				script.call("SetSoundDistanceCutoff", sound_name, sound_real(i.distance_cutoff));
+			}
+			if (has_sound_value(i.cone_inside) && has_sound_value(i.cone_outside) && i.cone_outside_volume != -1) {
+				script.call("SetSoundConeAngles", sound_name, sound_real(i.cone_inside), sound_real(i.cone_outside), i.cone_outside_volume);
+			}
+			if (has_sound_value(i.cone_orientation_x) && has_sound_value(i.cone_orientation_y)
+				&& has_sound_value(i.cone_orientation_z)) {
+				script.call(
+					"SetSoundConeOrientation",
+					sound_name,
+					sound_real(i.cone_orientation_x),
+					sound_real(i.cone_orientation_y),
+					sound_real(i.cone_orientation_z)
+				);
 			}
 		}
 	});
+}
+
+/// SetSoundDuration for a sound: the play length of its audio file, resolved through the hierarchy (map files, then game data
+/// including the locale folders where 3.0 dialogue lives). Game files do not change during a session, so their durations are cached
+/// by path and music is read once, not on every save. A file the map itself holds is read each time, since the user may replace it.
+std::optional<int> hierarchy_sound_duration(const Sound& sound) {
+	static std::unordered_map<std::string, std::optional<int>> game_file_durations;
+
+	const bool map_file = hierarchy.map_file_exists(sound.file);
+	// The settings that change which game file open_file picks are part of the key, so a reload with another tileset or mode
+	// cannot serve a stale duration.
+	std::string key = std::format(
+		"{}|{}|{}{}{}|{}",
+		hierarchy.tileset,
+		hierarchy.locale,
+		hierarchy.hd ? 'h' : '-',
+		hierarchy.teen ? 't' : '-',
+		hierarchy.local_files ? 'l' : '-',
+		to_lowercase_copy(sound.file)
+	);
+	std::ranges::replace(key, '\\', '/');
+	if (!map_file) {
+		if (const auto found = game_file_durations.find(key); found != game_file_durations.end()) {
+			return found->second;
+		}
+	}
+
+	std::optional<int> result;
+	if (const auto file = hierarchy.open_file(sound.file)) {
+		result = audio_duration_ms(file->buffer);
+	}
+	if (!map_file) {
+		game_file_durations.emplace(std::move(key), result);
+	}
+	return result;
+}
+
+std::string generate_sound_script(const Sounds& sounds, const ScriptMode mode, const SoundDurationLookup& duration) {
+	MapScriptWriter script(mode);
+	generate_sounds(script, sounds, duration);
+	return script.script;
 }
 
 void generate_trigger_initialization(
@@ -856,7 +972,7 @@ std::expected<void, std::string> Triggers::generate_map_script(
 	generate_item_tables(script_writer, "ItemTable_", map_info.random_item_tables);
 	generate_item_tables(script_writer, "UnitItemDrops_", units.units);
 	generate_item_tables(script_writer, "DoodadItemDrops_", doodads.doodads);
-	generate_sounds(script_writer, sounds);
+	generate_sounds(script_writer, sounds, hierarchy_sound_duration);
 
 	generate_destructables(script_writer, destructable_variables, terrain, doodads);
 	generate_items(script_writer, item_variables, terrain, units);
