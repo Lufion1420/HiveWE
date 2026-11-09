@@ -9,9 +9,16 @@ import std;
 import INI;
 namespace fs = std::filesystem;
 
+void generate_item_globals(MapScriptWriter& script, const std::unordered_map<std::string, std::string>& item_variables) {
+	for (const auto& [creation_number, type] : item_variables) {
+		script.global("item", "gg_item_" + type + "_" + creation_number, script.null());
+	}
+}
+
 void generate_global_variables(
 	MapScriptWriter& script,
 	std::unordered_map<std::string, std::string>& unit_variables,
+	const std::unordered_map<std::string, std::string>& item_variables,
 	std::unordered_map<std::string, std::string>& destructable_variables,
 	const std::vector<Trigger>& triggers,
 	const std::vector<TriggerVariable>& variables,
@@ -78,6 +85,8 @@ void generate_global_variables(
 	for (const auto& [creation_number, type] : unit_variables) {
 		script.global("unit", "gg_unit_" + type + "_" + creation_number, script.null());
 	}
+
+	generate_item_globals(script, item_variables);
 
 	for (const auto& [creation_number, type] : destructable_variables) {
 		script.global("destructable", "gg_dest_" + type + "_" + creation_number, script.null());
@@ -151,7 +160,8 @@ void generate_units(
 			}
 
 			std::string unit_reference = "u";
-			if (unit_variables.contains(std::format("{:0>4}", i.creation_number))) {
+			const auto unit_variable = unit_variables.find(std::format("{:0>4}", i.creation_number));
+			if (unit_variable != unit_variables.end() && unit_variable->second == i.id) {
 				unit_reference = std::format("gg_unit_{}_{:0>4}", i.id, i.creation_number);
 			}
 
@@ -251,18 +261,42 @@ void generate_units(
 	});
 }
 
-void generate_items(MapScriptWriter& script, const Terrain& terrain, const Units& units) {
+void generate_items(
+	MapScriptWriter& script,
+	const std::unordered_map<std::string, std::string>& item_variables,
+	const Terrain& terrain,
+	const Units& units
+) {
 	script.function("CreateAllItems", [&]() {
 		for (const auto& i : units.items) {
-			script.call(
-				"BlzCreateItemWithSkin",
-				script.four_cc(i.id),
-				i.position.x * 128.f + terrain.offset.x,
-				i.position.y * 128.f + terrain.offset.y,
-				script.four_cc(i.id)
-			);
+			const float x = i.position.x * 128.f + terrain.offset.x;
+			const float y = i.position.y * 128.f + terrain.offset.y;
+
+			// A reference whose type differs from the placed item names a global that is declared with the other type, so
+			// assigning this one would write an undeclared global.
+			const auto item_variable = item_variables.find(padded_creation_number(i.creation_number));
+			if (item_variable != item_variables.end() && item_variable->second == i.id) {
+				script.set_variable(
+					item_global_name(i.id, i.creation_number),
+					std::format("BlzCreateItemWithSkin({}, {}, {}, {})", script.four_cc(i.id), x, y, script.four_cc(i.id))
+				);
+			} else {
+				script.call("BlzCreateItemWithSkin", script.four_cc(i.id), x, y, script.four_cc(i.id));
+			}
 		}
 	});
+}
+
+std::string generate_item_script(
+	const std::unordered_map<std::string, std::string>& item_variables,
+	const Terrain& terrain,
+	const Units& units,
+	const ScriptMode mode
+) {
+	MapScriptWriter script(mode);
+	generate_item_globals(script, item_variables);
+	generate_items(script, item_variables, terrain, units);
+	return script.script;
 }
 
 void generate_destructables(
@@ -770,6 +804,7 @@ std::expected<void, std::string> Triggers::generate_map_script(
 ) const {
 	std::unordered_map<std::string, std::string> unit_variables; // creation_number, unit_id
 	std::unordered_map<std::string, std::string> destructable_variables; // creation_number, destructable_id
+	std::unordered_map<std::string, std::string> item_variables; // creation_number, item_id
 	std::vector<std::string> initialization_triggers;
 
 	std::string trigger_script;
@@ -801,11 +836,14 @@ std::expected<void, std::string> Triggers::generate_map_script(
 		pos = trigger_script.find("gg_dest", pos + 17);
 	}
 
+	item_variables = scan_item_variables(trigger_script);
+
 	MapScriptWriter script_writer(mode);
 
 	generate_global_variables(
 		script_writer,
 		unit_variables,
+		item_variables,
 		destructable_variables,
 		triggers,
 		variables,
@@ -821,7 +859,7 @@ std::expected<void, std::string> Triggers::generate_map_script(
 	generate_sounds(script_writer, sounds);
 
 	generate_destructables(script_writer, destructable_variables, terrain, doodads);
-	generate_items(script_writer, terrain, units);
+	generate_items(script_writer, item_variables, terrain, units);
 	generate_units(script_writer, unit_variables, terrain, units);
 	generate_regions(script_writer, regions, terrain);
 	generate_cameras(script_writer, cameras);

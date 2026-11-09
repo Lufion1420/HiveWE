@@ -12,6 +12,7 @@ add_executable(HiveWE_tests
 	map_body_check_test.cpp
 	start_location_index_test.cpp
 	preset_value_test.cpp
+	item_globals_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

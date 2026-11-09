@@ -33,6 +33,47 @@ export std::string destructable_global_name(const std::string_view id, const int
 	return std::format("gg_dest_{}_{}", id, padded_creation_number(creation_number));
 }
 
+export std::string item_global_name(const std::string_view id, const int creation_number) {
+	return std::format("gg_item_{}_{}", id, padded_creation_number(creation_number));
+}
+
+/// Collects every gg_item_<id>_<number> the trigger script references, keyed by the number's digits exactly as written (no
+/// padding is added) with the 4-char item id as value. A match whose id holds a character outside [A-Za-z0-9_] is skipped.
+/// Only these items get a global, like units.
+export std::unordered_map<std::string, std::string> scan_item_variables(const std::string_view trigger_script) {
+	std::unordered_map<std::string, std::string> result;
+	constexpr std::string_view prefix = "gg_item_";
+	size_t pos = trigger_script.find(prefix);
+	while (pos != std::string_view::npos) {
+		const size_t number_start = pos + 13;
+		const auto valid_type = [&] {
+			for (const char c : trigger_script.substr(pos + 8, 4)) {
+				if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_')) {
+					return false;
+				}
+			}
+			return true;
+		};
+		if (number_start <= trigger_script.size() && trigger_script[pos + 12] == '_' && valid_type()) {
+			const size_t number_end = std::min(trigger_script.find_first_not_of("0123456789", number_start), trigger_script.size());
+			if (number_end > number_start) {
+				result[std::string(trigger_script.substr(number_start, number_end - number_start))] =
+					std::string(trigger_script.substr(pos + 8, 4));
+			}
+		}
+		pos = trigger_script.find(prefix, pos + prefix.size());
+	}
+	return result;
+}
+
+/// Test seam: the item globals and CreateAllItems as generate_map_script writes them for the given referenced items.
+export std::string generate_item_script(
+	const std::unordered_map<std::string, std::string>& item_variables,
+	const Terrain& terrain,
+	const Units& units,
+	ScriptMode mode
+);
+
 /// The game numbers start locations 0..n-1 in map_info.players order, not by player number. DefineStartLocation,
 /// SetPlayerStartLocation and SetStartLocPrio must all use this mapping. A player without a start location unit still
 /// owns its index (the index is its position in the list).
