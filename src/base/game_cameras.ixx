@@ -20,12 +20,19 @@ export struct GameCamera {
 	float local_roll;
 	float local_pitch;
 	float local_yaw;
+	// v3 only. Stored as read; the script generator does not emit them yet.
+	float dof_distance = 0;
+	float dof_scale = 0;
+	float pos_absolute_z = 0;
 	std::string name;
+	int camera_type = 0;
 };
 
 export class GameCameras {
   public:
 	std::vector<GameCamera> cameras;
+	/// What the file was. save() writes nothing, so war3map.w3c stays the file that was loaded.
+	int format_version = 0;
 
 	void load(int game_version_major, int game_version_minor, float terrain_offset_x, float terrain_offset_y) {
 		BinaryReader reader = hierarchy.map_file_read("war3map.w3c").value();
@@ -37,7 +44,17 @@ export class GameCameras {
 		map_format::require_accepted("war3map.w3c", map_format::w3c_versions, version);
 
 		const bool has_local_rotation = game_version_major * 100 + game_version_minor >= 131;
-		cameras.resize(reader.read_count(has_local_rotation ? 53 : 41));
+		const bool has_v3_fields = version >= 3;
+		if (has_v3_fields && !has_local_rotation) {
+			throw std::runtime_error(std::format(
+				"war3map.w3c version {} is paired with a war3map.w3i game version of {}.{}, which has not been seen",
+				version,
+				game_version_major,
+				game_version_minor
+			));
+		}
+
+		cameras.resize(reader.read_count((has_local_rotation ? 53 : 41) + (has_v3_fields ? 16 : 0)));
 		for (auto& i : cameras) {
 			// change coordinate system to [0, terrain_width] x [0, terrain_height]
 			// as used by other objects in HiveWE
@@ -58,8 +75,23 @@ export class GameCameras {
 				i.local_yaw = reader.read<float>();
 				i.local_roll = reader.read<float>();
 			}
+			if (has_v3_fields) {
+				i.dof_distance = reader.read<float>();
+				i.dof_scale = reader.read<float>();
+				i.pos_absolute_z = reader.read<float>();
+			}
 			i.name = reader.read_c_string();
+			if (has_v3_fields) {
+				i.camera_type = reader.read<int>();
+			}
 		}
+
+		if (has_v3_fields && reader.remaining() != 0) {
+			throw std::runtime_error(
+				std::format("war3map.w3c version {} has leftover bytes after its last camera: {}", version, reader.remaining())
+			);
+		}
+		format_version = version;
 	}
 
 	void save() {}

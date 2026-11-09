@@ -41,8 +41,8 @@ export namespace map_format {
 	inline constexpr std::array<std::uint32_t, 4> doo_versions = { 7, 8, 12, 13 };
 	inline constexpr std::array<std::uint32_t, 4> units_versions = { 7, 8, 12, 13 };
 	inline constexpr std::array<std::uint32_t, 2> units_subversions = { 9, 11 };
-	inline constexpr std::array<std::uint32_t, 3> w3r_versions = { 2, 3, 5 };
-	inline constexpr std::array<std::uint32_t, 1> w3c_versions = { 0 };
+	inline constexpr std::array<std::uint32_t, 4> w3r_versions = { 2, 3, 5, 7 };
+	inline constexpr std::array<std::uint32_t, 2> w3c_versions = { 0, 3 };
 	inline constexpr std::array<std::uint32_t, 2> w3e_versions = { 11, 12 };
 	inline constexpr std::array<std::uint32_t, 3> w3s_versions = { 1, 2, 3 };
 	inline constexpr std::array<std::uint32_t, 1> wpm_versions = { 0 };

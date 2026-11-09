@@ -8,6 +8,7 @@ import std;
 import MPQ;
 import Doodad;
 import Doodads;
+import GameCameras;
 import Globals;
 import Hierarchy;
 import ModificationTables;
@@ -18,6 +19,7 @@ import MapArchiveCheck;
 import MapBodyCheck;
 import MapFormatCheck;
 import MapInfo;
+import Regions;
 import Terrain;
 import Triggers;
 import Units;
@@ -280,25 +282,34 @@ namespace {
 		return file;
 	}
 
-	Bytes w3r_file() {
+	Bytes w3r_file(const std::uint32_t version = 5) {
 		Bytes b;
-		b.u32(5);
+		b.u32(version);
 		b.count(1);
 		b.u32s(4);
 		b.str("Region");
 		b.u32();
 		b.raw("RLlr");
 		b.str("");
-		b.raw(std::string(4, '\0'));
+		b.raw(std::string(3, '\0') + '\xFF'); // colour, then the alpha that save always writes
+		if (version >= 7) {
+			b.u32s(2); // camera blocker, alpha tile minimap colour
+		}
 		return b;
 	}
 
-	Bytes w3c_file() {
+	Bytes w3c_file(const std::uint32_t version = 0) {
 		Bytes b;
-		b.u32(0);
+		b.u32(version);
 		b.count(1);
 		b.u32s(10 + 3);
+		if (version >= 3) {
+			b.u32s(3); // depth of field distance and scale, absolute z
+		}
 		b.str("Camera");
+		if (version >= 3) {
+			b.u32(); // camera type
+		}
 		return b;
 	}
 
@@ -874,14 +885,17 @@ TestCall=0,0,integer,integer
 
 		// The stock maps of 3.0.1, so that an extraction that lost maps or a stubbed doo cannot pass unnoticed.
 		CHECK(index.size() == 466);
-		CHECK(accepted == 275);
-		CHECK(refused == 191);
-		CHECK(refusals_by_kind["version"] == 191);
-		CHECK(readable_parts_passed == 190);
-		CHECK(readable_parts_with_real_doo == 190);
-		CHECK(readable_parts_with_real_units == 190);
+		// With doo, units, w3r v7 and w3c v3 read, no stock map is refused for a version any more, so the
+		// readable-parts pass has nothing to do and undead02's trigger refusal is reached directly.
+		CHECK(accepted == 465);
+		CHECK(refused == 1);
+		CHECK(refusals_by_kind["version"] == 0);
+		CHECK(refusals_by_kind["undead02 wtg"] == 1);
+		CHECK(readable_parts_passed == 0);
+		CHECK(readable_parts_with_real_doo == 0);
+		CHECK(readable_parts_with_real_units == 0);
 		CHECK(refusals_naming_units == 0);
-		CHECK(refusals_by_kind["undead02 wtg, behind a version refusal"] == 1);
+		CHECK(refusals_by_kind["undead02 wtg, behind a version refusal"] == 0);
 	}
 }
 
@@ -1092,9 +1106,11 @@ TEST_CASE("a damaged count is refused in every file") {
 	}
 	SUBCASE("war3map.w3r") {
 		check_every_count_refused(dir, "war3map.w3r", w3r_file());
+		check_every_count_refused(dir, "war3map.w3r", w3r_file(7));
 	}
 	SUBCASE("war3map.w3c") {
 		check_every_count_refused(dir, "war3map.w3c", w3c_file());
+		check_every_count_refused(dir, "war3map.w3c", w3c_file(3));
 	}
 	SUBCASE("war3map.w3s") {
 		check_every_count_refused(dir, "war3map.w3s", w3s_file());
@@ -3900,5 +3916,297 @@ TEST_CASE("every stock war3mapUnits.doo v12 or v13 below HIVEWE_STOCK_BODY_ROOT 
 
 	CHECK(files == 191);
 	CHECK(records == 33813);
+	CHECK_MESSAGE(failures.empty(), std::format("{} stock failures", failures.size()));
+}
+
+namespace {
+	/// Two v7 regions in which every field is set and differs from its neighbours.
+	std::string w3r_v7_every_field() {
+		Bytes b;
+		b.u32(7);
+		b.u32(2);
+		for (int i = 0; i < 2; i++) {
+			b.raw(le_f32(-1024.f - i) + le_f32(-512.f - i) + le_f32(256.f + i) + le_f32(768.f + i));
+			b.str(i == 0 ? "First region" : "Second");
+			b.u32(41 + i); // creation number
+			b.raw(i == 0 ? "RAhr" : "SNbs");
+			b.str(i == 0 ? "LordaeronSummerDay" : "");
+			b.raw(std::string { '\x11', '\x22', static_cast<char>(0x33 + i), '\xFF' });
+			b.u32(0x01020304u + i); // camera blocker
+			b.raw(std::string { '\x40', '\x50', '\x60', static_cast<char>(0x70 + i) }); // alpha tile minimap colour
+		}
+		return b.data;
+	}
+
+	/// One v3 camera whose floats all differ, so a field read from the wrong place shows.
+	std::string w3c_v3_one_camera() {
+		Bytes b;
+		b.u32(3);
+		b.u32(1);
+		for (int i = 0; i < 16; i++) {
+			b.raw(le_f32(1.5f + i));
+		}
+		b.str("Close Arthas");
+		b.u32(2); // camera type
+		return b.data;
+	}
+
+	std::string load_and_save_w3r(const std::string& name, const std::string& bytes, const std::function<void(Regions&)>& check) {
+		const fs::path dir = make_scratch_dir(name);
+		write_all(dir / "war3map.w3r", bytes);
+		const ScopedMapDirectory open_map(dir);
+		Regions regions;
+		REQUIRE(regions.load(0.f, 0.f));
+		check(regions);
+		fs::remove(dir / "war3map.w3r");
+		regions.save(0.f, 0.f);
+		return read_all(dir / "war3map.w3r");
+	}
+}
+
+TEST_CASE("a v7 war3map.w3r with every field set reads as what it holds and saves as the same bytes") {
+	const std::string bytes = w3r_v7_every_field();
+	const std::string saved = load_and_save_w3r("w3r_v7_round_trip", bytes, [](Regions& regions) {
+		CHECK(regions.format_version == 7);
+		REQUIRE(regions.regions.size() == 2);
+		const Region& first = regions.regions[0];
+		CHECK(first.left == -8.f);
+		CHECK(first.bottom == -4.f);
+		CHECK(first.right == 2.f);
+		CHECK(first.top == 6.f);
+		CHECK(first.name == "First region");
+		CHECK(first.creation_number == 41);
+		CHECK(first.weather_id == "RAhr");
+		CHECK(first.ambient_id == "LordaeronSummerDay");
+		CHECK(first.color == glm::vec3(0x11, 0x22, 0x33));
+		CHECK(first.camera_blocker == 0x01020304);
+		CHECK(first.alpha_tile_minimap_color == std::array<std::uint8_t, 4> { 0x40, 0x50, 0x60, 0x70 });
+		const Region& second = regions.regions[1];
+		CHECK(second.name == "Second");
+		CHECK(second.ambient_id.empty());
+		CHECK(second.camera_blocker == 0x01020305);
+		CHECK(second.alpha_tile_minimap_color[3] == 0x71);
+	});
+	CHECK(saved == bytes);
+}
+
+TEST_CASE("what a war3map.w3r saves as depends on what it was") {
+	for (const std::uint32_t version : { 2u, 3u, 5u }) {
+		CAPTURE(version);
+		const std::string bytes = w3r_file(version).data;
+		const std::string saved = load_and_save_w3r("w3r_old", bytes, [](Regions& regions) { CHECK(regions.format_version == 5); });
+		CHECK(saved == w3r_file(5).data);
+	}
+
+	// A region made in the editor has the v7 fields at 0, and a new map saves as v5.
+	const Region made {};
+	CHECK(made.camera_blocker == 0);
+	CHECK(made.alpha_tile_minimap_color == std::array<std::uint8_t, 4> {});
+	CHECK(Regions().format_version == 5);
+
+	// The same object read as v7 and then as v5 saves the second as v5.
+	const fs::path dir = make_scratch_dir("w3r_reused");
+	const ScopedMapDirectory open_map(dir);
+	Regions regions;
+	write_all(dir / "war3map.w3r", w3r_file(7).data);
+	REQUIRE(regions.load(0.f, 0.f));
+	CHECK(regions.format_version == 7);
+	write_all(dir / "war3map.w3r", w3r_file(5).data);
+	REQUIRE(regions.load(0.f, 0.f));
+	CHECK(regions.format_version == 5);
+	regions.save(0.f, 0.f);
+	CHECK(read_all(dir / "war3map.w3r") == w3r_file(5).data);
+}
+
+TEST_CASE("an empty v7 war3map.w3r and v3 war3map.w3c, as a fresh 3.0.1 World Editor save writes them, load") {
+	const fs::path dir = make_scratch_dir("w3r_w3c_empty");
+	const ScopedMapDirectory open_map(dir);
+	write_all(dir / "war3map.w3r", from_hex("0700000000000000"));
+	write_all(dir / "war3map.w3c", from_hex("0300000000000000"));
+	Regions regions;
+	REQUIRE(regions.load(0.f, 0.f));
+	CHECK(regions.regions.empty());
+	CHECK(regions.format_version == 7);
+	GameCameras cameras;
+	cameras.load(3, 0, 0.f, 0.f);
+	CHECK(cameras.cameras.empty());
+	CHECK(cameras.format_version == 3);
+	regions.save(0.f, 0.f);
+	CHECK(read_all(dir / "war3map.w3r") == from_hex("0700000000000000"));
+}
+
+TEST_CASE("a v3 war3map.w3c reads every field from its place") {
+	BinaryReader reader = reader_over(w3c_v3_one_camera());
+	GameCameras cameras;
+	cameras.load(reader, 3, 0, 0.f, 0.f);
+	CHECK(reader.remaining() == 0);
+	CHECK(cameras.format_version == 3);
+	REQUIRE(cameras.cameras.size() == 1);
+	const GameCamera& camera = cameras.cameras[0];
+	CHECK(camera.target_x == 1.5f / 128.f);
+	CHECK(camera.target_y == 2.5f / 128.f);
+	CHECK(camera.z_offset == 3.5f / 128.f);
+	CHECK(camera.rotation == 4.5f);
+	CHECK(camera.angle_of_attack == 5.5f);
+	CHECK(camera.distance == 6.5f);
+	CHECK(camera.roll == 7.5f);
+	CHECK(camera.fov == 8.5f);
+	CHECK(camera.far_z == 9.5f);
+	CHECK(camera.near_z == 10.5f);
+	CHECK(camera.local_pitch == 11.5f);
+	CHECK(camera.local_yaw == 12.5f);
+	CHECK(camera.local_roll == 13.5f);
+	CHECK(camera.dof_distance == 14.5f);
+	CHECK(camera.dof_scale == 15.5f);
+	CHECK(camera.pos_absolute_z == 16.5f);
+	CHECK(camera.name == "Close Arthas");
+	CHECK(camera.camera_type == 2);
+}
+
+TEST_CASE("a v3 war3map.w3c with a war3map.w3i game version below 1.31 is refused") {
+	for (const int minor : { 30, 0 }) {
+		CAPTURE(minor);
+		BinaryReader reader = reader_over(w3c_v3_one_camera());
+		GameCameras cameras;
+		CHECK_THROWS_WITH_AS(cameras.load(reader, 1, minor, 0.f, 0.f), doctest::Contains("has not been seen"), std::runtime_error);
+	}
+	BinaryReader at_131 = reader_over(w3c_v3_one_camera());
+	GameCameras cameras;
+	CHECK_NOTHROW(cameras.load(at_131, 1, 31, 0.f, 0.f));
+	// v0 still reads without local rotation before 1.31.
+	BinaryReader v0 = reader_over(le32(0) + le32(1) + std::string(40, '\0') + "Camera" + '\0');
+	CHECK_NOTHROW(cameras.load(v0, 1, 30, 0.f, 0.f));
+	CHECK(cameras.cameras.at(0).name == "Camera");
+}
+
+TEST_CASE("v7 and v3 refuse leftover bytes while v5 and v0 stay lenient") {
+	const fs::path dir = make_crafted_map("w3r_w3c_trailing");
+	write_all(dir / "war3map.w3r", w3r_file(7).data + '\0');
+	check_refused(dir, "war3map.w3r");
+	CHECK(contains(check_map_bodies(dir).error(), "leftover bytes"));
+	write_all(dir / "war3map.w3r", w3r_file(5).data + '\0');
+	check_accepted(dir);
+
+	write_all(dir / "war3map.w3c", w3c_file(3).data + '\0');
+	check_refused(dir, "war3map.w3c");
+	CHECK(contains(check_map_bodies(dir).error(), "leftover bytes"));
+	write_all(dir / "war3map.w3c", w3c_file(0).data + '\0');
+	check_accepted(dir);
+}
+
+TEST_CASE("every prefix of a v7 war3map.w3r or a v3 war3map.w3c is refused") {
+	const fs::path dir = make_crafted_map("w3r_w3c_prefixes");
+	write_all(dir / "war3map.w3r", w3r_v7_every_field());
+	write_all(dir / "war3map.w3c", w3c_v3_one_camera());
+	check_every_prefix_refused(dir, "war3map.w3r");
+	check_every_prefix_refused(dir, "war3map.w3c");
+}
+
+TEST_CASE("the smallest v7 region and v3 camera are exactly what their counts are measured against") {
+	CHECK(w3r_file(7).data.size() - 8 == 38 + std::string("Region").size());
+	CHECK(w3c_file(3).data.size() - 8 == 69 + std::string("Camera").size());
+	const auto all_zero = [](const std::uint32_t version, const std::size_t record, const std::uint32_t count) {
+		return le32(version) + le32(count) + std::string(record * count, '\0');
+	};
+	const fs::path dir = make_scratch_dir("w3r_w3c_smallest");
+	const ScopedMapDirectory open_map(dir);
+	Regions regions;
+	write_all(dir / "war3map.w3r", all_zero(7, 38, 2));
+	CHECK_NOTHROW(regions.load(0.f, 0.f));
+	CHECK(regions.regions.size() == 2);
+	write_all(dir / "war3map.w3r", all_zero(7, 38, 2).substr(0, 8 + 75));
+	CHECK_THROWS(regions.load(0.f, 0.f));
+
+	GameCameras cameras;
+	write_all(dir / "war3map.w3c", all_zero(3, 69, 2));
+	CHECK_NOTHROW(cameras.load(3, 0, 0.f, 0.f));
+	CHECK(cameras.cameras.size() == 2);
+	write_all(dir / "war3map.w3c", all_zero(3, 69, 2).substr(0, 8 + 137));
+	CHECK_THROWS(cameras.load(3, 0, 0.f, 0.f));
+}
+
+TEST_CASE("every stock war3map.w3r v7 below HIVEWE_STOCK_BODY_ROOT saves byte-exact and every w3c v3 reads to its end unchanged") {
+	const std::string root_text = env("HIVEWE_STOCK_BODY_ROOT");
+	if (root_text.empty()) {
+		MESSAGE("skipped: HIVEWE_STOCK_BODY_ROOT is not set");
+		return;
+	}
+	const fs::path root = root_text;
+	const fs::path scratch = make_scratch_dir("stock_w3r_w3c");
+	const ScopedMapDirectory open_map(scratch);
+
+	std::map<std::uint32_t, std::size_t> w3r_by_version;
+	std::map<std::uint32_t, std::size_t> w3c_by_version;
+	std::size_t regions_compared = 0;
+	std::size_t cameras_read = 0;
+	std::vector<std::string> failures;
+
+	const std::map<std::string, std::string> index = read_sweep_index(root / "index.json");
+	for (const auto& [key, name] : index) {
+		CAPTURE(name);
+		const fs::path directory = root / key;
+		fs::remove(scratch / "war3map.w3r");
+		fs::remove(scratch / "war3map.w3c");
+
+		if (fs::exists(directory / "war3map.w3r")) {
+			const std::string original = read_all(directory / "war3map.w3r");
+			const std::uint32_t version = leading_u32(directory / "war3map.w3r");
+			w3r_by_version[version]++;
+			if (version == 7) {
+				write_all(scratch / "war3map.w3r", original);
+				Regions regions;
+				try {
+					regions.load(0.f, 0.f);
+					regions_compared += regions.regions.size();
+					regions.save(0.f, 0.f);
+					if (read_all(scratch / "war3map.w3r") != original) {
+						failures.push_back(std::format("{}: war3map.w3r changed on save", name));
+					}
+				} catch (const std::exception& error) {
+					failures.push_back(std::format("{}: war3map.w3r: {}", name, error.what()));
+				}
+			}
+		}
+
+		if (fs::exists(directory / "war3map.w3c")) {
+			const std::string original = read_all(directory / "war3map.w3c");
+			const std::uint32_t version = leading_u32(directory / "war3map.w3c");
+			w3c_by_version[version]++;
+			if (version == 3) {
+				MapInfo info {};
+				{
+					BinaryReader reader = reader_over(read_all(directory / "war3map.w3i"));
+					info.load(reader);
+				}
+				write_all(scratch / "war3map.w3c", original);
+				GameCameras cameras;
+				try {
+					// v3 refuses leftover bytes, so passing means it read to the end.
+					cameras.load(info.game_version_major, info.game_version_minor, 0.f, 0.f);
+					cameras_read += cameras.cameras.size();
+					cameras.save();
+					if (read_all(scratch / "war3map.w3c") != original) {
+						failures.push_back(std::format("{}: war3map.w3c changed on save", name));
+					}
+				} catch (const std::exception& error) {
+					failures.push_back(std::format("{}: war3map.w3c: {}", name, error.what()));
+				}
+			}
+		}
+	}
+
+	for (const auto& [version, amount] : w3r_by_version) {
+		std::println("stock w3r: version {} files {}", version, amount);
+	}
+	for (const auto& [version, amount] : w3c_by_version) {
+		std::println("stock w3c: version {} files {}", version, amount);
+	}
+	std::println("stock w3r v7: regions saved byte-exact {}; stock w3c v3: cameras read {}; failures {}", regions_compared, cameras_read, failures.size());
+	for (const std::string& failure : failures | std::views::take(20)) {
+		std::println("stock w3r/w3c failed: {}", failure);
+	}
+	CHECK(index.size() == 466);
+	CHECK(w3r_by_version[7] == 191);
+	CHECK(w3c_by_version[3] == 191);
 	CHECK_MESSAGE(failures.empty(), std::format("{} stock failures", failures.size()));
 }

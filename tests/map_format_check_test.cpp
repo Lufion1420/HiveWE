@@ -537,8 +537,8 @@ TEST_CASE("check_map_format_versions accepts and refuses the remaining files") {
 		std::vector<std::uint32_t> newer;
 	};
 	const std::vector<Row> rows = {
-		{ "war3map.w3r", count_file_bytes, { 2, 3, 5 }, { 0, 1, 4 }, { 6, 7 } },
-		{ "war3map.w3c", count_file_bytes, { 0 }, {}, { 1, 2, 3 } },
+		{ "war3map.w3r", count_file_bytes, { 2, 3, 5, 7 }, { 0, 1, 4, 6 }, { 8 } },
+		{ "war3map.w3c", count_file_bytes, { 0, 3 }, { 1, 2 }, { 4 } },
 		{ "war3map.w3e", w3e_bytes, { 11, 12 }, { 0, 10 }, { 13 } },
 		{ "war3map.w3s", count_file_bytes, { 1, 2, 3 }, { 0 }, { 4 } },
 		{ "war3map.wpm", wpm_bytes, { 0 }, {}, { 1, 2 } },
@@ -659,13 +659,13 @@ TEST_CASE("check_map_format_versions reports every failing file") {
 	write_all(dir / "war3map.w3i", w3i_bytes(40));
 	write_all(dir / "war3map.doo", doo_bytes(14));
 	write_all(dir / "war3mapUnits.doo", doo_bytes(15));
-	write_all(dir / "war3map.w3r", count_file_bytes(7));
-	write_all(dir / "war3map.w3c", count_file_bytes(3));
+	write_all(dir / "war3map.w3r", count_file_bytes(8));
+	write_all(dir / "war3map.w3c", count_file_bytes(4));
 	write_all(dir / "war3map.w3s", "");
 	const auto result = check_map_format_versions(dir);
 	REQUIRE_FALSE(result.has_value());
-	for (const std::string part : { "war3map.w3i", "version 40", "war3map.doo", "version 14", "war3mapUnits.doo", "version 15", "war3map.w3r", "version 7",
-									"war3map.w3c", "version 3", "war3map.w3s" }) {
+	for (const std::string part : { "war3map.w3i", "version 40", "war3map.doo", "version 14", "war3mapUnits.doo", "version 15", "war3map.w3r", "version 8",
+									"war3map.w3c", "version 4", "war3map.w3s" }) {
 		CAPTURE(part);
 		CHECK(contains(result.error(), part));
 	}
@@ -692,7 +692,7 @@ TEST_CASE("a refusal writes nothing and does not touch hierarchy.map_directory")
 	const fs::path dir = make_valid_map("no_write");
 	write_all(dir / "war3map.w3i", w3i_bytes(39));
 	write_all(dir / "war3map.doo", doo_bytes(13));
-	write_all(dir / "war3map.w3r", count_file_bytes(7));
+	write_all(dir / "war3map.w3r", count_file_bytes(8));
 	const Snapshot before = snapshot(dir);
 
 	const ScopedMapDirectory open_map("some/open/map");
@@ -788,7 +788,7 @@ TEST_CASE("a stale file in the unpack folder is refused after the archive passed
 
 	const fs::path target = dir / "Foo";
 	fs::create_directories(target);
-	write_all(target / "war3map.w3c", count_file_bytes(3));
+	write_all(target / "war3map.w3c", count_file_bytes(4));
 	{
 		mpq::MPQ opened;
 		REQUIRE(opened.open(dir / "Foo.w3x", MPQ_OPEN_READ_ONLY));
@@ -828,8 +828,8 @@ TEST_CASE("check_archive_format_versions refuses a bad version in each checked f
 		{ "war3map.w3e", w3e_bytes(13) },
 		{ "war3map.doo", doo_bytes(14) },
 		{ "war3mapUnits.doo", doo_bytes(14) },
-		{ "war3map.w3r", count_file_bytes(7) },
-		{ "war3map.w3c", count_file_bytes(3) },
+		{ "war3map.w3r", count_file_bytes(8) },
+		{ "war3map.w3c", count_file_bytes(4) },
 		{ "war3map.w3s", count_file_bytes(4) },
 		{ "war3map.wpm", wpm_bytes(1) },
 	};
@@ -909,9 +909,9 @@ TEST_CASE("MapInfo::load still reads every accepted version") {
 TEST_CASE("Regions::load refuses an unknown war3map.w3r version and reads accepted ones") {
 	const fs::path dir = make_scratch_dir("reader_w3r");
 	const ScopedMapDirectory open_map(dir);
-	write_all(dir / "war3map.w3r", count_file_bytes(7));
+	write_all(dir / "war3map.w3r", count_file_bytes(8));
 	Regions regions;
-	check_reader_refuses([&] { regions.load(0.f, 0.f); }, "war3map.w3r", "7");
+	check_reader_refuses([&] { regions.load(0.f, 0.f); }, "war3map.w3r", "8");
 	for (const std::uint32_t version : map_format::w3r_versions) {
 		CAPTURE(version);
 		write_all(dir / "war3map.w3r", count_file_bytes(version));
@@ -922,11 +922,14 @@ TEST_CASE("Regions::load refuses an unknown war3map.w3r version and reads accept
 TEST_CASE("GameCameras::load refuses an unknown war3map.w3c version and reads accepted ones") {
 	const fs::path dir = make_scratch_dir("reader_w3c");
 	const ScopedMapDirectory open_map(dir);
-	write_all(dir / "war3map.w3c", count_file_bytes(3));
+	write_all(dir / "war3map.w3c", count_file_bytes(4));
 	GameCameras cameras;
-	check_reader_refuses([&] { cameras.load(2, 0, 0.f, 0.f); }, "war3map.w3c", "3");
-	write_all(dir / "war3map.w3c", count_file_bytes(0));
-	CHECK_NOTHROW(cameras.load(2, 0, 0.f, 0.f));
+	check_reader_refuses([&] { cameras.load(2, 0, 0.f, 0.f); }, "war3map.w3c", "4");
+	for (const std::uint32_t version : map_format::w3c_versions) {
+		CAPTURE(version);
+		write_all(dir / "war3map.w3c", count_file_bytes(version));
+		CHECK_NOTHROW(cameras.load(2, 0, 0.f, 0.f));
+	}
 }
 
 TEST_CASE("Doodads::load refuses an unknown war3map.doo version") {
@@ -1405,8 +1408,9 @@ TEST_CASE("every stock v39 war3map.w3i below HIVEWE_STOCK_W3I_ROOT round-trips b
 		}
 		checked++;
 		CAPTURE(entry.path().string());
-		// Accepting w3i v39 opens no stock map yet: w3r and w3c still refuse them. Drop this when they stop.
-		CHECK_FALSE(check_map_format_versions(entry.path().parent_path()).has_value());
+		// With w3r v7 and w3c v3 read, every file of a stock 3.0 map is a version HiveWE reads.
+		const auto versions = check_map_format_versions(entry.path().parent_path());
+		CHECK_MESSAGE(versions.has_value(), (versions ? std::string() : versions.error()));
 		try {
 			check_same_bytes(w3i_round_trip(scratch, bytes, w3i_tileset_byte(bytes)), bytes);
 		} catch (const std::exception& e) {
