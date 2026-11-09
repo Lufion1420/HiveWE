@@ -3,7 +3,7 @@
 Written 2026-11-09 (afternoon). Overwritten at each handoff.
 
 ## State
-- `main` holds all finished work. `[3.0] Read and write units v12/v13` landed in a14cdea, and the session closed its ticket. CI on a14cdea was still running at the time of writing (run 42658845053); check it first. The previous run, on 17a7231, passed.
+- `main` holds all finished work. `[3.0] Read and write units v12/v13` landed in a14cdea, and the session closed its ticket. CI passed on 018f798, which includes a14cdea (run 42659040699). The run on a14cdea itself was cancelled by the next push.
 - `wip/units-v12-v13` is deleted locally and on `origin`. No other WIP branches.
 - Nothing is running.
 - Closed tickets: `[3.0] Refuse unknown map format versions`, `[3.0] Read and write w3i v39`, `Truncated map file of an accepted version still crashes the editor`, `[3.0] Read and write doodads v12/v13`, `[3.0] Read and write units v12/v13`.
@@ -23,9 +23,8 @@ Written 2026-11-09 (afternoon). Overwritten at each handoff.
 - World Editor: if it is open, do not touch it without new permission.
 
 ## Next step
-1. Check CI run 42658845053 passed.
-2. Start `[3.0] w3r v7` and `[3.0] w3c v3` (find them with `get_tasks` on project 1220328345553589, under parent "Support Warcraft III 3.0 maps, models and data"). Risky track: `wc3-format-specialist` first, then `cpp-dev` on Opus. Layouts are verified in `.claude/plans/wc3-3.0-compatibility.md` section 3. When the last of these lands, 1.32+ maps become openable. The human05 ticket and the humanx03 w3u throw become reachable then.
-3. Stock root for the stock tests (session scratch, check it still exists): `C:/Users/mauri/AppData/Local/Temp/claude/11cf287c6d13d22a/624d2e1b-c296-4804-9b85-76d3a36906f9/scratchpad/stock`. Set `HIVEWE_STOCK_BODY_ROOT` and `HIVEWE_STOCK_W3I_ROOT` to it. Set `HIVEWE_BODY_CHECK_CASC` to `C:/Program Files (x86)/Warcraft III`. Stock tests pass silently with 0 assertions when these are unset.
+1. Start `[3.0] w3r v7` and `[3.0] w3c v3` (find them with `get_tasks` on project 1220328345553589, under parent "Support Warcraft III 3.0 maps, models and data"). Risky track: `wc3-format-specialist` first, then `cpp-dev` on Opus. Layouts are verified in `.claude/plans/wc3-3.0-compatibility.md` section 3. When the last of these lands, 1.32+ maps become openable. The human05 ticket and the humanx03 w3u throw become reachable then.
+2. Stock root for the stock tests (session scratch, check it still exists): `C:/Users/mauri/AppData/Local/Temp/claude/11cf287c6d13d22a/624d2e1b-c296-4804-9b85-76d3a36906f9/scratchpad/stock`. Set `HIVEWE_STOCK_BODY_ROOT` and `HIVEWE_STOCK_W3I_ROOT` to it. Set `HIVEWE_BODY_CHECK_CASC` to `C:/Program Files (x86)/Warcraft III`. Stock tests pass silently with 0 assertions when these are unset.
 
 ## Decisions the user made
 - Units: random type 2 count and empty ids are fixed for all versions.

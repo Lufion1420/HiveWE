@@ -46,3 +46,4 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - Do not hold work for a check the next step does not depend on (for example CI on an unrelated commit). Start it, watch in the background, report the result.
 - Spot-check subagent claims that drive decisions against the code before filing them. Designer runs have skipped parts of a brief: check that they launched the app.
 - Check paths before putting them in a brief.
+- `compile.yml` sets `cancel-in-progress: true`, so a second push to `main` cancels the CI run of the previous commit (run 42658845053 on a14cdea was cancelled by the handoff push). Take the code commit's CI result from the newer run and name that run when reporting.
