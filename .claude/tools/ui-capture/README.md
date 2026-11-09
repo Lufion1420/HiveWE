@@ -16,6 +16,13 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - Asset Manager (F12) takes about 15 s to appear and the process reports not responding meanwhile; wait, do not kill it.
 - Allowed since 2026-11-09 on sandbox map copies to check that HiveWE output loads (launch, load, capture, read errors), after the orchestrator has told the user in chat. Never save and never touch real maps: with a map open, Test Map also saves it. Never post it.
 
+## Launching the real editor and game (verified 2026-11-09)
+
+- World Editor: run `"World Editor.exe" -launch -loadfile "<map>"` from `_retail_\x86_64`. Without `-launch` it exits and starts Battle.net.
+- WE menu IDs for `WM_COMMAND`: Layer > Regions 771, Layer > Cameras 772, Close Map 64189. The Tool Palette window lists region and camera names.
+- Never launch `Warcraft III.exe` directly: it shows a login screen the user cannot use. `Battle.net.exe --exec="launch W3"` reaches the logged-in menu, but the game ignores posted clicks, so in-game checks are done by the user.
+- For the user's in-game check, put the map in `Documents\Warcraft III\Maps\<named subfolder>`. The game lists maps by internal name, so subfolders tell copies apart. Clean up afterwards and verify by listing the folder: QA once left `hwe_qa_*.w3x` copies in `Documents\Warcraft III\Maps` while reporting them removed.
+
 ## Driving file-dialog flows (verified 2026-11-08, qa-verifier on HiveWE)
 
 - Launch with a sandbox working directory (a full copy of `data/`, see `skills/hivewe-build-and-debug`).

@@ -58,6 +58,19 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - StormLib: `SFileCreateArchive` always writes a `(listfile)` regardless of `MPQ_CREATE_LISTFILE`; only `SFileCreateArchive2` with `dwFileFlags1 = 0` omits it. `MPQ_OPEN_READ_ONLY` does not change the read and extract paths.
 - The live game install on this machine is found through `find_warcraft_directory` at `C:/Program Files (x86)/Warcraft III`. The registry's Blizzard GamePath/Program/InstallPath values under `F:\` are stale.
 
+## Generated map script must match the World Editor (verified 2026-11-09)
+
+Checks: `.claude/tools/script-check/`.
+
+- Start locations: `DefineStartLocation` index is the position in the w3i players list, not the player number.
+- TriggerData preset values keep their quotes after INI parsing. Operators must be written unquoted; Lua uses `~=` and `nil`.
+- Lua mode: the World Editor emits no `gg_trg_` global and no `InitTrig_` call for custom-text triggers. JASS does.
+- Identifiers: every non-`[A-Za-z0-9_]` becomes `_`, trim first, and use the same helper at declaration and use.
+- Lua globals: `__jarray(0)`, `__jarray(false)` or `__jarray("")` by base type, `{}` for handle arrays; scalars `0`, `false`, `""`, `nil`.
+- `gg_unit_` and `gg_dest_` numbers are zero-padded to 4 (`{:0>4}`). Declared names come from scanning trigger text, created names from placed objects. Any padding, length or type difference leaves a global undeclared (JASS) or nil (Lua). Known open: unit numbers of 10000 and above are truncated by the fixed 4-char scan.
+- Test seam: `generate_*` and `MapScriptWriter` are private to `Triggers`. Export narrow helpers from `triggers.ixx` to test them.
+- WC3 3.0.1 writes no Lua runtime errors to `Documents\Warcraft III\Logs\War3Log.txt`, and Lua errors in `UITimer` callbacks fail silently. Use the simulator in `script-check`.
+
 ## w3i facts (strict parse of 466 stock maps, 2026-11-08)
 
 - Force flag: stock shared vision is 0x08. HiveWE treats it as 0x04 (ticket filed: "Forces: shared vision uses the wrong flag bit").
