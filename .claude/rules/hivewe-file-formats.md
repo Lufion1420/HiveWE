@@ -64,7 +64,11 @@ Checks: `.claude/tools/script-check/`.
 
 - Start locations: `DefineStartLocation` index is the position in the w3i players list, not the player number.
 - TriggerData preset values keep their quotes after INI parsing. Operators must be written unquoted; Lua uses `~=` and `nil`.
-- Lua mode: the World Editor emits no `gg_trg_` global and no `InitTrig_` call for custom-text triggers. JASS does.
+- Custom-text triggers (verified on stock 0239 and 0240, 2026-11-09): emission depends on the wtg classifier. 32 (script element) gets no `gg_trg_`, no `InitTrig_` call and no init call. 8 (GUI trigger converted to custom text) gets `gg_trg_`, the `InitTrig_` call and, if run-on-init, the init call. In Lua the World Editor writes an empty `function InitTrig_X() end` before the custom text. `Trigger::classifier` has no default value, so tests must set it. JASS `ConditionalTriggerExecute` for converted run-on-init triggers: Needs verification (no stock example).
+- The World Editor does not trim leading spaces in trigger names (`"  Defend"` becomes `gg_trg___Defend`).
+- `SetPlayerRaceSelectable` and `SetGamePlacement` follow w3i flags 0x20/0x40, not per-player race.
+- `generate_map_script` writes fixed shared paths (`%TEMP%/input.lua`, `data/tools/war3map.j`), so saves and resaves cannot run in parallel. On a script compile error, HiveWE's generated script can be taken from `%TEMP%/input.lua` right after the resave.
+- `MapScriptWriter::call` formats float args with `"{}"` (can produce exponents), and `string_view` concatenations can format as char ranges. Pre-format arguments as `std::string`.
 - Identifiers: every non-`[A-Za-z0-9_]` becomes `_`, trim first, and use the same helper at declaration and use.
 - Lua globals: `__jarray(0)`, `__jarray(false)` or `__jarray("")` by base type, `{}` for handle arrays; scalars `0`, `false`, `""`, `nil`.
 - `gg_unit_` and `gg_dest_` numbers are zero-padded to 4 (`{:0>4}`). Declared names come from scanning trigger text, created names from placed objects. Any padding, length or type difference leaves a global undeclared (JASS) or nil (Lua). Known open: unit numbers of 10000 and above are truncated by the fixed 4-char scan.
