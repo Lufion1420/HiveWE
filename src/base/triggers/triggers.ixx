@@ -552,6 +552,12 @@ export std::string generate_trigger_initialization_script(
 	ScriptMode mode
 );
 
+/// Test seam: the SetPlayers, SetTeams and SetGamePlacement calls at the start of config, as generate_map_script writes them.
+export std::string generate_map_settings_script(const MapInfo& map_info, ScriptMode mode);
+
+/// Test seam: InitCustomPlayerSlots as generate_map_script writes it.
+export std::string generate_player_slots_script(const MapInfo& map_info, ScriptMode mode);
+
 export struct TriggerVariable {
 	std::string name;
 	std::string type;

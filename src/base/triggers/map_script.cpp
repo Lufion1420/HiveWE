@@ -624,14 +624,17 @@ void generate_players(MapScriptWriter& script, const MapInfo& map_info) {
 			const int index = start_locations.at(i.internal_number);
 			std::string player = "Player(" + std::to_string(i.internal_number) + ")";
 
+			// The w3i dword stored in fixed_start_position is a flag set: 0x1 fixed start location, 0x2 race selectable.
 			script.call("SetPlayerStartLocation", player, index);
-			if (i.fixed_start_position || i.race == PlayerRace::selectable) {
+			if (i.fixed_start_position & 0x1) {
 				script.call("ForcePlayerStartLocation", player, index);
 			}
 
+			const bool race_selectable =
+				!map_info.fixed_player_settings || (i.fixed_start_position & 0x2) || i.race == PlayerRace::selectable;
 			script.call("SetPlayerColor", player, "ConvertPlayerColor(" + std::to_string(i.internal_number) + ")");
 			script.call("SetPlayerRacePreference", player, races[static_cast<int>(i.race)]);
-			script.call("SetPlayerRaceSelectable", player, i.race == PlayerRace::selectable);
+			script.call("SetPlayerRaceSelectable", player, race_selectable);
 			script.call("SetPlayerController", player, players[static_cast<int>(i.type)]);
 
 			if (i.type == PlayerType::rescuable) {
@@ -651,6 +654,28 @@ void generate_players(MapScriptWriter& script, const MapInfo& map_info) {
 			script.write("\n");
 		}
 	});
+}
+
+std::string generate_player_slots_script(const MapInfo& map_info, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_players(script, map_info);
+	return script.script;
+}
+
+// SetTeams takes the player count like SetPlayers, and the placement depends only on the number of human slots (466/466 stock).
+static void generate_map_settings(MapScriptWriter& script, const MapInfo& map_info) {
+	const auto human_players =
+		std::ranges::count_if(map_info.players, [](const PlayerData& player) { return player.type == PlayerType::human; });
+
+	script.call("SetPlayers", map_info.players.size());
+	script.call("SetTeams", map_info.players.size());
+	script.call("SetGamePlacement", human_players > 1 ? "MAP_PLACEMENT_TEAMS_TOGETHER" : "MAP_PLACEMENT_USE_MAP_SETTINGS");
+}
+
+std::string generate_map_settings_script(const MapInfo& map_info, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_map_settings(script, map_info);
+	return script.script;
 }
 
 static void write_item_table_entry(MapScriptWriter& script, int chance, const std::string& id) {
@@ -887,9 +912,7 @@ void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain,
 	script.function("config", [&]() {
 		script.call("SetMapName", "\"" + map_info.name + "\"");
 		script.call("SetMapDescription", "\"" + map_info.description + "\"");
-		script.call("SetPlayers", map_info.players.size());
-		script.call("SetTeams", map_info.forces.size());
-		script.call("SetGamePlacement", "MAP_PLACEMENT_USE_MAP_SETTINGS");
+		generate_map_settings(script, map_info);
 
 		script.write("\n");
 
