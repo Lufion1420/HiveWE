@@ -27,6 +27,12 @@ python -I sdiff.py <orig> <new> [--json OUT] [--top N] [--max-diff LINES] [--flo
 - Sanity checks: a self-compare is IDENTICAL on all three stock Lua maps and on `0001` human01 (JASS). A planted global removal in JASS is reported.
 - Two limits. Function bodies are compared line by line, so a statement split across lines differently counts as a change. Renamed helper functions (for example WE `Trig_X_Func003C` against HiveWE `Trig_X_HiveWE0`) show up as missing + extra plus a changed caller.
 
+## Resaving user and warcraft-vscode maps
+
+- `HiveWE.exe --resave <in> <out>` accepts folder maps directly (verified 2026-11-09 on a 382 MB folder map, 3.5 s). For a packed `.w3x`, first extract read-only with StormLib via `(listfile)` plus known names, never `SFileFindFirstFile`.
+- sdiff.py cannot split a warcraft-vscode minified single-line `war3map.lua` bundle. Extract the bundled `origwar3map.lua` module (the editor-generated part) and compare that with `sim/simdiff.py`.
+- warcraft-vscode projects: `warcraft.json` `mapdir` names the folder map. Packed output is `.build/release.w3x` and `.build/war3map.lua` (merged script). User code may wrap `InitGlobals`, `InitCustomTriggers` and `RunInitializationTriggers`, so HiveWE's Lua output must keep those as global functions.
+
 ### Forgotten Hollow (stock 0239 vs HiveWE save), 2026-11-09
 
 Missing globals `gg_item_ergg_0000` … `gg_item_ergw_0003` (and the matching `CreateAllItems` lines). `InitSounds` lacks the `SetSoundParamsFromLabel` / facial-animation setters. `main` lacks `SetHDWaterParamsEx`, and its `SetDayNightModels` passes the terrain model as the unit model, with `/` instead of `\`. The World Editor writes `CreateNeutralPassiveBuildings` / `CreatePlayerBuildings` / `CreatePlayerUnits`, and HiveWE inlines them. `InitCustomPlayerSlots` lacks `SetPlayerRaceSkin`. `config` has `SetTeams(1)` where the World Editor has `SetTeams(2)`. `InitAllyPriorities` differs. Camera fields are written with more decimals (90.51 vs 90.5).
