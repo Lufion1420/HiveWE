@@ -74,6 +74,9 @@ export std::string generate_item_script(
 	ScriptMode mode
 );
 
+/// Test seam: CreateAllUnits as generate_map_script writes it, without unit globals. Ability orders come from abilities_slk.
+export std::string generate_unit_script(const Terrain& terrain, const Units& units, ScriptMode mode);
+
 /// Returns the play length in milliseconds of a sound's audio file, or nullopt when it cannot be determined.
 export using SoundDurationLookup = std::function<std::optional<int>(const Sound&)>;
 
@@ -507,13 +510,14 @@ export struct Trigger {
 };
 
 /// Whether a trigger gets a `gg_trg_` global and an `InitTrig_` call. Disabled triggers and comments never do. In Lua the
-/// World Editor emits neither for custom-text triggers (they are plain library code); JASS custom text defines its own
-/// InitTrig_ function, so JASS keeps both.
+/// World Editor emits neither for script elements (wtg classifier 32, plain library code), whatever their text, but does for
+/// a GUI trigger converted to custom text (classifier 8): stock 0239 Forgotten Hollow and 0240 Silverpine Sprint. JASS keeps
+/// both for every enabled trigger.
 export bool emits_trigger_identifier(const Trigger& trigger, const ScriptMode mode) {
 	if (trigger.is_comment || !trigger.is_enabled) {
 		return false;
 	}
-	return !(mode == ScriptMode::lua && !trigger.custom_text.empty());
+	return !(mode == ScriptMode::lua && trigger.classifier == Classifier::script);
 }
 
 /// prefix + the trimmed, sanitized name, e.g. gg_rct_ for a region. Used for both the global and every use of it.
@@ -521,6 +525,32 @@ export std::string prefixed_script_identifier(const std::string_view prefix, std
 	trim(name);
 	return std::string(prefix) + script_identifier(std::move(name));
 }
+
+/// Appends an enabled trigger's custom text to the trigger script. A custom-text trigger marked "run on map initialization"
+/// is added to `initialization_triggers`. For a Lua trigger that gets an InitTrig_ call, an empty InitTrig_ is written first,
+/// as the World Editor does (0240), so the call works even when the text defines none; the text's own definition replaces it.
+export void append_custom_text_trigger(
+	std::string& trigger_script,
+	std::vector<std::string>& initialization_triggers,
+	const Trigger& trigger,
+	const ScriptMode mode
+) {
+	const bool emits_identifier = emits_trigger_identifier(trigger, mode);
+	if (mode == ScriptMode::lua && emits_identifier) {
+		trigger_script += "function " + prefixed_script_identifier("InitTrig_", trigger.name) + "()\nend\n\n";
+	}
+	trigger_script += trigger.custom_text + "\n";
+	if (emits_identifier && trigger.run_on_initialization) {
+		initialization_triggers.push_back(prefixed_script_identifier("gg_trg_", trigger.name));
+	}
+}
+
+/// Test seam: InitCustomTriggers and RunInitializationTriggers as generate_map_script writes them.
+export std::string generate_trigger_initialization_script(
+	const std::vector<std::string>& initialization_triggers,
+	const std::vector<Trigger>& triggers,
+	ScriptMode mode
+);
 
 export struct TriggerVariable {
 	std::string name;

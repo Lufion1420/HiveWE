@@ -36,21 +36,79 @@ TEST_CASE("an event without parameters has no trailing argument separator") {
 	CHECK(event_call_arguments("gg_trg_A", "Player(0), 5") == "gg_trg_A, Player(0), 5");
 }
 
-TEST_CASE("Lua custom-text triggers get no gg_trg_ global or InitTrig_ call, JASS ones do") {
+TEST_CASE("Lua script elements get no gg_trg_ global or InitTrig_ call, JASS ones and converted GUI triggers do") {
 	Trigger gui;
-	Trigger lua_library;
+	gui.classifier = Classifier::gui;
+	Trigger lua_library; // 0239 "Load Order": classifier 32
+	lua_library.classifier = Classifier::script;
+	lua_library.is_script = true;
 	lua_library.custom_text = "Debug.beginFile(\"x\")";
+	Trigger empty_library; // 0239 "Cursed Flute": classifier 32 with no text
+	empty_library.classifier = Classifier::script;
+	empty_library.is_script = true;
+	Trigger converted_gui; // 0240 "BeginMap": classifier 8 converted to custom text
+	converted_gui.classifier = Classifier::gui;
+	converted_gui.is_script = true;
+	converted_gui.custom_text = "function InitTrig_BeginMap()\nend";
 	Trigger disabled;
+	disabled.classifier = Classifier::gui;
 	disabled.is_enabled = false;
 	Trigger comment;
+	comment.classifier = Classifier::comment;
 	comment.is_comment = true;
 
 	CHECK(emits_trigger_identifier(gui, ScriptMode::lua));
 	CHECK(emits_trigger_identifier(gui, ScriptMode::jass));
 	CHECK_FALSE(emits_trigger_identifier(lua_library, ScriptMode::lua));
 	CHECK(emits_trigger_identifier(lua_library, ScriptMode::jass));
+	CHECK_FALSE(emits_trigger_identifier(empty_library, ScriptMode::lua));
+	CHECK(emits_trigger_identifier(empty_library, ScriptMode::jass));
+	CHECK(emits_trigger_identifier(converted_gui, ScriptMode::lua));
+	CHECK(emits_trigger_identifier(converted_gui, ScriptMode::jass));
 	CHECK_FALSE(emits_trigger_identifier(disabled, ScriptMode::lua));
 	CHECK_FALSE(emits_trigger_identifier(comment, ScriptMode::jass));
+}
+
+TEST_CASE("a Lua GUI trigger converted to custom text is initialised and run on map init like the World Editor does") {
+	Trigger begin_map; // 0240 Silverpine Sprint "BeginMap"
+	begin_map.classifier = Classifier::gui;
+	begin_map.name = "BeginMap";
+	begin_map.is_script = true;
+	begin_map.run_on_initialization = true;
+	begin_map.custom_text = "function InitTrig_BeginMap()\ngg_trg_BeginMap = CreateTrigger()\nend";
+	Trigger library; // Script element: plain code, never initialised
+	library.classifier = Classifier::script;
+	library.name = "Load Order";
+	library.is_script = true;
+	library.run_on_initialization = true;
+	library.custom_text = "do end";
+	const std::vector<Trigger> triggers = {begin_map, library};
+
+	std::string lua_script;
+	std::vector<std::string> lua_init;
+	for (const auto& trigger : triggers) {
+		append_custom_text_trigger(lua_script, lua_init, trigger, ScriptMode::lua);
+	}
+	CHECK(lua_script.starts_with("function InitTrig_BeginMap()\nend\n\nfunction InitTrig_BeginMap()\ngg_trg_BeginMap"));
+	CHECK(lua_script.find("InitTrig_Load_Order") == std::string::npos);
+	CHECK(lua_init == std::vector<std::string> {"gg_trg_BeginMap"});
+	const std::string lua = generate_trigger_initialization_script(lua_init, triggers, ScriptMode::lua);
+	CHECK(lua.find("\tInitTrig_BeginMap()\n") != std::string::npos);
+	CHECK(lua.find("\tConditionalTriggerExecute(gg_trg_BeginMap)\n") != std::string::npos);
+	CHECK(lua.find("Load_Order") == std::string::npos);
+
+	// JASS: no empty InitTrig_ (it would be a duplicate function), every enabled trigger initialised.
+	std::string jass_script;
+	std::vector<std::string> jass_init;
+	for (const auto& trigger : triggers) {
+		append_custom_text_trigger(jass_script, jass_init, trigger, ScriptMode::jass);
+	}
+	CHECK(jass_script == begin_map.custom_text + "\n" + library.custom_text + "\n");
+	CHECK(jass_init == std::vector<std::string> {"gg_trg_BeginMap", "gg_trg_Load_Order"});
+	const std::string jass = generate_trigger_initialization_script(jass_init, triggers, ScriptMode::jass);
+	CHECK(jass.find("\tcall InitTrig_BeginMap()\n") != std::string::npos);
+	CHECK(jass.find("\tcall InitTrig_Load_Order()\n") != std::string::npos);
+	CHECK(jass.find("\tcall ConditionalTriggerExecute(gg_trg_BeginMap)\n") != std::string::npos);
 }
 
 TEST_CASE("prefixed identifiers trim before sanitizing, so global and use agree") {

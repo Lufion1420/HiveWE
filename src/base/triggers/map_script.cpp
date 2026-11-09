@@ -222,12 +222,12 @@ void generate_units(
 					if (order_on.empty()) {
 						order_on = abilities_slk.data<std::string_view>("order", std::get<0>(j));
 					}
-					script.call("IssueImmediateOrder", unit_reference, "\"" + order_on + "\"");
+					script.call("IssueImmediateOrder", unit_reference, std::format("\"{}\"", order_on));
 
 				} else {
 					std::string_view order_off = abilities_slk.data<std::string_view>("orderoff", std::get<0>(j));
 					if (!order_off.empty()) {
-						script.call("IssueImmediateOrder", unit_reference, "\"" + order_off + "\"");
+						script.call("IssueImmediateOrder", unit_reference, std::format("\"{}\"", order_off));
 					}
 				}
 			}
@@ -259,6 +259,12 @@ void generate_units(
 			}
 		}
 	});
+}
+
+std::string generate_unit_script(const Terrain& terrain, const Units& units, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_units(script, {}, terrain, units);
+	return script.script;
 }
 
 void generate_items(
@@ -596,6 +602,16 @@ void generate_trigger_initialization(
 	});
 }
 
+std::string generate_trigger_initialization_script(
+	const std::vector<std::string>& initialization_triggers,
+	const std::vector<Trigger>& triggers,
+	const ScriptMode mode
+) {
+	MapScriptWriter script(mode);
+	generate_trigger_initialization(script, initialization_triggers, triggers);
+	return script.script;
+}
+
 void generate_players(MapScriptWriter& script, const MapInfo& map_info) {
 	script.function("InitCustomPlayerSlots", [&]() {
 		const std::vector<std::string> players =
@@ -928,8 +944,10 @@ std::expected<void, std::string> Triggers::generate_map_script(
 		if (i.is_comment || !i.is_enabled) {
 			continue;
 		}
-		if (!i.custom_text.empty()) {
-			trigger_script += i.custom_text + "\n";
+		// A Lua script element (classifier 32) gets no InitTrig_ call, so it is not converted from GUI even with empty text
+		// (0239 "Cursed Flute"). JASS calls InitTrig_ for it, so the GUI path must still define one there.
+		if (!i.custom_text.empty() || (mode == ScriptMode::lua && i.classifier == Classifier::script)) {
+			append_custom_text_trigger(trigger_script, initialization_triggers, i, mode);
 		} else {
 			trigger_script += convert_gui_to_jass(i, initialization_triggers, mode);
 		}
