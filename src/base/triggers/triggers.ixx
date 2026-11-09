@@ -74,8 +74,14 @@ export std::string generate_item_script(
 	ScriptMode mode
 );
 
-/// Test seam: CreateAllUnits as generate_map_script writes it, without unit globals. Ability orders come from abilities_slk.
-export std::string generate_unit_script(const Terrain& terrain, const Units& units, ScriptMode mode);
+/// Test seam: CreateAllUnits as generate_map_script writes it. `unit_variables` maps a zero-padded creation number to the unit id
+/// referenced by trigger text (empty: no unit globals). Ability orders come from abilities_slk, colours and gold mines from units_slk.
+export std::string generate_unit_script(
+	const Terrain& terrain,
+	const Units& units,
+	ScriptMode mode,
+	const std::unordered_map<std::string, std::string>& unit_variables = {}
+);
 
 /// Returns the play length in milliseconds of a sound's audio file, or nullopt when it cannot be determined.
 export using SoundDurationLookup = std::function<std::optional<int>(const Sound&)>;

@@ -142,6 +142,26 @@ void generate_init_global_variables(MapScriptWriter& script, const std::vector<T
 	});
 }
 
+/// Reads an integer units_slk field, or `fallback` when the type has no value for it.
+int units_slk_int_or(const std::string_view field, const std::string_view id, const int fallback) {
+	const std::string_view value = units_slk.data<std::string_view>(field, id);
+	int output = fallback;
+	if (value.empty() || std::from_chars(value.data(), value.data() + value.size(), output).ec != std::errc()) {
+		return fallback;
+	}
+	return output;
+}
+
+/// Whether the unit type's merged ability list (custom w3u uabi included) contains the gold mine ability Agld.
+bool has_gold_mine_ability(const std::string_view id) {
+	for (const auto ability : std::views::split(units_slk.data<std::string_view>("abillist", id), ',')) {
+		if (std::string_view(ability.begin(), ability.end()) == "Agld") {
+			return true;
+		}
+	}
+	return false;
+}
+
 void generate_units(
 	MapScriptWriter& script,
 	const std::unordered_map<std::string, std::string>& unit_variables,
@@ -186,6 +206,12 @@ void generate_units(
 			if (i.mana != -1) {
 				script.call("SetUnitState", unit_reference, "UNIT_STATE_MANA", i.mana);
 			}
+
+			// The World Editor writes the stored gold for every gold mine, including the 12500 default.
+			if (i.id == "ugol" || has_gold_mine_ability(i.id)) {
+				script.call("SetResourceAmount", unit_reference, i.gold);
+			}
+
 			if (i.level != 1) {
 				script.call("SetHeroLevel", unit_reference, i.level, "false");
 			}
@@ -210,6 +236,15 @@ void generate_units(
 					range = i.target_acquisition;
 				}
 				script.call("SetUnitAcquireRange", unit_reference, range);
+			}
+
+			// A custom colour only counts on types with customteamcolor set; otherwise the type's teamcolor, if any, is written.
+			int color = units_slk_int_or("teamcolor", i.id, -1);
+			if (units_slk_int_or("customteamcolor", i.id, 0) == 1 && i.custom_color != -1) {
+				color = i.custom_color;
+			}
+			if (color != -1) {
+				script.call("SetUnitColor", unit_reference, std::format("ConvertPlayerColor({})", color));
 			}
 
 			for (const auto& j : i.abilities) {
@@ -261,9 +296,14 @@ void generate_units(
 	});
 }
 
-std::string generate_unit_script(const Terrain& terrain, const Units& units, const ScriptMode mode) {
+std::string generate_unit_script(
+	const Terrain& terrain,
+	const Units& units,
+	const ScriptMode mode,
+	const std::unordered_map<std::string, std::string>& unit_variables
+) {
 	MapScriptWriter script(mode);
-	generate_units(script, {}, terrain, units);
+	generate_units(script, unit_variables, terrain, units);
 	return script.script;
 }
 
