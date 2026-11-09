@@ -21,6 +21,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Empty item-set ids in unit files are saved at full size** — They were written as 0 bytes instead of 4, which shifted everything after them. Fixed for all unit file versions.
 - **Saving a map with a unit or item id longer than 4 bytes is refused** — A dialog names the id and nothing is written. Before, the unit file was corrupted.
 - **The Object Editor no longer accepts a 4-character id that is longer than 4 bytes** — Ids such as `hfoö` are rejected because they cannot be stored in map files.
+- **Start locations in the generated map script are now numbered by position** — The script numbered start locations by player number instead of by position (0, 1, 2..., as the World Editor does), which was wrong for maps whose players are not numbered 0, 1, 2... such as Blizzard's Forgotten Hollow (players 1 and 10). Affects all map versions.
 
 ### New Features
 - **Warcraft III 3.0 map info (`war3map.w3i` v39) can be read and saved** — HiveWE keeps the map's own version stamps when saving it.- **Doodad files (`war3map.doo`) v12 and v13 can be read and saved** — The new doodad fields (group id, roll, pitch, lights) are kept, and a v12 or v13 file saves back as the same version. Roll, pitch and lights are not rendered or editable yet.

@@ -475,8 +475,9 @@ void generate_players(MapScriptWriter& script, const MapInfo& map_info) {
 		const std::vector<std::string> races =
 			{"RACE_PREF_RANDOM", "RACE_PREF_HUMAN", "RACE_PREF_ORC", "RACE_PREF_UNDEAD", "RACE_PREF_NIGHTELF"};
 
-		size_t index = 0;
+		const auto start_locations = start_location_indices(map_info);
 		for (const auto& i : map_info.players) {
+			const int index = start_locations.at(i.internal_number);
 			std::string player = "Player(" + std::to_string(i.internal_number) + ")";
 
 			script.call("SetPlayerStartLocation", player, index);
@@ -504,7 +505,6 @@ void generate_players(MapScriptWriter& script, const MapInfo& map_info) {
 			}
 
 			script.write("\n");
-			index++;
 		}
 	});
 }
@@ -662,15 +662,9 @@ void generate_custom_teams(MapScriptWriter& script, const MapInfo& map_info) {
 
 void generate_ally_priorities(MapScriptWriter& script, const MapInfo& map_info) {
 	script.function("InitAllyPriorities", [&]() {
-		std::unordered_map<int, int> player_to_startloc;
+		std::unordered_map<int, int> player_to_startloc = start_location_indices(map_info);
 
 		int current_player = 0;
-		for (const auto& i : map_info.players) {
-			player_to_startloc[i.internal_number] = current_player;
-			current_player++;
-		}
-
-		current_player = 0;
 		for (const auto& i : map_info.players) {
 			size_t count = 0;
 			for (const auto& j : map_info.players) {
@@ -755,6 +749,7 @@ void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain,
 
 		script.write("\n");
 
+		const auto start_locations = start_location_indices(map_info);
 		for (const auto& player : map_info.players) {
 			const Unit* start_location = units.find_start_location(player.internal_number);
 			if (!start_location) {
@@ -763,7 +758,7 @@ void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain,
 
 			script.call(
 				"DefineStartLocation",
-				player.internal_number,
+				start_locations.at(player.internal_number),
 				start_location->position.x * 128.f + terrain.offset.x,
 				start_location->position.y * 128.f + terrain.offset.y
 			);

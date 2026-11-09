@@ -24,6 +24,18 @@ export enum class ScriptMode {
 	jass
 };
 
+/// The game numbers start locations 0..n-1 in map_info.players order, not by player number. DefineStartLocation,
+/// SetPlayerStartLocation and SetStartLocPrio must all use this mapping. A player without a start location unit still
+/// owns its index (the index is its position in the list).
+export std::unordered_map<int, int> start_location_indices(const MapInfo& map_info) {
+	std::unordered_map<int, int> result;
+	int index = 0;
+	for (const auto& player : map_info.players) {
+		result[player.internal_number] = index++;
+	}
+	return result;
+}
+
 /// A minimal utility wrapper around a std::string that manages newlines, indentation and closing braces
 struct MapScriptWriter {
 	std::string script;
