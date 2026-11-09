@@ -86,3 +86,11 @@ Checks: `.claude/tools/script-check/`.
 - `stock_object_data::load()` needs `world_edit_strings` and `world_edit_game_strings` loaded, and reads `data/overrides` relative to the working directory, which under ctest is not the repository root.
 - A sweep check that a real file was parsed must read the checked copy, not the source folder, or a stubbed copy still passes.
 - doctest `SUBCASE` inside a `for` loop is unreliable, so looped refusal tests use plain blocks.
+
+## Sounds, script globals, wtg, writers (verified 2026-11-09)
+
+- w3s: 2^32 (0x4F800000) for pitch and distances, and -1 for channel and volume, mean "default"; the World Editor writes no setter for them. Duration is not stored in w3s; the World Editor computes it from the audio file (Ogg: last granule * 1000 / sample rate). 3.0 dialogue audio exists only under `_locales\enus.w3mod` in CASC.
+- The script generator binds `gg_unit_`/`gg_dest_`/`gg_item_` globals from trigger text. The declared type comes from the trigger text and the assigned type from the placed object; they must match (enforced for items and units).
+- 1.31+ wtg: the first int after the seven deleted-id lists is a count followed by that many ints (1 in human05 and undead02, 0 elsewhere). `Triggers::load_version_31` reads a fixed three ints. Needs verification in C++.
+- HiveWE's object-data writer puts 0 in the end token where the World Editor writes the object id. The wts writer drops `//` comments (found by fdiff on Forgotten Hollow).
+- StormLib: never enumerate with `SFileFindFirstFile` on these maps (hang, 20 GB RAM); see `harness-guardrails.md`.

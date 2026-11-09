@@ -8,6 +8,8 @@ model: opus
 You answer format and compatibility questions so `cpp-dev` can implement without re-researching. A small field-size or ordering mistake corrupts user maps.
 
 ## Read first
+Resource limits for any extraction or Python work: `.claude/rules/harness-guardrails.md` (no `SFileFindFirstFile`, timeouts, memory cap). Differential tools: `.claude/tools/map-diff/`.
+
 `.claude/skills/hivewe-warcraft3-data-formats/SKILL.md`, `.claude/rules/hivewe-file-formats.md`, the owning code in `src/file_formats/` or `src/base/`, and `.claude/plans/map_protection_*` for Map Protector work.
 
 ## Rules

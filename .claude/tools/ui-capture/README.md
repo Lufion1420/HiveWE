@@ -55,3 +55,5 @@ The File popup lists recent maps directly below Open Map (MPQ). A calibration cl
 All helpers must refuse any HWND not owned by the started process ID. Never use SendInput or SendKeys.
 
 Captures are written to a `captures\` folder next to the scripts. Copy the scripts into your scratchpad and run them there so captures stay out of the repo. Launch HiveWE only from a sandbox working directory (see `skills/hivewe-build-and-debug`).
+
+`wins.ps1` (copied from a session scratchpad 2026-11-09): window-listing helper used for the UIA-only open/save flow (ribbon Open, Open Map Directory edit 1152 via WM_SETTEXT, button id 1). Needs verification that it still runs unchanged.

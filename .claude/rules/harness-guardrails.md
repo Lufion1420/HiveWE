@@ -15,6 +15,7 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - `gh`'s active account may be the work account `Maurice-TPG`. Never use it and never run `gh auth switch`. Scope the identity per command:
   - Bash: `GH_TOKEN=$(gh auth token -u Lufion1420) git push origin main`
   - The same prefix applies to `gh` commands.
+- `git push origin main` prints "Bypassed rule violations ... Changes must be made through a pull request". The push still succeeds (owner bypass); verify with `git status -sb`.
 - No force-push. Publishing a release (version tag) happens only when the user asks for it; `release-manager` prepares it.
 
 ## Designs
@@ -30,6 +31,11 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - QA first tries UIA (for example ValuePattern SetValue on Qt line edits, reading IsEnabled) before declaring that a check needs a hook.
 - Agents may launch Warcraft III 3.0.1 and its World Editor on sandbox COPIES of maps to check that HiveWE output loads: launch, load, capture the screen, read errors. Never save in the World Editor (Test Map saves, so never use it), never touch the user's real maps. The orchestrator tells the user in chat before each run, because they may have the World Editor open with unsaved work. This replaces the old "no World Editor without new permission" rule for this purpose only.
 - Before listing any check for the user, the orchestrator sorts the checks into automatable, blocked by a rule, and truly user-only. Only the last group goes to the user.
+
+## Resource safety (incident 2026-11-09)
+- An agent's StormLib extraction with `SFileFindFirstFile` hung and grew to 20 GB RAM on the user's PC. Never use `SFileFindFirstFile` on these maps; extract through `(listfile)` plus known names.
+- Every long Python job gets a wall-clock timeout and handles one map per process. Stop your own process above about 2 GB and kill your own leftovers before returning.
+- Load StormLib/CascLib from a scratchpad copy of the DLLs, not `build/Agent` (it locks the DLLs during builds).
 
 ## Reporting
 - Report faithfully: failing tests, skipped checks and unknowns are stated plainly.
