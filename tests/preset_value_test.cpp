@@ -58,3 +58,16 @@ TEST_CASE("prefixed identifiers trim before sanitizing, so global and use agree"
 	CHECK(prefixed_script_identifier("InitTrig_", "Kelen's Dagger") == "InitTrig_Kelen_s_Dagger");
 	CHECK(prefixed_script_identifier("", "gg_snd_A B") == "gg_snd_A_B");
 }
+
+TEST_CASE("Lua global defaults match the World Editor") {
+	CHECK(lua_global_default("integer", false) == "0");
+	CHECK(lua_global_default("real", false) == "0.0");
+	CHECK(lua_global_default("boolean", false) == "false");
+	CHECK(lua_global_default("string", false) == "\"\"");
+	CHECK(lua_global_default("unit", false) == "nil");
+	CHECK(lua_global_default("integer", true) == "__jarray(0)");
+	CHECK(lua_global_default("real", true) == "__jarray(0.0)");
+	CHECK(lua_global_default("boolean", true) == "__jarray(false)");
+	CHECK(lua_global_default("string", true) == "__jarray(\"\")");
+	CHECK(lua_global_default("unit", true) == "{}");
+}

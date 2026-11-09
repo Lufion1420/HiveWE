@@ -73,6 +73,25 @@ export std::string normalize_preset_value(const std::string_view preset_type, st
 	return value;
 }
 
+/// Initial value the World Editor writes for a GUI variable in war3map.lua. `base_type` is the resolved base type (custom types such as
+/// unitcode already mapped to integer). Arrays of value types need a __jarray default so unset slots read as 0/false/"" instead of nil;
+/// handle arrays are plain tables. Scalar handles are nil.
+export std::string lua_global_default(const std::string_view base_type, const bool is_array) {
+	std::string value;
+	if (base_type == "integer") {
+		value = "0";
+	} else if (base_type == "real") {
+		value = "0.0";
+	} else if (base_type == "boolean") {
+		value = "false";
+	} else if (base_type == "string") {
+		value = "\"\"";
+	} else {
+		return is_array ? "{}" : "nil";
+	}
+	return is_array ? "__jarray(" + value + ")" : value;
+}
+
 /// A minimal utility wrapper around a std::string that manages newlines, indentation and closing braces
 struct MapScriptWriter {
 	std::string script;

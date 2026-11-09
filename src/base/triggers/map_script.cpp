@@ -42,11 +42,9 @@ void generate_global_variables(
 		}
 	} else {
 		for (const auto& variable : variables) {
-			if (variable.is_array) {
-				script.global(variable.type, "udg_" + variable.name, "__jarray(\"\")");
-			} else {
-				script.global(variable.type, "udg_" + variable.name, script.null());
-			}
+			const std::string base_type = trigger_data.data("TriggerTypes", variable.type, 4);
+			const std::string type = base_type.empty() ? variable.type : base_type;
+			script.global(variable.type, "udg_" + variable.name, lua_global_default(type, variable.is_array));
 		}
 	}
 
