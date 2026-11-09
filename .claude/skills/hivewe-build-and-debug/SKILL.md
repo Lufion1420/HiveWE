@@ -26,9 +26,13 @@ description: >-
 
 ## Running HiveWE and CI
 
-- `src/main.cpp` always loads `data/test map/` relative to the working directory (line 154) and writes `data/tools/` (lines 108-111). **Never launch HiveWE with the repo as working directory.** Use a sandbox folder with a copy of `data/`.
+- `src/main.cpp` always loads `data/test map/` relative to the working directory (line 154) and writes `data/tools/` (lines 108-111). **Never launch HiveWE with the repo as working directory.** Use a sandbox folder with a FULL copy of `data/` (`robocopy data <sandbox>\data /E`): without `data/warcraft` the app aborts at startup (0xc0000409) in `Terrain::load` on `data/warcraft/Cliffs.slk`. `build/Agent/Release/data` is a symlink to the repo `data/`; when copying the exe and DLLs into a sandbox, exclude `data` or the repo's test map overwrites the map under test.
 - To test any map without UI driving, replace the sandbox's `data/test map/` with the unpacked map. A stock 3.0 map (e.g. `(1)ForgottenHollow`) used to crash HiveWE (0xc0000409) about 2 seconds after start; it now shows the refusal dialog and exits with code 1 (see `rules/hivewe-file-formats.md`).
 - Crash debugging: the `Agent` preset produces no PDB. `cdbX64.exe` from the WindowsApps alias works, and `.exr -1` names the C++ exception class.
+- 0xc0000409 crashes leave minidumps in `%LOCALAPPDATA%\CrashDumps`. In cdb, `!peb` shows the working dir, `s -d @rsp L?8000 e06d7363` then `.exr <addr>` recovers the C++ exception type, and `ub HiveWE+0x<ret>` finds the throwing call without a PDB.
+- A first-chance `std::out_of_range` "Trying to read out of range of buffer" on a GL pool thread is normal (caught in `ResourceManager::load_impl`).
+- StormLib via ctypes: `SFILE_FIND_DATA.cFileName` is `[260]`. `SFileFindFirstFile` looped forever on one archive; extracting by names from `(listfile)` works.
+- Run the stock ctest suite without `-j`: `ctest -j` with the CASC stock test failed once with error 2 (Needs verification).
 - Use PowerShell for `reg`: Git Bash rewrites `HKCU\Software\HiveWE` into an invalid key.
 - `CloseMainWindow` can be swallowed by an open ribbon popup, so confirm the process really exited.
 - QSettings lives in `HKCU\Software\HiveWE` and holds the user's real layout and recent maps, so running HiveWE changes it. `reg export` before, `reg import` after.

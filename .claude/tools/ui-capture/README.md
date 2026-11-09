@@ -18,7 +18,9 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 
 ## Driving file-dialog flows (verified 2026-11-08, qa-verifier on HiveWE)
 
-- Launch with a sandbox working directory (a copy of `data/`). Invoke the File button through UIA in a detached process.
+- Launch with a sandbox working directory (a full copy of `data/`, see `skills/hivewe-build-and-debug`).
+- The ribbon header "No map loaded" label is stale at startup; check the window title or saved files instead.
+- The Regions palette toggle via UIA checks the box, but the palette is not visible to UIA or capture (needs an in-process hook). Invoke the File button through UIA in a detached process.
 - Qt popups and message boxes are not in UIA. Find their HWNDs with `EnumWindows` filtered by process ID, then post `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, `WM_LBUTTONUP` to the popup HWND.
 - Posted client coordinates map to capture pixels at about x1.25 on a 125% DPI display, with a title-bar offset on dialogs. Hover does not render in `PrintWindow`. Calibrate per run; coordinates depend on DPI and the recent-map list.
 - Native dialogs: fill with `WM_SETTEXT` (Open File edit id 1148, folder picker edit id 1152), then `BM_CLICK` on OK (id 1). Dismiss with `WM_CLOSE`.
