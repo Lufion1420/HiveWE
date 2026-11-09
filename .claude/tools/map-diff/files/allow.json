@@ -1,0 +1,16 @@
+{
+ "_doc": "Differences HiveWE is expected to make. See README.md. 'file' is a glob on the relative path or basename (case-insensitive); 'path' is a regex on the diff path; 'when' names a predicate in fdiff.py. Allowed diffs are still listed in the JSON under allowed_sample/allowed_by_rule.",
+ "order_insensitive": ["*"],
+ "rules": [
+  {"id": "unit-z", "file": "war3mapUnits.doo", "path": "^units\\[[^\\]]+\\](#\\d+)?\\.z$",
+   "reason": "Units::load replaces every unit z with the terrain height."},
+  {"id": "doodad-z-not-fixed", "file": "war3map.doo", "path": "^doodads\\[[^\\]]+\\](#\\d+)?\\.z$", "when": "doodad_not_fixed_z",
+   "reason": "Doodads without the fixed-Z flag (0x04) get z re-derived from terrain on save."},
+  {"id": "units-subversion-9-to-11", "file": "war3mapUnits.doo",
+   "path": "^header\\.subversion$|\\.(item_table_pointer|strength|agility|intelligence)$", "when": "units_subversion_9_to_11",
+   "reason": "A subversion 9 file is promoted to 11; the new fields must hold their defaults (-1, 0, 0, 0)."}
+ ],
+ "passthrough": [
+  {"file": "war3map.w3c", "note": "HiveWE does not write war3map.w3c (GameCameras::save is empty); identical proves nothing about camera support."}
+ ]
+}
