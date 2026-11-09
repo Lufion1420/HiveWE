@@ -39,7 +39,8 @@ Then the orchestrator commits and pushes. Internal-only changes get no changelog
 ## Gates
 - `reviewer` REJECT goes back to `cpp-dev`, then re-review. After 3 rejections, stop and ask the user.
 - `qa-verifier` FAIL goes back to `cpp-dev`, then `reviewer`, then QA again. COULD-NOT-RUN is not a pass.
-- QA tries every manual check itself first, with the ui-capture method, including finding test data and making edits (user request, 2026-11-08). Only what it cannot do, such as loading in the real game, goes to the user as a short list with exact inputs named. The change is described as unverified until they confirm.
+- QA tries every manual check itself first, with the ui-capture method, including finding test data and making edits (user request, 2026-11-08). QA tries UIA first (ValuePattern SetValue, IsEnabled). What the no-SendInput rule blocks (brush, copy/paste/undo, in-session edits) goes back to `cpp-dev` as an in-process test or hook, not to the user (2026-11-09). Loading in the real game is checked by launching Warcraft III 3.0.1 or its World Editor on sandbox map copies (never save, never real maps; the orchestrator warns the user in chat first). Before handing anything over, the orchestrator sorts checks into automatable, blocked by a rule, and truly user-only; only the last group goes to the user as a short list with exact inputs named. The change is described as unverified until they confirm.
+- `qa-verifier` `NEEDS_HOOK` goes to `cpp-dev` to add an in-process test for that check, then QA reruns. It is not a pass.
 - Stop and ask on `NEEDS_DECISION` or `NEEDS_GAME_TEST`.
 - Keep the orchestrator's context small: subagents report under 25 lines and the orchestrator does not read build logs.
 

@@ -14,7 +14,7 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - Its native menu bar is invisible to UIA (the main window is missing from the UIA top-level list) but readable across processes with `GetMenu`/`GetMenuItemInfo`. Do not combine `MIIM_TYPE` with `MIIM_STRING` in one mask: the call fails silently. Use `MIIM_ID|MIIM_STATE|MIIM_SUBMENU|MIIM_FTYPE|MIIM_STRING`.
 - The menu is not `MNS_NOTIFYBYPOS`, so `PostMessage(hwnd, WM_COMMAND, wID, 0)` opens the item. `WM_CLOSE` on a module window hides it instead of destroying it. Dialogs close with `BM_CLICK` on Cancel.
 - Asset Manager (F12) takes about 15 s to appear and the process reports not responding meanwhile; wait, do not kill it.
-- Only with explicit user permission, and never save: with a map open, Test Map also saves it. Do not post it.
+- Allowed since 2026-11-09 on sandbox map copies to check that HiveWE output loads (launch, load, capture, read errors), after the orchestrator has told the user in chat. Never save and never touch real maps: with a map open, Test Map also saves it. Never post it.
 
 ## Driving file-dialog flows (verified 2026-11-08, qa-verifier on HiveWE)
 
@@ -27,7 +27,7 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - For an edit you can read back, toggle a checkbox such as Melee map in Map Description. Name, author and description edits may be dropped (ticket "Map Description drops edits when the name, author or description is a literal"). Needs verification: that this applies to `data/test map`.
 - A UIA walk of the whole main window can exceed 60 seconds. Run it detached or scope to a dialog HWND.
 - Never name a PowerShell function `H` or `Cls`: they are built-in aliases, so the call silently runs something else.
-- Posted-message brush strokes only draw a brush preview and do not register in `world_undo`, so they cannot create a tracked unsaved edit. Brush, copy/paste and undo checks need real mouse input.
+- Posted-message brush strokes only draw a brush preview and do not register in `world_undo`, so they cannot create a tracked unsaved edit. Brush, copy/paste and undo checks need an in-process test from `cpp-dev`, not the user (guardrails, 2026-11-09).
 - Qt File popups close when focus shifts, so invoke File and post the click in the same script.
 - UIA can Invoke ribbon buttons only on the selected tab, so select the tab first with `ui-act.ps1 select -Type TabItem`. Map Protector is on Home, Item Tables is on Units.
 - A `Start-Process` argument list needs the whole string quoted, or names with spaces are silently dropped.

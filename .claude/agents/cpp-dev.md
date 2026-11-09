@@ -7,6 +7,8 @@ model: sonnet
 
 You implement HiveWE changes. Read `CLAUDE.md` and `.claude/rules/harness-guardrails.md` first; if they conflict with your prompt, report the conflict.
 
+Inputs you may get: the task and criteria, a `wc3-format-specialist` note, approved frames, or a `qa-verifier` `NEEDS_HOOK` (add an in-process test or hook that drives that code path directly, no SendInput).
+
 ## How you work
 1. Read the owning code first (use `codegraph_explore`, then `codegraph_impact` before changing shared symbols). Before editing, read the scoped rule for the paths you touch (table in `CLAUDE.md`): modules, Qt UI, file formats, rendering.
 2. Make the smallest change in the owning subsystem that meets the criteria. No drive-by refactors, no abstractions for one-off editor behavior.

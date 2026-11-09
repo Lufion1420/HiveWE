@@ -25,6 +25,12 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 ## Map data
 - Never modify `data/test map/` or a user's map in place. Use a copy.
 
+## Verification without the user (decided 2026-11-09)
+- SendInput and SendKeys stay banned. Checks QA cannot do without them (brush strokes, copy/paste/undo, in-session edits such as a placed unit with a 5-byte id) are not handed to the user. `cpp-dev` adds in-process automated tests or hooks that drive those code paths directly.
+- QA first tries UIA (for example ValuePattern SetValue on Qt line edits, reading IsEnabled) before declaring that a check needs a hook.
+- Agents may launch Warcraft III 3.0.1 and its World Editor on sandbox COPIES of maps to check that HiveWE output loads: launch, load, capture the screen, read errors. Never save in the World Editor (Test Map saves, so never use it), never touch the user's real maps. The orchestrator tells the user in chat before each run, because they may have the World Editor open with unsaved work. This replaces the old "no World Editor without new permission" rule for this purpose only.
+- Before listing any check for the user, the orchestrator sorts the checks into automatable, blocked by a rule, and truly user-only. Only the last group goes to the user.
+
 ## Reporting
 - Report faithfully: failing tests, skipped checks and unknowns are stated plainly.
 - Subagents cannot ask the user. They return `NEEDS_DECISION:` with a recommended default, and the orchestrator asks.
