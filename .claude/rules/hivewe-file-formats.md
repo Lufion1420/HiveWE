@@ -66,7 +66,10 @@ Checks: `.claude/tools/script-check/`.
 - TriggerData preset values keep their quotes after INI parsing. Operators must be written unquoted; Lua uses `~=` and `nil`.
 - Custom-text triggers (verified on stock 0239 and 0240, 2026-11-09): emission depends on the wtg classifier. 32 (script element) gets no `gg_trg_`, no `InitTrig_` call and no init call. 8 (GUI trigger converted to custom text) gets `gg_trg_`, the `InitTrig_` call and, if run-on-init, the init call. In Lua the World Editor writes an empty `function InitTrig_X() end` before the custom text. `Trigger::classifier` has no default value, so tests must set it. JASS `ConditionalTriggerExecute` for converted run-on-init triggers: Needs verification (no stock example).
 - The World Editor does not trim leading spaces in trigger names (`"  Defend"` becomes `gg_trg___Defend`).
-- `SetPlayerRaceSelectable` and `SetGamePlacement` follow w3i flags 0x20/0x40, not per-player race.
+- `SetGamePlacement` (466/466 stock): `MAP_PLACEMENT_TEAMS_TOGETHER` when more than one player has type human (w3i type 1), else `MAP_PLACEMENT_USE_MAP_SETTINGS`. It does not follow w3i flags.
+- `SetTeams(n)` uses n = number of players (same as `SetPlayers`), not number of forces (466/466).
+- The per-player w3i dword HiveWE calls `fixed_start_position` is a flag set: 0x1 = fixed start location (`ForcePlayerStartLocation` emitted exactly when set), 0x2 = race selectable. `SetPlayerRaceSelectable` is true when `!(w3i flags & 0x20)` or the slot is race-selectable (race 0 / dword bit 0x2). In stock maps w3i flags 0x20 and 0x40 are always set together; using 0x20 alone follows War3Net (spec, not stock-verified).
+- `InitAllyPriorities` is omitted by the World Editor when no player has a priority on another (463/466; 3 unexplained, Needs verification).
 - `generate_map_script` writes fixed shared paths (`%TEMP%/input.lua`, `data/tools/war3map.j`), so saves and resaves cannot run in parallel. On a script compile error, HiveWE's generated script can be taken from `%TEMP%/input.lua` right after the resave.
 - `MapScriptWriter::call` formats float args with `"{}"` (can produce exponents), and `string_view` concatenations can format as char ranges. Pre-format arguments as `std::string`.
 - Identifiers: every non-`[A-Za-z0-9_]` becomes `_`, trim first, and use the same helper at declaration and use.
