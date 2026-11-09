@@ -33,6 +33,9 @@ python -I sdiff.py <orig> <new> [--json OUT] [--top N] [--max-diff LINES] [--flo
 - sdiff.py cannot split a warcraft-vscode minified single-line `war3map.lua` bundle. Extract the bundled `origwar3map.lua` module (the editor-generated part) and compare that with `sim/simdiff.py`.
 - warcraft-vscode projects: `warcraft.json` `mapdir` names the folder map. Packed output is `.build/release.w3x` and `.build/war3map.lua` (merged script). User code may wrap `InitGlobals`, `InitCustomTriggers` and `RunInitializationTriggers`, so HiveWE's Lua output must keep those as global functions.
 
+- `drive.py` deletes each map's `out/` folder, so spot-checking generated lines needs a separate `resave.py` rerun. For JASS maps the newest `%TEMP%/input.lua` is the generated script: copy it right after each resave.
+- The sweep's kind classifier is a throwaway script in the run's scratchpad, not in the repo (Needs verification whether it should be committed).
+
 ### Forgotten Hollow (stock 0239 vs HiveWE save), 2026-11-09
 
 Missing globals `gg_item_ergg_0000` … `gg_item_ergw_0003` (and the matching `CreateAllItems` lines). `InitSounds` lacks the `SetSoundParamsFromLabel` / facial-animation setters. `main` lacks `SetHDWaterParamsEx`, and its `SetDayNightModels` passes the terrain model as the unit model, with `/` instead of `\`. The World Editor writes `CreateNeutralPassiveBuildings` / `CreatePlayerBuildings` / `CreatePlayerUnits`, and HiveWE inlines them. `InitCustomPlayerSlots` lacks `SetPlayerRaceSkin`. `config` has `SetTeams(1)` where the World Editor has `SetTeams(2)`. `InitAllyPriorities` differs. Camera fields are written with more decimals (90.51 vs 90.5).

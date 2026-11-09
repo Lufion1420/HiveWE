@@ -69,6 +69,10 @@ Checks: `.claude/tools/script-check/`.
 - `SetGamePlacement` (466/466 stock): `MAP_PLACEMENT_TEAMS_TOGETHER` when more than one player has type human (w3i type 1), else `MAP_PLACEMENT_USE_MAP_SETTINGS`. It does not follow w3i flags.
 - `SetTeams(n)` uses n = number of players (same as `SetPlayers`), not number of forces (466/466).
 - The per-player w3i dword HiveWE calls `fixed_start_position` is a flag set: 0x1 = fixed start location (`ForcePlayerStartLocation` emitted exactly when set), 0x2 = race selectable. `SetPlayerRaceSelectable` is true when `!(w3i flags & 0x20)` or the slot is race-selectable (race 0 / dword bit 0x2). In stock maps w3i flags 0x20 and 0x40 are always set together; using 0x20 alone follows War3Net (spec, not stock-verified).
+- Known bug (ticketed): `scenario_properties_editor.cpp` and `scenario_data_io.ixx` still write `fixed_start_position` as 0/1, which drops bit 0x2.
+- `SetResourceAmount(u, gold)` is written for every placed unit whose type's abilList contains `Agld`, or type `ugol`; also for 12500 (466 stock maps, 77,921 units).
+- `SetUnitColor`: if UnitUI `customTeamColor` (utcc) == 1 and the placed unit's custom colour != -1, use that colour; else if `teamColor` (utco) != -1, `ConvertPlayerColor(utco)`; else none. Per-unit call order: SetHeroLevel, WaygateSetDestination, WaygateActivate, SetUnitColor, SelectHeroSkill, item-drop trigger (War3Net's order is wrong here).
+- The World Editor creates `ugol` with `CreateBlightedGoldmine(p, x, y, face)`, not `BlzCreateUnitWithSkin` (40 JASS maps).
 - `InitAllyPriorities` is omitted by the World Editor when no player has a priority on another (463/466; 3 unexplained, Needs verification).
 - `generate_map_script` writes fixed shared paths (`%TEMP%/input.lua`, `data/tools/war3map.j`), so saves and resaves cannot run in parallel. On a script compile error, HiveWE's generated script can be taken from `%TEMP%/input.lua` right after the resave.
 - `MapScriptWriter::call` formats float args with `"{}"` (can produce exponents), and `string_view` concatenations can format as char ranges. Pre-format arguments as `std::string`.
