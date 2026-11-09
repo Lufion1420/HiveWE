@@ -35,6 +35,8 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - It suggests a new session when context looks high and at natural points such as a finished ticket. It does not stop mid-task to do so.
 - Before suggesting: commit and push finished work so the tree is clean, update the Asana board and guidance docs, and write `.claude/HANDOFF.md` (overwritten each time, committed). It covers current state, what is running or unfinished, next step, decisions the user made, and open questions.
 - Every suggestion includes a paste-ready prompt in the message.
+- The user does not read the MD files, including `HANDOFF.md`. Every paste-ready prompt tells the next session to start by listing in chat every check or decision waiting on the user (from `HANDOFF.md` "Open questions"), with exact steps.
+- Anything the user must do is stated in chat, not only in a file.
 
 ## Self-updating guidance
 - When work reveals something that helps later work (a bug pattern, a tool quirk, a better method, a wrong assumption), update the owning rule, skill or agent file without asking the user.
