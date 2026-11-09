@@ -10,6 +10,10 @@ import Doodad;
 import Doodads;
 import Globals;
 import Hierarchy;
+import ModificationTables;
+import SLK;
+import StockObjectData;
+import <glm/glm.hpp>;
 import MapArchiveCheck;
 import MapBodyCheck;
 import MapFormatCheck;
@@ -239,6 +243,9 @@ namespace {
 		file.x_offset = b.data.size();
 		b.u32s(3 + 1 + 3); // position, angle, scale
 		b.raw("hfoo"); // skin
+		if (version >= 12) {
+			b.u32(0xFFFFFFFF); // group id
+		}
 		b.raw(std::string(1, '\0')); // flags
 		b.u32(); // player
 		b.raw(std::string(2, '\0'));
@@ -267,6 +274,9 @@ namespace {
 		}
 		b.u32s(2); // color, waygate
 		b.u32(9); // creation number
+		if (version >= 12) {
+			b.u32s(3); // trailer
+		}
 		return file;
 	}
 
@@ -741,8 +751,8 @@ TestCall=0,0,integer,integer
 	}
 
 	/// A copy of a map the version check refuses, with the files in a format no parser exists for replaced or
-	/// dropped, so that the check can reach the bodies of everything else in it. A war3map.doo of v12 or v13 has
-	/// a parser now, so it stays, and these passes read its real body.
+	/// dropped, so that the check can reach the bodies of everything else in it. A war3map.doo or war3mapUnits.doo
+	/// of v12 or v13 has a parser now, so it stays, and these passes read its real body.
 	fs::path copy_with_readable_formats_only(const fs::path& directory) {
 		const fs::path copy = make_scratch_dir("stock_readable_formats");
 		for (const auto& entry : fs::directory_iterator(directory)) {
@@ -775,6 +785,8 @@ TestCall=0,0,integer,integer
 		std::size_t refused = 0;
 		std::size_t readable_parts_passed = 0;
 		std::size_t readable_parts_with_real_doo = 0;
+		std::size_t readable_parts_with_real_units = 0;
+		std::size_t refusals_naming_units = 0;
 		int deepest = 0;
 		std::string deepest_map;
 		const int trigger_next_id = Trigger::next_id;
@@ -785,6 +797,7 @@ TestCall=0,0,integer,integer
 				accepted++;
 			} else {
 				refused++;
+				refusals_naming_units += contains(result.error(), "war3mapUnits.doo") ? 1 : 0;
 				const bool version_refusal = contains(result.error(), "does not support") || contains(result.error(), "newer version of HiveWE");
 				const bool known_trigger_refusal = contains(name, "reforged/roc/undead02") && contains(result.error(), "war3map.wtg");
 				refusals_by_kind[version_refusal ? "version" : known_trigger_refusal ? "undead02 wtg" : "other"]++;
@@ -806,7 +819,14 @@ TestCall=0,0,integer,integer
 						} else {
 							unexpected.push_back(name);
 						}
+						const std::uint32_t real_units = doo_version(directory / "war3mapUnits.doo");
+						if ((real_units == 12 || real_units == 13) && read_all(readable_copy / "war3mapUnits.doo") == read_all(directory / "war3mapUnits.doo")) {
+							readable_parts_with_real_units++;
+						} else {
+							unexpected.push_back(name);
+						}
 					} else {
+						refusals_naming_units += contains(readable.error(), "war3mapUnits.doo") ? 1 : 0;
 						std::string readable_line = readable.error();
 						std::ranges::replace(readable_line, '\n', ' ');
 						std::println("{} readable parts of {} ({}) refused: {}", label, key, name, readable_line);
@@ -843,6 +863,8 @@ TestCall=0,0,integer,integer
 		std::println("{}: stock maps checked: {}, accepted {}, refused {}", label, index.size(), accepted, refused);
 		std::println("{}: version refusals whose readable parts passed the body check: {}", label, readable_parts_passed);
 		std::println("{}: of those, passes that parsed a real war3map.doo v12 or v13: {}", label, readable_parts_with_real_doo);
+		std::println("{}: of those, passes that parsed a real war3mapUnits.doo v12 or v13: {}", label, readable_parts_with_real_units);
+		std::println("{}: refusals naming war3mapUnits.doo: {}", label, refusals_naming_units);
 		for (const auto& [kind, amount] : refusals_by_kind) {
 			std::println("{}: refused as {}: {}", label, kind, amount);
 		}
@@ -857,6 +879,8 @@ TestCall=0,0,integer,integer
 		CHECK(refusals_by_kind["version"] == 191);
 		CHECK(readable_parts_passed == 190);
 		CHECK(readable_parts_with_real_doo == 190);
+		CHECK(readable_parts_with_real_units == 190);
+		CHECK(refusals_naming_units == 0);
 		CHECK(refusals_by_kind["undead02 wtg, behind a version refusal"] == 1);
 	}
 }
@@ -992,8 +1016,12 @@ TEST_CASE("the readers really do bump the statics so the state checks above mean
 	MapInfo info {};
 	info.game_version_major = 2;
 	int records = 0;
-	Units::read_records(reader, {}, info, [&](Unit&) { records++; });
+	std::uint32_t version = 0;
+	std::uint32_t subversion = 0;
+	Units::read_records(reader, {}, info, version, subversion, [&](Unit&) { records++; });
 	CHECK(records == 1);
+	CHECK(version == 8);
+	CHECK(subversion == 11);
 	CHECK(Unit::auto_increment != 2345);
 
 	Hierarchy::map_read_override = &dir;
@@ -2557,4 +2585,1320 @@ TEST_CASE("HIVEWE_BODY_CHECK_CASC gives real TriggerData from the game for the s
 		sweep_stock_maps(root, "game TriggerData");
 		open_map.check_unchanged();
 	}
+}
+
+namespace {
+	/// A war3mapUnits.doo of one record with a value other than the default in every field, except the z, which Units::load
+	/// re-derives from the flat test terrain. The sub 11 fields are only there when the subversion has them.
+	struct UnitFileSpec {
+		std::uint32_t version = 13;
+		std::uint32_t subversion = 11;
+		std::string id = "hfoo";
+		std::string skin = "hsk1";
+		std::string item_set_id = "ratc";
+		std::string inventory_id = "rat6";
+		std::string ability_id = "Ahbz";
+		std::uint32_t group_id = 0x12345678;
+		std::uint32_t item_table = 5;
+		std::array<std::uint32_t, 3> stats = { 4, 5, 6 };
+		std::uint32_t random_type = 0;
+		std::string random = le32(1);
+		std::array<std::uint32_t, 3> trailer = { 0, 0, 0 };
+	};
+
+	std::string unit_file(const UnitFileSpec& spec) {
+		Bytes b;
+		b.raw("W3do");
+		b.u32(spec.version);
+		b.u32(spec.subversion);
+		b.u32(1);
+
+		b.raw(spec.id);
+		b.u32(3); // variation
+		for (const float value : { 64.f, 64.f, 0.f, 1.5f, 128.f, 256.f, 384.f }) {
+			b.raw(le_f32(value)); // position, angle, scale
+		}
+		b.raw(spec.skin);
+		if (spec.version >= 12) {
+			b.u32(spec.group_id);
+		}
+		b.raw(std::string(1, '\x0A')); // flags
+		b.u32(4); // player
+		b.raw("\x07\x09"); // unknown bytes
+		b.u32(50); // health
+		b.u32(22); // mana
+		if (spec.subversion >= 11) {
+			b.u32(spec.item_table);
+		}
+		b.u32(1); // item sets
+		b.u32(1); // items
+		b.raw(spec.item_set_id);
+		b.u32(100); // chance
+		b.u32(123); // gold
+		b.raw(le_f32(200.f)); // acquisition
+		b.u32(3); // level
+		if (spec.subversion >= 11) {
+			for (const std::uint32_t stat : spec.stats) {
+				b.u32(stat);
+			}
+		}
+		b.u32(1); // inventory
+		b.u32(2); // slot
+		b.raw(spec.inventory_id);
+		b.u32(1); // abilities
+		b.raw(spec.ability_id);
+		b.u32(1); // autocast
+		b.u32(2); // level
+		b.u32(spec.random_type);
+		b.raw(spec.random);
+		b.u32(3); // color
+		b.u32(0xFFFFFFFF); // waygate
+		b.u32(41); // creation number
+		if (spec.version >= 12) {
+			for (const std::uint32_t value : spec.trailer) {
+				b.u32(value);
+			}
+		}
+		return b.data;
+	}
+
+	/// Loads and saves through the real paths and returns what the save wrote.
+	std::string load_and_save_units(
+		const std::string& name,
+		const std::string& bytes,
+		const MapInfo& info,
+		const std::function<void(Units&)>& check,
+		const Terrain& terrain = terrain_without_gl()
+	) {
+		const fs::path dir = make_scratch_dir(name);
+		write_all(dir / "war3mapUnits.doo", bytes);
+		const ScopedMapDirectory open_map(dir);
+		Units units;
+		units.load(terrain, info);
+		check(units);
+		units.save(terrain);
+		return read_all(dir / "war3mapUnits.doo");
+	}
+
+	std::string load_and_save_units(const std::string& name, const std::string& bytes, const MapInfo& info) {
+		return load_and_save_units(name, bytes, info, [](Units&) {});
+	}
+}
+
+TEST_CASE("a random type 2 unit keeps its count and entries on save") {
+	for (const std::uint32_t version : { 8u, 13u }) {
+		CAPTURE(version);
+		for (const std::uint32_t entries : { 0u, 1u, 3u }) {
+			CAPTURE(entries);
+			UnitFileSpec spec;
+			spec.version = version;
+			spec.random_type = 2;
+			spec.random = le32(entries);
+			for (std::uint32_t i = 0; i < entries; i++) {
+				spec.random += "hfo" + std::string(1, static_cast<char>('a' + i)) + le32(30 + i);
+			}
+			const std::string bytes = unit_file(spec);
+			CHECK(load_and_save_units("units_random_2", bytes, game_version(3, 0), [&](Units& units) {
+				REQUIRE(units.items.size() == 1);
+				CHECK(units.items[0].random_type == 2);
+				CHECK(units.items[0].random.size() == 4 + std::size_t { entries } * 8);
+			}) == bytes);
+		}
+	}
+}
+
+TEST_CASE("an id that is not 4 characters long still takes up 4 bytes on save") {
+	for (const std::uint32_t version : { 8u, 13u }) {
+		CAPTURE(version);
+		for (const std::string& id : { std::string(4, '\0'), std::string("ab\0\0", 4) }) {
+			UnitFileSpec spec;
+			spec.version = version;
+			const auto check_same = [&](const std::string_view field) {
+				CAPTURE(field);
+				const std::string bytes = unit_file(spec);
+				CHECK(load_and_save_units("units_short_id", bytes, game_version(3, 0)) == bytes);
+			};
+
+			spec.item_set_id = id;
+			check_same("item set");
+			spec.item_set_id = "ratc";
+
+			spec.inventory_id = id;
+			check_same("inventory");
+			spec.inventory_id = "rat6";
+
+			spec.ability_id = id;
+			check_same("ability");
+			spec.ability_id = "Ahbz";
+
+			spec.skin = id;
+			check_same("skin");
+			spec.skin = "hsk1";
+
+			spec.id = id;
+			check_same("id");
+		}
+	}
+}
+
+namespace {
+	/// A fresh World Editor 3.0.1 save: subversion 9, with a start location, a unit and a hero.
+	constexpr std::string_view fresh_world_editor_units =
+		"5733646f0d0000000900000003000000736c6f6300000000000000c50000c84400000000e4cb96400000803f0000803f0000803f736c6f63ffffffff0200"
+		"0000000000ffffffffffffffff0000000000000000000000000000000000000000000000000000000001000000ffffffffffffffff000000000000000000"
+		"000000000000006867727900000000c02c9cc300c2f8c200000000dfead73f0000803f0000803f0000803f68677279ffffffff02000000000000ffffffff"
+		"ffffffff00000000d4300000000080bf0100000000000000000000000000000001000000ffffffffffffffff010000000000000000000000000000004870"
+		"616c000000006a800b43d01709c3000000000b41043d0000803f0000803f0000803f4870616cffffffff02000000000000320000001600000000000000d4"
+		"300000000080bf0a00000000000000000000000000000001000000ffffffffffffffff02000000000000000000000000000000";
+
+	/// A crafted map whose war3mapUnits.doo is the given file.
+	fs::path crafted_map_with_units(const std::string& name, const std::string& units) {
+		const fs::path dir = make_crafted_map(name);
+		write_all(dir / "war3mapUnits.doo", units);
+		return dir;
+	}
+
+	/// read_records into units.units at offset 0, and then a real save. This keeps the order and the z, which Units::load does not,
+	/// so it says that the writer reproduces what the reader read, and nothing about Units::load.
+	std::string read_records_then_save_units(const std::string& bytes, const MapInfo& info, const std::function<void(Units&)>& edit = {}) {
+		const fs::path dir = make_scratch_dir("units_read_and_save");
+		const ScopedMapDirectory open_map(dir);
+		Units units;
+		BinaryReader reader = reader_over(bytes);
+		std::uint32_t version = 0;
+		std::uint32_t subversion = 0;
+		Units::read_records(reader, {}, info, version, subversion, [&](Unit& unit) { units.units.push_back(unit); });
+		units.format_version = static_cast<int>(version);
+		units.format_subversion = static_cast<int>(subversion);
+		if (edit) {
+			edit(units);
+		}
+		units.save(terrain_without_gl());
+		return read_all(dir / "war3mapUnits.doo");
+	}
+
+	void check_units_refused_saying(const fs::path& dir, const std::vector<std::string>& parts) {
+		const auto result = check_map_bodies(dir);
+		REQUIRE_FALSE(result.has_value());
+		CHECK_MESSAGE(contains(result.error(), "war3mapUnits.doo"), result.error());
+		for (const std::string& part : parts) {
+			CHECK_MESSAGE(contains(result.error(), part), result.error());
+		}
+	}
+
+	constexpr std::array<std::pair<std::uint32_t, std::uint32_t>, 4> units_v12_pairs = { {
+		{ 12, 9 },
+		{ 12, 11 },
+		{ 13, 9 },
+		{ 13, 11 },
+	} };
+
+	UnitFileSpec unit_spec(const std::uint32_t version, const std::uint32_t subversion) {
+		UnitFileSpec spec;
+		spec.version = version;
+		spec.subversion = subversion;
+		return spec;
+	}
+
+	std::string units_without_records(const std::uint32_t version, const std::uint32_t subversion) {
+		return "W3do" + le32(version) + le32(subversion) + le32(0);
+	}
+
+	/// The fields of a record no subversion 9 file can hold, at their defaults.
+	UnitFileSpec with_subversion_11_defaults(UnitFileSpec spec) {
+		spec.item_table = 0xFFFFFFFF;
+		spec.stats = { 0, 0, 0 };
+		return spec;
+	}
+}
+
+TEST_CASE("the fresh World Editor v13 war3mapUnits.doo reads as what it holds and the writer reproduces it from read_records") {
+	const std::string bytes = from_hex(fresh_world_editor_units);
+	REQUIRE(bytes.size() == 361);
+
+	BinaryReader reader = reader_over(bytes);
+	std::vector<Unit> units;
+	std::uint32_t version = 0;
+	std::uint32_t subversion = 0;
+	Units::read_records(reader, {}, game_version(3, 0), version, subversion, [&](Unit& unit) { units.push_back(unit); });
+	CHECK(version == 13);
+	CHECK(subversion == 9);
+	CHECK(reader.remaining() == 0);
+
+	struct Expected {
+		std::string id;
+		int gold;
+		int level;
+		int health;
+		int mana;
+		std::vector<std::uint8_t> random;
+	};
+	const std::array<Expected, 3> expected = { {
+		{ "sloc", 0, 0, -1, -1, { 1, 0, 0, 0 } },
+		{ "hgry", 12500, 1, -1, -1, { 1, 0, 0, 0 } },
+		{ "Hpal", 12500, 10, 50, 22, { 1, 0, 0, 0 } },
+	} };
+	REQUIRE(units.size() == expected.size());
+	for (std::size_t i = 0; i < expected.size(); i++) {
+		CAPTURE(i);
+		const Unit& unit = units[i];
+		CHECK(unit.id == expected[i].id);
+		CHECK(unit.skin_id == expected[i].id);
+		CHECK(unit.gold == expected[i].gold);
+		CHECK(unit.level == expected[i].level);
+		CHECK(unit.health == expected[i].health);
+		CHECK(unit.mana == expected[i].mana);
+		CHECK(unit.random_type == 0);
+		CHECK(unit.random == expected[i].random);
+		CHECK(unit.group_id == 0xFFFFFFFF);
+		CHECK(unit.trailer == std::array<std::uint32_t, 2> { 0, 0 });
+		CHECK(int { unit.flags } == 2);
+		CHECK(unit.creation_number == static_cast<int>(i));
+		// Not in a subversion 9 file, so these are the defaults, which do not ask for subversion 11.
+		CHECK(unit.item_table_pointer == -1);
+		CHECK(unit.strength == 0);
+		CHECK(unit.agility == 0);
+		CHECK(unit.intelligence == 0);
+	}
+
+	CHECK(read_records_then_save_units(bytes, game_version(3, 0)) == bytes);
+	check_accepted(crafted_map_with_units("units_fresh", bytes));
+}
+
+TEST_CASE("a v12 or v13 war3mapUnits.doo of one record at offset 0 with every field set saves as the same bytes through Units::load") {
+	for (const auto& [version, subversion] : units_v12_pairs) {
+		CAPTURE(version);
+		CAPTURE(subversion);
+		const std::string bytes = unit_file(unit_spec(version, subversion));
+		const std::string saved = load_and_save_units("units_every_field", bytes, game_version(3, 0), [&](Units& units) {
+			CHECK(units.format_version == static_cast<int>(version));
+			CHECK(units.format_subversion == static_cast<int>(subversion));
+			// Without object data nothing is known about hfoo, so Units::load files it as an item.
+			REQUIRE(units.items.size() == 1);
+			const Unit& unit = units.items[0];
+			CHECK(unit.group_id == 0x12345678u);
+			CHECK(int { unit.flags } == 0x0A);
+			CHECK(unit.item_table_pointer == (subversion >= 11 ? 5 : -1));
+			CHECK(unit.strength == (subversion >= 11 ? 4 : 0));
+			CHECK(unit.agility == (subversion >= 11 ? 5 : 0));
+			CHECK(unit.intelligence == (subversion >= 11 ? 6 : 0));
+		});
+		// A sub 9 file cannot hold the item table and stats, so unit_file leaves them out and they stay at their defaults.
+		CHECK(saved == bytes);
+		check_accepted(crafted_map_with_units("units_every_field_accepted", bytes));
+	}
+}
+
+TEST_CASE("what a war3mapUnits.doo saves as depends on what it was") {
+	const auto check_load_saves_as = [](const std::uint32_t version, const std::uint32_t subversion, const int saved_version, const int saved_subversion) {
+		CAPTURE(version);
+		CAPTURE(subversion);
+		const std::string saved = load_and_save_units("units_saves_as", units_without_records(version, subversion), game_version(3, 0), [&](Units& units) {
+			CHECK(units.format_version == saved_version);
+			CHECK(units.format_subversion == saved_subversion);
+		});
+		CHECK(saved == units_without_records(saved_version, saved_subversion));
+	};
+
+	SUBCASE("every accepted pair") {
+		check_load_saves_as(7, 9, 8, 11);
+		check_load_saves_as(7, 11, 8, 11);
+		check_load_saves_as(8, 9, 8, 11);
+		check_load_saves_as(8, 11, 8, 11);
+		check_load_saves_as(12, 9, 12, 9);
+		check_load_saves_as(12, 11, 12, 11);
+		check_load_saves_as(13, 9, 13, 9);
+		check_load_saves_as(13, 11, 13, 11);
+	}
+	SUBCASE("a new map saves as (8, 11)") {
+		const fs::path dir = make_scratch_dir("units_saves_new");
+		const ScopedMapDirectory open_map(dir);
+		Units units;
+		CHECK(units.format_version == 8);
+		CHECK(units.format_subversion == 11);
+		units.save(terrain_without_gl());
+		CHECK(read_all(dir / "war3mapUnits.doo") == units_without_records(8, 11));
+	}
+	SUBCASE("loading again leaves nothing behind of the previous file") {
+		const fs::path dir = make_scratch_dir("units_saves_stale");
+		const ScopedMapDirectory open_map(dir);
+		Units units;
+		write_all(dir / "war3mapUnits.doo", units_without_records(13, 9));
+		units.load(terrain_without_gl(), game_version(3, 0));
+		CHECK(units.format_version == 13);
+		CHECK(units.format_subversion == 9);
+
+		write_all(dir / "war3mapUnits.doo", units_without_records(8, 9));
+		units.load(terrain_without_gl(), game_version(3, 0));
+		CHECK(units.format_version == 8);
+		CHECK(units.format_subversion == 11);
+
+		write_all(dir / "war3mapUnits.doo", units_without_records(13, 9));
+		units.load(terrain_without_gl(), game_version(3, 0));
+		write_all(dir / "war3mapUnits.doo", units_without_records(14, 9));
+		CHECK_THROWS(units.load(terrain_without_gl(), game_version(3, 0)));
+		CHECK(units.format_version == 8);
+		CHECK(units.format_subversion == 11);
+	}
+}
+
+TEST_CASE("a v7 or v8 war3mapUnits.doo saves with no new fields") {
+	for (const std::uint32_t version : { 7u, 8u }) {
+		CAPTURE(version);
+		UnitFileSpec spec = unit_spec(version, 11);
+		const std::string saved = load_and_save_units("units_old_saves", unit_file(spec), game_version(3, 0));
+		spec.version = 8;
+		CHECK(saved == unit_file(spec));
+
+		UnitFileSpec sub_9 = unit_spec(version, 9);
+		const std::string saved_sub_9 = load_and_save_units("units_old_saves_sub_9", unit_file(sub_9), game_version(3, 0));
+		sub_9.version = 8;
+		sub_9.subversion = 11;
+		CHECK(saved_sub_9 == unit_file(with_subversion_11_defaults(sub_9)));
+	}
+}
+
+TEST_CASE("a subversion 9 v12 or v13 file only saves as subversion 11 when it has to") {
+	const std::array<std::function<void(Unit&)>, 4> edits = {
+		[](Unit& unit) { unit.item_table_pointer = 0; },
+		[](Unit& unit) { unit.strength = 7; },
+		[](Unit& unit) { unit.agility = 8; },
+		[](Unit& unit) { unit.intelligence = 9; },
+	};
+	const std::array<std::function<void(UnitFileSpec&)>, 4> expected_edits = {
+		[](UnitFileSpec& spec) { spec.item_table = 0; },
+		[](UnitFileSpec& spec) { spec.stats[0] = 7; },
+		[](UnitFileSpec& spec) { spec.stats[1] = 8; },
+		[](UnitFileSpec& spec) { spec.stats[2] = 9; },
+	};
+
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const UnitFileSpec sub_9 = unit_spec(version, 9);
+		const std::string bytes = unit_file(sub_9);
+		REQUIRE(bytes.size() + 16 == unit_file(unit_spec(version, 11)).size());
+
+		// Untouched, it keeps its shape.
+		CHECK(read_records_then_save_units(bytes, game_version(3, 0)) == bytes);
+
+		for (std::size_t i = 0; i < edits.size(); i++) {
+			CAPTURE(i);
+			UnitFileSpec expected = with_subversion_11_defaults(sub_9);
+			expected.subversion = 11;
+			expected_edits[i](expected);
+
+			// On a unit, and on an item, which is saved from the other list.
+			CHECK(read_records_then_save_units(bytes, game_version(3, 0), [&](Units& units) { edits[i](units.units[0]); }) == unit_file(expected));
+			CHECK(read_records_then_save_units(bytes, game_version(3, 0), [&](Units& units) {
+				units.items.push_back(units.units[0]);
+				units.units.clear();
+				edits[i](units.items[0]);
+			}) == unit_file(expected));
+		}
+
+		// Only for a value that the file could not hold: other edits keep the shape.
+		const std::string other_edit = read_records_then_save_units(bytes, game_version(3, 0), [](Units& units) { units.units[0].gold = 1; });
+		CHECK(other_edit.size() == bytes.size());
+		CHECK(read_u32_at(other_edit, 8) == 9u);
+
+		// An edit that was taken back asks for nothing any more: this is computed at save.
+		CHECK(read_records_then_save_units(bytes, game_version(3, 0), [](Units& units) {
+			units.units[0].strength = 7;
+			units.units[0].strength = 0;
+		}) == bytes);
+
+		// One that needs it is enough.
+		const std::string one_of_two = read_records_then_save_units(bytes, game_version(3, 0), [](Units& units) {
+			units.items.push_back(units.units[0]);
+			units.items[0].intelligence = 1;
+		});
+		CHECK(read_u32_at(one_of_two, 8) == 11u);
+		CHECK(read_u32_at(one_of_two, 12) == 2u);
+
+		// A file loaded as 11 stays 11, even with the stats at their defaults.
+		UnitFileSpec defaults = with_subversion_11_defaults(unit_spec(version, 11));
+		const std::string sub_11 = unit_file(defaults);
+		CHECK(read_records_then_save_units(sub_11, game_version(3, 0)) == sub_11);
+		CHECK(load_and_save_units("units_never_demoted", sub_11, game_version(3, 0)) == sub_11);
+	}
+}
+
+TEST_CASE("the third trailer value is refused and the other unknown values are preserved") {
+	constexpr std::array<std::array<std::uint32_t, 2>, 3> first_and_second = { {
+		{ 0x7FA00001, 0xFFC12345 }, // NaNs, which a float would not keep
+		{ 0xFFFFFFFF, 0x80000000 },
+		{ 1, 2 },
+	} };
+
+	for (const auto& [version, subversion] : units_v12_pairs) {
+		CAPTURE(version);
+		CAPTURE(subversion);
+
+		for (const std::uint32_t third : { 1u, 0xFFFFFFFFu }) {
+			UnitFileSpec spec = unit_spec(version, subversion);
+			spec.trailer[2] = third;
+			check_units_refused_saying(crafted_map_with_units("units_third_trailer", unit_file(spec)), { "hfoo", std::to_string(third), "trailer" });
+		}
+
+		for (const auto& [first, second] : first_and_second) {
+			for (const std::uint32_t group_id : { 0u, 0x7FC00001u, 0xFFFFFFFEu }) {
+				UnitFileSpec spec = unit_spec(version, subversion);
+				spec.trailer = { first, second, 0 };
+				spec.group_id = group_id;
+				const std::string bytes = unit_file(spec);
+				check_accepted(crafted_map_with_units("units_unknown_values", bytes));
+				CHECK(load_and_save_units("units_unknown_values_save", bytes, game_version(3, 0), [&](Units& units) {
+					REQUIRE(units.items.size() == 1);
+					CHECK(units.items[0].group_id == group_id);
+					CHECK(units.items[0].trailer[0] == first);
+					CHECK(units.items[0].trailer[1] == second);
+				}) == bytes);
+			}
+		}
+	}
+}
+
+TEST_CASE("every prefix of a v12 or v13 war3mapUnits.doo is refused") {
+	for (const auto& [version, subversion] : units_v12_pairs) {
+		CAPTURE(version);
+		CAPTURE(subversion);
+		check_every_prefix_refused(crafted_map_with_units("units_prefix", unit_file(unit_spec(version, subversion))), "war3mapUnits.doo");
+		check_every_prefix_refused(crafted_map_with_units("units_prefix_fresh", from_hex(fresh_world_editor_units)), "war3mapUnits.doo");
+	}
+}
+
+TEST_CASE("a v12 or v13 war3mapUnits.doo is refused for what stock never has") {
+	for (const auto& [version, subversion] : units_v12_pairs) {
+		CAPTURE(version);
+		CAPTURE(subversion);
+		const std::string valid = unit_file(unit_spec(version, subversion));
+		const fs::path dir = crafted_map_with_units("units_refusals", valid);
+		check_accepted(dir);
+		CHECK(check_map_for_opening(dir).has_value());
+
+		// Bytes left after the last unit
+		write_all(dir / "war3mapUnits.doo", valid + std::string(1, '\0'));
+		check_units_refused_saying(dir, { "leftover bytes after its last unit: 1" });
+		write_all(dir / "war3mapUnits.doo", valid + std::string(4, '\0'));
+		check_units_refused_saying(dir, { "leftover bytes after its last unit: 4" });
+
+		// A subversion that does not exist
+		for (const std::uint32_t wrong : { 0u, 10u, 12u }) {
+			write_all(dir / "war3mapUnits.doo", with_u32_at(valid, 8, wrong));
+			check_units_refused_saying(dir, { "subversion " + std::to_string(wrong) });
+			CHECK_FALSE(check_map_format_versions(dir).has_value());
+		}
+
+		// A record that is not what the subversion says
+		write_all(dir / "war3mapUnits.doo", with_u32_at(valid, 8, subversion == 9 ? 11 : 9));
+		check_units_refused_saying(dir, {});
+
+		// A count that cannot fit
+		write_all(dir / "war3mapUnits.doo", with_u32_at(valid, 12, 2));
+		check_units_refused_saying(dir, { "A count of 2 does not fit" });
+
+		// A w3i game version below 1.32. The doo has no records for that to matter to.
+		write_all(dir / "war3mapUnits.doo", valid);
+		write_all(dir / "war3map.doo", "W3do" + le32(8) + le32(11) + le32(0) + le32(0) + le32(0));
+		const std::string w3i = w3i_file(33).data;
+		write_all(dir / "war3map.w3i", with_u32_at(with_u32_at(w3i, 12, 1), 16, 31));
+		check_units_refused_saying(dir, { "1.31", "has not been seen" });
+		write_all(dir / "war3map.w3i", with_u32_at(with_u32_at(w3i, 12, 1), 16, 32));
+		check_accepted(dir);
+	}
+}
+
+TEST_CASE("a damaged count in a v12 or v13 war3mapUnits.doo is refused") {
+	const fs::path dir = make_crafted_map("units_v12_counts");
+	check_every_count_refused(dir, "war3mapUnits.doo", units_file(12).bytes);
+	check_every_count_refused(dir, "war3mapUnits.doo", units_file(13).bytes);
+}
+
+TEST_CASE("the smallest v12 and v13 unit records are exactly what the unit count is measured against") {
+	for (const auto& [version, subversion] : units_v12_pairs) {
+		CAPTURE(version);
+		CAPTURE(subversion);
+		const std::size_t smallest = 91 + 4 + (subversion >= 11 ? 16 : 0) + 16;
+		const std::string header = "W3do" + le32(version) + le32(subversion);
+		const MapInfo info = game_version(3, 0);
+
+		std::uint32_t read_version = 0;
+		std::uint32_t read_subversion = 0;
+		int records = 0;
+		const auto read = [&](const std::string& bytes) {
+			records = 0;
+			BinaryReader reader = reader_over(bytes);
+			Units::read_records(reader, {}, info, read_version, read_subversion, [&](Unit&) { records++; });
+		};
+
+		CHECK_THROWS_WITH_AS(read(header + le32(2) + std::string(2 * smallest - 1, '\0')), doctest::Contains("does not fit in the file"), std::out_of_range);
+		// One byte more and the count passes. Random type 0 has a payload, for which there is no room then.
+		CHECK_THROWS_WITH_AS(read(header + le32(2) + std::string(2 * smallest, '\0')), doctest::Contains("out of range"), std::out_of_range);
+
+		// A record of exactly that size exists: no random payload.
+		std::string record(smallest, '\0');
+		const std::size_t random_type_offset = smallest - 4 * 7; // Random type, color, waygate, creation number, trailer.
+		record.replace(random_type_offset, 4, le32(0xFFFFFFFF));
+		read(header + le32(1) + record);
+		CHECK(records == 1);
+		CHECK(read_version == version);
+		CHECK(read_subversion == subversion);
+		CHECK_THROWS_WITH_AS(read(header + le32(1) + record.substr(0, smallest - 1)), doctest::Contains("does not fit in the file"), std::out_of_range);
+	}
+}
+
+TEST_CASE("a mismatch between w3i flag 0x4000 and the subversion stays accepted") {
+	constexpr std::size_t w3i_33_flags_offset = 116;
+	const std::string with_flag = with_u32_at(w3i_file(33).data, w3i_33_flags_offset, 0x4000);
+	{
+		BinaryReader reader = reader_over(with_flag);
+		MapInfo info {};
+		info.load(reader);
+		REQUIRE(info.all_flags == 0x4000); // That the offset above is the flags.
+	}
+
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const fs::path dir = crafted_map_with_units("units_flag_mismatch", unit_file(unit_spec(version, 9)));
+		write_all(dir / "war3map.w3i", with_flag);
+		check_accepted(dir);
+
+		write_all(dir / "war3mapUnits.doo", unit_file(unit_spec(version, 11)));
+		write_all(dir / "war3map.w3i", w3i_file(33).data);
+		check_accepted(dir);
+	}
+}
+
+TEST_CASE("v7 and v8 war3mapUnits.doo get none of the v12 and v13 refusals") {
+	for (const std::uint32_t version : { 7u, 8u }) {
+		CAPTURE(version);
+		for (const std::uint32_t subversion : { 9u, 11u }) {
+			CAPTURE(subversion);
+			const std::string valid = unit_file(unit_spec(version, subversion));
+			const fs::path dir = crafted_map_with_units("units_old_lenient", valid);
+			check_accepted(dir);
+
+			write_all(dir / "war3mapUnits.doo", valid + std::string(4, '\0'));
+			check_accepted(dir);
+
+			// Below 1.32 the record has no skin.
+			UnitFileSpec no_skin = unit_spec(version, subversion);
+			no_skin.skin = "";
+			BinaryReader reader = reader_over(unit_file(no_skin));
+			std::uint32_t read_version = 0;
+			std::uint32_t read_subversion = 0;
+			std::vector<Unit> units;
+			Units::read_records(reader, {}, game_version(1, 31), read_version, read_subversion, [&](Unit& unit) { units.push_back(unit); });
+			CHECK(read_version == version);
+			CHECK(read_subversion == subversion);
+			REQUIRE(units.size() == 1);
+			CHECK(units[0].skin_id == units[0].id);
+			CHECK(reader.remaining() == 0);
+		}
+	}
+}
+
+TEST_CASE("a unit made in the editor has the defaults of a fresh World Editor save") {
+	const Unit unit;
+	CHECK(unit.group_id == 0xFFFFFFFF);
+	CHECK(unit.trailer == std::array<std::uint32_t, 2> { 0, 0 });
+
+	Units units;
+	Unit& start_location = units.add_start_location(3, glm::vec3(1.f, 2.f, 0.f));
+	CHECK(start_location.group_id == 0xFFFFFFFF);
+	CHECK(start_location.trailer == std::array<std::uint32_t, 2> { 0, 0 });
+
+	// And paste, which goes through this, keeps what the copied unit had.
+	Unit copied;
+	copied.group_id = 7;
+	copied.trailer = { 8, 9 };
+	Unit& pasted = units.add_unit(copied);
+	CHECK(pasted.group_id == 7u);
+	CHECK(pasted.trailer == std::array<std::uint32_t, 2> { 8, 9 });
+
+	// A start location placed on a v13 map saves with them, and as what read_records then reads back.
+	const fs::path dir = make_scratch_dir("units_placed_v13");
+	const ScopedMapDirectory open_map(dir);
+	units.units.pop_back();
+	units.format_version = 13;
+	units.format_subversion = 9;
+	units.save(terrain_without_gl());
+	const std::string saved = read_all(dir / "war3mapUnits.doo");
+	CHECK(saved.size() == 16 + 91 + 4 + 16 + 4);
+	BinaryReader reader = reader_over(saved);
+	std::uint32_t version = 0;
+	std::uint32_t subversion = 0;
+	int records = 0;
+	Units::read_records(reader, {}, game_version(3, 0), version, subversion, [&](Unit& read) {
+		records++;
+		CHECK(read.id == "sloc");
+		CHECK(read.group_id == 0xFFFFFFFF);
+	});
+	CHECK(records == 1);
+	CHECK(version == 13);
+	CHECK(subversion == 9);
+}
+
+TEST_CASE("the template a new map starts from has a war3mapUnits.doo that saves as (8, 11)") {
+	// HiveWE loads this folder for a new map and only clears the units, so the format fields come from this file.
+	const std::string bytes = read_all(fs::path(TEST_MAP_DIR) / "war3mapUnits.doo");
+	REQUIRE(bytes.size() >= 12);
+	CHECK(bytes.substr(0, 4) == "W3do");
+	const std::uint32_t version = read_u32_at(bytes, 4);
+	CAPTURE(version);
+	CHECK((version == 7 || version == 8));
+}
+
+TEST_CASE("the writer reproduces every stock war3mapUnits.doo v12 or v13 below HIVEWE_STOCK_BODY_ROOT from read_records") {
+	const std::string root_text = env("HIVEWE_STOCK_BODY_ROOT");
+	if (root_text.empty()) {
+		MESSAGE("skipped: HIVEWE_STOCK_BODY_ROOT is not set");
+		return;
+	}
+	const fs::path root = root_text;
+
+	std::map<std::pair<std::uint32_t, std::uint32_t>, std::size_t> files;
+	std::map<std::pair<std::uint32_t, std::uint32_t>, std::size_t> records;
+	std::map<int, std::size_t> random_types;
+	std::size_t group_other = 0;
+	std::size_t trailer_other = 0;
+	std::size_t flag_set = 0;
+	std::size_t flag_unset = 0;
+	std::vector<std::string> failures;
+
+	const std::map<std::string, std::string> index = read_sweep_index(root / "index.json");
+	for (const auto& [key, name] : index) {
+		CAPTURE(name);
+		const std::string original = read_all(root / key / "war3mapUnits.doo");
+		if (original.size() < 12) {
+			failures.push_back(std::format("{}: war3mapUnits.doo has {} bytes", name, original.size()));
+			continue;
+		}
+		const std::uint32_t version = read_u32_at(original, 4);
+		const std::uint32_t subversion = read_u32_at(original, 8);
+
+		MapInfo info {};
+		{
+			BinaryReader reader = reader_over(read_all(root / key / "war3map.w3i"));
+			info.load(reader);
+		}
+
+		const bool flag = (info.all_flags & 0x4000) != 0;
+		(flag ? flag_set : flag_unset)++;
+		if (flag != (subversion == 11)) {
+			failures.push_back(std::format("{}: subversion {} with w3i flags {:#x}", name, subversion, info.all_flags));
+		}
+
+		if (version < 12) {
+			continue;
+		}
+		files[{ version, subversion }]++;
+
+		BinaryReader reader = reader_over(original);
+		std::uint32_t read_version = 0;
+		std::uint32_t read_subversion = 0;
+		Units::read_records(reader, {}, info, read_version, read_subversion, [&](Unit& unit) {
+			records[{ version, subversion }]++;
+			random_types[unit.random_type]++;
+			group_other += unit.group_id != 0xFFFFFFFF ? 1 : 0;
+			trailer_other += unit.trailer != std::array<std::uint32_t, 2> { 0, 0 } ? 1 : 0;
+		});
+		CHECK(read_version == version);
+		CHECK(read_subversion == subversion);
+
+		const std::string saved = read_records_then_save_units(original, info);
+		if (saved != original) {
+			const auto [from, to] = std::ranges::mismatch(original, saved);
+			failures.push_back(std::format(
+				"{}: {} bytes became {}, first difference at {}",
+				name,
+				original.size(),
+				saved.size(),
+				std::distance(original.begin(), from)
+			));
+		}
+	}
+
+	std::println(
+		"stock units round trip: (12,11) {} files {} records, (12,9) {} files {} records, (13,11) {} files {} records, (13,9) {} files {} records, failures {}",
+		files[{ 12, 11 }],
+		records[{ 12, 11 }],
+		files[{ 12, 9 }],
+		records[{ 12, 9 }],
+		files[{ 13, 11 }],
+		records[{ 13, 11 }],
+		files[{ 13, 9 }],
+		records[{ 13, 9 }],
+		failures.size()
+	);
+	std::println("stock units round trip: random types 0: {}, -1: {}, 2: {}; w3i flag 0x4000 set {}, unset {}", random_types[0], random_types[-1], random_types[2], flag_set, flag_unset);
+	for (const std::string& failure : failures) {
+		std::println("stock units round trip failed: {}", failure);
+	}
+
+	CHECK(index.size() == 466);
+	CHECK(files[{ 12, 11 }] == 79);
+	CHECK(records[{ 12, 11 }] == 14381);
+	CHECK(files[{ 12, 9 }] == 51);
+	CHECK(records[{ 12, 9 }] == 8549);
+	CHECK(files[{ 13, 11 }] == 57);
+	CHECK(records[{ 13, 11 }] == 10321);
+	CHECK(files[{ 13, 9 }] == 4);
+	CHECK(records[{ 13, 9 }] == 562);
+	CHECK(random_types[0] == 30400);
+	CHECK(random_types[-1] == 3412);
+	CHECK(random_types[2] == 1);
+	CHECK(random_types.size() == 3);
+	CHECK(group_other == 0);
+	CHECK(trailer_other == 0);
+	CHECK(flag_set == 355);
+	CHECK(flag_unset == 111);
+	CHECK_MESSAGE(failures.empty(), std::format("{} stock files failed", failures.size()));
+}
+
+namespace {
+	/// Plain SHA-256, for tying a fixture to its source.
+	std::string sha256_hex(const std::string& bytes) {
+		static constexpr std::array<std::uint32_t, 64> k = {
+			0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be,
+			0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa,
+			0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85,
+			0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+			0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f,
+			0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+		};
+		std::array<std::uint32_t, 8> h = { 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 };
+
+		std::string message = bytes;
+		message += static_cast<char>(0x80);
+		message.append((120 - message.size() % 64) % 64, '\0');
+		const std::uint64_t bits = std::uint64_t { bytes.size() } * 8;
+		for (int i = 7; i >= 0; i--) {
+			message += static_cast<char>((bits >> (8 * i)) & 0xFF);
+		}
+
+		for (std::size_t chunk = 0; chunk < message.size(); chunk += 64) {
+			std::array<std::uint32_t, 64> w {};
+			for (std::size_t i = 0; i < 16; i++) {
+				for (std::size_t j = 0; j < 4; j++) {
+					w[i] = (w[i] << 8) | static_cast<unsigned char>(message[chunk + i * 4 + j]);
+				}
+			}
+			for (std::size_t i = 16; i < 64; i++) {
+				const std::uint32_t s0 = std::rotr(w[i - 15], 7) ^ std::rotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
+				const std::uint32_t s1 = std::rotr(w[i - 2], 17) ^ std::rotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
+				w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+			}
+
+			std::array<std::uint32_t, 8> v = h;
+			for (std::size_t i = 0; i < 64; i++) {
+				const std::uint32_t s1 = std::rotr(v[4], 6) ^ std::rotr(v[4], 11) ^ std::rotr(v[4], 25);
+				const std::uint32_t ch = (v[4] & v[5]) ^ (~v[4] & v[6]);
+				const std::uint32_t t1 = v[7] + s1 + ch + k[i] + w[i];
+				const std::uint32_t s0 = std::rotr(v[0], 2) ^ std::rotr(v[0], 13) ^ std::rotr(v[0], 22);
+				const std::uint32_t maj = (v[0] & v[1]) ^ (v[0] & v[2]) ^ (v[1] & v[2]);
+				const std::uint32_t t2 = s0 + maj;
+				v = { t1 + t2, v[0], v[1], v[2], v[3] + t1, v[4], v[5], v[6] };
+			}
+			for (std::size_t i = 0; i < 8; i++) {
+				h[i] += v[i];
+			}
+		}
+
+		std::string hex;
+		for (const std::uint32_t word : h) {
+			hex += std::format("{:08x}", word);
+		}
+		return hex;
+	}
+
+	/// One record of a v12 or v13 war3mapUnits.doo, walked here rather than by the reader, which wrote one of the files compared.
+	struct RawUnitRecord {
+		std::string id;
+		std::uint32_t creation_number = 0;
+		/// The whole record without its 12 position bytes.
+		std::string without_position;
+		std::array<std::uint32_t, 3> position_bits {};
+	};
+
+	std::vector<RawUnitRecord> raw_unit_records(const std::string& bytes) {
+		const bool sub_11 = read_u32_at(bytes, 8) >= 11;
+		std::size_t at = 16;
+		const auto u32 = [&] {
+			const std::uint32_t value = read_u32_at(bytes, at);
+			at += 4;
+			return value;
+		};
+
+		std::vector<RawUnitRecord> records(read_u32_at(bytes, 12));
+		for (RawUnitRecord& record : records) {
+			const std::size_t start = at;
+			at += 4 + 4; // id, variation
+			const std::size_t position = at;
+			for (std::uint32_t& bits : record.position_bits) {
+				bits = u32();
+			}
+			at += 4 + 12 + 4 + 4 + 1 + 4 + 2 + 4 + 4; // angle, scale, skin, group, flags, player, unknown bytes, health, mana
+			at += sub_11 ? 4 : 0; // item table
+			const std::uint32_t item_sets = u32();
+			for (std::uint32_t i = 0; i < item_sets; i++) {
+				const std::uint32_t items = u32();
+				at += std::size_t { items } * 8;
+			}
+			at += 12 + (sub_11 ? 12 : 0); // gold, acquisition, level, stats
+			const std::uint32_t inventory = u32();
+			at += std::size_t { inventory } * 8;
+			const std::uint32_t abilities = u32();
+			at += std::size_t { abilities } * 12;
+			const std::uint32_t random_type = u32();
+			if (random_type == 0) {
+				at += 4;
+			} else if (random_type == 1) {
+				at += 8;
+			} else if (random_type == 2) {
+				const std::uint32_t entries = u32();
+				at += std::size_t { entries } * 8;
+			}
+			at += 8; // color, waygate
+			record.creation_number = u32();
+			at += 12; // trailer
+
+			record.id = bytes.substr(start, 4);
+			record.without_position = bytes.substr(start, position - start) + bytes.substr(position + 12, at - position - 12);
+		}
+		REQUIRE(at == bytes.size());
+		return records;
+	}
+
+	/// Terrain's destructor calls GL, so this is kept for the process. As terrain_without_gl, at another offset.
+	Terrain& offset_terrain_without_gl(const glm::vec2 offset) {
+		static Terrain* const terrain = [] {
+			Terrain* const created = new Terrain();
+			created->width = 2;
+			created->height = 2;
+			created->resize_corner_arrays(4);
+			return created;
+		}();
+		terrain->offset = offset;
+		return *terrain;
+	}
+
+	/// What Terrain::load reads for positions and heights, which it cannot do here as it creates GPU resources.
+	Terrain& terrain_from_w3e(const std::string& bytes, const float water_offset) {
+		static Terrain* const terrain = new Terrain();
+		BinaryReader reader = reader_over(bytes);
+		reader.advance(4);
+		const std::uint32_t version = reader.read<std::uint32_t>();
+		reader.advance(5);
+		reader.advance(std::size_t { reader.read<std::uint32_t>() } * 4);
+		reader.advance(std::size_t { reader.read<std::uint32_t>() } * 4);
+		terrain->width = reader.read<std::uint32_t>();
+		terrain->height = reader.read<std::uint32_t>();
+		terrain->offset = reader.read<glm::vec2>();
+		terrain->water_offset = water_offset;
+		const std::size_t corners = std::size_t { static_cast<std::uint32_t>(terrain->width) } * static_cast<std::uint32_t>(terrain->height);
+		terrain->resize_corner_arrays(corners);
+		for (std::size_t i = 0; i < corners; i++) {
+			terrain->corner_height[i] = (reader.read<std::uint16_t>() - 8192.f) / 512.f;
+			terrain->corner_water_height[i] = ((reader.read<std::uint16_t>() & 0x3FFF) - 8192.f) / 512.f;
+			if (version >= 12) {
+				terrain->corner_water[i] = (reader.read<std::uint16_t>() & 0b01'0000'0000) != 0;
+			} else {
+				terrain->corner_water[i] = (reader.read<std::uint8_t>() & 0b0100'0000) != 0;
+			}
+			reader.advance(1);
+			terrain->corner_layer_height[i] = reader.read<std::uint8_t>() & 0b0000'1111;
+		}
+		return *terrain;
+	}
+}
+
+TEST_CASE("the fresh World Editor war3mapUnits.doo fixture is the file it claims to be") {
+	CHECK(sha256_hex("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+	CHECK(sha256_hex(from_hex(fresh_world_editor_units)) == "3c2fb35cbdf13f042a9a6317d3ca1a0acf6d2f64a756da00713087940cba7a55");
+}
+
+TEST_CASE("through Units::load and save at a terrain offset, a v13 file keeps all but its positions, which stay close") {
+	const std::string bytes = from_hex(fresh_world_editor_units);
+	const std::vector<RawUnitRecord> original = raw_unit_records(bytes);
+	REQUIRE(original.size() == 3);
+	REQUIRE(original[0].position_bits[0] == 0xC5000000); // sloc at x = -2048, the left edge of a map at this offset.
+	REQUIRE(original[2].position_bits[0] == 0x430B806A); // Hpal
+
+	const Terrain& terrain = offset_terrain_without_gl(glm::vec2(-2048.f, -2048.f));
+	const std::string saved = load_and_save_units(
+		"units_terrain_offset",
+		bytes,
+		game_version(3, 0),
+		[](Units& units) {
+			CHECK(units.format_version == 13);
+			CHECK(units.format_subversion == 9);
+			// hgry and Hpal are items here, as there is no object data. The file happens to have sloc first, so the order holds.
+			REQUIRE(units.units.size() == 1);
+			REQUIRE(units.items.size() == 2);
+			CHECK(units.units[0].position.x == 0.f);
+			CHECK(units.items[1].position.x == doctest::Approx((std::bit_cast<float>(0x430B806Au) + 2048.f) / 128.f));
+		},
+		terrain
+	);
+
+	const std::vector<RawUnitRecord> after = raw_unit_records(saved);
+	REQUIRE(after.size() == original.size());
+	CHECK(saved.size() == bytes.size());
+	CHECK(saved.substr(0, 16) == bytes.substr(0, 16));
+	for (std::size_t i = 0; i < original.size(); i++) {
+		CAPTURE(i);
+		CHECK(after[i].without_position == original[i].without_position);
+		for (std::size_t axis = 0; axis < 2; axis++) {
+			CAPTURE(axis);
+			const float was = std::bit_cast<float>(original[i].position_bits[axis]);
+			const float is = std::bit_cast<float>(after[i].position_bits[axis]);
+			CHECK(std::abs(is - was) < 0.001f);
+		}
+		CHECK(after[i].position_bits[2] == 0u); // The test terrain is flat at 0.
+	}
+	CHECK(after[0].position_bits[0] == 0xC5000000); // -2048 is exact at this offset.
+}
+
+TEST_CASE("a subversion 9 file that was promoted goes back to 9 once no unit needs 11 any more") {
+	const fs::path dir = make_scratch_dir("units_promoted_back");
+	const ScopedMapDirectory open_map(dir);
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const std::string bytes = unit_file(unit_spec(version, 9));
+		write_all(dir / "war3mapUnits.doo", bytes);
+
+		Units units;
+		BinaryReader reader = reader_over(bytes);
+		std::uint32_t read_version = 0;
+		std::uint32_t read_subversion = 0;
+		Units::read_records(reader, {}, game_version(3, 0), read_version, read_subversion, [&](Unit& unit) { units.units.push_back(unit); });
+		units.format_version = static_cast<int>(read_version);
+		units.format_subversion = static_cast<int>(read_subversion);
+
+		units.units[0].strength = 7;
+		units.save(terrain_without_gl());
+		CHECK(read_u32_at(read_all(dir / "war3mapUnits.doo"), 8) == 11u);
+		CHECK(units.format_subversion == 9); // Still what was loaded: the promotion belongs to that save.
+
+		units.units[0].strength = 0;
+		units.save(terrain_without_gl());
+		CHECK(read_all(dir / "war3mapUnits.doo") == bytes);
+	}
+}
+
+TEST_CASE("an id with bytes after its first NUL is refused on v12 and up and read as before on v7 and v8") {
+	const std::string odd_id("h\0xy", 4);
+	const std::array<std::pair<std::string, std::function<void(UnitFileSpec&)>>, 5> fields = { {
+		{ "id", [&](UnitFileSpec& spec) { spec.id = odd_id; } },
+		{ "skin", [&](UnitFileSpec& spec) { spec.skin = odd_id; } },
+		{ "item set", [&](UnitFileSpec& spec) { spec.item_set_id = odd_id; } },
+		{ "inventory", [&](UnitFileSpec& spec) { spec.inventory_id = odd_id; } },
+		{ "ability", [&](UnitFileSpec& spec) { spec.ability_id = odd_id; } },
+	} };
+
+	for (const auto& [field, apply] : fields) {
+		CAPTURE(field);
+		for (const auto& [version, subversion] : units_v12_pairs) {
+			CAPTURE(version);
+			CAPTURE(subversion);
+			UnitFileSpec spec = unit_spec(version, subversion);
+			apply(spec);
+			check_units_refused_saying(crafted_map_with_units("units_odd_id", unit_file(spec)), { "after the first NUL", "the " + field + " id" });
+		}
+		for (const std::uint32_t version : { 7u, 8u }) {
+			CAPTURE(version);
+			UnitFileSpec spec = unit_spec(version, 11);
+			apply(spec);
+			check_accepted(crafted_map_with_units("units_odd_id_old", unit_file(spec)));
+		}
+	}
+}
+
+TEST_CASE("an id over 4 bytes is not cut down to another id on save") {
+	const fs::path dir = make_scratch_dir("units_long_id");
+	const ScopedMapDirectory open_map(dir);
+	write_all(dir / "war3mapUnits.doo", "the file as it was");
+
+	const std::array<std::function<void(Unit&)>, 5> edits = {
+		[](Unit& unit) { unit.id = "hfoox"; },
+		[](Unit& unit) { unit.skin_id = "hfoox"; },
+		[](Unit& unit) { unit.item_sets = { ItemSet {} }; unit.item_sets[0].items = { { 100, "hfoox" } }; },
+		[](Unit& unit) { unit.items = { { 0, "hfoox" } }; },
+		[](Unit& unit) { unit.abilities = { { "hfoox", 0, 1 } }; },
+	};
+	for (const auto& edit : edits) {
+		Units units;
+		Unit unit;
+		unit.id = "hfoo";
+		unit.skin_id = "hfoo";
+		unit.position = glm::vec3(0.f);
+		unit.scale = glm::vec3(1.f);
+		unit.angle = 0.f;
+		edit(unit);
+		units.add_unit(unit);
+		CHECK_THROWS_WITH_AS(units.save(terrain_without_gl()), doctest::Contains("hfoox"), std::runtime_error);
+		CHECK(read_all(dir / "war3mapUnits.doo") == "the file as it was");
+	}
+}
+
+TEST_CASE("the save check finds every over-long id that save would refuse, and the refused save changes no file") {
+	const fs::path dir = make_scratch_dir("units_long_id_check");
+	const ScopedMapDirectory open_map(dir);
+	write_all(dir / "war3mapUnits.doo", "the file as it was");
+
+	struct Case {
+		std::string field;
+		std::function<void(Unit&)> edit;
+	};
+	const std::array<Case, 5> cases = { {
+		{ "type", [](Unit& unit) { unit.id = "hfoox"; } },
+		{ "skin", [](Unit& unit) { unit.skin_id = "hfoox"; } },
+		{ "dropped item", [](Unit& unit) { unit.item_sets = { ItemSet {}, ItemSet {} }; unit.item_sets[1].items = { { 50, "ratc" }, { 50, "hfoox" } }; } },
+		{ "inventory item", [](Unit& unit) { unit.items = { { 0, "rat6" }, { 1, "hfoox" } }; } },
+		{ "ability", [](Unit& unit) { unit.abilities = { { "Ahbz", 0, 1 }, { "hfoox", 0, 1 } }; } },
+	} };
+	for (const bool as_item : { false, true }) {
+		CAPTURE(as_item);
+		for (const auto& [field, edit] : cases) {
+			CAPTURE(field);
+			Units units;
+			Unit fine;
+			fine.id = "hpea";
+			fine.skin_id = "hpea";
+			fine.position = glm::vec3(0.f);
+			fine.scale = glm::vec3(1.f);
+			fine.angle = 0.f;
+			Unit unit = fine;
+			unit.id = "hfoo";
+			unit.skin_id = "hfoo";
+			edit(unit);
+			(as_item ? units.items : units.units) = { fine, unit };
+
+			const auto found = units.find_id_over_4_bytes();
+			REQUIRE(found.has_value());
+			CHECK(found->id == "hfoox");
+			CHECK(found->field == field);
+			CHECK(found->owner_id == (field == "type" ? "hfoox" : "hfoo"));
+
+			// The check and the writer agree: what the check refuses is what write_id would throw on, after the file was left alone.
+			CHECK_THROWS_WITH_AS(units.save(terrain_without_gl()), doctest::Contains("hfoox"), std::runtime_error);
+			CHECK(read_all(dir / "war3mapUnits.doo") == "the file as it was");
+		}
+	}
+}
+
+TEST_CASE("the save check passes the test map, whose units then save") {
+	const fs::path dir = copy_test_map("units_check_valid");
+	const ScopedMapDirectory open_map(dir);
+
+	BinaryReader w3i = reader_over(read_all(dir / "war3map.w3i"));
+	MapInfo info {};
+	info.load(w3i);
+
+	Units units;
+	units.load(terrain_without_gl(), info);
+	REQUIRE(units.units.size() + units.items.size() > 0);
+	CHECK_FALSE(units.find_id_over_4_bytes().has_value());
+	CHECK_NOTHROW(units.save(terrain_without_gl()));
+}
+
+TEST_CASE("the save check counts the bytes of an id, not its characters") {
+	// U+00F6 is two bytes in UTF-8, which is what QString::toStdString gives the object editor.
+	const std::string four_bytes = "hf\xC3\xB6";
+	const std::string four_characters_five_bytes = "hfo\xC3\xB6";
+	CHECK(Units::id_fits(four_bytes));
+	CHECK_FALSE(Units::id_fits(four_characters_five_bytes));
+	CHECK(Units::id_fits(""));
+	CHECK(Units::id_fits("hfoo"));
+	CHECK_FALSE(Units::id_fits("hfoox"));
+
+	Units units;
+	Unit unit;
+	unit.id = "hfoo";
+	unit.skin_id = four_bytes;
+	units.add_unit(unit);
+	CHECK_FALSE(units.find_id_over_4_bytes().has_value());
+	units.units[0].skin_id = four_characters_five_bytes;
+	const auto found = units.find_id_over_4_bytes();
+	REQUIRE(found.has_value());
+	CHECK(found->id == four_characters_five_bytes);
+	CHECK(found->field == "skin");
+}
+
+TEST_CASE("every stock war3mapUnits.doo v12 or v13 below HIVEWE_STOCK_BODY_ROOT keeps all but positions and order through Units::load and save") {
+	const std::string root_text = env("HIVEWE_STOCK_BODY_ROOT");
+	if (root_text.empty()) {
+		MESSAGE("skipped: HIVEWE_STOCK_BODY_ROOT is not set");
+		return;
+	}
+	const fs::path root = root_text;
+
+	// Units::load splits units from items with units_slk, and heights over water need the object data and the tileset's water level.
+	// With the game available these are real, custom units from each map's war3map.w3u included. Without it only sloc and the like
+	// are units, so the order numbers mean little, and water is at 0.
+	const std::string warcraft = env("HIVEWE_BODY_CHECK_CASC");
+	const bool has_object_data = !warcraft.empty();
+	slk::SLK stock_units;
+	slk::SLK water;
+	if (has_object_data) {
+		REQUIRE(hierarchy.open_casc(warcraft));
+		// The stock tables also read data/overrides, relative to the working directory, which under ctest is not the repository.
+		const fs::path previous_directory = fs::current_path();
+		fs::current_path(fs::path(TEST_MAP_DIR).parent_path().parent_path());
+		world_edit_strings = {};
+		world_edit_strings.load("UI/WorldEditStrings.txt");
+		world_edit_game_strings = {};
+		world_edit_game_strings.load("UI/WorldEditGameStrings.txt");
+		stock_object_data::Tables tables = stock_object_data::load();
+		stock_units = std::move(tables.units.data);
+		units_meta_slk = std::move(tables.units.meta);
+		water = slk::SLK("TerrainArt/Water.slk");
+		fs::current_path(previous_directory);
+	}
+	std::size_t stock_rows_not_4_bytes = 0;
+	for (const auto& [row, index] : stock_units.row_headers) {
+		stock_rows_not_4_bytes += row.size() != 4 ? 1 : 0;
+	}
+
+	const fs::path scratch = make_scratch_dir("stock_units_real_load");
+	const ScopedMapDirectory open_map(scratch);
+
+	std::size_t files = 0;
+	std::size_t records = 0;
+	std::size_t units_after_load = 0;
+	std::size_t items_after_load = 0;
+	std::size_t duplicate_keys = 0;
+	std::size_t files_order_changed = 0;
+	std::array<std::size_t, 3> files_position_changed {};
+	std::array<std::size_t, 3> records_position_changed {};
+	std::array<float, 3> largest_change {};
+	std::array<std::string, 3> largest_change_map;
+	std::vector<std::string> failures;
+	std::vector<std::string> unloadable_object_files;
+
+	for (const auto& [key, name] : read_sweep_index(root / "index.json")) {
+		const std::string original = read_all(root / key / "war3mapUnits.doo");
+		const std::uint32_t version = original.size() >= 12 ? read_u32_at(original, 4) : 0;
+		if (version != 12 && version != 13) {
+			continue;
+		}
+		CAPTURE(name);
+		files++;
+
+		MapInfo info {};
+		{
+			BinaryReader reader = reader_over(read_all(root / key / "war3map.w3i"));
+			info.load(reader);
+		}
+
+		const std::string w3e = read_all(root / key / "war3map.w3e");
+		REQUIRE(w3e.size() > 8);
+		float water_offset = 0.f;
+		if (has_object_data) {
+			water_offset = water.data<float>("height", std::string(1, w3e[8]) + "Sha");
+			units_slk = stock_units;
+			for (const std::string_view file : { "war3map.w3u", "war3mapSkin.w3u" }) {
+				fs::remove(scratch / file);
+				if (fs::exists(root / key / file)) {
+					fs::copy_file(root / key / file, scratch / file);
+					// What this throws on, Map::load throws on too. The rows read until then still count, so the sweep goes on.
+					try {
+						load_modification_file(file, units_slk, units_meta_slk, false);
+					} catch (const std::exception& error) {
+						unloadable_object_files.push_back(std::format("{} {}: {}", name, file, error.what()));
+					}
+				}
+			}
+		}
+		const Terrain& terrain = terrain_from_w3e(w3e, water_offset);
+
+		write_all(scratch / "war3mapUnits.doo", original);
+		Units units;
+		units.load(terrain, info);
+		units_after_load += units.units.size();
+		items_after_load += units.items.size();
+		CHECK(units.format_version == static_cast<int>(version));
+		units.save(terrain);
+		const std::string saved = read_all(scratch / "war3mapUnits.doo");
+
+		// The header holds the version, the subversion and the record count.
+		if (saved.substr(0, 16) != original.substr(0, 16)) {
+			failures.push_back(std::format("{}: header changed", name));
+			continue;
+		}
+
+		const std::vector<RawUnitRecord> before = raw_unit_records(original);
+		const std::vector<RawUnitRecord> after = raw_unit_records(saved);
+		records += before.size();
+
+		// By creation number and id. Where a pair is not unique the records match in file order, which the split between units and items keeps.
+		std::map<std::pair<std::uint32_t, std::string>, std::vector<const RawUnitRecord*>> saved_by_key;
+		for (auto it = after.rbegin(); it != after.rend(); ++it) {
+			saved_by_key[{ it->creation_number, it->id }].push_back(&*it);
+		}
+		for (const auto& [record_key, matches] : saved_by_key) {
+			duplicate_keys += matches.size() > 1 ? 1 : 0;
+		}
+
+		std::array<bool, 3> file_changed {};
+		for (const RawUnitRecord& record : before) {
+			auto& matches = saved_by_key[{ record.creation_number, record.id }];
+			if (matches.empty()) {
+				failures.push_back(std::format("{}: record {} {} is gone", name, record.id, record.creation_number));
+				continue;
+			}
+			const RawUnitRecord& match = *matches.back();
+			matches.pop_back();
+			if (match.without_position != record.without_position) {
+				failures.push_back(std::format("{}: record {} {} changed outside its position", name, record.id, record.creation_number));
+			}
+			for (std::size_t axis = 0; axis < 3; axis++) {
+				if (match.position_bits[axis] != record.position_bits[axis]) {
+					file_changed[axis] = true;
+					records_position_changed[axis]++;
+					const float change = std::abs(std::bit_cast<float>(match.position_bits[axis]) - std::bit_cast<float>(record.position_bits[axis]));
+					if (change > largest_change[axis]) {
+						largest_change[axis] = change;
+						largest_change_map[axis] = name;
+					}
+				}
+			}
+		}
+		for (std::size_t axis = 0; axis < 3; axis++) {
+			files_position_changed[axis] += file_changed[axis] ? 1 : 0;
+		}
+
+		const auto same_place = [](const RawUnitRecord& a, const RawUnitRecord& b) {
+			return a.creation_number == b.creation_number && a.id == b.id;
+		};
+		files_order_changed += std::ranges::equal(before, after, same_place) ? 0 : 1;
+	}
+	units_slk = slk::SLK();
+	units_meta_slk = slk::SLK();
+
+	std::println("stock units through Units::load: object data {}, stock rows not 4 bytes {}", has_object_data ? "from the game" : "absent", stock_rows_not_4_bytes);
+	std::println("stock units through Units::load: {} files, {} records, {} units and {} items after load, {} repeated keys, {} failures", files, records, units_after_load, items_after_load, duplicate_keys, failures.size());
+	for (std::size_t axis = 0; axis < 3; axis++) {
+		std::println(
+			"stock units through Units::load: {} changed in {} files and {} records, at most by {} in {}",
+			"xyz"[axis],
+			files_position_changed[axis],
+			records_position_changed[axis],
+			largest_change[axis],
+			largest_change_map[axis]
+		);
+	}
+	std::println("stock units through Units::load: {} files change order", files_order_changed);
+	std::println("stock units through Units::load: {} object files threw on load", unloadable_object_files.size());
+	for (const std::string& unloadable : unloadable_object_files) {
+		std::println("stock units through Units::load: threw: {}", unloadable);
+	}
+	for (const std::string& failure : failures | std::views::take(20)) {
+		std::println("stock units through Units::load failed: {}", failure);
+	}
+
+	CHECK(files == 191);
+	CHECK(records == 33813);
+	CHECK_MESSAGE(failures.empty(), std::format("{} stock failures", failures.size()));
 }

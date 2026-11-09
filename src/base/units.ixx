@@ -35,6 +35,11 @@ export struct Unit {
 
 	std::string skin_id;
 
+	// Read from war3mapUnits.doo v12 and up and only written back. Their meaning is unknown, so other values are preserved.
+	// The defaults are what a fresh 3.0.1 World Editor save and all stock units have.
+	uint32_t group_id = 0xFFFFFFFF;
+	std::array<uint32_t, 2> trailer {};
+
 	uint8_t flags = 2;
 	int player = 0;
 
@@ -61,6 +66,7 @@ export struct Unit {
 	std::vector<std::tuple<std::string, uint32_t, uint32_t>> abilities;
 
 	int random_type = 0;
+	/// Everything after random_type as it is in the file, with for type 2 the entry count in front of the entries.
 	std::vector<uint8_t> random;
 
 	int custom_color = -1;
@@ -122,16 +128,88 @@ export class Units {
 	static constexpr int write_version = 8;
 	static constexpr int write_subversion = 11;
 
+	/// Every id in this file takes up 4 bytes, so a shorter one is padded, as the reader cuts it at the first NUL. A longer one
+	/// is refused, as cutting it would name another object. A row of an imported SLK or the object editor's new object dialog can hold one.
+	static void write_id(BinaryWriter& writer, const std::string_view id) {
+		if (!id_fits(id)) {
+			throw std::runtime_error(std::format("war3mapUnits.doo cannot hold the id {}, which is longer than 4 bytes", id));
+		}
+		std::array<char, 4> bytes {};
+		id.copy(bytes.data(), bytes.size());
+		writer.write_string(std::string_view(bytes.data(), bytes.size()));
+	}
+
+	/// Subversion 9 has no room for these, so a unit that was given one needs subversion 11.
+	static bool needs_subversion_11(const Unit& i) {
+		return i.item_table_pointer != -1 || i.strength != 0 || i.agility != 0 || i.intelligence != 0;
+	}
+
 	//static constexpr int mod_table_write_version = 2;
 
   public:
 	std::vector<Unit> units;
 	std::vector<Unit> items;
 
+	/// What was loaded, which is what save starts from. A file of v12 or up keeps its version and subversion, so its fields survive.
+	/// Anything older saves as write_version and write_subversion. Each save works out on its own whether a format_subversion of 9
+	/// has to be written as 11: see needs_subversion_11.
+	int format_version = write_version;
+	int format_subversion = write_subversion;
+
+	/// Counts bytes, not characters, as that is what the file has room for.
+	static bool id_fits(const std::string_view id) {
+		return id.size() <= 4;
+	}
+
+	struct OverlongId {
+		std::string id;
+		std::string field;
+		std::string owner_id;
+	};
+
+	/// The first id save would refuse, covering every id it hands to write_id, or nothing when they all fit.
+	/// Map::save asks this before it writes anything, so the throw in write_id stays a backstop.
+	[[nodiscard]]
+	std::optional<OverlongId> find_id_over_4_bytes() const {
+		for (const std::vector<Unit>* list : { &units, &items }) {
+			for (const Unit& i : *list) {
+				if (!id_fits(i.id)) {
+					return OverlongId { i.id, "type", i.id };
+				}
+				if (!id_fits(i.skin_id)) {
+					return OverlongId { i.skin_id, "skin", i.id };
+				}
+				for (const ItemSet& set : i.item_sets) {
+					for (const auto& [chance, id] : set.items) {
+						if (!id_fits(id)) {
+							return OverlongId { id, "dropped item", i.id };
+						}
+					}
+				}
+				for (const auto& [slot, id] : i.items) {
+					if (!id_fits(id)) {
+						return OverlongId { id, "inventory item", i.id };
+					}
+				}
+				for (const auto& [id, autocast, level] : i.abilities) {
+					if (!id_fits(id)) {
+						return OverlongId { id, "ability", i.id };
+					}
+				}
+			}
+		}
+		return std::nullopt;
+	}
+
 	void load(const Terrain& terrain, const MapInfo& info) {
+		format_version = write_version;
+		format_subversion = write_subversion;
+
 		BinaryReader reader = hierarchy.map_file_read("war3mapUnits.doo").value();
 
-		read_records(reader, terrain.offset, info, [&](Unit& i) {
+		std::uint32_t version = write_version;
+		std::uint32_t subversion = write_subversion;
+		read_records(reader, terrain.offset, info, version, subversion, [&](Unit& i) {
 			i.update_terrain_height(terrain);
 
 			// Either a unit or an item
@@ -143,6 +221,11 @@ export class Units {
 
 			Unit::auto_increment = std::max(Unit::auto_increment, i.creation_number);
 		});
+
+		if (version >= 12) {
+			format_version = static_cast<int>(version);
+			format_subversion = static_cast<int>(subversion);
+		}
 	}
 
 	/// Parses war3mapUnits.doo, handing each record to on_record. Constructing a Unit bumps Unit::auto_increment;
@@ -151,6 +234,8 @@ export class Units {
 		BinaryReader& reader,
 		const glm::vec2 terrain_offset,
 		const MapInfo& info,
+		std::uint32_t& out_version,
+		std::uint32_t& out_subversion,
 		const std::function<void(Unit&)>& on_record
 	) {
 		const std::string magic_number = reader.read_string(4);
@@ -159,17 +244,43 @@ export class Units {
 		}
 		const uint32_t version = reader.read<uint32_t>();
 		map_format::require_accepted("war3mapUnits.doo", map_format::units_versions, version);
+		out_version = version;
+
+		// The group id and the trailer exist from v12 on. v9 to v11 are refused above.
+		const bool has_v12_fields = version >= 12;
 
 		// Subversion
 		const int subversion = reader.read<uint32_t>();
 		map_format::require_accepted("war3mapUnits.doo", map_format::units_subversions, subversion, "subversion");
+		out_subversion = subversion;
 
 		const bool has_skin = info.game_version_major * 100 + info.game_version_minor >= 132;
+		if (has_v12_fields && !has_skin) {
+			throw std::runtime_error(std::format(
+				"war3mapUnits.doo version {} is paired with a war3map.w3i game version of {}.{}, which has not been seen",
+				version,
+				info.game_version_major,
+				info.game_version_minor
+			));
+		}
 
-		const uint32_t unit_count = reader.read_count(91 + (has_skin ? 4 : 0) + (subversion >= 11 ? 16 : 0));
+		// As BinaryReader::read_string, except that v12 and up refuse what the cut would lose, which could not be saved back.
+		const auto read_id = [&](const std::string_view field, const uint32_t record) {
+			const auto bytes = reader.read<std::array<char, 4>>();
+			std::string id(bytes.data(), bytes.size());
+			if (const size_t nul = id.find('\0'); nul != std::string::npos) {
+				if (has_v12_fields && id.find_first_not_of('\0', nul) != std::string::npos) {
+					throw std::runtime_error(std::format("war3mapUnits.doo record {} has bytes after the first NUL of the {} id", record, field));
+				}
+				id.resize(nul);
+			}
+			return id;
+		};
+
+		const uint32_t unit_count = reader.read_count(91 + (has_skin ? 4 : 0) + (subversion >= 11 ? 16 : 0) + (has_v12_fields ? 16 : 0));
 		for (uint32_t k = 0; k < unit_count; k++) {
 			Unit i;
-			i.id = reader.read_string(4);
+			i.id = read_id("id", k);
 			i.variation = reader.read<uint32_t>();
 			const glm::vec3 position = reader.read<glm::vec3>();
 			if (!std::isfinite(position.x) || !std::isfinite(position.y)) {
@@ -180,9 +291,13 @@ export class Units {
 			i.scale = reader.read<glm::vec3>() / 128.f;
 
 			if (has_skin) {
-				i.skin_id = reader.read_string(4);
+				i.skin_id = read_id("skin", k);
 			} else {
 				i.skin_id = i.id;
+			}
+
+			if (has_v12_fields) {
+				i.group_id = reader.read<uint32_t>();
 			}
 
 			i.flags = reader.read<uint8_t>();
@@ -206,7 +321,7 @@ export class Units {
 			for (auto&& j : i.item_sets) {
 				j.items.resize(reader.read_count(8));
 				for (auto&& [chance, id] : j.items) {
-					id = reader.read_string(4);
+					id = read_id("item set", k);
 					chance = reader.read<uint32_t>();
 				}
 			}
@@ -225,12 +340,12 @@ export class Units {
 			i.items.resize(reader.read_count(8));
 			for (auto&& [slot, id] : i.items) {
 				slot = reader.read<uint32_t>();
-				id = reader.read_string(4);
+				id = read_id("inventory", k);
 			}
 
 			i.abilities.resize(reader.read_count(12));
 			for (auto&& [id, autocast, level] : i.abilities) {
-				id = reader.read_string(4);
+				id = read_id("ability", k);
 				autocast = reader.read<uint32_t>();
 				level = reader.read<uint32_t>();
 			}
@@ -243,37 +358,67 @@ export class Units {
 				case 1:
 					i.random = reader.read_vector<uint8_t>(8);
 					break;
-				case 2:
-					i.random = reader.read_vector<uint8_t>(std::size_t { reader.read_count(8) } * 8);
+				case 2: {
+					const uint32_t entries = reader.read_count(8);
+					const auto count_bytes = std::bit_cast<std::array<uint8_t, 4>>(entries);
+					i.random = reader.read_vector<uint8_t>(std::size_t { entries } * 8);
+					i.random.insert(i.random.begin(), count_bytes.begin(), count_bytes.end());
 					break;
+				}
 			}
 
 			i.custom_color = reader.read<uint32_t>();
 			i.waygate = reader.read<uint32_t>();
 			i.creation_number = reader.read<uint32_t>();
 
+			if (has_v12_fields) {
+				i.trailer[0] = reader.read<uint32_t>();
+				i.trailer[1] = reader.read<uint32_t>();
+				// 0 on all stock units, and save writes a 0: anything else would be lost, so it is refused.
+				const uint32_t third = reader.read<uint32_t>();
+				if (third != 0) {
+					throw std::runtime_error(
+						std::format("war3mapUnits.doo unit {} has {} as the third value of its trailer, which has not been seen", i.id, third)
+					);
+				}
+			}
+
 			on_record(i);
+		}
+
+		if (has_v12_fields && reader.remaining() != 0) {
+			throw std::runtime_error(std::format("war3mapUnits.doo version {} has leftover bytes after its last unit: {}", version, reader.remaining()));
 		}
 	}
 
 	void save(const Terrain& terrain) const {
 		BinaryWriter writer;
 
+		// Per save, as the item table and the stats can change at any time: a file loaded as 9 is written as 11 while a unit needs it
+		// and as 9 again once none does, with nothing lost. One loaded as 11 stays 11.
+		const bool has_subversion_11_fields =
+			format_subversion >= 11 || std::ranges::any_of(units, needs_subversion_11) || std::ranges::any_of(items, needs_subversion_11);
+		const bool has_v12_fields = format_version >= 12;
+
 		writer.write_string("W3do");
-		writer.write<uint32_t>(write_version);
-		writer.write<uint32_t>(write_subversion);
+		writer.write<uint32_t>(format_version);
+		writer.write<uint32_t>(has_subversion_11_fields ? write_subversion : format_subversion);
 
 		writer.write<uint32_t>(units.size() + items.size());
 
 		auto write_units = [&](const std::vector<Unit>& to_write) {
 			for (auto&& i : to_write) {
-				writer.write_string(i.id);
+				write_id(writer, i.id);
 				writer.write<uint32_t>(i.variation);
 				writer.write<glm::vec3>(i.position * 128.f + glm::vec3(terrain.offset, 0));
 				writer.write<float>(i.angle);
 				writer.write<glm::vec3>(i.scale * 128.f);
 
-				writer.write_string(i.skin_id);
+				write_id(writer, i.skin_id);
+
+				if (has_v12_fields) {
+					writer.write<uint32_t>(i.group_id);
+				}
 
 				writer.write<uint8_t>(i.flags);
 
@@ -285,13 +430,15 @@ export class Units {
 				writer.write<uint32_t>(i.health);
 				writer.write<uint32_t>(i.mana);
 
-				writer.write<uint32_t>(i.item_table_pointer);
+				if (has_subversion_11_fields) {
+					writer.write<uint32_t>(i.item_table_pointer);
+				}
 
 				writer.write<uint32_t>(i.item_sets.size());
 				for (auto&& j : i.item_sets) {
 					writer.write<uint32_t>(j.items.size());
 					for (auto&& [chance, id] : j.items) {
-						writer.write_string(id);
+						write_id(writer, id);
 						writer.write<uint32_t>(chance);
 					}
 				}
@@ -299,19 +446,21 @@ export class Units {
 				writer.write<uint32_t>(i.gold);
 				writer.write<float>(i.target_acquisition);
 				writer.write<uint32_t>(i.level);
-				writer.write<uint32_t>(i.strength);
-				writer.write<uint32_t>(i.agility);
-				writer.write<uint32_t>(i.intelligence);
+				if (has_subversion_11_fields) {
+					writer.write<uint32_t>(i.strength);
+					writer.write<uint32_t>(i.agility);
+					writer.write<uint32_t>(i.intelligence);
+				}
 
 				writer.write<uint32_t>(i.items.size());
 				for (auto&& [slot, id] : i.items) {
 					writer.write<uint32_t>(slot);
-					writer.write_string(id);
+					write_id(writer, id);
 				}
 
 				writer.write<uint32_t>(i.abilities.size());
 				for (auto&& [id, autocast, level] : i.abilities) {
-					writer.write_string(id);
+					write_id(writer, id);
 					writer.write<uint32_t>(autocast);
 					writer.write<uint32_t>(level);
 				}
@@ -322,6 +471,12 @@ export class Units {
 				writer.write<uint32_t>(i.custom_color);
 				writer.write<uint32_t>(i.waygate);
 				writer.write<uint32_t>(i.creation_number);
+
+				if (has_v12_fields) {
+					writer.write<uint32_t>(i.trailer[0]);
+					writer.write<uint32_t>(i.trailer[1]);
+					writer.write<uint32_t>(0);
+				}
 			}
 		};
 

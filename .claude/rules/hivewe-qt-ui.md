@@ -40,6 +40,7 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 - UX: active-state clarity, predictable toggles, low-noise feedback.
 - User-facing values: prefer Warcraft coordinates/IDs over internal engine values.
 - Errors: Qt dialogs where surrounding code already does.
+- `HiveWE::save_current_map_as` creates the target folder and sets `hierarchy.map_directory` before `Map::save` runs, so a save refusal check must run before the folder picker, as `Map::ensure_unit_ids_fit` does.
 
 ## Verification
 

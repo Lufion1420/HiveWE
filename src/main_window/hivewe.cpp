@@ -817,6 +817,11 @@ bool HiveWE::save_current_map_as() {
 		return false;
 	}
 
+	// Before the folder is picked or created and before the map's paths are redirected, so a refusal changes neither.
+	if (!map->ensure_unit_ids_fit()) {
+		return false;
+	}
+
 	QSettings settings;
 	fs::path file_name = QFileDialog::getExistingDirectory(this, "Choose Save Location",
 														   settings.value("openDirectory", QDir::current().path()).toString(),

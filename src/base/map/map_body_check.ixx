@@ -378,7 +378,9 @@ export auto check_map_bodies(const fs::path& directory, const BodyScope scope = 
 		parse_objects(objects_before_units);
 
 		parse_if_present("war3mapUnits.doo", [&](BinaryReader& reader) {
-			Units::read_records(reader, glm::vec2(0.f), info, [](Unit&) {});
+			std::uint32_t version = 0;
+			std::uint32_t subversion = 0;
+			Units::read_records(reader, glm::vec2(0.f), info, version, subversion, [](Unit&) {});
 		});
 
 		parse_objects(objects_after_units);

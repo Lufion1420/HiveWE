@@ -383,8 +383,32 @@ export class Map: public QObject {
 		});
 	}
 
+	/// war3mapUnits.doo holds every id in 4 bytes, so a longer one refuses the save with a dialog. Save calls this before it copies or
+	/// writes anything, and Save As before it picks or creates a folder.
+	bool ensure_unit_ids_fit() const {
+		const auto overlong = units.find_id_over_4_bytes();
+		if (!overlong) {
+			return true;
+		}
+
+		QMessageBox message_box;
+		message_box.setIcon(QMessageBox::Warning);
+		message_box.setWindowTitle("Id Too Long");
+		message_box.setText(QString("The map was not saved. The id \"%1\" is longer than 4 bytes.").arg(QString::fromStdString(overlong->id)));
+		message_box.setInformativeText(QString("It is the %1 id of a placed %2. Warcraft III stores these ids in 4 bytes, so give the object an id "
+											   "of at most 4 bytes in the Object Editor, or remove it, and save again.")
+										   .arg(QString::fromStdString(overlong->field), QString::fromStdString(overlong->owner_id)));
+		message_box.setStandardButtons(QMessageBox::Ok);
+		message_box.exec();
+		return false;
+	}
+
 	bool save(const fs::path& path) {
 		Timer timer;
+		if (!ensure_unit_ids_fit()) {
+			return false;
+		}
+
 		if (!fs::equivalent(path, filesystem_path)) {
 			try {
 				fs::copy(filesystem_path, fs::absolute(path), fs::copy_options::recursive);

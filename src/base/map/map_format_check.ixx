@@ -39,7 +39,7 @@ namespace {
 export namespace map_format {
 	inline constexpr std::array<std::uint32_t, 9> w3i_versions = { 15, 18, 25, 26, 28, 31, 32, 33, 39 };
 	inline constexpr std::array<std::uint32_t, 4> doo_versions = { 7, 8, 12, 13 };
-	inline constexpr std::array<std::uint32_t, 2> units_versions = { 7, 8 };
+	inline constexpr std::array<std::uint32_t, 4> units_versions = { 7, 8, 12, 13 };
 	inline constexpr std::array<std::uint32_t, 2> units_subversions = { 9, 11 };
 	inline constexpr std::array<std::uint32_t, 3> w3r_versions = { 2, 3, 5 };
 	inline constexpr std::array<std::uint32_t, 1> w3c_versions = { 0 };

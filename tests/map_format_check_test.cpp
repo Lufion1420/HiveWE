@@ -496,7 +496,7 @@ TEST_CASE("check_map_format_versions accepts and refuses war3map.doo versions, i
 
 TEST_CASE("check_map_format_versions accepts and refuses war3mapUnits.doo versions and subversions") {
 	const fs::path dir = make_valid_map("units");
-	for (const std::uint32_t version : { 7u, 8u }) {
+	for (const std::uint32_t version : { 7u, 8u, 12u, 13u }) {
 		for (const std::uint32_t subversion : { 9u, 11u }) {
 			CAPTURE(version);
 			CAPTURE(subversion);
@@ -506,11 +506,13 @@ TEST_CASE("check_map_format_versions accepts and refuses war3mapUnits.doo versio
 	}
 	write_all(dir / "war3mapUnits.doo", doo_bytes(6, 9));
 	check_refused_as_unsupported(dir, "war3mapUnits.doo", "6");
-	for (const std::uint32_t version : { 12u, 13u }) {
+	for (const std::uint32_t version : { 9u, 10u, 11u }) {
 		CAPTURE(version);
 		write_all(dir / "war3mapUnits.doo", doo_bytes(version, 9));
-		check_refused_as_newer(dir, "war3mapUnits.doo", std::to_string(version));
+		check_refused_as_unsupported(dir, "war3mapUnits.doo", std::to_string(version));
 	}
+	write_all(dir / "war3mapUnits.doo", doo_bytes(14, 9));
+	check_refused_as_newer(dir, "war3mapUnits.doo", "14");
 	// "version N" is also found inside "subversion N", so these name the subversion as the check does.
 	for (const std::uint32_t subversion : { 7u, 8u, 10u }) {
 		CAPTURE(subversion);
@@ -521,6 +523,9 @@ TEST_CASE("check_map_format_versions accepts and refuses war3mapUnits.doo versio
 	write_all(dir / "war3mapUnits.doo", doo_bytes(8, 12));
 	check_refused_as_newer(dir, "war3mapUnits.doo", "12");
 	CHECK(contains(check_map_format_versions(dir).error(), "subversion 12"));
+	write_all(dir / "war3mapUnits.doo", doo_bytes(13, 10));
+	check_refused_as_unsupported(dir, "war3mapUnits.doo", "10");
+	CHECK(contains(check_map_format_versions(dir).error(), "subversion 10"));
 }
 
 TEST_CASE("check_map_format_versions accepts and refuses the remaining files") {
@@ -645,21 +650,21 @@ TEST_CASE("check_map_format_versions does not newly refuse a wrong magic where t
 	const fs::path dir = make_valid_map("wrong_magic_units");
 	write_all(dir / "war3mapUnits.doo", "XXXX" + le32(8) + le32(11));
 	CHECK(check_map_format_versions(dir).has_value());
-	write_all(dir / "war3mapUnits.doo", "XXXX" + le32(13) + le32(11));
-	check_refused_as_newer(dir, "war3mapUnits.doo", "13");
+	write_all(dir / "war3mapUnits.doo", "XXXX" + le32(14) + le32(11));
+	check_refused_as_newer(dir, "war3mapUnits.doo", "14");
 }
 
 TEST_CASE("check_map_format_versions reports every failing file") {
 	const fs::path dir = make_valid_map("all_failures");
 	write_all(dir / "war3map.w3i", w3i_bytes(40));
 	write_all(dir / "war3map.doo", doo_bytes(14));
-	write_all(dir / "war3mapUnits.doo", doo_bytes(13));
+	write_all(dir / "war3mapUnits.doo", doo_bytes(15));
 	write_all(dir / "war3map.w3r", count_file_bytes(7));
 	write_all(dir / "war3map.w3c", count_file_bytes(3));
 	write_all(dir / "war3map.w3s", "");
 	const auto result = check_map_format_versions(dir);
 	REQUIRE_FALSE(result.has_value());
-	for (const std::string part : { "war3map.w3i", "version 40", "war3map.doo", "version 14", "war3mapUnits.doo", "version 13", "war3map.w3r", "version 7",
+	for (const std::string part : { "war3map.w3i", "version 40", "war3map.doo", "version 14", "war3mapUnits.doo", "version 15", "war3map.w3r", "version 7",
 									"war3map.w3c", "version 3", "war3map.w3s" }) {
 		CAPTURE(part);
 		CHECK(contains(result.error(), part));
@@ -822,7 +827,7 @@ TEST_CASE("check_archive_format_versions refuses a bad version in each checked f
 		{ "war3map.w3i", w3i_bytes(40) },
 		{ "war3map.w3e", w3e_bytes(13) },
 		{ "war3map.doo", doo_bytes(14) },
-		{ "war3mapUnits.doo", doo_bytes(13) },
+		{ "war3mapUnits.doo", doo_bytes(14) },
 		{ "war3map.w3r", count_file_bytes(7) },
 		{ "war3map.w3c", count_file_bytes(3) },
 		{ "war3map.w3s", count_file_bytes(4) },
@@ -938,8 +943,8 @@ TEST_CASE("Units::load refuses an unknown war3mapUnits.doo version or subversion
 	const ScopedMapDirectory open_map(dir);
 	Units units;
 	MapInfo info;
-	write_all(dir / "war3mapUnits.doo", doo_bytes(13, 11));
-	check_reader_refuses([&] { units.load(terrain_without_gl(), info); }, "war3mapUnits.doo", "13");
+	write_all(dir / "war3mapUnits.doo", doo_bytes(14, 11));
+	check_reader_refuses([&] { units.load(terrain_without_gl(), info); }, "war3mapUnits.doo", "14");
 	write_all(dir / "war3mapUnits.doo", doo_bytes(8, 10));
 	check_reader_refuses([&] { units.load(terrain_without_gl(), info); }, "war3mapUnits.doo", "10");
 }
@@ -1400,7 +1405,7 @@ TEST_CASE("every stock v39 war3map.w3i below HIVEWE_STOCK_W3I_ROOT round-trips b
 		}
 		checked++;
 		CAPTURE(entry.path().string());
-		// Accepting w3i v39 opens no stock map yet: doo, units, w3r and w3c still refuse them. Drop this when they stop.
+		// Accepting w3i v39 opens no stock map yet: w3r and w3c still refuse them. Drop this when they stop.
 		CHECK_FALSE(check_map_format_versions(entry.path().parent_path()).has_value());
 		try {
 			check_same_bytes(w3i_round_trip(scratch, bytes, w3i_tileset_byte(bytes)), bytes);

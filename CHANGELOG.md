@@ -17,10 +17,15 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 
 - **Saving no longer changes a doodad's flag byte** — Doodads with flag state 3 were written back as 2, and flag bit 0x08 was dropped, on every save including v8 maps. Both are now preserved.
 - **Damaged v12 or v13 doodad files are refused with a dialog** — Opening one shows an error and leaves your open map usable.
+- **Units set to a random unit from a group keep their count on save** — The count was dropped, so the next load misread the unit file. Fixed for all unit file versions.
+- **Empty item-set ids in unit files are saved at full size** — They were written as 0 bytes instead of 4, which shifted everything after them. Fixed for all unit file versions.
+- **Saving a map with a unit or item id longer than 4 bytes is refused** — A dialog names the id and nothing is written. Before, the unit file was corrupted.
+- **The Object Editor no longer accepts a 4-character id that is longer than 4 bytes** — Ids such as `hfoö` are rejected because they cannot be stored in map files.
 
 ### New Features
 - **Warcraft III 3.0 map info (`war3map.w3i` v39) can be read and saved** — HiveWE keeps the map's own version stamps when saving it. Real 3.0 maps are still refused on open until their unit, region and camera files are supported.
 - **Doodad files (`war3map.doo`) v12 and v13 can be read and saved** — The new doodad fields (group id, roll, pitch, lights) are kept, and a v12 or v13 file saves back as the same version. Roll, pitch and lights are not rendered or editable yet, and maps saved by Warcraft III 3.0 still do not open because their unit, region and camera files are not supported yet.
+- **Unit files (`war3mapUnits.doo`) v12 and v13 can be read and saved** — These are the versions written by Warcraft III 1.32+ and Reforged. The version and subversion are kept on save. Maps from those versions still do not open, because region (w3r v7) and camera (w3c v3) files are not supported yet.
 
 ---
 

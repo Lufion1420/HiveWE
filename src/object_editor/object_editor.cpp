@@ -2481,12 +2481,13 @@ void ObjectEditor::addTypeTreeView(
 			});
 
 			auto select = [view, table, sub_filter, filter, selectdialog, id, treeModel](const QModelIndex& index) {
-				if (id->text().size() != 4) {
+				// Bytes, not QString characters, as the map files hold 4 bytes: a multi-byte character counts as several.
+				const std::string new_id = id->text().toStdString();
+				if (new_id.size() != 4) {
 					return;
 				}
 
 				// check if another object with selected ID already exists
-				std::string new_id = id->text().toStdString();
 				if (table->slk->row_headers.contains(new_id)) {
 					return;
 				}
@@ -2497,7 +2498,7 @@ void ObjectEditor::addTypeTreeView(
 				}
 
 				selectdialog->close();
-				table->copyRow(treeItem->id, id->text().toStdString());
+				table->copyRow(treeItem->id, new_id);
 
 				QModelIndex new_index = filter->mapFromSource(treeModel->mapFromSource(table->index(table->rowCount() - 1, 0)));
 				view->setCurrentIndex(new_index);
