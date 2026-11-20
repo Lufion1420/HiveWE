@@ -34,7 +34,8 @@ python -I sdiff.py <orig> <new> [--json OUT] [--top N] [--max-diff LINES] [--flo
 - warcraft-vscode projects: `warcraft.json` `mapdir` names the folder map. Packed output is `.build/release.w3x` and `.build/war3map.lua` (merged script). User code may wrap `InitGlobals`, `InitCustomTriggers` and `RunInitializationTriggers`, so HiveWE's Lua output must keep those as global functions.
 
 - `drive.py` deletes each map's `out/` folder, so spot-checking generated lines needs a separate `resave.py` rerun. For JASS maps the newest `%TEMP%/input.lua` is the generated script: copy it right after each resave.
-- The sweep's kind classifier is a throwaway script in the run's scratchpad, not in the repo (Needs verification whether it should be committed).
+- The sweep's 78-kind classifier is a throwaway script that is not in the repo and was not rebuilt for the fourth sweep (`reports/2026-11-20-fourth-sweep.md`). The sweep tooling that is kept lives in `../sweep/` (see its README).
+- `%TEMP%/input.lua` is shared by every HiveWE process, so a user save during a sweep contaminates the generated-script copies (seen on map 0049, 2026-11-20). Size-check each copy and rerun odd maps alone.
 
 ### Forgotten Hollow (stock 0239 vs HiveWE save), 2026-11-09
 
