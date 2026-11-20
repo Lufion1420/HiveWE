@@ -28,6 +28,9 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - Preserve Hierarchy lookup order unless task is specifically to change it.
 - No "cleanup" refactors while fixing compatibility bugs.
 - Mark uncertain format rules `Needs verification`; test with `data/test map/` or fixtures.
+- Object data writers (`modification_tables.ixx`): `write_modification_property` throws on a field with no meta id (it used to `exit(0)`). Every caller must handle the throw: `Map::save` (through the preflight `find_unwritable_object_data`), `export_binary_object_data`, the Map Protector `rewrite_object_data_file`, and `protection_pipeline`'s `map->save`.
+- Unknown field ids are dropped on load. A custom object's useSpecific fields resolve only through its row's `code`, so a row lost while copying shows up as a save failure, not a load failure.
+- To force a refused save in a test: `anam` with data_pointer=1 gives column `namea`, which has no meta id (`tests/fixtures/resave/unwritable_field.w3a`).
 
 ## Game version support
 

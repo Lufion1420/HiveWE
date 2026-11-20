@@ -73,7 +73,7 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - The numbered test list for the user goes in the LAST message of the turn (a list posted before the final tool call was missed).
 - After opening a window for the user, end the turn at once and do not poll it.
 - Every question to the user is written out in full in chat. Never re-list a check the user already passed.
-- Warn the user before a QA window appears (they may mistake a stock-map run for a defect).
+- Announce QA GUI windows to the user before they open, in chat (one opened unannounced on 2026-11-20 and the user asked about it; they may also mistake a stock-map run for a defect).
 
 ## Self-updating guidance
 - When work reveals something that helps later work (a bug pattern, a tool quirk, a better method, a wrong assumption), update the owning rule, skill or agent file without asking the user.

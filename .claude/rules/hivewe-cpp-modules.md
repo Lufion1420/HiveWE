@@ -25,6 +25,7 @@ Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_threa
 - Parsing/resources: `std::expected<..., std::string>`.
 - Low-level binary: exceptions on invalid bounds / I/O failure.
 - Diagnostics: `std::println`.
+- `Map` cannot be constructed in tests (`RenderManager` calls `init_gl`). Map-level checks must be free functions over the globals.
 - Assertions are invariants in parsers — do not replace with silent fallbacks unless user-facing.
 
 ## Performance

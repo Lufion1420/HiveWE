@@ -43,6 +43,8 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - Qt combo popups ignore posted mouse and key messages and UIA select, so a combo choice cannot be committed without real input.
 - No `world_undo`-tracked edit was reachable without real mouse input on `data/test map`: it has no doodads and Ctrl+A skips `sloc`. Map Options, Modify Map Bounds does reach `Map::resize` without the mouse.
 - Map Protector's saved settings can point at the user's real map. Reset the Source and Output fields and read them back before exporting.
+- The ribbon Export Objects is a QToolButton with InstantPopup, so UIA Invoke does nothing. Open it with `post-click.ps1`, then post a click to the popup HWND (class `Qt6102QWindowPopupDropShadowSaveBits`) at client (60,14) for the first item.
+- The folder picker defaults to the user's real map path: always set edit 1152. Empty `recentMaps` first and restore it afterwards (safety section below).
 - MPQ test archives can be built with `StormLib.dll` through ctypes.
 
 ### Safety: recent maps (incident 2026-11-08)
