@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **The Map Info dialog shows and saves the water tint and fog colours correctly** — Red and blue were swapped before, and an unchanged dialog now keeps the colours' alpha byte.
 - **Saved maps set the water colour when water tinting is on** — The generated map script now calls `SetWaterBaseColor` like the World Editor, so tinted water no longer falls back to the default colour in game. Not game-tested yet.
 - **Start location priorities in the generated map script match the World Editor** — `SetStartLocPrio` and `SetEnemyStartLocPrio` are written in the World Editor's order with its values, and maps without priorities no longer get an empty `InitAllyPriorities`. Not game-tested yet.
 - **Saving no longer closes HiveWE silently when object data has a field it cannot write** — The save is refused before any file is written, and a dialog names the object and field. Custom abilities losing their data on load, the usual cause, was already fixed earlier in this release.

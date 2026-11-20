@@ -24,6 +24,17 @@ export enum class PlayerRace {
 	night_elf
 };
 
+/// w3i colours (fog and water tint) are stored B, G, R, A and are read raw, so `.r` of the stored value holds blue. Verified against
+/// the World Editor's SetTerrainFogEx and SetWaterBaseColor arguments on stock maps 0049, 0415, 0418 and 0407.
+export glm::u8vec4 w3i_color_to_rgba(const glm::u8vec4 stored) {
+	return { stored[2], stored[1], stored[0], stored[3] };
+}
+
+/// The inverse of w3i_color_to_rgba: an R, G, B, A colour in the byte order w3i stores it.
+export glm::u8vec4 rgba_to_w3i_color(const glm::u8vec4 rgba) {
+	return { rgba[2], rgba[1], rgba[0], rgba[3] };
+}
+
 export struct PlayerData {
 	int internal_number;
 	PlayerType type;

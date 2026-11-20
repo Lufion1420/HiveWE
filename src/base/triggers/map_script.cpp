@@ -871,9 +871,16 @@ void generate_custom_teams(MapScriptWriter& script, const MapInfo& map_info) {
 
 // World Editor rules for start location priorities (466/466 stock maps). Per player ii in w3i list order, the ally block, then the
 // enemy block. The count includes ii's own bit; ii and jj are list positions; LOW wins when both bits are set.
+uint32_t player_mask_bit(const int internal_number) {
+	if (internal_number < 0 || internal_number >= 32) {
+		return 0;
+	}
+	return 1u << internal_number;
+}
+
 static size_t priority_count(const MapInfo& map_info, const uint32_t low_flags, const uint32_t high_flags) {
 	return std::ranges::count_if(map_info.players, [&](const PlayerData& player) {
-		return ((low_flags | high_flags) & (1u << player.internal_number)) != 0;
+		return ((low_flags | high_flags) & player_mask_bit(player.internal_number)) != 0;
 	});
 }
 
@@ -900,7 +907,7 @@ static void generate_ally_priorities(MapScriptWriter& script, const MapInfo& map
 
 			size_t k = 0;
 			for (size_t jj = 0; jj < map_info.players.size(); jj++) {
-				const uint32_t bit = 1u << map_info.players[jj].internal_number;
+				const uint32_t bit = player_mask_bit(map_info.players[jj].internal_number);
 				if (jj == ii || !((low_flags | high_flags) & bit)) {
 					continue;
 				}
@@ -928,9 +935,9 @@ static void generate_water_base_color(MapScriptWriter& script, const MapInfo& ma
 	if (!map_info.water_tinting) {
 		return;
 	}
-	const auto& color = map_info.water_color;
-	script.call("SetWaterBaseColor", static_cast<int>(color[2]), static_cast<int>(color[1]), static_cast<int>(color[0]),
-				static_cast<int>(color[3]));
+	const auto color = w3i_color_to_rgba(map_info.water_color);
+	script.call("SetWaterBaseColor", static_cast<int>(color.r), static_cast<int>(color.g), static_cast<int>(color.b),
+				static_cast<int>(color.a));
 }
 
 std::string generate_water_base_color_script(const MapInfo& map_info, const ScriptMode mode) {
@@ -1022,6 +1029,18 @@ void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain,
 			script.call("InitAllyPriorities");
 		}
 	});
+}
+
+std::string generate_main_script(const Terrain& terrain, const MapInfo& map_info, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_main(script, terrain, map_info);
+	return script.script;
+}
+
+std::string generate_map_configuration_script(const Terrain& terrain, const Units& units, const MapInfo& map_info, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_map_configuration(script, terrain, units, map_info);
+	return script.script;
 }
 
 /// Returns compile output which could contain errors or general information

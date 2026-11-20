@@ -8,6 +8,8 @@ import SLK;
 import Utilities;
 import MapGlobal;
 import Globals;
+import MapInfo;
+import <glm/glm.hpp>;
 
 namespace fs = std::filesystem;
 
@@ -74,10 +76,13 @@ MapInfoEditor::MapInfoEditor(QWidget* parent) : QDialog(parent) {
 	ui.fogZStart->setValue(map->info.fog_start_z_height);
 	ui.fogZEnd->setValue(map->info.fog_end_z_height);
 	ui.fogDensity->setValue(map->info.fog_density);
-	ui.fogColor->setColor(QColor(map->info.fog_color.r, map->info.fog_color.g, map->info.fog_color.b));
+	// w3i stores colours B, G, R, A; the alpha is kept so an unchanged dialog writes the same bytes back.
+	const glm::u8vec4 fog_color = w3i_color_to_rgba(map->info.fog_color);
+	ui.fogColor->setColor(QColor(fog_color.r, fog_color.g, fog_color.b, fog_color.a));
 
 	ui.waterTinting->setChecked(map->info.water_tinting);
-	ui.waterColor->setColor(QColor(map->info.water_color.r, map->info.water_color.g, map->info.water_color.b));
+	const glm::u8vec4 water_color = w3i_color_to_rgba(map->info.water_color);
+	ui.waterColor->setColor(QColor(water_color.r, water_color.g, water_color.b, water_color.a));
 
 	ui.globalWeather->setChecked(map->info.weather_id != 0);
 
@@ -230,7 +235,7 @@ bool MapInfoEditor::save() const {
 	map->info.fog_start_z_height = ui.fogZStart->value();
 	map->info.fog_end_z_height = ui.fogZEnd->value();
 	map->info.fog_density = ui.fogDensity->value();
-	map->info.fog_color = ui.fogColor->get_glm_color();
+	map->info.fog_color = rgba_to_w3i_color(glm::u8vec4(ui.fogColor->get_glm_color()));
 
 	// Global Weather
 	if (ui.globalWeather->isChecked()) {
@@ -254,7 +259,7 @@ bool MapInfoEditor::save() const {
 	}
 
 	map->info.water_tinting = ui.waterTinting->isChecked();
-	map->info.water_color = ui.waterColor->get_glm_color();
+	map->info.water_color = rgba_to_w3i_color(glm::u8vec4(ui.waterColor->get_glm_color()));
 
 	// Map size and camera bounds
 	bool changedMapSize = (newMapBottomLeft != oldMapBottomLeft) || (newMapTopRight != oldMapTopRight);
