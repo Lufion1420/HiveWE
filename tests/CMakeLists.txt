@@ -17,6 +17,7 @@ add_executable(HiveWE_tests
 	unit_script_test.cpp
 	sounds_test.cpp
 	object_data_save_check_test.cpp
+	ally_priorities_script_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

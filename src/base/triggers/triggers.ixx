@@ -564,6 +564,16 @@ export std::string generate_map_settings_script(const MapInfo& map_info, ScriptM
 /// Test seam: InitCustomPlayerSlots as generate_map_script writes it.
 export std::string generate_player_slots_script(const MapInfo& map_info, ScriptMode mode);
 
+/// Whether the World Editor writes InitAllyPriorities, and config calls it: some player has an ally or enemy priority bit for a
+/// player in the list (its own bit counts).
+export bool has_ally_priorities(const MapInfo& map_info);
+
+/// Test seam: InitAllyPriorities as generate_map_script writes it, or nothing when has_ally_priorities() is false.
+export std::string generate_ally_priorities_script(const MapInfo& map_info, ScriptMode mode);
+
+/// Test seam: the SetWaterBaseColor call main() writes after SetDayNightModels, or nothing when water tinting is off.
+export std::string generate_water_base_color_script(const MapInfo& map_info, ScriptMode mode);
+
 export struct TriggerVariable {
 	std::string name;
 	std::string type;

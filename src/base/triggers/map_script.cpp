@@ -869,39 +869,74 @@ void generate_custom_teams(MapScriptWriter& script, const MapInfo& map_info) {
 	});
 }
 
-void generate_ally_priorities(MapScriptWriter& script, const MapInfo& map_info) {
+// World Editor rules for start location priorities (466/466 stock maps). Per player ii in w3i list order, the ally block, then the
+// enemy block. The count includes ii's own bit; ii and jj are list positions; LOW wins when both bits are set.
+static size_t priority_count(const MapInfo& map_info, const uint32_t low_flags, const uint32_t high_flags) {
+	return std::ranges::count_if(map_info.players, [&](const PlayerData& player) {
+		return ((low_flags | high_flags) & (1u << player.internal_number)) != 0;
+	});
+}
+
+bool has_ally_priorities(const MapInfo& map_info) {
+	return std::ranges::any_of(map_info.players, [&](const PlayerData& player) {
+		return priority_count(map_info, player.ally_low_priorities_flags, player.ally_high_priorities_flags) > 0
+			|| priority_count(map_info, player.enemy_low_priorities_flags, player.enemy_high_priorities_flags) > 0;
+	});
+}
+
+static void generate_ally_priorities(MapScriptWriter& script, const MapInfo& map_info) {
+	if (!has_ally_priorities(map_info)) {
+		return;
+	}
+
 	script.function("InitAllyPriorities", [&]() {
-		std::unordered_map<int, int> player_to_startloc = start_location_indices(map_info);
-
-		int current_player = 0;
-		for (const auto& i : map_info.players) {
-			size_t count = 0;
-			for (const auto& j : map_info.players) {
-				if (i.ally_low_priorities_flags & (1 << j.internal_number) && i.internal_number != j.internal_number) {
-					count++;
-				} else if (i.ally_high_priorities_flags & (1 << j.internal_number) && i.internal_number != j.internal_number) {
-					count++;
-				}
+		const auto write_block = [&](const size_t ii, const uint32_t low_flags, const uint32_t high_flags, const std::string& count_function,
+									 const std::string& prio_function) {
+			const size_t count = priority_count(map_info, low_flags, high_flags);
+			if (count == 0) {
+				return;
 			}
+			script.call(count_function, ii, count);
 
-			script.call("SetStartLocPrioCount", current_player, count);
-
-			size_t current_index = 0;
-			for (const auto& j : map_info.players) {
-				if (i.ally_low_priorities_flags & (1 << j.internal_number) && i.internal_number != j.internal_number) {
-					script
-						.call("SetStartLocPrio", current_player, current_index, player_to_startloc[j.internal_number], "MAP_LOC_PRIO_LOW");
-					current_index++;
-				} else if (i.ally_high_priorities_flags & (1 << j.internal_number) && i.internal_number != j.internal_number) {
-					script
-						.call("SetStartLocPrio", current_player, current_index, player_to_startloc[j.internal_number], "MAP_LOC_PRIO_HIGH");
-					current_index++;
+			size_t k = 0;
+			for (size_t jj = 0; jj < map_info.players.size(); jj++) {
+				const uint32_t bit = 1u << map_info.players[jj].internal_number;
+				if (jj == ii || !((low_flags | high_flags) & bit)) {
+					continue;
 				}
+				script.call(prio_function, ii, k++, jj, (low_flags & bit) ? "MAP_LOC_PRIO_LOW" : "MAP_LOC_PRIO_HIGH");
 			}
+		};
 
-			current_player++;
+		for (size_t ii = 0; ii < map_info.players.size(); ii++) {
+			const PlayerData& player = map_info.players[ii];
+			write_block(ii, player.ally_low_priorities_flags, player.ally_high_priorities_flags, "SetStartLocPrioCount", "SetStartLocPrio");
+			write_block(ii, player.enemy_low_priorities_flags, player.enemy_high_priorities_flags, "SetEnemyStartLocPrioCount",
+						"SetEnemyStartLocPrio");
 		}
 	});
+}
+
+std::string generate_ally_priorities_script(const MapInfo& map_info, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_ally_priorities(script, map_info);
+	return script.script;
+}
+
+// The World Editor writes SetWaterBaseColor exactly when w3i flag 0x10000 is set. The colour is stored B, G, R, A (466/466 stock).
+static void generate_water_base_color(MapScriptWriter& script, const MapInfo& map_info) {
+	if (!map_info.water_tinting) {
+		return;
+	}
+	const auto& color = map_info.water_color;
+	script.call("SetWaterBaseColor", static_cast<int>(color[2]), static_cast<int>(color[1]), static_cast<int>(color[0]),
+				static_cast<int>(color[3]));
+}
+
+std::string generate_water_base_color_script(const MapInfo& map_info, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_water_base_color(script, map_info);
+	return script.script;
 }
 
 void generate_main(MapScriptWriter& script, const Terrain& terrain, const MapInfo& map_info) {
@@ -924,6 +959,7 @@ void generate_main(MapScriptWriter& script, const Terrain& terrain, const MapInf
 		const std::string terrain_lights = string_replaced(world_edit_data.data("TerrainLights", ""s + terrain.tileset), "\\", "/");
 		const std::string unit_lights = string_replaced(world_edit_data.data("TerrainLights", ""s + terrain.tileset), "\\", "/");
 		script.call("SetDayNightModels", "\"" + terrain_lights + "\"", "\"" + unit_lights + "\"");
+		generate_water_base_color(script, map_info);
 
 		const std::string sound_environment = string_replaced(world_edit_data.data("SoundEnvironment", ""s + terrain.tileset), "\\", "/");
 		script.call("NewSoundEnvironment", "\"" + sound_environment + "\"");
@@ -982,7 +1018,9 @@ void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain,
 
 			script.call("InitGenericPlayerSlots");
 		}
-		script.call("InitAllyPriorities");
+		if (has_ally_priorities(map_info)) {
+			script.call("InitAllyPriorities");
+		}
 	});
 }
 
