@@ -45,6 +45,7 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - Map Protector's saved settings can point at the user's real map. Reset the Source and Output fields and read them back before exporting.
 - The ribbon Export Objects is a QToolButton with InstantPopup, so UIA Invoke does nothing. Open it with `post-click.ps1`, then post a click to the popup HWND (class `Qt6102QWindowPopupDropShadowSaveBits`) at client (60,14) for the first item.
 - The folder picker defaults to the user's real map path: always set edit 1152. Empty `recentMaps` first and restore it afterwards (safety section below).
+- UIA does not expose `ColorButton` swatch values. Read them by sampling `PrintWindow` capture pixels at the element's bounding rect, scaled by capture size divided by window rect.
 - MPQ test archives can be built with `StormLib.dll` through ctypes.
 
 ### Safety: recent maps (incident 2026-11-08)

@@ -90,12 +90,15 @@ Checks: `.claude/tools/script-check/`.
 - Force flag: stock shared vision is 0x08. HiveWE treats it as 0x04 (ticket filed: "Forces: shared vision uses the wrong flag bit").
 - v39 player `hud_skin` exists only when editor_version >= 6140. Samples: 6117 and 6127 have none; 6140, 7000, 7003 have it; 6128-6139 have no samples. A wrong gate still reaches EOF on most maps with names shifted, so test by comparing names, not EOF.
 
+- Map Info water and fog colours are stored B,G,R,A. Fog confirmed by `SetTerrainFogEx` on stock map 0415 (2026-11-20).
+
 ## Tests
 
 - `tests/binary_writer_test.cpp`, `tests/modification_tables_test.cpp`, `tests/mdl_reader_test.cpp`, `tests/map_format_check_test.cpp`, `tests/map_body_check_test.cpp`.
 - The stock sweeps in `tests/map_body_check_test.cpp` pass silently unless `HIVEWE_STOCK_BODY_ROOT` and `HIVEWE_BODY_CHECK_CASC` are set. Confirm the printed "stock maps checked" line.
 - The stock v39 sweep in `tests/map_format_check_test.cpp` passes silently when `HIVEWE_STOCK_W3I_ROOT` is unset. Confirm the "stock v39 files checked: N" message.
 - `Doodads::load` and `Units::load` can be tested without GL if the `Terrain` is heap-allocated and never destroyed (its destructor calls GL). Both readers refuse unknown versions before using it. `new Terrain()` has a 0 offset because `Terrain` has no user-provided constructor, so it is value-initialized.
+- Script-generator tests: `world_edit_data.data()` throws when a section is missing, so a `generate_main` test must add the TerrainLights, SoundEnvironment, DayAmbience and NightAmbience sections. The seams `generate_main_script` and `generate_map_configuration_script` exist for script tests.
 - `ctest` runs each doctest case in its own process. Stock tests report pass with 0 assertions when their root variable is unset, so check the printed counts, not the pass status.
 - `stock_object_data::load()` needs `world_edit_strings` and `world_edit_game_strings` loaded, and reads `data/overrides` relative to the working directory, which under ctest is not the repository root.
 - A sweep check that a real file was parsed must read the checked copy, not the source folder, or a stubbed copy still passes.
