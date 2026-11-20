@@ -53,6 +53,39 @@ export struct FileUsage {
 	std::uintmax_t size = 0; // file size in bytes
 };
 
+/// The first object data file Map::save() would fail to write, with every field in it that cannot be written.
+export struct UnwritableObjectData {
+	std::string_view file_name;
+	std::vector<ModificationSerializeError> errors;
+};
+
+/// Checks the seven object data tables Map::save() writes (the skin files hold no fields) with the same rules as the writer.
+export std::optional<UnwritableObjectData> find_unwritable_object_data() {
+	struct Table {
+		std::string_view file_name;
+		const slk::SLK& slk;
+		const slk::SLK& meta_slk;
+		bool optional_ints;
+	};
+	const std::array<Table, 7> tables = { {
+		{ "war3map.w3d", doodads_slk, doodads_meta_slk, true },
+		{ "war3map.w3b", destructibles_slk, destructibles_meta_slk, false },
+		{ "war3map.w3u", units_slk, units_meta_slk, false },
+		{ "war3map.w3t", items_slk, items_meta_slk, false },
+		{ "war3map.w3a", abilities_slk, abilities_meta_slk, true },
+		{ "war3map.w3h", buff_slk, buff_meta_slk, false },
+		{ "war3map.w3q", upgrade_slk, upgrade_meta_slk, true },
+	} };
+
+	for (const auto& table : tables) {
+		auto errors = collect_save_modification_file_errors(table.slk, table.meta_slk, table.optional_ints);
+		if (!errors.empty()) {
+			return UnwritableObjectData { table.file_name, std::move(errors) };
+		}
+	}
+	return std::nullopt;
+}
+
 export class Map: public QObject {
 	Q_OBJECT
 
@@ -414,9 +447,41 @@ export class Map: public QObject {
 		return false;
 	}
 
+	/// The object data writer throws on a field it cannot map to a meta data id or a value of the wrong type. Save calls this before it
+	/// copies or writes anything, so such a field refuses the save with a message instead of stopping it halfway.
+	bool ensure_object_data_serializes() const {
+		const auto unwritable = find_unwritable_object_data();
+		if (!unwritable) {
+			return true;
+		}
+
+		const auto& first = unwritable->errors.front();
+		if (headless) {
+			std::println(stderr, "Save refused: {} object {} field {}: {} ({} problem(s) in this file)", unwritable->file_name,
+						 first.object_id, first.field, first.message, unwritable->errors.size());
+			return false;
+		}
+
+		QMessageBox message_box;
+		message_box.setIcon(QMessageBox::Warning);
+		message_box.setWindowTitle("Object Data Cannot Be Saved");
+		message_box.setText(QString("The map was not saved. %1 has %2 field(s) that cannot be written.")
+								.arg(QString::fromUtf8(unwritable->file_name.data(), unwritable->file_name.size()))
+								.arg(unwritable->errors.size()));
+		message_box.setInformativeText(QString("First: object %1, field %2: %3")
+										   .arg(QString::fromStdString(first.object_id), QString::fromStdString(first.field),
+												QString::fromStdString(first.message)));
+		message_box.setStandardButtons(QMessageBox::Ok);
+		message_box.exec();
+		return false;
+	}
+
 	bool save(const fs::path& path) {
 		Timer timer;
 		if (!ensure_unit_ids_fit()) {
+			return false;
+		}
+		if (!ensure_object_data_serializes()) {
 			return false;
 		}
 

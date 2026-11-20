@@ -616,6 +616,12 @@ export FileRewriteResult rewrite_object_data_file(
 
 	if (changed) {
 		scratch = shadow_map_to_slk(template_slk, shadow_map); // rebuild: shadow_map above was mutated in place
+		// save_modification_file() throws on a field it cannot write, so check first and fail this file instead.
+		if (const auto errors = collect_save_modification_file_errors(scratch, meta_slk, optional_ints); !errors.empty()) {
+			const auto& first = errors.front();
+			return { false, std::format("{} field(s) cannot be written. First: object {}, field {}: {}", errors.size(), first.object_id,
+										first.field, first.message), false };
+		}
 		save_modification_file(file_name, scratch, meta_slk, optional_ints, skin);
 	}
 
@@ -662,7 +668,11 @@ export AssetObfuscationResult rewrite_object_data_references(const fs::path& tem
 		{ "war3map.w3d", "war3mapSkin.w3d", &stock.doodads, true },
 	} };
 
-	const fs::path original_map_directory = hierarchy.map_directory;
+	// Restored on every exit, including a throw, so a later save never writes into the deleted temp dir.
+	struct MapDirectoryRestore {
+		fs::path original = hierarchy.map_directory;
+		~MapDirectoryRestore() { hierarchy.map_directory = original; }
+	} restore_map_directory;
 	hierarchy.map_directory = temp_dir;
 
 	AssetObfuscationResult result{ true, "" };
@@ -681,7 +691,6 @@ export AssetObfuscationResult rewrite_object_data_references(const fs::path& tem
 		}
 	}
 
-	hierarchy.map_directory = original_map_directory;
 	return result;
 }
 

@@ -68,3 +68,80 @@ TEST_CASE("shadow_map_to_slk copies base_data fields from a custom object's oldi
 	CHECK(scratch.data("hp", "Cust") == "500"); // inherited from the parent via copy_row()
 	CHECK(scratch.data("name", "Cust") == "Custom Object");
 }
+
+namespace {
+
+/// An ability meta table whose "dataa" field only resolves through the ability's code (useSpecific), like most stock ability data fields.
+slk::SLK use_specific_ability_meta() {
+	slk::SLK meta;
+	meta.add_row("Ocr1");
+	meta.set_shadow_data("field", "Ocr1", "Data");
+	meta.set_shadow_data("data", "Ocr1", "1");
+	meta.set_shadow_data("repeat", "Ocr1", "1");
+	meta.set_shadow_data("usespecific", "Ocr1", "AOcr");
+	meta.set_shadow_data("type", "Ocr1", "int");
+	meta.build_meta_map();
+	return meta;
+}
+
+} // namespace
+
+// NCOW_Spell_Dev crash (2026-11-20): a build with the old copy_row() copied an empty row for one custom ability while loading
+// war3map.w3a, so the ability lost its "code", its useSpecific fields no longer resolved, and the save called exit(0) halfway.
+TEST_CASE("custom abilities loaded from a modification table keep their parent's code and save again") {
+	const slk::SLK meta = use_specific_ability_meta();
+
+	// Enough stock rows and custom objects that copy_row() crosses several storage reallocations of base_data.
+	const auto make_stock = [] {
+		slk::SLK stock;
+		for (int i = 0; i < 300; i++) {
+			const std::string id = std::format("S{:03}", i);
+			stock.add_row(id);
+			stock.base_data[id]["code"] = id;
+		}
+		stock.add_row("AOcr");
+		stock.base_data["AOcr"]["code"] = "AOcr";
+		return stock;
+	};
+
+	slk::SLK source = make_stock();
+	std::vector<std::string> custom_ids;
+	for (int i = 0; i < 200; i++) {
+		const std::string id = std::format("Z{:03}", i);
+		custom_ids.push_back(id);
+		source.copy_row("AOcr", id, false);
+		source.set_shadow_data("dataa1", id, std::to_string(i));
+	}
+
+	const std::vector<u8> buffer = build_modification_file_buffer(source, meta, true, false);
+
+	slk::SLK loaded = make_stock();
+	BinaryReader reader(std::vector<u8, default_init_allocator<u8>>(buffer.begin(), buffer.end()));
+	REQUIRE(load_modification_file_reader(reader, loaded, meta, true).has_value());
+
+	for (size_t i = 0; i < custom_ids.size(); i++) {
+		const std::string& id = custom_ids[i];
+		CHECK_MESSAGE(loaded.data("code", id) == "AOcr", id);
+		CHECK(loaded.data("dataa1", id) == std::to_string(i));
+	}
+
+	CHECK(collect_save_modification_file_errors(loaded, meta, true).empty());
+	CHECK_NOTHROW((void)build_modification_file_buffer(loaded, meta, true, false));
+}
+
+TEST_CASE("saving a field without a meta data id throws instead of closing the editor") {
+	const slk::SLK meta = use_specific_ability_meta();
+
+	// A custom ability whose row has no code, as the old copy_row() left it: "dataa1" then has no meta data id.
+	slk::SLK data;
+	data.add_row("Z00A");
+	data.set_shadow_data("oldid", "Z00A", "AOcr");
+	data.set_shadow_data("dataa1", "Z00A", "5");
+
+	const auto errors = collect_save_modification_file_errors(data, meta, true);
+	REQUIRE(errors.size() == 1);
+	CHECK(errors.front().object_id == "Z00A");
+	CHECK(errors.front().field == "dataa1");
+
+	CHECK_THROWS_AS((void)build_modification_file_buffer(data, meta, true, false), std::runtime_error);
+}

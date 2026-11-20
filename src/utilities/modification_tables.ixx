@@ -217,8 +217,8 @@ bool write_modification_property(
 			return false;
 		}
 
-		std::println("Meta data key not found for id {} property {}", id, property_id);
-		exit(0);
+		// Used to be exit(0), which closed the editor mid-save with no message. Map::save() checks this before writing anything.
+		throw std::runtime_error(std::format("Meta data key not found for id {} property {}", id, property_id));
 	}
 	const std::string meta_data_key = std::string(meta_id2.value());
 
@@ -230,7 +230,16 @@ bool write_modification_property(
 		if (has_repeat && !append_index) {
 			size_t nr_position = property_id.find_first_of("0123456789");
 			if (nr_position != std::string::npos) {
-				variation = std::stoi(property_id.substr(nr_position));
+				const std::string_view digits = std::string_view(property_id).substr(nr_position);
+				const auto [end, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), variation);
+				if (ec != std::errc()) {
+					const std::string message = std::format("Level number '{}' is not valid.", digits);
+					if (errors) {
+						errors->push_back({ id, property_id, message });
+						return false;
+					}
+					throw std::runtime_error(std::format("{} Object {} property {}", message, id, property_id));
+				}
 			}
 		}
 

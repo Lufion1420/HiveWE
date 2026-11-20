@@ -73,6 +73,18 @@ import MapArchiveCheck;
 namespace fs = std::filesystem;
 
 namespace {
+/// Map::save() with any exception shown in a dialog, so a throw while saving cannot close the editor without a message.
+bool save_map_reporting_errors(const fs::path& path) {
+	try {
+		return map->save(path);
+	} catch (const std::exception& e) {
+		QMessageBox::critical(nullptr, "Saving failed",
+							  "The map could not be saved completely:\n" + QString::fromLocal8Bit(e.what())
+								  + "\n\nSome map files may already have been written.");
+		return false;
+	}
+}
+
 std::shared_ptr<mdx::MDX> load_preview_mdx(const fs::path& path) {
 	auto result = hierarchy.open_file(path);
 	if (!result) {
@@ -803,7 +815,7 @@ bool HiveWE::save_current_map() {
 	}
 
 	emit saving_initiated();
-	if (!map->save(map->filesystem_path)) {
+	if (!save_map_reporting_errors(map->filesystem_path)) {
 		return false;
 	}
 
@@ -818,7 +830,7 @@ bool HiveWE::save_current_map_as() {
 	}
 
 	// Before the folder is picked or created and before the map's paths are redirected, so a refusal changes neither.
-	if (!map->ensure_unit_ids_fit()) {
+	if (!map->ensure_unit_ids_fit() || !map->ensure_object_data_serializes()) {
 		return false;
 	}
 
@@ -836,7 +848,7 @@ bool HiveWE::save_current_map_as() {
 
 	emit saving_initiated();
 	if (!map->filesystem_path.empty() && fs::exists(file_name) && fs::equivalent(file_name, map->filesystem_path)) {
-		if (!map->save(map->filesystem_path)) {
+		if (!save_map_reporting_errors(map->filesystem_path)) {
 			return false;
 		}
 	} else {
@@ -849,11 +861,11 @@ bool HiveWE::save_current_map_as() {
 			map->filesystem_path = fs::absolute(target_directory) / "";
 			map->name = (*--(--map->filesystem_path.end())).string();
 			hierarchy.map_directory = map->filesystem_path;
-			if (!map->save(map->filesystem_path)) {
+			if (!save_map_reporting_errors(map->filesystem_path)) {
 				return false;
 			}
 		} else {
-			if (!map->save(target_directory)) {
+			if (!save_map_reporting_errors(target_directory)) {
 				return false;
 			}
 		}

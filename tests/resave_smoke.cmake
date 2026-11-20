@@ -66,5 +66,20 @@ if(NOT result EQUAL 1)
 	message(FATAL_ERROR "--resave into the input folder exited with ${result}, expected 1: ${errors}")
 endif()
 
+# An ability field the object data writer cannot write (anam with data pointer 1 loads as "namea", which has no meta data id):
+# refused before anything is copied or written, so the output folder stays empty.
+file(COPY_FILE "${UNWRITABLE_W3A}" "${sandbox}/war3map.w3a")
+set(refused_output "${OUTPUT}_refused")
+file(REMOVE_RECURSE "${refused_output}")
+run_resave(result errors "${sandbox}" "${refused_output}")
+if(NOT result EQUAL 1 OR NOT errors MATCHES "Save refused: war3map.w3a object AHbz field namea")
+	message(FATAL_ERROR "--resave with an unwritable ability field exited with ${result}, expected 1 and a refusal: ${errors}")
+endif()
+file(GLOB refused_files "${refused_output}/*")
+if(refused_files)
+	message(FATAL_ERROR "--resave refused the save but wrote into the output folder: ${refused_files}")
+endif()
+file(REMOVE_RECURSE "${refused_output}")
+
 file(REMOVE_RECURSE "${sandbox}")
 message("resave_smoke: saved ${OUTPUT}, refusals checked")

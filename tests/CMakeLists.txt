@@ -16,6 +16,7 @@ add_executable(HiveWE_tests
 	item_globals_test.cpp
 	unit_script_test.cpp
 	sounds_test.cpp
+	object_data_save_check_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
@@ -43,6 +44,7 @@ add_test(NAME resave_smoke COMMAND ${CMAKE_COMMAND}
 	-DHIVEWE_EXE=$<TARGET_FILE:HiveWE>
 	"-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../data/test map"
 	-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/resave_smoke_out
+	"-DUNWRITABLE_W3A=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/unwritable_field.w3a"
 	-P ${CMAKE_CURRENT_SOURCE_DIR}/resave_smoke.cmake
 )
 set_tests_properties(resave_smoke PROPERTIES SKIP_REGULAR_EXPRESSION "RESAVE_SMOKE_SKIPPED" TIMEOUT 300)

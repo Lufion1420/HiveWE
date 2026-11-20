@@ -844,6 +844,19 @@ export std::expected<void, std::string> export_binary_object_data(const fs::path
 		return std::unexpected("No map is loaded.");
 	}
 
+	// build_modification_file_buffer() throws on a field it cannot write, so every table is checked before any file is written.
+	for (const auto& descriptor : object_data_category_descriptors()) {
+		if (!modification_table_has_data(*descriptor.slk)) {
+			continue;
+		}
+		const auto errors = collect_save_modification_file_errors(*descriptor.slk, *descriptor.meta_slk, descriptor.optional_ints);
+		if (!errors.empty()) {
+			const auto& first = errors.front();
+			return std::unexpected(std::format("Nothing was exported. {} has {} field(s) that cannot be written. First: object {}, field {}: {}",
+											   descriptor.main_file, errors.size(), first.object_id, first.field, first.message));
+		}
+	}
+
 	std::error_code ec;
 	fs::create_directories(directory, ec);
 
@@ -865,26 +878,31 @@ export std::expected<void, std::string> export_binary_object_data(const fs::path
 	nlohmann::json files = nlohmann::json::array();
 	nlohmann::json categories = nlohmann::json::array();
 
-	for (const auto& descriptor : object_data_category_descriptors()) {
-		if (!modification_table_has_data(*descriptor.slk)) {
-			continue;
-		}
-
-		categories.push_back(descriptor.key);
-
-		for (const bool skin : { false, true }) {
-			const std::string file_name = skin ? descriptor.skin_file : descriptor.main_file;
-			const std::vector<u8> buffer = build_modification_file_buffer(*descriptor.slk, *descriptor.meta_slk, descriptor.optional_ints, skin);
-			if (const auto result = write_bytes_file(directory / file_name, buffer); !result) {
-				return std::unexpected(result.error());
+	try {
+		for (const auto& descriptor : object_data_category_descriptors()) {
+			if (!modification_table_has_data(*descriptor.slk)) {
+				continue;
 			}
 
-			files.push_back({
-				{ "name", file_name },
-				{ "sha256", sha256_bytes(buffer) },
-				{ "object_count", count_modification_objects(*descriptor.slk) },
-			});
+			categories.push_back(descriptor.key);
+
+			for (const bool skin : { false, true }) {
+				const std::string file_name = skin ? descriptor.skin_file : descriptor.main_file;
+				const std::vector<u8> buffer =
+					build_modification_file_buffer(*descriptor.slk, *descriptor.meta_slk, descriptor.optional_ints, skin);
+				if (const auto result = write_bytes_file(directory / file_name, buffer); !result) {
+					return std::unexpected(result.error());
+				}
+
+				files.push_back({
+					{ "name", file_name },
+					{ "sha256", sha256_bytes(buffer) },
+					{ "object_count", count_modification_objects(*descriptor.slk) },
+				});
+			}
 		}
+	} catch (const std::exception& e) {
+		return std::unexpected(std::format("Exporting object data failed: {}", e.what()));
 	}
 
 	manifest["categories"] = categories;
