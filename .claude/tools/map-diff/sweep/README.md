@@ -22,4 +22,4 @@ Scripts of the differential sweep (fourth sweep, 2026-11-20). Not run since bein
 
 The 78-kind classifier from reports 1-3 is not in the repo and was not rebuilt.
 
-`%TEMP%/input.lua` is shared by every HiveWE process: see `../scripts/README.md`.
+`%TEMP%/input.lua` is shared by every HiveWE process: see `../scripts/README.md`. To check for a clash, compare the hash and size of each generated script (all distinct, none the user's map) instead of watching processes: `Win32_Process.CommandLine` can be empty for a process that has just started.

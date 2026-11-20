@@ -7,6 +7,7 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - Never build the `Release` preset locally. It has `HIVEWE_AUTO_RUN_AFTER_BUILD=ON`, which force-kills any running `HiveWE.exe` (losing unsaved map work) and launches a new one.
 - One build at a time: agents share `build/Agent`. Worktree builds stay banned.
 - Lock file: create `<scratchpad>\build.lock` before any build, `ctest` or app launch and delete it after; poll every 4 seconds, not 30. A `HOLD` file next to it means stop starting builds or app windows (the user has a window open or is playing). Every brief explains both. A source edit while QA builds gets compiled into QA's build: hold edits until QA returns.
+- `qa-verifier` cannot write under `.claude/` (the writes are denied). It returns the sweep report text and `docs-keeper` writes it to `.claude/tools/map-diff/reports/`.
 - Never kill `HiveWE`, `code`, or any process you did not start.
 
 ## Git and releases
