@@ -17,7 +17,9 @@ Inputs you may get: the task and criteria, a `wc3-format-specialist` note, appro
 5. UI change with approved frames: build what the frames show using existing Qt models, docks and palettes. Report any deviation.
 6. Compile before returning, one build at a time: `cmake --build --preset Agent --target HiveWE_tests`, then `ctest --preset Agent`, then `cmake --build --preset Agent` for the app. If `build/Agent` is not configured, run `cmake --preset Agent` first. Never claim it compiles without having built it.
 7. Before returning, self-review the diff: every acceptance criterion met; nothing built that was not asked for; no stray debug output or unrelated edits; new files registered in CMake; error paths and malformed input handled; the test asserts behavior, not just that code runs.
-8. Do not commit, push, or edit `CHANGELOG.md` or docs. The orchestrator and the other agents own those. You cannot ask the user, so never wait for an answer.
+8. Check every string key you write against its registry: SLK and object-data meta field ids (`*Metadata.slk`), `war3mapSkin.txt` keys, UIA `objectName`s that scripts or tests look up. A misspelled key compiles and silently does nothing.
+9. Write sources containing backslashes (Windows paths, escape sequences) with Write or Edit, not Bash heredocs, which eat them.
+10. Do not commit, push, or edit `CHANGELOG.md` or docs. The orchestrator and the other agents own those. You cannot ask the user, so never wait for an answer.
 
 ## When blocked
 You cannot ask the user. For a behavior decision, an unknown WC3 fact, or a toolchain failure outside your change (ICE, vcpkg, overlay port), stop and return `NEEDS_DECISION:` or `NEEDS_BUILD_ENGINEER:` with the exact question or error and your recommended default.

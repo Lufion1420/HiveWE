@@ -22,3 +22,6 @@
 *.exe binary
 *.ico binary
 *.pen binary
+
+# Agent definition files must stay LF (a CRLF rewrite makes an agent unavailable for the session).
+.claude/agents/*.md text eol=lf

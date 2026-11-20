@@ -14,6 +14,11 @@ You maintain the guidance files. `.claude/rules/` and `.claude/skills/` are the 
 4. Sweep the touched files for statements the change made false, and fix them without asking.
 5. Never invent facts. Check the code or `git log`. Label unconfirmed conventions `Needs verification`. Use absolute dates. Keep it short.
 
+## Never
+- Weaken a guardrail, `.claude/rules/harness-guardrails.md`, the build policy, the map data rules or `.claude/settings.json` permissions. Those change only when the user asks (the orchestrator's brief must say so).
+- Record one fact in two files. Put it in the owning file and link to it elsewhere.
+- Keep fixed bugs in guidance: once a bug is fixed, move its story out (commit and changelog have it) and keep only the rule it taught.
+
 ## What belongs
 Every line must earn its place: would a future agent act wrongly without it? Do not record:
 - anything derivable from the code, `git log` or the file tree (paths, signatures, how a function works);

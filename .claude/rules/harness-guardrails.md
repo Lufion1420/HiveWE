@@ -5,18 +5,22 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 ## Builds
 - Agents may build and run tests, using only the `Agent` preset: `cmake --preset Agent`, `cmake --build --preset Agent`, `ctest --preset Agent`.
 - Never build the `Release` preset locally. It has `HIVEWE_AUTO_RUN_AFTER_BUILD=ON`, which force-kills any running `HiveWE.exe` (losing unsaved map work) and launches a new one.
-- One build at a time: agents share `build/Agent`. Do not use parallel worktrees for builds.
+- One build at a time: agents share `build/Agent`. Worktree builds stay banned.
+- Lock file: create `<scratchpad>\build.lock` before any build, `ctest` or app launch and delete it after; poll every 4 seconds, not 30. A `HOLD` file next to it means stop starting builds or app windows (the user has a window open or is playing). Every brief explains both. A source edit while QA builds gets compiled into QA's build: hold edits until QA returns.
 - Never kill `HiveWE`, `code`, or any process you did not start.
 
 ## Git and releases
-- The orchestrator commits and pushes after each finished task, without asking. Subagents do not commit or push.
+- The orchestrator commits and pushes after each finished task, without asking, but only after QA PASS (and reviewer APPROVE on Standard and Risky). There is no commit-before-sweep exception. Subagents do not commit or push.
 - Stage named paths only, never `git add -A`.
 - Push only to `origin` (`Lufion1420/HiveWE`). Never push to `upstream`, and never open PRs against `stijnherfst/HiveWE`: this fork is not merged back.
 - `gh`'s active account may be the work account `Maurice-TPG`. Never use it and never run `gh auth switch`. Scope the identity per command:
   - Bash: `GH_TOKEN=$(gh auth token -u Lufion1420) git push origin main`
   - The same prefix applies to `gh` commands.
 - `git push origin main` prints "Bypassed rule violations ... Changes must be made through a pull request". The push still succeeds (owner bypass); verify with `git status -sb`.
-- No force-push. Publishing a release (version tag) happens only when the user asks for it; `release-manager` prepares it.
+- No force-push and no history rewrite unless the user okays that specific rewrite in chat. Then only `git push --force-with-lease=<branch>:<sha> origin`, after a backup bundle. `settings.json` denies plain `--force`/`-f`, `--mirror`, `+refspec` and `:`-delete pushes and puts `--force-with-lease` on "ask".
+- Never change repo visibility. Never delete `main` on origin (`git push --delete`/`-d`, `gh api` on `refs/heads/main`); other branches stay deletable.
+- Commit and push as separate commands: deny patterns match the whole command line, so a commit message quoting a blocked push is itself blocked.
+- Publishing a release (version tag) happens only when the user asks for it; `release-manager` prepares it.
 
 ## Designs
 - All `.pen` files live in `designs/`. Never Read or Grep them; use `mcp__pencil__*`.
@@ -32,6 +36,13 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - Agents may launch Warcraft III 3.0.1 and its World Editor on sandbox COPIES of maps to check that HiveWE output loads: launch, load, capture the screen, read errors. Never save in the World Editor (Test Map saves, so never use it), never touch the user's real maps. The orchestrator tells the user in chat before each run, because they may have the World Editor open with unsaved work. This replaces the old "no World Editor without new permission" rule for this purpose only.
 - Before listing any check for the user, the orchestrator sorts the checks into automatable, blocked by a rule, and truly user-only. Only the last group goes to the user.
 
+## Real-game launches (3.0.1 load checks)
+- The user confirms the Battle.net login works before a launch; launch through Battle.net, never the exe directly. If it fails, Warcraft III can exit by itself within seconds with no error text: stop after repeated silent exits instead of retrying in a chain.
+- The orchestrator's message announcing a run says "do not click or type in the window" (a user click once spoiled a run announced only in general terms).
+- `Start-Process -Wait` also waits for `BlizzardError.exe` after a crash and stalls the chain. Use a watcher that stops only a `BlizzardError.exe` whose parent is a game process this run started.
+- Screenshots can show the user's Battle.net e-mail: keep them local, never commit or paste them.
+- A Warcraft III process that exists before the launch is the user's: leave it alone and return `NEEDS_DECISION:`.
+
 ## Resource safety (incident 2026-11-09)
 - An agent's StormLib extraction with `SFileFindFirstFile` hung and grew to 20 GB RAM on the user's PC. Never use `SFileFindFirstFile` on these maps; extract through `(listfile)` plus known names.
 - Every long Python job gets a wall-clock timeout and handles one map per process. Stop your own process above about 2 GB and kill your own leftovers before returning.
@@ -44,11 +55,25 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 
 ## Session handoff
 - The orchestrator cannot measure context exactly, so it estimates: subagent reports so far, long tool results, whether the session was already summarized.
+- Spawn budget: after 8 to 10 subagent runs (resumes do not count) it finishes the running task, writes the handoff and offers a new session without being asked; it starts no new task past that point unless the user says so.
 - It suggests a new session when context looks high and at natural points such as a finished ticket. It does not stop mid-task to do so.
-- Before suggesting: commit and push finished work so the tree is clean, update the Asana board and guidance docs, and write `.claude/HANDOFF.md` (overwritten each time, committed). It covers current state, what is running or unfinished, next step, decisions the user made, and open questions.
+- Before suggesting: commit and push finished work so the tree is clean, update the Asana board and guidance docs, and write `.claude/HANDOFF.md` (overwritten each time, committed). Format, in this order:
+  1. Header: date, models used, spawn count.
+  2. `Checks waiting on the user`: numbered list with exact steps (drop checks the user already passed unless a later commit changed them in a way automation cannot see).
+  3. `State`: what is committed, running or unfinished.
+  4. `Next step`: names an Asana ticket from "Next up".
+  5. `Backlog only, not next steps`: one line of leftovers.
+  6. `Decisions`: the user's, then orchestrator calls the user may overrule, each dated.
+  7. `Scratch`: absolute paths of scratchpad files the next session needs (they may vanish; say so).
 - Every suggestion includes a paste-ready prompt in the message.
 - The user does not read the MD files, including `HANDOFF.md`. Every paste-ready prompt tells the next session to start by listing in chat every check or decision waiting on the user (from `HANDOFF.md` "Open questions"), with exact steps.
 - Anything the user must do is stated in chat, not only in a file.
+
+## Chat rules
+- The numbered test list for the user goes in the LAST message of the turn (a list posted before the final tool call was missed).
+- After opening a window for the user, end the turn at once and do not poll it.
+- Every question to the user is written out in full in chat. Never re-list a check the user already passed.
+- Warn the user before a QA window appears (they may mistake a stock-map run for a defect).
 
 ## Self-updating guidance
 - When work reveals something that helps later work (a bug pattern, a tool quirk, a better method, a wrong assumption), update the owning rule, skill or agent file without asking the user.
@@ -60,4 +85,7 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - Do not hold work for a check the next step does not depend on (for example CI on an unrelated commit). Start it, watch in the background, report the result.
 - Spot-check subagent claims that drive decisions against the code before filing them. Designer runs have skipped parts of a brief: check that they launched the app.
 - Check paths before putting them in a brief.
+- Explain a subsystem briefly the first time a task touches it (the user is building a mental map of the repo).
+- Name in every brief the scoped rules (`.claude/rules/`) and skills the agent must read.
+- If the work turns into a cosmetic World Editor byte-parity fight (differences that do not change what loads or runs), stop and ask before grinding further.
 - `compile.yml` sets `cancel-in-progress: true`, so a second push to `main` cancels the CI run of the previous commit (run 42658845053 on a14cdea was cancelled by the handoff push). Take the code commit's CI result from the newer run and name that run when reporting.

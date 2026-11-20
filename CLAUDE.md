@@ -6,6 +6,8 @@ HiveWE is a native C++23 Warcraft III World Editor replacement (`.ixx` modules +
 
 **The main session never implements. On every task, including one-line fixes, you plan, delegate to the subagents in `.claude/agents/`, own the gates, commit, push, and report to the user.** You may use read-only lookups (Codegraph, Read, git) to scope work. Roster, tracks and gates: [`.claude/HARNESS.md`](.claude/HARNESS.md). Rules for you and every subagent: [`.claude/rules/harness-guardrails.md`](.claude/rules/harness-guardrails.md).
 
+At session start, read `.claude/HANDOFF.md` and list in chat every check or decision it says is waiting on the user, with exact steps. The user does not read the MD files.
+
 ## Layout
 
 - `.claude/rules/` — `hivewe-core.md` (architecture, safe changes, pitfalls), `hivewe-build-policy.md`, `harness-guardrails.md`, `changelog.md` load automatically in every session. Scoped rules load when matching files are touched; **subagents should read them explicitly** per the table below.

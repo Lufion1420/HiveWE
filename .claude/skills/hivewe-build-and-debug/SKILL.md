@@ -38,6 +38,13 @@ description: >-
 - QSettings lives in `HKCU\Software\HiveWE` and holds the user's real layout and recent maps, so running HiveWE changes it. `reg export` before, `reg import` after.
 - CI (`.github/workflows/compile.yml`) builds and tests on every push to `main` and publishes nothing. New pushes cancel running ones. On a cold vcpkg cache, Configure CMake took about an hour on 2026-11-08.
 
+## Tool quirks
+
+- Bash tool heredocs eat backslashes and apostrophes: write sources and Windows paths with Write or Edit, or build them with `chr(92)` / `string.char(92)`. `cat > f` without a heredoc waits on stdin.
+- PowerShell: aliases shadow function names (`R`, `Diff`) and variables are case-insensitive (`$Repo` is `$repo`); `Start-Process -ArgumentList` drops quoting; `run_in_background` on a wrapper returns when `Start-Process` returns, so background the runner script itself and poll for its output file.
+- Git Bash `sed -i` strips CRLF from CRLF files; check `git ls-files --eol` after edits.
+- Asana MCP calls can time out: check with `get_task` whether the change landed before retrying.
+
 ## Verification checklist
 
 - [ ] Reconfigure after CMake/dependency edits

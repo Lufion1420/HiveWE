@@ -1,6 +1,6 @@
 # Session handoff
 
-Written 2026-11-09 (night). Overwritten at each handoff.
+Written 2026-11-09 (night). Overwritten at each handoff. Format template: `.claude/rules/harness-guardrails.md` "Session handoff" (header with models and spawn count, checks waiting on the user, state, next step naming an Asana ticket, backlog line, dated decisions, scratch paths).
 
 ## State
 - `main` holds all work; tree clean after the handoff commit. This session's commits:
