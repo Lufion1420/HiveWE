@@ -51,8 +51,12 @@ Add-ons on any track:
 Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPROVE on Standard and Risky). Internal-only changes get no changelog entry, so `release-manager` is skipped for them.
 
 ## Choosing work
-- Every "Next step" in the handoff names an Asana ticket from "Next up" (the section exists on the board). Read "Next up" at session start.
-- Leftovers (sweep kinds, reviewer notes) go to the backlog, not into the next step. At most one leftover batch per session.
+- The handoff "Next step" always names an Asana ticket from "Next up". Read "Next up" at session start and check that the named ticket is still open before starting.
+- A reviewer or QA finding becomes work in the same task only if it crashes, corrupts a save, blocks the current ticket, or is visible in the user's maps (NCOW, Lua). Anything else is filed as a ticket under "Harness and quality follow-ups" and is not added to the next step. Do not chase edge cases.
+- At most one leftover batch per session.
+- Sweep-driven parity work counts as leftover work (user concern, 2026-11-22): the subtasks of "World Editor parity: map output on save" (1220328838360686) and any new sweep kinds. At most one parity ticket or batch per session. The handoff "Next step" list alternates: the first item is a non-parity "Next up" ticket (a feature, a user-reported bug or a decision ticket), and a parity item may follow. Background: in sessions up to 2026-11-20 the Next step always named the next save-parity item from the sweep, while the tickets created on 2026-11-08 (UI modernization 1220328401966062, trigger variable types, save-reports-success) sat untouched. WarMash had the same drift in sessions 56-61.
+- Current order is the user's decision of 2026-11-22; it is in the Decisions list of `HANDOFF.md`.
+- At session start, sweep "Next up" and "Harness and quality follow-ups" for completed tasks and move them to "Done — shipped" (section 1220328136214002).
 - JASS-only parity waits unless a map needs it (Lua first).
 - The orchestrator picks the next ticket itself without asking (orchestrator decision; the user may overrule).
 

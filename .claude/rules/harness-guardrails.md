@@ -86,6 +86,7 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - Do not hold work for a check the next step does not depend on (for example CI on an unrelated commit). Start it, watch in the background, report the result.
 - Spot-check subagent claims that drive decisions against the code before filing them. Designer runs have skipped parts of a brief: check that they launched the app.
 - Check paths before putting them in a brief.
+- Do not chase edge cases: file them per HARNESS.md 'Choosing work'.
 - Explain a subsystem briefly the first time a task touches it (the user is building a mental map of the repo).
 - Name in every brief the scoped rules (`.claude/rules/`) and skills the agent must read.
 - If the work turns into a cosmetic World Editor byte-parity fight (differences that do not change what loads or runs), stop and ask before grinding further.

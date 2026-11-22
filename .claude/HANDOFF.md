@@ -30,6 +30,7 @@ Not verified in the real game: the water colour and start-location priority outp
 The four follow-up tickets above, and `ColorButton` dropping alpha when a new colour is picked.
 
 ## Decisions
+- User, 2026-11-22: work order is (1) finish doodad skin 1220369827454184; (2) "Decide UI modernization approach" 1220328401966062 (`Plan` agent compares Qt Widgets+QSS / QML / web, then `designer` mocks the main window and one editor in `designs/proposals/`, then stop for approval); (3) "[Parity 2a] New trigger variables get no type and break the script" 1220328820523202; (4) "Map save can report success after a failed or truncated file write" 1220330960297388.
 - User, 2026-11-20: WarMash's harness is the base. Keep the Tools-folder HiveWE current.
 - User, 2026-11-09: maps are Lua-only (Lua first, JASS must not break). No open-ended manual game testing; the differential sweep is the default bug finder, and the user gets only short, specific checklists. Sweeps run on sandbox copies of NCOW; originals never written.
 - User, 2026-11-09 and earlier:
