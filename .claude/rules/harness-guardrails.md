@@ -26,6 +26,7 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 ## Designs
 - All `.pen` files live in `designs/`. Never Read or Grep them; use `mcp__pencil__*`.
 - The file must be open and active in VS Code. Agents open and focus it themselves with `code --reuse-window`, without asking the user. Run one designer at a time.
+- The user's Claude chat is a locked editor group in VS Code (2026-11-22): `code --reuse-window` opens the `.pen` in the other group. Never close tabs or hide the chat; if the group is not locked, have the orchestrator tell the user. See `designs/README.md`.
 - New windows and changed layouts need user-approved frames before `cpp-dev` starts.
 
 ## Map data
