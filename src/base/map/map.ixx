@@ -488,6 +488,8 @@ export class Map: public QObject {
 		if (!fs::equivalent(path, filesystem_path)) {
 			try {
 				fs::copy(filesystem_path, fs::absolute(path), fs::copy_options::recursive);
+				// A temporary file a crashed save left in the source folder is not part of the map.
+				remove_map_write_temp_files(fs::absolute(path));
 			} catch (fs::filesystem_error& e) {
 				if (headless) {
 					std::println(stderr, "Save failed: copying the map folder: {}", e.what());
@@ -546,6 +548,13 @@ export class Map: public QObject {
 		script_compile_failed = !result.has_value();
 		if (!result.has_value() && headless) {
 			std::println(stderr, "Script compilation errors:\n{}", result.error());
+		} else if (!result.has_value() && mode == ScriptMode::lua) {
+			QMessageBox::warning(
+				nullptr,
+				"Lua script",
+				"The map script could not be written: " + QString::fromStdString(result.error()),
+				QMessageBox::StandardButton::Ok
+			);
 		} else if (!result.has_value()) {
 			QMessageBox::information(
 				nullptr,

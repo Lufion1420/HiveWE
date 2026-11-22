@@ -61,7 +61,7 @@ export class Imports {
 		for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
 			if (i.is_regular_file()) {
 				std::string file_name = i.path().filename().string();
-				if (blacklist.contains(file_name)) {
+				if (blacklist.contains(file_name) || is_map_write_temp_file(i.path())) {
 					continue;
 				}
 				count++;
@@ -73,7 +73,7 @@ export class Imports {
 			if (i.is_regular_file()) {
 				std::string path = i.path().lexically_relative(filesystem_path).string();
 				std::string file_name = i.path().filename().string();
-				if (blacklist.contains(file_name)) {
+				if (blacklist.contains(file_name) || is_map_write_temp_file(i.path())) {
 					continue;
 				}
 

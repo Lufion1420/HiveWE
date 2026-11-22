@@ -819,8 +819,14 @@ bool HiveWE::save_current_map() {
 		return false;
 	}
 
-	show_transient_notice("Map saved");
-	update_map_context("Saved");
+	// The map files were written, but the script step failed and its error was shown: the old script is still in the map.
+	if (map->script_compile_failed) {
+		show_transient_notice("Saved without a new map script");
+		update_map_context("Saved, script not updated");
+	} else {
+		show_transient_notice("Map saved");
+		update_map_context("Saved");
+	}
 	return true;
 }
 
@@ -871,8 +877,14 @@ bool HiveWE::save_current_map_as() {
 		}
 	}
 
-	show_transient_notice("Map saved");
-	update_map_context("Saved");
+	// The map files were written, but the script step failed and its error was shown: the old script is still in the map.
+	if (map->script_compile_failed) {
+		show_transient_notice("Saved without a new map script");
+		update_map_context("Saved, script not updated");
+	} else {
+		show_transient_notice("Map saved");
+		update_map_context("Saved");
+	}
 	return true;
 }
 
@@ -902,7 +914,7 @@ void HiveWE::export_mpq() {
 	}
 
 	for (const auto& entry : fs::recursive_directory_iterator(map->filesystem_path)) {
-		if (entry.is_regular_file()) {
+		if (entry.is_regular_file() && !is_map_write_temp_file(entry.path())) {
 			bool success = SFileAddFileEx(handle, entry.path().c_str(), entry.path().lexically_relative(map->filesystem_path).string().c_str(), MPQ_FILE_COMPRESS, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
 			if (!success) {
 				std::println("Error {} adding file {}", GetLastError(), entry.path().string());

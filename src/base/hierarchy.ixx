@@ -15,6 +15,28 @@ import Utilities;
 using namespace std::literals::string_literals;
 namespace fs = std::filesystem;
 
+/// Suffix of the temporary file Hierarchy::map_file_write writes before renaming it over the target. Unusual on purpose, so it
+/// never matches a real import. A crash can leave one behind, so folder loops that list, copy or pack map files skip it.
+export constexpr std::string_view map_write_temp_suffix = ".hivewe-tmp";
+
+export bool is_map_write_temp_file(const fs::path& path) {
+	return path.filename().native().ends_with(L".hivewe-tmp");
+}
+
+/// Deletes every leftover map_file_write temporary file under `directory`, for example after copying a map folder.
+export void remove_map_write_temp_files(const fs::path& directory) {
+	std::error_code ec;
+	std::vector<fs::path> leftovers;
+	for (auto it = fs::recursive_directory_iterator(directory, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+		if (is_map_write_temp_file(it->path())) {
+			leftovers.push_back(it->path());
+		}
+	}
+	for (const fs::path& path : leftovers) {
+		fs::remove(path, ec);
+	}
+}
+
 export class Hierarchy {
   public:
 	char tileset = 'L';
@@ -170,19 +192,47 @@ export class Hierarchy {
 		fs::copy_file(source, map_directory / destination, fs::copy_options::overwrite_existing);
 	}
 
+	/// Writes `<path>.hivewe-tmp`, checks its size and renames it over the target, so a failed write leaves the old file intact.
+	/// Throws on any failure and removes the temporary file first.
 	void map_file_write(const fs::path& path, const std::span<const u8> data) const {
-		std::ofstream outfile(map_directory / path, std::ios::binary);
+		const fs::path target = map_directory / path;
+		fs::path temporary = target;
+		temporary += map_write_temp_suffix;
 
-		if (!outfile) {
-			throw std::runtime_error("Error writing file " + path.string());
+		const auto fail = [&](const std::string& reason) {
+			std::error_code ignored;
+			fs::remove(temporary, ignored);
+			throw std::runtime_error("Error writing file " + path.string() + ": " + reason);
+		};
+
+		{
+			std::ofstream outfile(temporary, std::ios::binary | std::ios::trunc);
+			if (!outfile) {
+				fail("could not create " + temporary.filename().string());
+			}
+			outfile.write(reinterpret_cast<char const*>(data.data()), static_cast<std::streamsize>(data.size()));
+			outfile.close();
+			// A short write or a failed flush must not let the save report success.
+			if (!outfile) {
+				fail("the write or close failed");
+			}
 		}
 
-		outfile.write(reinterpret_cast<char const*>(data.data()), data.size());
-		outfile.close();
-		// A short write or a failed flush must not let the save report success.
-		if (!outfile) {
-			throw std::runtime_error("Error writing file " + path.string() + ": the write or close failed");
+		std::error_code ec;
+		const auto written = fs::file_size(temporary, ec);
+		if (ec || written != data.size()) {
+			fail("the written file has the wrong size");
 		}
+
+		// A virus scanner or indexer can hold the target for a moment, so retry briefly before giving up.
+		for (int attempt = 0; attempt < 5; attempt++) {
+			fs::rename(temporary, target, ec);
+			if (!ec) {
+				return;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		}
+		fail("could not replace the file (" + ec.message() + ")");
 	}
 
 	void map_file_remove(const fs::path& path) const {

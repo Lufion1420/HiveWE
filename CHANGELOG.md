@@ -7,6 +7,9 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **A failed save no longer says "Map saved" or damages your map files** — If a save fails or is interrupted (disk full, read-only or locked file), the error is shown, and map files are written to a temporary file and swapped in so a failed write no longer truncates the existing good file. `--resave` exits with a non-zero code on these failures.
+- **A failed map script step no longer puts a stale script into your map** — If the Lua temp file cannot be written, or JassHelper fails, times out or exits with an error, HiveWE keeps the map's previous `war3map.lua` / `war3map.j` instead of copying an old script (possibly from another map), and shows "Saved without a new map script" instead of "Map saved".
+- **Map Protector reports a failed internal save and returns to your map folder** — The export shows the error, and the editor no longer stays pointed at a temporary folder.
 - **New Trigger Editor variables no longer break the generated script** — Variables created in the Trigger Editor now default to type integer with clean flags, so the script no longer fails with "Undefined type udg_NewVariable". New variables also get unique names (NewVariable, NewVariable2, ...).
 - **Doodads keep their skin when a map is loaded and saved** — A doodad that `war3map.doo` skins as a different type (for example FTtw shown as LTlt) used to lose that skin. The skin is now kept in `war3map.doo` and in the generated script, while newly placed doodads still use their own type as the skin.
 - **Pressing OK in Scenario > Map Options no longer clears the map's global weather** — The weather list now shows every entry (the first one was missing and the entries had no usable ids), and the current weather is shown by name.

@@ -619,6 +619,21 @@ export TriggerVariable make_new_trigger_variable(std::string name, const int id,
 /// Test seam: the udg_ globals and InitGlobals as generate_map_script writes them for these variables.
 export std::string generate_variable_script(const std::vector<TriggerVariable>& variables, const ini::INI& trigger_data, ScriptMode mode);
 
+/// Where generate_map_script writes the generated script and how it runs the JASS compiler. The defaults are the production
+/// paths; tests point them at a scratch folder and a stub compiler.
+export struct MapScriptOutput {
+	/// Empty means QDir::tempPath()/input.lua.
+	fs::path input_script;
+	/// Working directory of the compiler. It writes war3map.j here.
+	fs::path tools_directory = "data/tools";
+	fs::path compiler = "data/tools/clijasshelper.exe";
+	std::chrono::milliseconds compile_timeout = std::chrono::minutes(2);
+};
+
+/// Writes `script` to the input file, compiles it (JASS) and copies the result into the map folder as war3map.lua or war3map.j.
+/// On any failure the map's existing script file is left untouched and the error is returned.
+export std::expected<void, std::string> install_map_script(std::string_view script, ScriptMode mode, const MapScriptOutput& output);
+
 export class Triggers {
 	std::unordered_map<std::string, int> argument_counts;
 

@@ -53,6 +53,30 @@ export struct PackResult {
 	std::string error;
 };
 
+/// Runs `save`, then `restore`, which runs even when `save` throws. A throw becomes {false, what()}.
+/// Test seam for run_sync_save_and_restore(), which cannot be called in tests (no Map).
+export SyncSaveResult save_restoring_state(const std::function<SyncSaveResult()>& save, const std::function<void()>& restore) {
+	struct RestoreGuard {
+		const std::function<void()>& restore;
+		~RestoreGuard() {
+			// A throw out of a destructor would terminate the program; restore only assigns, so this is not expected.
+			try {
+				restore();
+			} catch (...) {
+				std::println(stderr, "Map Protector: restoring the editor state after the save failed");
+			}
+		}
+	} guard{ restore };
+
+	try {
+		return save();
+	} catch (const std::exception& e) {
+		return { false, e.what() };
+	} catch (...) {
+		return { false, "Saving the map to a temporary folder failed with an unknown error." };
+	}
+}
+
 /// Saves the currently loaded map into temp_dir with the requested metadata fields cleared.
 ///
 /// This is the only function in the pipeline allowed to touch the global `map`/`hierarchy`
@@ -94,24 +118,30 @@ export SyncSaveResult run_sync_save_and_restore(const fs::path& temp_dir, const 
 		map->info.name = "Warcraft III Map";
 	}
 
-	hierarchy.map_directory = temp_dir;
-	const bool save_ok = map->save(temp_dir);
-
-	// Restore immediately and unconditionally - no early return above this point.
-	map->filesystem_path = original_filesystem_path;
-	map->name = original_name;
-	hierarchy.map_directory = original_map_directory;
-	map->info.author = original_author;
-	map->info.description = original_description;
-	map->info.loading_screen_text = original_loading_screen_text;
-	map->info.loading_screen_title = original_loading_screen_title;
-	map->info.loading_screen_subtitle = original_loading_screen_subtitle;
-	map->info.name = original_info_name;
-
-	if (!save_ok) {
-		return { false, "Failed to save map data to a temporary folder." };
-	}
-	return { true, "" };
+	return save_restoring_state(
+		[&]() -> SyncSaveResult {
+			hierarchy.map_directory = temp_dir;
+			if (!map->save(temp_dir)) {
+				return { false, "Failed to save map data to a temporary folder." };
+			}
+			// The temporary folder would hold the map's previous script, which no longer matches the saved data.
+			if (map->script_compile_failed) {
+				return { false, "The map script could not be generated, so no protected map was written." };
+			}
+			return { true, "" };
+		},
+		[&]() {
+			map->filesystem_path = original_filesystem_path;
+			map->name = original_name;
+			hierarchy.map_directory = original_map_directory;
+			map->info.author = original_author;
+			map->info.description = original_description;
+			map->info.loading_screen_text = original_loading_screen_text;
+			map->info.loading_screen_title = original_loading_screen_title;
+			map->info.loading_screen_subtitle = original_loading_screen_subtitle;
+			map->info.name = original_info_name;
+		}
+	);
 }
 
 /// Copies a folder-mode map's loose files into temp_dir untouched. Unlike
@@ -128,6 +158,7 @@ SyncSaveResult copy_source_folder(const fs::path& source_directory, const fs::pa
 	if (ec) {
 		return { false, "Failed to copy the source map: " + ec.message() };
 	}
+	remove_map_write_temp_files(temp_dir);
 	return { true, "" };
 }
 
@@ -749,7 +780,7 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 
 	for (const auto& entry : fs::recursive_directory_iterator(temp_dir)) {
 		if (entry.is_regular_file()) {
-			if (is_stormlib_fabricated_name(entry.path().filename().string())) {
+			if (is_stormlib_fabricated_name(entry.path().filename().string()) || is_map_write_temp_file(entry.path())) {
 				continue;
 			}
 			if (!SFileAddFileEx(handle, entry.path().c_str(), entry.path().lexically_relative(temp_dir).string().c_str(), file_flags, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME)) {

@@ -1140,31 +1140,88 @@ std::expected<void, std::string> Triggers::generate_map_script(
 	generate_main(script_writer, terrain, map_info);
 	generate_map_configuration(script_writer, terrain, units, map_info);
 
-	fs::path path = QDir::tempPath().toStdString() + "/input.lua";
-	std::ofstream output(path, std::ios::binary);
-	output.write((char*)script_writer.script.data(), script_writer.script.size());
-	output.close();
+	return install_map_script(script_writer.script, mode, {});
+}
 
-	if (mode == ScriptMode::jass) {
-		QProcess* proc = new QProcess();
-		proc->setWorkingDirectory("data/tools");
-		proc->start(
-			"data/tools/clijasshelper.exe",
-			{"--scriptonly", "common.j", "blizzard.j", QString::fromStdString(path.string()), "war3map.j"}
-		);
-		proc->waitForFinished();
-		const QString result = proc->readAllStandardOutput();
+std::expected<void, std::string> install_map_script(const std::string_view script, const ScriptMode mode, const MapScriptOutput& paths) {
+	const auto display = [](const fs::path& p) { return QString::fromStdWString(p.wstring()).toStdString(); };
+	const std::string kept = mode == ScriptMode::lua ? "The map's previous war3map.lua was kept." : "The map's previous war3map.j was kept.";
 
-		if (result.contains("Compile error")) {
-			return std::unexpected(result.mid(result.indexOf("Compile error")).toStdString());
-		} else if (result.contains("compile errors")) {
-			return std::unexpected(result.mid(result.indexOf("compile errors.")).toStdString());
-		} else {
-			hierarchy.map_file_add("data/tools/war3map.j", "war3map.j");
+	const fs::path path = paths.input_script.empty() ? fs::path(QDir::tempPath().toStdWString()) / "input.lua" : paths.input_script;
+	{
+		// A failed open must not fall through: the file may still hold the previous save's script, possibly of another map.
+		std::ofstream output(path, std::ios::binary | std::ios::trunc);
+		if (!output) {
+			return std::unexpected(std::format("Could not open {} to write the generated map script. {}", display(path), kept));
 		}
-	} else {
-		hierarchy.map_file_add(path, "war3map.lua");
+		output.write(script.data(), static_cast<std::streamsize>(script.size()));
+		output.close();
+		if (!output) {
+			return std::unexpected(std::format("Could not write the generated map script to {}. {}", display(path), kept));
+		}
 	}
 
+	if (mode == ScriptMode::lua) {
+		hierarchy.map_file_add(path, "war3map.lua");
+		return {};
+	}
+
+	// The compiler writes war3map.j into its working directory. A file left by an earlier save must not be taken for this one's.
+	const fs::path compiled = paths.tools_directory / "war3map.j";
+	std::error_code ec;
+	fs::remove(compiled, ec);
+	if (fs::exists(compiled, ec)) {
+		return std::unexpected(std::format("Could not remove the previous compiler output {}. {}", display(compiled), kept));
+	}
+
+	QProcess process;
+	process.setWorkingDirectory(QString::fromStdWString(paths.tools_directory.wstring()));
+	process.start(
+		QString::fromStdWString(paths.compiler.wstring()),
+		{"--scriptonly", "common.j", "blizzard.j", QString::fromStdWString(fs::absolute(path).wstring()), "war3map.j"}
+	);
+	if (!process.waitForStarted()) {
+		return std::unexpected(
+			std::format("Could not start the JASS compiler {}: {}. {}", display(paths.compiler), process.errorString().toStdString(), kept)
+		);
+	}
+
+	const auto timeout_ms = static_cast<int>(std::min<std::int64_t>(paths.compile_timeout.count(), std::numeric_limits<int>::max()));
+	if (!process.waitForFinished(timeout_ms)) {
+		if (process.state() != QProcess::NotRunning) {
+			process.kill();
+			process.waitForFinished(5000);
+			return std::unexpected(std::format(
+				"The JASS compiler did not finish within {} seconds and was stopped. {}",
+				std::chrono::duration_cast<std::chrono::seconds>(paths.compile_timeout).count(),
+				kept
+			));
+		}
+		return std::unexpected(std::format("The JASS compiler failed: {}. {}", process.errorString().toStdString(), kept));
+	}
+
+	const QString result = process.readAllStandardOutput();
+	if (result.contains("Compile error")) {
+		return std::unexpected(result.mid(result.indexOf("Compile error")).toStdString());
+	} else if (result.contains("compile errors")) {
+		return std::unexpected(result.mid(result.indexOf("compile errors.")).toStdString());
+	}
+
+	// Measured 2026-11-22: clijasshelper exits 0 on success and 1 on a compile error.
+	if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+		return std::unexpected(std::format(
+			"The JASS compiler failed (exit code {}). {}\n{}{}",
+			process.exitStatus() == QProcess::NormalExit ? std::to_string(process.exitCode()) : "crashed",
+			kept,
+			result.toStdString(),
+			QString(process.readAllStandardError()).toStdString()
+		));
+	}
+
+	if (!fs::exists(compiled, ec)) {
+		return std::unexpected(std::format("The JASS compiler reported success but wrote no {}. {}", display(compiled), kept));
+	}
+
+	hierarchy.map_file_add(compiled, "war3map.j");
 	return {};
 }
