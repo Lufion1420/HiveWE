@@ -263,10 +263,13 @@ void TriggerExplorer::createVariable() {
 		index = index.parent();
 	}
 
-	TriggerVariable variable;
-	variable.id = ++Trigger::next_id;
-	variable.name = "NewVariable";
-	variable.parent_id = parent_item->id;
+	// Variable names are identifiers (udg_<name>), so a duplicate would redeclare the global.
+	std::string name = "NewVariable";
+	for (int suffix = 2; std::ranges::any_of(map->triggers.variables, [&](const TriggerVariable& i) { return i.name == name; }); suffix++) {
+		name = "NewVariable" + std::to_string(suffix);
+	}
+
+	const TriggerVariable variable = make_new_trigger_variable(name, ++Trigger::next_id, parent_item->id);
 	map->triggers.variables.push_back(variable);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, Classifier::variable, variable.id);

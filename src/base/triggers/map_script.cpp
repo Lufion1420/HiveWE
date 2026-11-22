@@ -15,22 +15,7 @@ void generate_item_globals(MapScriptWriter& script, const std::unordered_map<std
 	}
 }
 
-void generate_global_variables(
-	MapScriptWriter& script,
-	std::unordered_map<std::string, std::string>& unit_variables,
-	const std::unordered_map<std::string, std::string>& item_variables,
-	std::unordered_map<std::string, std::string>& destructable_variables,
-	const std::vector<Trigger>& triggers,
-	const std::vector<TriggerVariable>& variables,
-	const ini::INI& trigger_data,
-	const Regions& regions,
-	const GameCameras& cameras,
-	const Sounds& sounds
-) {
-	if (script.mode == ScriptMode::jass) {
-		script.write_ln("globals");
-	}
-
+void generate_variable_globals(MapScriptWriter& script, const std::vector<TriggerVariable>& variables, const ini::INI& trigger_data) {
 	if (script.mode == ScriptMode::jass) {
 		for (const auto& variable : variables) {
 			const std::string base_type = trigger_data.data("TriggerTypes", variable.type, 4);
@@ -54,6 +39,25 @@ void generate_global_variables(
 			script.global(variable.type, "udg_" + variable.name, lua_global_default(type, variable.is_array));
 		}
 	}
+}
+
+void generate_global_variables(
+	MapScriptWriter& script,
+	std::unordered_map<std::string, std::string>& unit_variables,
+	const std::unordered_map<std::string, std::string>& item_variables,
+	std::unordered_map<std::string, std::string>& destructable_variables,
+	const std::vector<Trigger>& triggers,
+	const std::vector<TriggerVariable>& variables,
+	const ini::INI& trigger_data,
+	const Regions& regions,
+	const GameCameras& cameras,
+	const Sounds& sounds
+) {
+	if (script.mode == ScriptMode::jass) {
+		script.write_ln("globals");
+	}
+
+	generate_variable_globals(script, variables, trigger_data);
 
 	for (const auto& i : regions.regions) {
 		script.global("rect", prefixed_script_identifier("gg_rct_", i.name), script.null());
@@ -1029,6 +1033,13 @@ void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain,
 			script.call("InitAllyPriorities");
 		}
 	});
+}
+
+std::string generate_variable_script(const std::vector<TriggerVariable>& variables, const ini::INI& trigger_data, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_variable_globals(script, variables, trigger_data);
+	generate_init_global_variables(script, variables, trigger_data);
+	return script.script;
 }
 
 std::string generate_main_script(const Terrain& terrain, const MapInfo& map_info, const ScriptMode mode) {

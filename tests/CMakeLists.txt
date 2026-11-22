@@ -19,6 +19,7 @@ add_executable(HiveWE_tests
 	object_data_save_check_test.cpp
 	ally_priorities_script_test.cpp
 	map_info_weather_test.cpp
+	trigger_variable_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

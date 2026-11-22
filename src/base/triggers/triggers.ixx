@@ -586,10 +586,11 @@ export std::string generate_map_configuration_script(const Terrain& terrain, con
 export struct TriggerVariable {
 	std::string name;
 	std::string type;
-	uint32_t unknown;
-	bool is_array;
+	/// The wtg field after the type. Always 1 in the format notes (wc3libs/War3Net); Needs verification against a stock map.
+	uint32_t unknown = 1;
+	bool is_array = false;
 	int array_size = 0;
-	bool is_initialized;
+	bool is_initialized = false;
 	std::string initial_value;
 	int id;
 	int parent_id;
@@ -604,6 +605,19 @@ std::string get_base_type(const std::string& type, const ini::INI& trigger_data)
 
 	return base_type;
 }
+
+/// A variable as the Trigger Editor creates it: integer, not an array, no initial value (the World Editor default).
+export TriggerVariable make_new_trigger_variable(std::string name, const int id, const int parent_id) {
+	TriggerVariable variable;
+	variable.name = std::move(name);
+	variable.type = "integer";
+	variable.id = id;
+	variable.parent_id = parent_id;
+	return variable;
+}
+
+/// Test seam: the udg_ globals and InitGlobals as generate_map_script writes them for these variables.
+export std::string generate_variable_script(const std::vector<TriggerVariable>& variables, const ini::INI& trigger_data, ScriptMode mode);
 
 export class Triggers {
 	std::unordered_map<std::string, int> argument_counts;

@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **New Trigger Editor variables no longer break the generated script** — Variables created in the Trigger Editor now default to type integer with clean flags, so the script no longer fails with "Undefined type udg_NewVariable". New variables also get unique names (NewVariable, NewVariable2, ...).
 - **Doodads keep their skin when a map is loaded and saved** — A doodad that `war3map.doo` skins as a different type (for example FTtw shown as LTlt) used to lose that skin. The skin is now kept in `war3map.doo` and in the generated script, while newly placed doodads still use their own type as the skin.
 - **Pressing OK in Scenario > Map Options no longer clears the map's global weather** — The weather list now shows every entry (the first one was missing and the entries had no usable ids), and the current weather is shown by name.
 - **The Map Info dialog shows and saves the water tint and fog colours correctly** — Red and blue were swapped before, and an unchanged dialog now keeps the colours' alpha byte.
