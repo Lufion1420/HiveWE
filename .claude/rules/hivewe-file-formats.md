@@ -25,6 +25,7 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - Preserve round-trip: MDL/MDX, SLK merges, W3* files, generated scripts.
 - Do not silently discard unknown data unless existing code does intentionally.
 - Keep bounds checks and explicit error propagation.
+- `slk::SLK` (`src/file_formats/slk.ixx`): column 0 (the row key, e.g. unitID, effectID) lives only in `index_to_row` / `row_headers`, never in `base_data`, so `data("<first column name>", row)` silently returns "". Data row indexes start at 0 (header not indexed), so `for (i = 1; ...)` skips the first data row. Take ids from `index_to_row.at(i)`.
 - Preserve Hierarchy lookup order unless task is specifically to change it.
 - No "cleanup" refactors while fixing compatibility bugs.
 - Mark uncertain format rules `Needs verification`; test with `data/test map/` or fixtures.

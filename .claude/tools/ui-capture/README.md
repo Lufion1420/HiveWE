@@ -46,6 +46,9 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - The ribbon Export Objects is a QToolButton with InstantPopup, so UIA Invoke does nothing. Open it with `post-click.ps1`, then post a click to the popup HWND (class `Qt6102QWindowPopupDropShadowSaveBits`) at client (60,14) for the first item.
 - The folder picker defaults to the user's real map path: always set edit 1152. Empty `recentMaps` first and restore it afterwards (safety section below).
 - UIA does not expose `ColorButton` swatch values. Read them by sampling `PrintWindow` capture pixels at the element's bounding rect, scaled by capture size divided by window rect.
+- `ui-act.ps1` works on Qt dialogs (select, toggle, invoke OK); `post-click.ps1` fails on them because it finds the dialog by name.
+- A Qt QComboBox exposes only the Invoke, Value and ExpandCollapse patterns. The Value pattern returns the displayed text, so it confirms a selection; popup items cannot be listed or picked.
+- `data/test map` w3i (v33) has weather_id at byte offset 0xB3. Patching `RAlr` there in a sandbox copy gives a weather test input (no stock map with RAlr was found).
 - MPQ test archives can be built with `StormLib.dll` through ctypes.
 
 ### Safety: recent maps (incident 2026-11-08)

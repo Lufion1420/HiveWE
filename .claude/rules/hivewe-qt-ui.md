@@ -39,6 +39,7 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 - Do not move parsing/resource loading into widgets unless that area already does.
 - UX: active-state clarity, predictable toggles, low-noise feedback.
 - User-facing values: prefer Warcraft coordinates/IDs over internal engine values.
+- A combo filled from an SLK must be checked for the row-key and first-row pitfalls in `hivewe-file-formats.md`.
 - Errors: Qt dialogs where surrounding code already does.
 - `ColorButton::changeColor` has no `ShowAlphaChannel`, so a picked colour gets alpha 255 (ticketed as backlog).
 - `HiveWE::save_current_map_as` creates the target folder and sets `hierarchy.map_directory` before `Map::save` runs, so a save refusal check must run before the folder picker, as `Map::ensure_unit_ids_fit` does.
