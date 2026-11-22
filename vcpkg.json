@@ -34,6 +34,7 @@
     "nlohmann-json",
     "outcome",
     "qt-advanced-docking-system",
+    "qtsvg",
     {
       "name": "qtbase",
       "default-features": false,

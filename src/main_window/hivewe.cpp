@@ -2,6 +2,7 @@
 #include "ui_HiveWE.h"
 #include "new_map_dialog.h"
 #include "shortcut_config_dialog.h"
+#include "theme.h"
 #define __STORMLIB_NO_STATIC_LINK__
 #include "StormLib.h"
 
@@ -40,6 +41,13 @@ import "trigger_editor.h";
 #include "QKeySequence"
 #include "QString"
 #include <QApplication>
+#include <QGuiApplication>
+#include <QComboBox>
+#include <QFile>
+#include <QScrollBar>
+#include <QTextStream>
+#include <QScreen>
+#include <QScrollArea>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -76,7 +84,11 @@ namespace {
 /// Map::save() with any exception shown in a dialog, so a throw while saving cannot close the editor without a message.
 bool save_map_reporting_errors(const fs::path& path) {
 	try {
-		return map->save(path);
+		const bool saved = map->save(path);
+		if (saved) {
+			map->world_undo.mark_saved();
+		}
+		return saved;
 	} catch (const std::exception& e) {
 		QMessageBox::critical(nullptr, "Saving failed",
 							  "The map could not be saved completely:\n" + QString::fromLocal8Bit(e.what())
@@ -178,6 +190,9 @@ HiveWE::HiveWE(QWidget* parent)
 		if (sidebar_minimap_frame) {
 			sidebar_minimap_frame->setVisible(checked);
 		}
+		if (flat_minimap_dock) {
+			flat_minimap_dock->setVisible(checked);
+		}
 	});
 
 	connect(new QShortcut(Qt::CTRL | Qt::Key_U, this), &QShortcut::activated, ui->ribbon->units_visible, &QPushButton::click);
@@ -186,21 +201,17 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(new QShortcut(Qt::CTRL | Qt::Key_L, this), &QShortcut::activated, ui->ribbon->lighting_visible, &QPushButton::click);
 	connect(new QShortcut(Qt::CTRL | Qt::Key_W, this), &QShortcut::activated, ui->ribbon->water_visible, &QPushButton::click);
 	connect(new QShortcut(Qt::CTRL | Qt::Key_I, this), &QShortcut::activated, ui->ribbon->click_helpers_visible, &QPushButton::click);
-	connect(new QShortcut(Qt::CTRL | Qt::Key_T, this), &QShortcut::activated, ui->ribbon->wireframe_visible, &QPushButton::click);
+	connect(new QShortcut(Qt::CTRL | Qt::SHIFT | Qt::Key_W, this), &QShortcut::activated, ui->ribbon->wireframe_visible, &QPushButton::click);
+	connect(new QShortcut(Qt::CTRL | Qt::Key_T, this), &QShortcut::activated, ui->ribbon->test_map, &QToolButton::click);
 	connect(new QShortcut(Qt::Key_F3, this), &QShortcut::activated, ui->ribbon->debug_visible, &QPushButton::click);
 
 	// Reload theme
 	connect(new QShortcut(Qt::Key_F5, this), &QShortcut::activated, [&]() {
-		QSettings settings;
-		QFile file("data/themes/" + settings.value("theme").toString() + ".qss");
-		const auto success = file.open(QFile::ReadOnly);
-		if (!success) {
-			std::println("Failed to open theme file");
+		if (const QString error = theme::apply(theme::current()); !error.isEmpty()) {
+			std::println("Failed to reload the theme: {}", error.toStdString());
 			return;
 		}
-		QString StyleSheet = QLatin1String(file.readAll());
-
-		qApp->setStyleSheet(StyleSheet);
+		apply_theme_chrome();
 	});
 
 	connect(ui->ribbon->reset_camera, &QPushButton::clicked, [&]() { camera.reset(); });
@@ -224,7 +235,9 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(ui->ribbon->export_mpq, &QToolButton::clicked, this, &HiveWE::export_mpq);
 	connect(ui->ribbon->test_map, &QToolButton::clicked, this, &HiveWE::play_test);
 	connect(ui->ribbon->quick_search, &QToolButton::clicked, this, [this]() { new GlobalSearchWidget(this); });
-	connect(ui->ribbon->settings, &QToolButton::clicked, [&]() { new SettingsEditor(this); });
+	connect(ui->ribbon->settings, &QToolButton::clicked, [&]() {
+		connect(new SettingsEditor(this), &QDialog::accepted, this, &HiveWE::apply_theme_chrome);
+	});
 	connect(ui->ribbon->config, &QToolButton::clicked, [&]() { new ShortcutConfigDialog(this); });
 
 	auto* export_menu = new QMenu(this);
@@ -326,8 +339,10 @@ HiveWE::HiveWE(QWidget* parent)
 		window_handler.create_or_raise<MapProtector>(nullptr, created);
 	});
 
+	setup_flat_chrome();
 	restore_window_state();
 	update_recent_maps_menu();
+	apply_theme_chrome();
 
 	connect(minimap, &Minimap::clicked, [](QPointF location) { camera.position = { location.x() * map->terrain.width, (1.0 - location.y()) * map->terrain.height, camera.position.z }; });
 	ui->widget->makeCurrent();
@@ -349,7 +364,7 @@ void HiveWE::setup_palette_sidebar() {
 	auto* main_layout = qobject_cast<QVBoxLayout*>(centralWidget()->layout());
 	main_layout->removeWidget(ui->widget);
 
-	auto* content_layout = new QHBoxLayout;
+	content_layout = new QHBoxLayout;
 	content_layout->setContentsMargins(0, 0, 0, 0);
 	content_layout->setSpacing(0);
 	content_layout->addWidget(ui->widget, 1);
@@ -359,7 +374,7 @@ void HiveWE::setup_palette_sidebar() {
 	sidebar_root->setObjectName("paletteSidebar");
 	sidebar_root->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
 	sidebar_root->setFixedWidth(400);
-	sidebar_root->setStyleSheet(
+	sidebar_legacy_stylesheet = QString(
 		"#paletteSidebar { background: rgba(20, 23, 27, 236); border-left: 1px solid rgba(255, 255, 255, 18); }"
 		"QWidget#paletteSidebarHeader { background: transparent; }"
 		"QWidget#paletteSidebarModeBar { background: transparent; }"
@@ -435,6 +450,7 @@ void HiveWE::setup_palette_sidebar() {
 		"}"
 		"#paletteSidebar QLabel { color: rgb(214, 221, 229); }"
 	);
+	sidebar_root->setStyleSheet(sidebar_legacy_stylesheet);
 
 	auto* sidebar_layout = new QVBoxLayout(sidebar_root);
 	sidebar_layout->setContentsMargins(12, 12, 12, 12);
@@ -460,7 +476,9 @@ void HiveWE::setup_palette_sidebar() {
 		button->setMinimumHeight(38);
 		button->setToolTip(text);
 		mode_layout->addWidget(button, row, column);
-		connect(button, &QToolButton::clicked, this, [this, slot]() { (this->*slot)(); });
+		// toggled, not clicked: an accessibility Toggle (UIA) calls toggle() and emits no clicked signal. update_active_palette_visuals() sets the
+		// state with the signals blocked, so a real click still runs the slot exactly once.
+		connect(button, &QToolButton::toggled, this, [this, slot]() { (this->*slot)(); });
 		return button;
 	};
 
@@ -523,7 +541,7 @@ void HiveWE::setup_palette_sidebar() {
 	header_layout->addWidget(sidebar_title);
 	header_layout->addWidget(sidebar_description);
 
-	auto* sidebar_body = new QFrame(sidebar_root);
+	sidebar_body = new QFrame(sidebar_root);
 	sidebar_body->setProperty("sidebarBody", true);
 	auto* body_layout = new QVBoxLayout(sidebar_body);
 	body_layout->setContentsMargins(14, 14, 14, 14);
@@ -542,6 +560,13 @@ void HiveWE::setup_palette_sidebar() {
 		auto* layout = new QVBoxLayout(host);
 		layout->setContentsMargins(0, 0, 0, 0);
 		layout->setSpacing(0);
+		// The palette sits in a scroll area: its content height no longer sets the minimum height of the main window.
+		auto* scroll = new QScrollArea(host);
+		scroll->setObjectName("paletteScroll");
+		scroll->setWidgetResizable(true);
+		scroll->setFrameShape(QFrame::NoFrame);
+		scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		layout->addWidget(scroll);
 		sidebar_stack->addWidget(host);
 		return host;
 	};
@@ -606,6 +631,8 @@ void HiveWE::add_recent_map(const fs::path& directory) {
 void HiveWE::update_recent_maps_menu() {
 	QSettings settings;
 	QStringList recent_maps = settings.value("recentMaps").toStringList();
+
+	update_flat_recent_menus(recent_maps);
 
 	int button_index = 0;
 	for (const auto& map_path : recent_maps) {
@@ -1510,6 +1537,11 @@ void HiveWE::import_object_data_text() {
 }
 
 void HiveWE::save_window_state() {
+	// --qa-offscreen runs must not overwrite the position of the user's window.
+	if (qa_offscreen) {
+		return;
+	}
+
 	QSettings settings;
 
 	if (!isMaximized()) {
@@ -1521,6 +1553,18 @@ void HiveWE::save_window_state() {
 }
 
 void HiveWE::restore_window_state() {
+	if (qa_offscreen) {
+		// Left of every monitor and never activated or raised, so an automated screenshot run does not disturb the user.
+		const QSize size = qa_window_size;
+		const QRect virtual_geometry = QGuiApplication::primaryScreen()->virtualGeometry();
+		setAttribute(Qt::WA_ShowWithoutActivating);
+		setWindowFlag(Qt::WindowDoesNotAcceptFocus, true);
+		resize(size);
+		move(virtual_geometry.left() - size.width() - 200, virtual_geometry.top());
+		show();
+		return;
+	}
+
 	QSettings settings;
 
 	if (settings.contains("MainWindow/windowState")) {
@@ -1549,6 +1593,7 @@ void HiveWE::set_current_custom_tab(QRibbonTab* tab, QString name) {
 	current_custom_tab = tab;
 	ui->ribbon->addTab(tab, name);
 	ui->ribbon->setCurrentIndex(ui->ribbon->count() - 1);
+	update_ribbon_visibility();
 }
 
 void HiveWE::remove_custom_tab() {
@@ -1556,6 +1601,8 @@ void HiveWE::remove_custom_tab() {
 		if (ui->ribbon->widget(i) == current_custom_tab) {
 			ui->ribbon->removeTab(i);
 			current_custom_tab = nullptr;
+			current_flat_tab = nullptr;
+			update_ribbon_visibility();
 			return;
 		}
 	}
@@ -1675,20 +1722,31 @@ QString HiveWE::sidebar_feedback_label(const SidebarPaletteView view) const {
 	return "Sidebar";
 }
 
+namespace {
+/// Puts a palette into the scroll area of its host (see create_host in the sidebar setup).
+void put_palette_in_host(QWidget* host, Palette* palette) {
+	// The content follows the width of the scroll area instead of pushing the palette wider than the column.
+	palette->fit_to_column();
+	host->findChild<QScrollArea*>("paletteScroll")->setWidget(palette);
+}
+}
+
 void HiveWE::ensure_palette_view(const SidebarPaletteView view) {
 	if ((view == SidebarPaletteView::terrain || view == SidebarPaletteView::pathing) && !terrain_palette) {
 		terrain_palette = new TerrainPalette(terrain_host);
-		terrain_host->layout()->addWidget(terrain_palette);
+		put_palette_in_host(terrain_host, terrain_palette);
 		connect(terrain_palette, &Palette::activated, this, [this]() { activate_palette(terrain_palette); });
 		connect(terrain_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(terrain_palette, &Palette::tool_page_activated, this, &HiveWE::on_tool_page_activated);
 		connect(this, &HiveWE::palette_changed, terrain_palette, &Palette::deactivate);
 	}
 
 	if ((view == SidebarPaletteView::terrain || view == SidebarPaletteView::pathing) && !pathing_palette) {
 		pathing_palette = new PathingPalette(pathing_host);
-		pathing_host->layout()->addWidget(pathing_palette);
+		put_palette_in_host(pathing_host, pathing_palette);
 		connect(pathing_palette, &Palette::activated, this, [this]() { activate_palette(pathing_palette); });
 		connect(pathing_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(pathing_palette, &Palette::tool_page_activated, this, &HiveWE::on_tool_page_activated);
 		connect(this, &HiveWE::palette_changed, pathing_palette, &Palette::deactivate);
 		connect(&pathing_palette->current_brush(), &Brush::size_changed, this, [this](glm::ivec2) {
 			if (terrain_palette) {
@@ -1710,29 +1768,51 @@ void HiveWE::ensure_palette_view(const SidebarPaletteView view) {
 
 	if (view == SidebarPaletteView::doodad && !doodad_palette) {
 		doodad_palette = new DoodadPalette(doodad_host);
-		doodad_host->layout()->addWidget(doodad_palette);
+		put_palette_in_host(doodad_host, doodad_palette);
 		connect(doodad_palette, &Palette::activated, this, [this]() { activate_palette(doodad_palette); });
 		connect(doodad_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(doodad_palette, &Palette::tool_page_activated, this, &HiveWE::on_tool_page_activated);
 		connect(doodad_palette, &DoodadPalette::preview_doodad_changed, this, &HiveWE::update_doodad_model_preview);
 		connect(this, &HiveWE::palette_changed, doodad_palette, &Palette::deactivate);
 	}
 
 	if (view == SidebarPaletteView::unit && !unit_palette) {
 		unit_palette = new UnitPalette(unit_host);
-		unit_host->layout()->addWidget(unit_palette);
+		put_palette_in_host(unit_host, unit_palette);
 		connect(unit_palette, &Palette::activated, this, [this]() { activate_palette(unit_palette); });
 		connect(unit_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(unit_palette, &Palette::tool_page_activated, this, &HiveWE::on_tool_page_activated);
 		connect(unit_palette, &UnitPalette::preview_unit_changed, this, &HiveWE::update_unit_model_preview);
 		connect(this, &HiveWE::palette_changed, unit_palette, &Palette::deactivate);
 	}
 
 	if (view == SidebarPaletteView::region && !region_palette) {
 		region_palette = new RegionPalette(region_host);
-		region_host->layout()->addWidget(region_palette);
+		put_palette_in_host(region_host, region_palette);
 		connect(region_palette, &Palette::activated, this, [this]() { activate_palette(region_palette); });
 		connect(region_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
+		connect(region_palette, &Palette::tool_page_activated, this, &HiveWE::on_tool_page_activated);
 		connect(this, &HiveWE::palette_changed, region_palette, &Palette::deactivate);
 	}
+}
+
+void HiveWE::reset_palettes() {
+	if (!terrain_palette && !pathing_palette && !doodad_palette && !unit_palette && !region_palette) {
+		return;
+	}
+
+	hide_palette_sidebar();
+	delete terrain_palette;
+	terrain_palette = nullptr;
+	delete pathing_palette;
+	pathing_palette = nullptr;
+	delete doodad_palette;
+	doodad_palette = nullptr;
+	delete unit_palette;
+	unit_palette = nullptr;
+	delete region_palette;
+	region_palette = nullptr;
+	current_flat_tab = nullptr;
 }
 
 void HiveWE::reset_map_session() {
@@ -1747,8 +1827,9 @@ void HiveWE::reset_map_session() {
 	delete region_palette;
 	region_palette = nullptr;
 	remove_custom_tab();
+	current_flat_tab = nullptr;
 	current_sidebar_view = SidebarPaletteView::none;
-	sidebar_root->hide();
+	set_sidebar_shown(false);
 	update_palette_model_preview(nullptr, "Model Preview");
 	ui->widget->makeCurrent();
 	ui->ribbon->terrain_palette->setChecked(false);
@@ -1837,7 +1918,7 @@ QString HiveWE::sanitized_folder_name(const QString& map_name) {
 }
 
 void HiveWE::update_active_palette_visuals() {
-	const bool sidebar_visible = sidebar_root && sidebar_root->isVisible() && current_sidebar_view != SidebarPaletteView::none;
+	const bool sidebar_visible = sidebar_shown() && current_sidebar_view != SidebarPaletteView::none;
 	const bool preview_visible = sidebar_visible && (current_sidebar_view == SidebarPaletteView::doodad || current_sidebar_view == SidebarPaletteView::unit);
 
 	auto set_checked = [](QAbstractButton* button, const bool checked) {
@@ -1861,7 +1942,7 @@ void HiveWE::update_active_palette_visuals() {
 	set_checked(region_mode_button, sidebar_visible && current_sidebar_view == SidebarPaletteView::region);
 
 	if (sidebar_preview_frame) {
-		sidebar_preview_frame->setVisible(preview_visible);
+		sidebar_preview_frame->setVisible(flat_layout_active || preview_visible);
 	}
 
 	if (!sidebar_visible) {
@@ -1871,7 +1952,7 @@ void HiveWE::update_active_palette_visuals() {
 		return;
 	}
 
-	sidebar_title->setText(sidebar_title_for_view(current_sidebar_view));
+	sidebar_title->setText(flat_layout_active ? sidebar_flat_title_for_view(current_sidebar_view) : sidebar_title_for_view(current_sidebar_view));
 	sidebar_description->setText(sidebar_description_for_view(current_sidebar_view));
 	sidebar_hint->setText(sidebar_hint_for_view(current_sidebar_view));
 }
@@ -1879,7 +1960,7 @@ void HiveWE::update_active_palette_visuals() {
 void HiveWE::hide_palette_sidebar() {
 	const SidebarPaletteView previous_view = current_sidebar_view;
 	current_sidebar_view = SidebarPaletteView::none;
-	sidebar_root->hide();
+	set_sidebar_shown(false);
 
 	if (auto* palette = palette_for_view(previous_view)) {
 		if ((terrain_palette && palette == terrain_palette && map->brush == &terrain_palette->current_brush())
@@ -1893,6 +1974,7 @@ void HiveWE::hide_palette_sidebar() {
 
 	remove_custom_tab();
 	update_active_palette_visuals();
+	update_ribbon_visibility();
 }
 
 void HiveWE::show_palette_view(const SidebarPaletteView view, const bool show_feedback) {
@@ -1906,7 +1988,7 @@ void HiveWE::show_palette_view(const SidebarPaletteView view, const bool show_fe
 
 	current_sidebar_view = view;
 	sidebar_stack->setCurrentWidget(host);
-	sidebar_root->show();
+	set_sidebar_shown(true);
 	switch (view) {
 	case SidebarPaletteView::terrain:
 		ui->ribbon->show_tab(MainRibbon::HeaderTab::terrain);
@@ -1928,6 +2010,7 @@ void HiveWE::show_palette_view(const SidebarPaletteView view, const bool show_fe
 	}
 	update_active_palette_visuals();
 	activate_palette(palette, false);
+	update_ribbon_visibility();
 
 	if (show_feedback) {
 		show_transient_notice(sidebar_feedback_label(view), 850);
@@ -2000,8 +2083,97 @@ void HiveWE::activate_palette(Palette* palette, const bool show_feedback) {
 	show_transient_notice(label, 850);
 }
 
+void HiveWE::open_qa_palette() {
+	// The same slots the mode buttons and shortcuts run, so no UI automation is needed to open a palette.
+	if (qa_palette == "terrain") {
+		toggle_terrain_sidebar();
+	} else if (qa_palette == "doodads") {
+		toggle_doodad_palette();
+	} else if (qa_palette == "units") {
+		toggle_unit_palette();
+	} else if (qa_palette == "pathing") {
+		toggle_pathing_sidebar();
+	} else if (qa_palette == "regions") {
+		toggle_region_palette();
+	}
+}
+
+void HiveWE::dump_qa_layout() const {
+	QFile file(qa_dump_layout_file);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+		std::println(stderr, "--qa-dump-layout: cannot write {}", qa_dump_layout_file.toStdString());
+		return;
+	}
+	QTextStream out(&file);
+
+	const auto policy_text = [](const QSizePolicy::Policy policy) {
+		switch (policy) {
+			case QSizePolicy::Fixed: return "Fixed";
+			case QSizePolicy::Minimum: return "Minimum";
+			case QSizePolicy::Maximum: return "Maximum";
+			case QSizePolicy::Preferred: return "Preferred";
+			case QSizePolicy::MinimumExpanding: return "MinExpanding";
+			case QSizePolicy::Expanding: return "Expanding";
+			case QSizePolicy::Ignored: return "Ignored";
+		}
+		return "?";
+	};
+	const auto size_text = [](const QSize& size) { return QString("%1x%2").arg(size.width()).arg(size.height()); };
+
+	auto* host = host_for_view(current_sidebar_view);
+	auto* scroll = host ? host->findChild<QScrollArea*>("paletteScroll") : nullptr;
+	const int viewport_width = scroll ? scroll->viewport()->width() : 0;
+
+	// The effective minimum width is what a layout reserves for the widget (an explicit minimumSize wins, an Ignored policy means none).
+	const auto effective_min_width = [](const QWidget* widget) {
+		if (widget->minimumWidth() > 0) {
+			return widget->minimumWidth();
+		}
+		return widget->sizePolicy().horizontalPolicy() == QSizePolicy::Ignored ? 0 : widget->minimumSizeHint().width();
+	};
+	const auto visible_children = [](QWidget* widget) {
+		QList<QWidget*> result;
+		for (auto* child : widget->children()) {
+			if (auto* child_widget = qobject_cast<QWidget*>(child); child_widget && !child_widget->isWindow() && !child_widget->isHidden()) {
+				result.push_back(child_widget);
+			}
+		}
+		return result;
+	};
+
+	// OVER_VIEWPORT: the minimum width is larger than the scroll area's viewport (not than the parent's geometry, which is already stretched).
+	// DEEPEST_OFFENDER: over the viewport, and no visible child is: its layout (margins, spacing, a row or grid of children) makes the width.
+	const std::function<void(QWidget*, int)> dump = [&](QWidget* widget, const int depth) {
+		const QSize minimum_hint = widget->minimumSizeHint();
+		const int min_width = effective_min_width(widget);
+		const bool over = viewport_width > 0 && min_width > viewport_width;
+		bool child_over = false;
+		for (auto* child : visible_children(widget)) {
+			child_over = child_over || effective_min_width(child) > viewport_width;
+		}
+		out << QString(depth * 2, ' ') << widget->metaObject()->className() << " '" << widget->objectName() << "' geo=" << size_text(widget->size())
+			<< " minHint=" << size_text(minimum_hint) << " min=" << size_text(widget->minimumSize()) << " hint=" << size_text(widget->sizeHint())
+			<< " policy=" << policy_text(widget->sizePolicy().horizontalPolicy()) << "/" << policy_text(widget->sizePolicy().verticalPolicy())
+			<< (widget->isVisibleTo(window()) ? "" : " HIDDEN") << (over ? " OVER_VIEWPORT" : "")
+			<< (over && !child_over ? " DEEPEST_OFFENDER" : "") << "\n";
+		for (auto* child : visible_children(widget)) {
+			dump(child, depth + 1);
+		}
+	};
+
+	if (host) {
+		out << "palette view widget tree (host -> scroll area -> palette); viewport width " << viewport_width << "\n";
+		dump(host, 0);
+		if (scroll) {
+			out << "horizontal scrollbar visible: " << (scroll->horizontalScrollBar()->isVisibleTo(scroll) ? "YES" : "no") << "\n";
+		}
+	} else {
+		out << "no palette open (use --palette)\n";
+	}
+}
+
 void HiveWE::toggle_terrain_sidebar() {
-	if (sidebar_root->isVisible() && current_sidebar_view == SidebarPaletteView::terrain) {
+	if (sidebar_shown() && current_sidebar_view == SidebarPaletteView::terrain) {
 		hide_palette_sidebar();
 		show_transient_notice("Terrain sidebar hidden", 700);
 		return;
@@ -2012,7 +2184,7 @@ void HiveWE::toggle_terrain_sidebar() {
 }
 
 void HiveWE::toggle_pathing_sidebar() {
-	if (sidebar_root->isVisible() && current_sidebar_view == SidebarPaletteView::pathing) {
+	if (sidebar_shown() && current_sidebar_view == SidebarPaletteView::pathing) {
 		hide_palette_sidebar();
 		show_transient_notice("Pathing sidebar hidden", 700);
 		return;
@@ -2023,7 +2195,7 @@ void HiveWE::toggle_pathing_sidebar() {
 }
 
 void HiveWE::toggle_doodad_palette() {
-	if (sidebar_root->isVisible() && current_sidebar_view == SidebarPaletteView::doodad) {
+	if (sidebar_shown() && current_sidebar_view == SidebarPaletteView::doodad) {
 		hide_palette_sidebar();
 		show_transient_notice("Doodad sidebar hidden", 700);
 		return;
@@ -2034,7 +2206,7 @@ void HiveWE::toggle_doodad_palette() {
 }
 
 void HiveWE::toggle_unit_palette() {
-	if (sidebar_root->isVisible() && current_sidebar_view == SidebarPaletteView::unit) {
+	if (sidebar_shown() && current_sidebar_view == SidebarPaletteView::unit) {
 		hide_palette_sidebar();
 		show_transient_notice("Unit sidebar hidden", 700);
 		return;
@@ -2045,7 +2217,7 @@ void HiveWE::toggle_unit_palette() {
 }
 
 void HiveWE::toggle_region_palette() {
-	if (sidebar_root->isVisible() && current_sidebar_view == SidebarPaletteView::region) {
+	if (sidebar_shown() && current_sidebar_view == SidebarPaletteView::region) {
 		hide_palette_sidebar();
 		show_transient_notice("Region sidebar hidden", 700);
 		return;

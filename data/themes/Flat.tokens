@@ -1,0 +1,101 @@
+# Design tokens of the "Flat Dark" and "Flat Light" themes.
+# Values come from designs/proposals/ui-modernization/tokens.css (direction A, Flat). Names match the CSS custom properties without
+# the leading "--". Flat.qss.in refers to them as @{name}; src/utilities/theme_tokens.ixx substitutes them and src/main_window/theme.cpp
+# builds the palette and the icon colours from the same values.
+# Edit a value here and press F5 in the app to reload the active theme.
+
+[shared]
+font-family = "Inter", "Segoe UI", sans-serif
+font-family-name = Inter
+font-size-base = 12
+font-size-small = 11
+font-size-title = 12
+font-weight-strong = 600
+
+space-1 = 2
+space-2 = 4
+space-3 = 8
+space-4 = 12
+
+radius-button = 3
+radius-input = 3
+radius-group = 3
+
+row-height = 22
+# control-height minus the two 1px border rows; QSS min-height excludes the border.
+control-height = 24
+control-inner = 22
+toolbar-button-inner = 26
+menubar-height = 24
+toolbar-height = 36
+toolbar-button = 28
+toolbar-icon = 20
+dock-tab-height = 24
+statusbar-height = 22
+tab-indicator-width = 2
+
+[dark]
+color-window = #2b2d30
+color-base = #1e1f22
+color-alt-base = #25272a
+color-panel = #2b2d30
+color-menu-bg = #2b2d30
+color-border = #393b40
+color-border-strong = #4e5157
+color-text = #dfe1e5
+color-text-muted = #9da0a8
+color-text-disabled = #5c5f66
+color-accent = #3574f0
+color-accent-hover = #4682f4
+color-accent-text = #ffffff
+color-hover = #393b40
+color-selection = #2e436e
+color-selection-text = #dfe1e5
+color-checked-bg = #2e436e
+color-checked-border = #3574f0
+color-button-top = #393b40
+color-button-bottom = #393b40
+color-button-hover = #43454a
+color-button-pressed = #4e5157
+color-titlebar-top = #2b2d30
+color-titlebar-bottom = #2b2d30
+color-tab-selected = #1e1f22
+color-input-bg = #1e1f22
+color-focus = #3574f0
+color-ok = #5fb865
+color-warn = #e0a030
+color-error = #e5534b
+color-viewport = #2f3d2c
+
+[light]
+color-window = #f2f3f5
+color-base = #ffffff
+color-alt-base = #f7f8fa
+color-panel = #f2f3f5
+color-menu-bg = #ffffff
+color-border = #d1d3d9
+color-border-strong = #b4b8bf
+color-text = #1e1f22
+color-text-muted = #6c707e
+color-text-disabled = #a8adb8
+color-accent = #3574f0
+color-accent-hover = #2a62d6
+color-accent-text = #ffffff
+color-hover = #e6e8ec
+color-selection = #d5e2fc
+color-selection-text = #1e1f22
+color-checked-bg = #d5e2fc
+color-checked-border = #3574f0
+color-button-top = #e6e8ec
+color-button-bottom = #e6e8ec
+color-button-hover = #dcdee3
+color-button-pressed = #c9ccd3
+color-titlebar-top = #f2f3f5
+color-titlebar-bottom = #f2f3f5
+color-tab-selected = #ffffff
+color-input-bg = #ffffff
+color-focus = #3574f0
+color-ok = #2e8b3d
+color-warn = #b87500
+color-error = #c9372c
+color-viewport = #2f3d2c

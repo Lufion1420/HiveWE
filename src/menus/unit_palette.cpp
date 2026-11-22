@@ -1,4 +1,5 @@
 #include "unit_palette.h"
+#include "theme.h"
 
 #include <QComboBox>
 #include <QLineEdit>
@@ -52,12 +53,12 @@ UnitPalette::UnitPalette(QWidget* parent) : Palette(parent) {
 
 	selection_summary = new QFrame(this);
 	selection_summary->setObjectName("unitSelectionSummary");
-	selection_summary->setStyleSheet(
+	selection_summary->setStyleSheet(theme::current_is_flat() ? QString() : QString(
 		"QFrame#unitSelectionSummary { background: rgba(24, 27, 31, 200); border: 1px solid rgba(255, 255, 255, 14); border-radius: 12px; }"
 		"QLabel#unitSelectionSummaryLabel { color: rgb(140, 149, 162); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }"
 		"QLabel#unitSelectionSummaryTitle { color: rgb(241, 244, 247); font-size: 14px; font-weight: 700; }"
 		"QLabel#unitSelectionSummaryMeta { color: rgb(176, 185, 196); font-size: 12px; }"
-	);
+	));
 	auto* selection_summary_layout = new QVBoxLayout(selection_summary);
 	selection_summary_layout->setContentsMargins(12, 12, 12, 12);
 	selection_summary_layout->setSpacing(4);
@@ -173,7 +174,11 @@ void UnitPalette::activate_palette() {
 		selection_mode->setChecked(true);
 	}
 	map->brush = &brush;
-	emit ribbon_tab_requested(ribbon_tab, "Unit Palette");
+	if (theme::current_is_flat()) {
+		attach_tool_page(ribbon_tab);
+	} else {
+		emit ribbon_tab_requested(ribbon_tab, "Unit Palette");
+	}
 }
 
 void UnitPalette::select_id_in_palette(std::string id) {

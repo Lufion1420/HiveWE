@@ -2,6 +2,9 @@
 
 #include <QSettings>
 #include <QFile>
+#include <QMessageBox>
+
+#include "main_window/theme.h"
 
 import std;
 
@@ -47,13 +50,13 @@ SettingsEditor::SettingsEditor(QWidget* parent)
 
 
 	connect(ui.buttonBox, &QDialogButtonBox::accepted, [&]() {
+		// A theme that fails to apply is not saved: it would break the next start.
+		const QString previous_theme = QSettings().value("theme", "Dark").toString();
 		save();
-		QSettings settings;
-		QFile file("data/themes/" + settings.value("theme").toString() + ".qss");
-		file.open(QFile::ReadOnly);
-		QString StyleSheet = QLatin1String(file.readAll());
-
-		qApp->setStyleSheet(StyleSheet);
+		if (const QString error = theme::apply_from_settings(); !error.isEmpty()) {
+			QSettings().setValue("theme", previous_theme);
+			QMessageBox::warning(this, "Theme", error + "\n\nThe theme was not changed.");
+		}
 		emit accept();
 		close();
 	});

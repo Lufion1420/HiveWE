@@ -11,7 +11,7 @@ project (HiveWE CXX)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets REQUIRED)
+find_package(Qt6 COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets Svg REQUIRED)
 find_package(Bullet CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
@@ -71,6 +71,7 @@ target_link_libraries(HiveWE_lib PUBLIC
 	Qt6::Widgets
 	Qt6::OpenGL
 	Qt6::OpenGLWidgets
+	Qt6::Svg
 	glm::glm
 	glad::glad
 	soil2::soil2

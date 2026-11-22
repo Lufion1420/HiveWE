@@ -1,4 +1,5 @@
 #include "pathing_palette.h"
+#include "theme.h"
 
 #include <QImage>
 #include <QSettings>
@@ -37,7 +38,7 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 	ui.brushShapeDiamond->hide();
 	ui.brushSize->setReadOnly(true);
 	ui.brushSize->setButtonSymbols(QAbstractSpinBox::NoButtons);
-	setStyleSheet(
+	setStyleSheet(theme::current_is_flat() ? QString() : QString(
 		"QLabel { color: rgb(212, 219, 227); }"
 		"QLabel#brushOperationLabel, QLabel#brushTypeLabel, QLabel#brushSizeLabel {"
 		"font-size: 11px;"
@@ -61,7 +62,7 @@ PathingPalette::PathingPalette(QWidget *parent) : Palette(parent) {
 		"}"
 		"QSlider::groove:horizontal { height: 6px; background: rgba(255, 255, 255, 20); border-radius: 999px; }"
 		"QSlider::handle:horizontal { width: 16px; margin: -5px 0; background: rgb(95, 164, 255); border-radius: 8px; }"
-	);
+	));
 
 	QRibbonSection* selection_section = new QRibbonSection;
 	selection_section->setText("Selection");
@@ -174,6 +175,9 @@ void PathingPalette::activate_palette() {
 	selection_mode->enableShortcuts();
 	map->brush = &brush;
 	sync_brush_controls();
+	if (theme::current_is_flat()) {
+		attach_tool_page(ribbon_tab);
+	}
 }
 
 void PathingPalette::deactivate(QRibbonTab* tab) {

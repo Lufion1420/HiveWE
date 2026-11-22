@@ -17,6 +17,11 @@ namespace fs = std::filesystem;
 #include <QKeyEvent>
 #include <QStackedWidget>
 #include <QToolButton>
+#include <QToolBar>
+#include <QAction>
+#include <QMenu>
+#include <vector>
+#include <utility>
 #include <QString>
 #include <memory>
 
@@ -51,6 +56,19 @@ class HiveWE : public QMainWindow {
 public:
 	explicit HiveWE(QWidget* parent = nullptr);
 	~HiveWE();
+
+	/// Set by --qa-offscreen before the window exists: show it outside all monitors, never activate it, never save its position.
+	static inline bool qa_offscreen = false;
+	/// Set by --window-size: size of the --qa-offscreen window.
+	static inline QSize qa_window_size = QSize(1600, 1000);
+	/// Set by --palette: the palette (terrain, doodads, units, pathing, regions) opened after the map has loaded, through the mode button's slot.
+	static inline QString qa_palette;
+	void open_qa_palette();
+	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.
+	static inline QString qa_dump_layout_file;
+	/// Writes the widget tree of the open palette (class, objectName, size hints, size policy, geometry) to qa_dump_layout_file, so a too wide
+	/// minimum width can be traced to a widget.
+	void dump_qa_layout() const;
 
 	void load_map(const fs::path& directory);
 
@@ -110,6 +128,28 @@ private:
 	void show_transient_notice(const QString& text, int timeout_ms = 1800);
 	void position_transient_notice();
 	void setup_palette_sidebar();
+	/// flat_chrome.cpp: menu bar and compact toolbar of the Flat themes. Every action forwards to the matching ribbon button, so the slots
+	/// and shortcuts stay the ones wired in the constructor.
+	void setup_flat_chrome();
+	/// Shows the menu bar and toolbar (Flat themes) or the ribbon (old themes), restyles the sidebar and refreshes the icon colours.
+	void apply_theme_chrome();
+	void apply_sidebar_style(bool flat);
+	/// Flat themes: the ribbon is only shown while a palette has its tool page in it. Old themes: always shown.
+	void update_ribbon_visibility();
+	void refresh_flat_icons();
+	void update_flat_recent_menus(const QStringList& recent_maps);
+	/// Flat themes: left column (mode buttons, Minimap, palette), viewport, right column (Properties, Preview). Old themes: one right sidebar.
+	void apply_flat_layout(bool flat);
+	void setup_flat_status_bar();
+	void update_status_bar();
+	/// Shows or hides the palette panel (the whole sidebar in the old layout, the palette dock in the Flat layout).
+	void set_sidebar_shown(bool shown);
+	bool sidebar_shown() const { return palette_panel_visible; }
+	void on_tool_page_activated(QRibbonTab* tab);
+	/// Deletes the palettes so they are rebuilt for the layout of the active theme.
+	void reset_palettes();
+	QString sidebar_flat_title_for_view(SidebarPaletteView view) const;
+	QAction* link_ribbon_action(QAbstractButton* source, const QString& text, const QString& icon_name, const QString& tooltip = {});
 	void update_active_palette_visuals();
 	void hide_palette_sidebar();
 	void show_palette_view(SidebarPaletteView view, bool show_feedback = true);
@@ -143,6 +183,29 @@ private:
 	QLabel* transient_notice = nullptr;
 	QTimer transient_notice_timer;
 	QWidget* sidebar_root = nullptr;
+	QHBoxLayout* content_layout = nullptr;
+	QFrame* sidebar_body = nullptr;
+	bool palette_panel_visible = false;
+	bool flat_layout_active = false;
+	QRibbonTab* current_flat_tab = nullptr;
+	QWidget* flat_left = nullptr;
+	QWidget* flat_right = nullptr;
+	QFrame* flat_minimap_dock = nullptr;
+	QFrame* flat_palette_dock = nullptr;
+	QFrame* flat_properties_dock = nullptr;
+	QFrame* flat_preview_dock = nullptr;
+	QTimer status_timer;
+	QLabel* status_cursor = nullptr;
+	QLabel* status_tileset = nullptr;
+	QLabel* status_map = nullptr;
+	QLabel* status_brush = nullptr;
+	QLabel* status_unsaved = nullptr;
+	QString sidebar_legacy_stylesheet;
+	QToolBar* flat_toolbar = nullptr;
+	QMenu* recent_maps_menu = nullptr;
+	QMenu* open_dropdown_menu = nullptr;
+	QAction* open_mpq_action = nullptr;
+	std::vector<std::pair<QAction*, QString>> flat_icon_actions;
 	QWidget* sidebar_header = nullptr;
 	QWidget* sidebar_mode_bar = nullptr;
 	QLabel* sidebar_title = nullptr;

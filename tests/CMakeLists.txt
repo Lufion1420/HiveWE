@@ -21,6 +21,7 @@ add_executable(HiveWE_tests
 	map_info_weather_test.cpp
 	trigger_variable_test.cpp
 	map_save_failure_test.cpp
+	theme_tokens_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
@@ -30,6 +31,7 @@ target_link_libraries(HiveWE_tests PRIVATE
 
 target_compile_definitions(HiveWE_tests PRIVATE
 	MDL_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mdl"
+	THEMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../data/themes"
 	TEST_MAP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../data/test map"
 )
 

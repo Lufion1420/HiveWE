@@ -1,4 +1,5 @@
 ﻿#include "doodad_palette.h"
+#include "theme.h"
 
 #include <QRadioButton>
 #include <QCheckBox>
@@ -63,19 +64,19 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	ui.doodads->setIconSize(QSize(24, 24));
 	ui.brushGroupBox->setTitle("Placement");
 	ui.brushGroupBox->setObjectName("doodadPlacementGroup");
-	ui.brushGroupBox->setStyleSheet(
+	ui.brushGroupBox->setStyleSheet(theme::current_is_flat() ? QString() : QString(
 		"QGroupBox#doodadPlacementGroup { margin-top: 12px; padding-top: 6px; }"
 		"QGroupBox#doodadPlacementGroup::title { subcontrol-origin: margin; left: 0px; padding: 0 0 6px 0; }"
-	);
+	));
 
 	selection_summary = new QFrame(this);
 	selection_summary->setObjectName("doodadSelectionSummary");
-	selection_summary->setStyleSheet(
+	selection_summary->setStyleSheet(theme::current_is_flat() ? QString() : QString(
 		"QFrame#doodadSelectionSummary { background: rgba(24, 27, 31, 200); border: 1px solid rgba(255, 255, 255, 14); border-radius: 12px; }"
 		"QLabel#doodadSelectionSummaryLabel { color: rgb(140, 149, 162); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }"
 		"QLabel#doodadSelectionSummaryTitle { color: rgb(241, 244, 247); font-size: 14px; font-weight: 700; }"
 		"QLabel#doodadSelectionSummaryMeta { color: rgb(176, 185, 196); font-size: 12px; }"
-	);
+	));
 	auto* selection_summary_layout = new QVBoxLayout(selection_summary);
 	selection_summary_layout->setContentsMargins(12, 12, 12, 12);
 	selection_summary_layout->setSpacing(4);
@@ -83,6 +84,7 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	selection_summary_label->setObjectName("doodadSelectionSummaryLabel");
 	selection_summary_title = new QLabel("No doodad selected", selection_summary);
 	selection_summary_title->setObjectName("doodadSelectionSummaryTitle");
+	selection_summary_title->setWordWrap(true);
 	selection_summary_meta = new QLabel("Pick an entry from the list or sync from the map selection.", selection_summary);
 	selection_summary_meta->setObjectName("doodadSelectionSummaryMeta");
 	selection_summary_meta->setWordWrap(true);
@@ -511,7 +513,11 @@ void DoodadPalette::activate_palette() {
 		selection_mode->setChecked(true);
 	}
 	map->brush = &brush;
-	emit ribbon_tab_requested(ribbon_tab, "Doodad Palette");
+	if (theme::current_is_flat()) {
+		attach_tool_page(ribbon_tab);
+	} else {
+		emit ribbon_tab_requested(ribbon_tab, "Doodad Palette");
+	}
 }
 
 void DoodadPalette::selection_changed(const QModelIndex& index) {

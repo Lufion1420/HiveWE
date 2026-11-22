@@ -12,8 +12,10 @@
 #include <QSurfaceFormat>
 #include <QSettings>
 #include <QStyleFactory>
+#include <QTimer>
 
 #include "main_window/hivewe.h"
+#include "main_window/theme.h"
 #include "headless_resave.h"
 #include "DockManager.h"
 
@@ -34,10 +36,31 @@ import Timer;
 import MapGlobal;
 import Globals;
 import Utilities;
+import ThemeTokens;
 import Hierarchy;
 import BinaryReader;
 import GLThreadPool;
 namespace fs = std::filesystem;
+
+namespace {
+/// --qa-offscreen: every top-level window the app creates (dialogs, editors, message boxes) refuses activation, so an automated run never
+/// takes the foreground from the user.
+class NoActivateFilter : public QObject {
+  public:
+	using QObject::QObject;
+
+	bool eventFilter(QObject* watched, QEvent* event) override {
+		if (event->type() == QEvent::Polish) {
+			auto* widget = qobject_cast<QWidget*>(watched);
+			if (widget && (widget->windowType() == Qt::Window || widget->windowType() == Qt::Dialog) && !widget->isVisible()) {
+				widget->setAttribute(Qt::WA_ShowWithoutActivating);
+				widget->setWindowFlag(Qt::WindowDoesNotAcceptFocus, true);
+			}
+		}
+		return false;
+	}
+};
+}
 
 int main(int argc, char* argv[]) {
 	ZoneScopedN("main");
@@ -98,6 +121,66 @@ int main(int argc, char* argv[]) {
 		return 2;
 	}
 
+	// Options for automated screenshots and harmless in normal use.
+	QString theme_override;
+	for (int i = 1; i < arguments.size(); ++i) {
+		if (arguments[i] == "--help" || arguments[i] == "-h") {
+			std::println(
+				"Usage: HiveWE [--theme <name>] [--qa-offscreen [--window-size WxH]] [--palette <name>]\n"
+				"       HiveWE --resave <input_folder> <output_folder>\n"
+				"\n"
+				"  --theme <name>       Use this theme for this run only (Dark, Light, Flat Dark or Flat Light). The saved setting is not changed.\n"
+				"  --qa-offscreen       Show the main window outside all monitors, without activating or raising it. Its position is not saved.\n"
+				"  --window-size WxH    Size in pixels of the --qa-offscreen window, for example 1366x768. Ignored without --qa-offscreen.\n"
+				"  --palette <name>     Open a palette after the startup map has loaded: terrain, doodads, units, pathing or regions.\n"
+				"                       Needs a loaded map, so it only works with the startup map (data/test map).\n"
+				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
+				"                       (sizes, size hints, policies) to <file>.\n"
+				"  --resave <in> <out>  Load one map folder and save it to another folder without opening the editor window.\n"
+				"  --help               Show this text."
+			);
+			return 0;
+		}
+		if (arguments[i] == "--qa-offscreen") {
+			HiveWE::qa_offscreen = true;
+		} else if (arguments[i] == "--theme") {
+			if (i + 1 >= arguments.size()) {
+				std::println(stderr, "--theme needs a theme name. See HiveWE --help.");
+				return 2;
+			}
+			theme_override = arguments[++i];
+		} else if (arguments[i] == "--palette") {
+			static const QStringList names = { "terrain", "doodads", "units", "pathing", "regions" };
+			if (i + 1 >= arguments.size() || !names.contains(arguments[i + 1])) {
+				std::println(stderr, "--palette needs one of: terrain, doodads, units, pathing, regions. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_palette = arguments[++i];
+		} else if (arguments[i] == "--qa-dump-layout") {
+			if (i + 1 >= arguments.size()) {
+				std::println(stderr, "--qa-dump-layout needs a file name. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_dump_layout_file = arguments[++i];
+		} else if (arguments[i] == "--window-size") {
+			const QStringList parts = i + 1 < arguments.size() ? arguments[i + 1].split('x') : QStringList();
+			bool width_ok = false;
+			bool height_ok = false;
+			const int width = parts.size() == 2 ? parts[0].toInt(&width_ok) : 0;
+			const int height = parts.size() == 2 ? parts[1].toInt(&height_ok) : 0;
+			if (!width_ok || !height_ok || width < 200 || height < 200) {
+				std::println(stderr, "--window-size needs a size like 1366x768. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_window_size = QSize(width, height);
+			++i;
+		}
+	}
+
+	if (HiveWE::qa_offscreen) {
+		a.installEventFilter(new NoActivateFilter(&a));
+	}
+
 	ads::CDockManager::setConfigFlag(ads::CDockManager::FocusHighlighting);
 	ads::CDockManager::setConfigFlag(ads::CDockManager::AllTabsHaveCloseButton);
 	ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility);
@@ -107,13 +190,23 @@ int main(int argc, char* argv[]) {
 	QSettings settings;
 	// --resave opens no window, so it does not need the theme.
 	if (!resave) {
-		QFile file("data/themes/" + settings.value("theme", "Dark").toString() + ".qss");
-		if (!file.open(QIODevice::ReadOnly)) {
-			qWarning() << "Error: Reading theme failed:" << file.error() << ": " << file.errorString();
-			return -1;
+		// A broken theme must never stop HiveWE from starting: fall back to Dark, and to no style sheet if that fails too.
+		const QString requested = theme_override.isEmpty() ? settings.value("theme", "Dark").toString() : theme_override;
+		const auto startup_theme = theme_tokens::apply_with_fallback(requested.toStdString(), [](const std::string& name) {
+			return theme::apply(QString::fromStdString(name)).toStdString();
+		});
+		if (!startup_theme.error.empty()) {
+			qWarning() << "Error: Applying the theme failed:" << QString::fromStdString(startup_theme.error);
+			const QString used = startup_theme.applied.empty() ? QString("no theme (the default look)") : QString::fromStdString(startup_theme.applied);
+			const QString message = "The theme \"" + requested + "\" could not be applied:\n\n" + QString::fromStdString(startup_theme.error)
+				+ "\n\nHiveWE starts with " + used + ". Pick another theme in Settings.";
+			if (HiveWE::qa_offscreen) {
+				// An automated run must not open a window on the user's screen.
+				std::println(stderr, "{}", message.toStdString());
+			} else {
+				QMessageBox::warning(nullptr, "Theme", message);
+			}
 		}
-
-		a.setStyleSheet(QLatin1String(file.readAll()));
 	}
 
 	const auto load_files = [] {
@@ -188,6 +281,11 @@ int main(int argc, char* argv[]) {
 
 	map->load(startup_map);
 	// map->load("C:/Users/User/Desktop/MCFC.w3x");
+
+	w.open_qa_palette();
+	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
+		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
+	}
 
 	return QApplication::exec();
 }

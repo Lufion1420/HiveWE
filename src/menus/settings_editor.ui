@@ -51,6 +51,16 @@
              <string>Dark</string>
             </property>
            </item>
+           <item>
+            <property name="text">
+             <string>Flat Dark</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Flat Light</string>
+            </property>
+           </item>
           </widget>
          </item>
          <item row="1" column="0">

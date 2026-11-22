@@ -112,6 +112,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"utilities/no_init_allocator.ixx"
 	"utilities/math_operations.ixx"
 	"utilities/rects.ixx"
+	"utilities/theme_tokens.ixx"
 	
 	"test.ixx"
 	"object_editor/ability_list_editor.ixx"
@@ -146,6 +147,9 @@ target_sources(HiveWE_lib PRIVATE
 	"main_window/hivewe.cpp"
 	"main_window/glwidget.cpp"
 	"main_window/main_ribbon.cpp"
+	"main_window/theme.cpp"
+	"main_window/theme.h"
+	"main_window/flat_chrome.cpp"
 
 	"brush/brush.cpp"
 	"brush/doodad_brush.cpp"

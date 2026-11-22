@@ -1,8 +1,18 @@
 #include "terrain_palette.h"
+#include "theme.h"
 #include "terrain_operators.h"
 #include "pathing_brush.h"
 
+#include <QButtonGroup>
+#include <QGroupBox>
+#include <QHeaderView>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QVBoxLayout>
+
 import MapGlobal;
+import Globals;
 
 import std;
 import SLK;
@@ -29,7 +39,7 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 	ui.cellCheckbox->setText("Water / Boundaries");
 	ui.label_2->setText("Brush Size");
 	ui.label->setText("Brush Shape");
-	setStyleSheet(
+	setStyleSheet(theme::current_is_flat() ? QString() : QString(
 		"QCheckBox { font-size: 14px; font-weight: 700; color: rgb(232, 236, 241); spacing: 8px; padding-top: 4px; }"
 		"QLabel { color: rgb(212, 219, 227); }"
 		"QLabel#label, QLabel#label_2 { font-size: 11px; font-weight: 600; color: rgb(140, 149, 162); padding-top: 2px; }"
@@ -49,7 +59,7 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 		"}"
 		"QSlider::groove:horizontal { height: 6px; background: rgba(255, 255, 255, 20); border-radius: 999px; }"
 		"QSlider::handle:horizontal { width: 16px; margin: -5px 0; background: rgb(95, 164, 255); border-radius: 8px; }"
-	);
+	));
 	monitor_activation();
 
 	brush.texture_operator.tile_id = map->terrain.tileset_ids.front();
@@ -58,6 +68,11 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 
 	ui.flowLayout_placeholder->addLayout(textures_layout);
 	ui.flowLayout_placeholder_2->addLayout(cliff_layout);
+
+	if (theme::current_is_flat()) {
+		hidden_store = new QWidget(this);
+		hidden_store->hide();
+	}
 
 	refresh();
 
@@ -72,6 +87,9 @@ TerrainPalette::TerrainPalette(QWidget* parent) : Palette(parent) {
 
 	// brush menu
 	setup_brush_menu();
+	if (hidden_store) {
+		build_flat_layout();
+	}
 	sync_brush_controls(&brush);
 	monitor_activation();
 }
@@ -84,6 +102,9 @@ TerrainPalette::~TerrainPalette() {
 
 void TerrainPalette::refresh() {
 	create_terrain_buttons();
+	if (tileset_name) {
+		tileset_name->setText(QString::fromStdString(world_edit_data.data<std::string>("TileSets", std::string(1, map->terrain.tileset))));
+	}
 	if (std::ranges::find(map->terrain.tileset_ids, brush.texture_operator.tile_id) == map->terrain.tileset_ids.end()) {
 		brush.texture_operator.tile_id = map->terrain.tileset_ids.front();
 	}
@@ -93,7 +114,11 @@ void TerrainPalette::activate_palette() {
 	change_mode_parent->setEnabled(true);
 	map->brush = &brush;
 	sync_brush_controls(&brush);
-	emit ribbon_tab_requested(ribbon_tab, "Terrain Palette");
+	if (theme::current_is_flat()) {
+		attach_tool_page(ribbon_tab);
+	} else {
+		emit ribbon_tab_requested(ribbon_tab, "Terrain Palette");
+	}
 }
 
 void TerrainPalette::sync_brush_controls(Brush* active_brush) {
@@ -113,6 +138,11 @@ void TerrainPalette::sync_brush_controls(Brush* active_brush) {
 	ui.brushSize->setSingleStep(use_odd_steps ? 4 : 1);
 	ui.brushSizeSlider->setValue(size.x);
 	ui.brushSize->setValue(size.x);
+
+	for (auto* button : size_buttons) {
+		const QSignalBlocker blocker(button);
+		button->setChecked(button->property("brushSize").toInt() == size.x);
+	}
 }
 
 void TerrainPalette::deactivate(QRibbonTab* tab) {
@@ -260,6 +290,18 @@ void TerrainPalette::update_texture_operator_gui() {
 			button->setChecked(is_enabled);
 		} else {
 			button->setChecked(false);
+		}
+	}
+
+	if (tile_tree) {
+		const QSignalBlocker blocker(tile_tree);
+		tile_tree->clearSelection();
+		for (int i = 0; i < tile_tree->topLevelItemCount(); ++i) {
+			auto* item = tile_tree->topLevelItem(i);
+			if (is_enabled && item->text(1) == tile_id) {
+				item->setSelected(true);
+				tile_tree->setCurrentItem(item);
+			}
 		}
 	}
 }
@@ -602,6 +644,9 @@ void TerrainPalette::setup_brush_menu() {
 void TerrainPalette::create_terrain_buttons() {
 	textures_layout->clear();
 	cliff_layout->clear();
+	if (hidden_store) {
+		qDeleteAll(textures_group->buttons());
+	}
 
 	// allow button groups to have no buttons checked
 	textures_group->setExclusive(false);
@@ -616,7 +661,11 @@ void TerrainPalette::create_terrain_buttons() {
 		QPushButton* button =
 			terrain_button(icon, "tileID", QString::fromStdString(i), QString::fromUtf8(slk.data<std::string_view>("comment", i)));
 
-		textures_layout->addWidget(button);
+		if (hidden_store) {
+			button->setParent(hidden_store);
+		} else {
+			textures_layout->addWidget(button);
+		}
 		textures_group->addButton(button);
 
 		// check if we are dealing with a cliff tile - if so, add it to cliff operator
@@ -637,8 +686,180 @@ void TerrainPalette::create_terrain_buttons() {
 	const auto icon = ground_texture_to_icon(image->data.data(), image->width, image->height);
 
 	QPushButton* blight_button = terrain_button(icon, "tileID", "blight", "Blight");
-	textures_layout->addWidget(blight_button);
+	if (hidden_store) {
+		blight_button->setParent(hidden_store);
+	} else {
+		textures_layout->addWidget(blight_button);
+	}
 	textures_group->addButton(blight_button);
+
+	populate_tile_list();
+}
+
+void TerrainPalette::populate_tile_list() {
+	if (!tile_tree) {
+		return;
+	}
+
+	tile_tree->clear();
+	const auto buttons = textures_group->buttons();
+	for (int i = 0; i < buttons.size(); ++i) {
+		const QString tile_id = buttons[i]->property("tileID").toString();
+		const QString name = buttons[i]->property("tileName").toString();
+
+		auto* item = new QTreeWidgetItem(tile_tree);
+		item->setText(0, name.isEmpty() ? tile_id : name);
+		item->setIcon(0, buttons[i]->icon());
+		item->setText(1, tile_id);
+		item->setData(0, Qt::UserRole, i);
+	}
+
+	if (tile_filter) {
+		emit tile_filter->textChanged(tile_filter->text());
+	}
+	update_texture_operator_gui();
+}
+
+void TerrainPalette::build_flat_layout() {
+	auto* root = ui.verticalLayout;
+	root->setAlignment({});
+	root->setSpacing(8);
+
+	const auto make_page = [&](QCheckBox* enable, const QString& enable_text, std::initializer_list<QLayout*> layouts) {
+		auto* page = new QWidget;
+		auto* layout = new QVBoxLayout(page);
+		layout->setContentsMargins(8, 8, 8, 8);
+		layout->setSpacing(8);
+
+		root->removeWidget(enable);
+		enable->setText(enable_text);
+		layout->addWidget(enable);
+		for (auto* sub_layout : layouts) {
+			root->removeItem(sub_layout);
+			layout->addLayout(sub_layout);
+		}
+		layout->addStretch(1);
+		return page;
+	};
+
+	// Texture: tileset, filter, tile list. The icon grid is replaced by the list; the list drives the same buttons.
+	auto* texture_page = new QWidget;
+	auto* texture_layout = new QVBoxLayout(texture_page);
+	texture_layout->setContentsMargins(8, 8, 8, 8);
+	texture_layout->setSpacing(8);
+
+	root->removeWidget(ui.textureCheckbox);
+	ui.textureCheckbox->setText("Paint textures");
+	texture_layout->addWidget(ui.textureCheckbox);
+	root->removeItem(ui.textureLayout);
+
+	auto* tileset_row = new QHBoxLayout;
+	tileset_row->setSpacing(8);
+	auto* tileset_label = new QLabel("Tileset", texture_page);
+	tileset_label->setProperty("mutedLabel", true);
+	tileset_name = new QLabel(texture_page);
+	tileset_name->setObjectName("tilesetName");
+	tileset_name->setText(QString::fromStdString(world_edit_data.data<std::string>("TileSets", std::string(1, map->terrain.tileset))));
+	tileset_name->setToolTip("Change the tileset with Terrain > Change Tileset");
+	tileset_row->addWidget(tileset_label);
+	tileset_row->addWidget(tileset_name, 1);
+	texture_layout->addLayout(tileset_row);
+
+	tile_filter = new QLineEdit(texture_page);
+	tile_filter->setObjectName("tileFilter");
+	tile_filter->setPlaceholderText("Filter tiles");
+	tile_filter->setClearButtonEnabled(true);
+	texture_layout->addWidget(tile_filter);
+
+	tile_tree = new QTreeWidget(texture_page);
+	tile_tree->setObjectName("tileList");
+	tile_tree->setColumnCount(2);
+	tile_tree->setHeaderLabels({ "Tile", "ID" });
+	tile_tree->setRootIsDecorated(false);
+	tile_tree->setAlternatingRowColors(true);
+	tile_tree->setIconSize({ 14, 14 });
+	tile_tree->setUniformRowHeights(true);
+	tile_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+	tile_tree->header()->setStretchLastSection(false);
+	tile_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+	tile_tree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+	tile_tree->setMinimumHeight(140);
+	texture_layout->addWidget(tile_tree, 1);
+
+	connect(tile_tree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item) {
+		const auto buttons = textures_group->buttons();
+		const int index = item->data(0, Qt::UserRole).toInt();
+		if (index >= 0 && index < buttons.size()) {
+			buttons[index]->click();
+		}
+	});
+	connect(tile_filter, &QLineEdit::textChanged, this, [this](const QString& text) {
+		for (int i = 0; i < tile_tree->topLevelItemCount(); ++i) {
+			auto* item = tile_tree->topLevelItem(i);
+			item->setHidden(!text.isEmpty() && !item->text(0).contains(text, Qt::CaseInsensitive) && !item->text(1).contains(text, Qt::CaseInsensitive));
+		}
+	});
+
+	auto* cliff_page = make_page(ui.cliffCheckbox, "Cliff tools", { ui.cliffRaiseLayout, ui.cliffWaterLayout, ui.flowLayout_placeholder_2 });
+	auto* deformation_page = make_page(ui.deformationCheckbox, "Height tools", { ui.deformationLayout });
+	auto* cell_page = make_page(ui.cellCheckbox, "Water / boundaries", { ui.cellLayoutTop });
+	// Rows of 5 fixed 48 px buttons are wider than the column: they wrap instead. Not used again after this, so the dangling ui pointers are safe.
+	for (QBoxLayout* row : { static_cast<QBoxLayout*>(ui.cliffRaiseLayout), static_cast<QBoxLayout*>(ui.cliffWaterLayout),
+							 static_cast<QBoxLayout*>(ui.deformationLayout), static_cast<QBoxLayout*>(ui.cellLayoutTop) }) {
+		wrap_button_row(row);
+	}
+
+	auto* tabs = new QTabWidget(this);
+	tabs->setObjectName("terrainTabs");
+	tabs->setDocumentMode(true);
+	tabs->addTab(texture_page, "Texture");
+	tabs->addTab(cliff_page, "Cliff");
+	tabs->addTab(deformation_page, "Deformation");
+	tabs->addTab(cell_page, "Cell");
+	root->insertWidget(0, tabs, 1);
+
+	// Brush size: preset buttons plus the existing field and slider; brush shape: the existing buttons.
+	root->removeWidget(ui.label_2);
+	ui.label_2->hide();
+	root->removeWidget(ui.label);
+	ui.label->hide();
+
+	auto* size_group = new QGroupBox("Brush Size", this);
+	auto* size_layout = new QVBoxLayout(size_group);
+	size_layout->setContentsMargins(8, 12, 8, 8);
+	size_layout->setSpacing(6);
+	auto* size_row = new QHBoxLayout;
+	size_row->setSpacing(4);
+	for (const int value : { 1, 3, 5, 7, 9 }) {
+		auto* button = new QPushButton(QString::number(value), size_group);
+		button->setCheckable(true);
+		button->setProperty("brushSize", value);
+		button->setToolTip(QString("Brush size %1").arg(value));
+		connect(button, &QPushButton::clicked, this, [this, value]() {
+			// Through the slider, whose handler sets the brush size and the spin box; then resync everything, including the preset
+			// buttons and the case where the slider already showed this value.
+			ui.brushSizeSlider->setValue(value);
+			Brush* target = map && map->brush ? map->brush : &brush;
+			target->set_size(glm::ivec2(value));
+			sync_brush_controls(target);
+		});
+		size_row->addWidget(button, 1);
+		size_buttons.push_back(button);
+	}
+	size_layout->addLayout(size_row);
+	root->removeItem(ui.horizontalLayout_4);
+	size_layout->addLayout(ui.horizontalLayout_4);
+
+	auto* shape_group = new QGroupBox("Brush Shape", this);
+	auto* shape_layout = new QVBoxLayout(shape_group);
+	shape_layout->setContentsMargins(8, 12, 8, 8);
+	root->removeItem(ui.brushShapeLayout);
+	shape_layout->addLayout(ui.brushShapeLayout);
+
+	root->addWidget(size_group);
+	root->addWidget(shape_group);
+
+	populate_tile_list();
 }
 
 QPushButton*

@@ -1,4 +1,5 @@
 #include "region_palette.h"
+#include "theme.h"
 
 #include <QColorDialog>
 #include <QFormLayout>
@@ -16,10 +17,10 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(10);
-	setStyleSheet(
+	setStyleSheet(theme::current_is_flat() ? QString() : QString(
 		"QPushButton { color: rgb(229, 233, 239); }"
 		"QLabel { color: rgb(214, 221, 229); }"
-	);
+	));
 
 	region_list->setSelectionMode(QAbstractItemView::SingleSelection);
 	region_list->setObjectName("regionList");
@@ -32,12 +33,12 @@ RegionPalette::RegionPalette(QWidget* parent) : Palette(parent) {
 
 	selection_summary = new QFrame(this);
 	selection_summary->setObjectName("regionSelectionSummary");
-	selection_summary->setStyleSheet(
+	selection_summary->setStyleSheet(theme::current_is_flat() ? QString() : QString(
 		"QFrame#regionSelectionSummary { background: rgba(24, 27, 31, 200); border: 1px solid rgba(255, 255, 255, 14); border-radius: 12px; }"
 		"QLabel#regionSelectionSummaryLabel { color: rgb(140, 149, 162); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }"
 		"QLabel#regionSelectionSummaryTitle { color: rgb(241, 244, 247); font-size: 14px; font-weight: 700; }"
 		"QLabel#regionSelectionSummaryMeta { color: rgb(176, 185, 196); font-size: 12px; }"
-	);
+	));
 	auto* selection_summary_layout = new QVBoxLayout(selection_summary);
 	selection_summary_layout->setContentsMargins(12, 12, 12, 12);
 	selection_summary_layout->setSpacing(4);
@@ -161,7 +162,11 @@ void RegionPalette::activate_palette() {
 		selection_mode->setChecked(true);
 	}
 	map->brush = &brush;
-	emit ribbon_tab_requested(ribbon_tab, "Region Palette");
+	if (theme::current_is_flat()) {
+		attach_tool_page(ribbon_tab);
+	} else {
+		emit ribbon_tab_requested(ribbon_tab, "Region Palette");
+	}
 }
 
 void RegionPalette::deactivate(QRibbonTab* tab) {

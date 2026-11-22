@@ -123,8 +123,25 @@ export class FlowLayout : public QLayout {
 	//	return size;
 	// }
 
+	/// By default the minimum width is the width of the widest laid out row, so a flow that was once laid out wide never wraps again.
+	/// A shrinkable flow reports only its widest item (plus margins) and wraps at any width above that.
+	void set_shrinkable(const bool shrinkable) {
+		is_shrinkable = shrinkable;
+		invalidate();
+	}
+
 	QSize minimumSize() const {
-		return min_size;
+		if (!is_shrinkable) {
+			return min_size;
+		}
+
+		int left, top, right, bottom;
+		getContentsMargins(&left, &top, &right, &bottom);
+		int widest = 0;
+		for (auto&& item : item_list) {
+			widest = qMax(widest, item->sizeHint().width());
+		}
+		return QSize(widest + left + right, min_size.height());
 	}
 
 	QList<QLayoutItem*> items() const {
@@ -231,6 +248,7 @@ export class FlowLayout : public QLayout {
 	}
 
 	QSize min_size;
+	bool is_shrinkable = false;
 	QList<QLayoutItem*> item_list;
 	int h_space;
 	int v_space;

@@ -49,7 +49,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	tabBar()->setDrawBase(false);
 	setMovable(false);
 
-	setStyleSheet(
+	legacy_stylesheet = QString(
 		"MainRibbon {"
 		"background: rgb(33, 39, 47);"
 		"border: none;"
@@ -137,6 +137,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 		"font-weight: 700;"
 		"}"
 	);
+	setStyleSheet(legacy_stylesheet);
 
 	if (auto* file_btn = findChild<QRibbonFileButton*>("ribbonFileButton")) {
 		file_btn->setPopupMode(QToolButton::InstantPopup);
@@ -222,7 +223,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 
 	QToolButton* quick_open = mirror_button(open_map_folder, "Open a map folder. Shortcut: Ctrl+O");
 	QToolButton* quick_save = mirror_button(save_map, "Save the current map. Shortcut: Ctrl+S");
-	QToolButton* quick_test = mirror_button(test_map, "Save and launch Warcraft III test mode.");
+	QToolButton* quick_test = mirror_button(test_map, "Save and launch Warcraft III test mode. Shortcut: Ctrl+T");
 
 	for (auto* button : { quick_open, quick_save, quick_test }) {
 		button->setObjectName("ribbonQuickAction");
@@ -472,7 +473,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	wireframe_visible->setIcon(QIcon("data/icons/ribbon/wireframe.png"));
 	wireframe_visible->setText("Wireframe");
 	wireframe_visible->setCheckable(true);
-	set_tooltip(wireframe_visible, "Show or hide wireframe rendering.\nShortcut: Ctrl+T");
+	set_tooltip(wireframe_visible, "Show or hide wireframe rendering.\nShortcut: Ctrl+Shift+W");
 
 	debug_visible->setIcon(QIcon("data/icons/ribbon/debug.png"));
 	debug_visible->setText("Debug");
@@ -595,7 +596,7 @@ MainRibbon::MainRibbon(QWidget* parent) : QRibbon(parent) {
 	auto* pathing_tools_section = make_section("Overlay");
 	pathing_tools_section->addWidget(mirror_button(pathing_visible, "Show or hide the pathing overlay.\nShortcut: Ctrl+P"));
 	pathing_tools_section->addWidget(mirror_button(brush_visible, "Show or hide the active brush overlay."));
-	pathing_tools_section->addWidget(mirror_button(wireframe_visible, "Show or hide wireframe rendering.\nShortcut: Ctrl+T"));
+	pathing_tools_section->addWidget(mirror_button(wireframe_visible, "Show or hide wireframe rendering.\nShortcut: Ctrl+Shift+W"));
 
 	pathing_tab->addSection(pathing_section);
 	pathing_tab->addSection(pathing_tools_section);
@@ -671,6 +672,17 @@ void MainRibbon::set_map_context(const QString& title, const QString& meta, cons
 	map_meta->setText(meta);
 	map_badge->setText(badge);
 	map_badge->setVisible(!badge.isEmpty());
+}
+
+void MainRibbon::set_palette_strip_mode(const bool enabled) {
+	// Flat themes: the toolbar and menus replace the ribbon. What is left is the page of the active palette (its brush options).
+	setStyleSheet(enabled ? QString() : legacy_stylesheet);
+	tabBar()->setVisible(!enabled);
+	for (const auto corner : { Qt::TopLeftCorner, Qt::TopRightCorner }) {
+		if (auto* widget = cornerWidget(corner)) {
+			widget->setVisible(!enabled);
+		}
+	}
 }
 
 void MainRibbon::show_tab(const HeaderTab tab) {

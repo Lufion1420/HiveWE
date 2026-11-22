@@ -3,6 +3,12 @@
 #include "ui_terrain_palette.h"
 
 #include <QDialog>
+#include <QLabel>
+#include <QLineEdit>
+#include <QTabWidget>
+#include <QTreeWidget>
+
+#include <vector>
 
 #include "palette.h"
 #include "terrain_brush.h"
@@ -37,6 +43,15 @@ class TerrainPalette: public Palette {
 	QRibbonButton* selection_mode = new QRibbonButton;
 
 	QShortcut* change_mode_parent;
+
+	// Flat themes: tabs Texture / Cliff / Deformation / Cell, a tile list and brush size buttons instead of the stacked sections.
+	QWidget* hidden_store = nullptr; // holds the texture icon buttons, which stay the backing of the tile list
+	QTreeWidget* tile_tree = nullptr;
+	QLineEdit* tile_filter = nullptr;
+	QLabel* tileset_name = nullptr;
+	std::vector<QPushButton*> size_buttons;
+	void build_flat_layout();
+	void populate_tile_list();
 
 	// GUI creation functions
 	void update_operator_gui();

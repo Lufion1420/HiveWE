@@ -96,6 +96,8 @@ public:
 
 	void set_map_context(const QString& title, const QString& meta, const QString& badge);
 	void show_tab(HeaderTab tab);
+	/// True while a Flat theme is active: hides the tab bar and the corner widgets, leaves only the current page.
+	void set_palette_strip_mode(bool enabled);
 
 protected:
 	void resizeEvent(QResizeEvent* event) override;
@@ -103,6 +105,8 @@ protected:
 
 private:
 	void sync_file_corner_geometry();
+
+	QString legacy_stylesheet;
 
 	int home_tab_index = -1;
 	int terrain_tab_index = -1;

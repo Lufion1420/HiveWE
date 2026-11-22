@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **A theme that fails to load no longer stops HiveWE from starting** — HiveWE falls back to the Dark theme and shows a message.
 - **A failed save no longer says "Map saved" or damages your map files** — If a save fails or is interrupted (disk full, read-only or locked file), the error is shown, and map files are written to a temporary file and swapped in so a failed write no longer truncates the existing good file. `--resave` exits with a non-zero code on these failures.
 - **A failed map script step no longer puts a stale script into your map** — If the Lua temp file cannot be written, or JassHelper fails, times out or exits with an error, HiveWE keeps the map's previous `war3map.lua` / `war3map.j` instead of copying an old script (possibly from another map), and shows "Saved without a new map script" instead of "Map saved".
 - **Map Protector reports a failed internal save and returns to your map folder** — The export shows the error, and the editor no longer stays pointed at a temporary folder.
@@ -48,6 +49,9 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Placed units' team colour and gold mine amounts in the generated map script now match the World Editor** — The script now sets the team colour of placed units (taverns, mercenary camps, and units with a custom colour where the type allows it) and the gold amount of every gold mine, in both Lua and JASS. Before, both were dropped, so mines started with the default amount. Not game-tested yet.
 
 ### New Features
+- **New "Flat Dark" and "Flat Light" themes (File > Settings > Theme)** — A modern flat look with the bundled Inter font, a compact menu bar and icon toolbar instead of the ribbon, the sidebar on the left with mode buttons, Minimap and the palette, Properties and Preview panels on the right, and a status bar (cursor position, tileset, map size, brush, saved state). The terrain palette uses Texture / Cliff / Deformation / Cell tabs, and all palettes scroll so the window fits small screens. The old Dark and Light themes are unchanged.
+- **Shortcut change: Ctrl+T now runs Test Map** — Ctrl+T used to toggle Wireframe; Wireframe moved to Ctrl+Shift+W.
+- **New command-line options for automated testing** — `--qa-offscreen`, `--theme`, `--palette` and `--window-size` (see `--help`).
 - **Command-line map resave (`HiveWE.exe --resave <in> <out>`)** — HiveWE loads a map folder and saves it to another folder without opening the editor. The exit code shows whether the save worked and whether the generated map script compiled (0 ok, 1 refused or failed, 2 wrong usage, 3 saved but the script did not compile, 4 no game data or OpenGL). Used for automated comparisons against World Editor output.
 - **Warcraft III 3.0 map info (`war3map.w3i` v39) can be read and saved** — HiveWE keeps the map's own version stamps when saving it.
 - **Doodad files (`war3map.doo`) v12 and v13 can be read and saved** — The new doodad fields (group id, roll, pitch, lights) are kept, and a v12 or v13 file saves back as the same version. Roll, pitch and lights are not rendered or editable yet.
