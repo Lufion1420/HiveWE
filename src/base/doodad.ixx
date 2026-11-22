@@ -113,9 +113,9 @@ export struct Doodad {
 		fixed_z = true;
 	}
 
+	/// Leaves skin_id alone: war3map.doo can skin a doodad as another type. Callers that set a new type set the skin too.
 	void init(const std::string_view id, const std::shared_ptr<SkinnedMesh> mesh, const Terrain& terrain) {
 		this->id = id;
-		this->skin_id = id;
 		this->mesh = mesh;
 
 		skeleton = SkeletalModelInstance(mesh->mdx);

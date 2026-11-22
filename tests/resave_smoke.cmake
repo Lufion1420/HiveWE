@@ -66,6 +66,35 @@ if(NOT result EQUAL 1)
 	message(FATAL_ERROR "--resave into the input folder exited with ${result}, expected 1: ${errors}")
 endif()
 
+# A doodad whose skin differs from its id keeps the skin through load, save and the script (the post-load Doodad::init used to
+# reset it). Fixture: FTtw skinned as LTlt (skin at byte 52, with an item set so the script creates it), then LTlt skinned as
+# LTlt (skin at byte 118). Both are fixed-Z so the records do not depend on terrain height.
+file(COPY_FILE "${SKINNED_DOO}" "${sandbox}/war3map.doo")
+set(skin_output "${OUTPUT}_skin")
+file(REMOVE_RECURSE "${skin_output}")
+run_resave(result errors "${sandbox}" "${skin_output}")
+if(NOT result EQUAL 0)
+	message(FATAL_ERROR "--resave with a skinned doodad exited with ${result}: ${errors}")
+endif()
+file(READ "${SKINNED_DOO}" doo_in HEX)
+file(READ "${skin_output}/war3map.doo" doo_out HEX)
+string(SUBSTRING "${doo_out}" 104 8 changed_skin)
+string(SUBSTRING "${doo_out}" 236 8 same_skin)
+if(NOT changed_skin STREQUAL "4c546c74" OR NOT same_skin STREQUAL "4c546c74")
+	message(FATAL_ERROR "war3map.doo skins after resave: ${changed_skin} and ${same_skin}, expected 4c546c74 (LTlt) for both")
+endif()
+if(NOT doo_out STREQUAL doo_in)
+	message(FATAL_ERROR "war3map.doo with skinned doodads changed on resave:\n${doo_in}\n${doo_out}")
+endif()
+file(READ "${skin_output}/war3map.j" skin_script)
+string(FIND "${skin_script}" "BlzCreateDestructableZWithSkin('FTtw'" create_call)
+string(FIND "${skin_script}" "'LTlt')" skin_argument)
+if(create_call EQUAL -1 OR skin_argument EQUAL -1)
+	message(FATAL_ERROR "war3map.j does not create FTtw with skin LTlt")
+endif()
+file(REMOVE_RECURSE "${skin_output}")
+file(COPY_FILE "${INPUT}/war3map.doo" "${sandbox}/war3map.doo")
+
 # An ability field the object data writer cannot write (anam with data pointer 1 loads as "namea", which has no meta data id):
 # refused before anything is copied or written, so the output folder stays empty.
 file(COPY_FILE "${UNWRITABLE_W3A}" "${sandbox}/war3map.w3a")

@@ -47,6 +47,7 @@ add_test(NAME resave_smoke COMMAND ${CMAKE_COMMAND}
 	"-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../data/test map"
 	-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/resave_smoke_out
 	"-DUNWRITABLE_W3A=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/unwritable_field.w3a"
+	"-DSKINNED_DOO=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/skinned_doodads.doo"
 	-P ${CMAKE_CURRENT_SOURCE_DIR}/resave_smoke.cmake
 )
 set_tests_properties(resave_smoke PROPERTIES SKIP_REGULAR_EXPRESSION "RESAVE_SMOKE_SKIPPED" TIMEOUT 300)

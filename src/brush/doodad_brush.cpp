@@ -674,6 +674,7 @@ void DoodadBrush::set_doodad(const std::string& id) {
 	}
 	variation = get_random_variation();
 
+	doodad.skin_id = id;
 	doodad.init(id, map->doodads.get_mesh(id, variation), map->terrain);
 
 	// It might be initially incorrect because another doodad.angle is not reset in init()
