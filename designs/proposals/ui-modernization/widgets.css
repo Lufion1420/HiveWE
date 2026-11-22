@@ -1,0 +1,119 @@
+/* Qt-widget shapes built only from tokens.css. No shadows, filters, transforms,
+   transitions. Radii only on buttons, inputs, tabs, group boxes. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { font-family: var(--font-family); font-size: var(--font-size-base); font-weight: var(--font-weight-normal);
+  color: var(--color-text); background: var(--color-window); line-height: 1; }
+svg.i { width: var(--toolbar-icon); height: var(--toolbar-icon); fill: none; stroke: currentColor; stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 16px; height: 16px; }
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.grow { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.muted { color: var(--color-text-muted); }
+.small { font-size: var(--font-size-small); }
+
+/* QMenuBar */
+.menubar { height: var(--menubar-height); display: flex; align-items: center; padding: 0 var(--space-2);
+  background: var(--color-window); border-bottom: var(--border-width) solid var(--color-border); }
+.menubar .mi { padding: 5px 9px; }
+.menubar .mi.open { background: var(--color-selection); color: var(--color-selection-text); }
+
+/* QToolBar + QToolButton */
+.toolbar { height: var(--toolbar-height); display: flex; align-items: center; gap: var(--space-1); padding: 0 6px;
+  background: var(--color-window); border-bottom: var(--border-width) solid var(--color-border); }
+.tbtn { width: var(--toolbar-button); height: var(--toolbar-button); display: flex; align-items: center; justify-content: center;
+  border: var(--border-width) solid transparent; border-radius: var(--radius-button); color: var(--color-text); }
+.tbtn.drop { width: 40px; justify-content: flex-start; padding-left: 3px; gap: 1px; }
+.tbtn.hover { background: var(--color-hover); border-color: var(--color-border); }
+.tbtn.checked { background: var(--color-checked-bg); border-color: var(--color-checked-border); }
+.tbtn.disabled { color: var(--color-text-disabled); }
+.tbtn.pressed { background: var(--color-button-pressed); border-color: var(--color-border-strong); }
+.tsep { width: var(--border-width); height: 20px; background: var(--color-border); margin: 0 var(--space-3); flex: none; }
+.arrow { width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 4px solid currentColor; }
+
+/* QLineEdit, QComboBox */
+.edit { height: var(--control-height); display: flex; align-items: center; padding: 0 var(--space-3);
+  background: var(--color-input-bg); border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-input);
+  color: var(--color-text); gap: var(--space-3); }
+.edit.focus { border-color: var(--color-focus); }
+.edit .ph { color: var(--color-text-muted); }
+.edit.disabled { color: var(--color-text-disabled); border-color: var(--color-border); }
+.combo { height: var(--control-height); display: flex; align-items: center; justify-content: space-between; padding: 0 0 0 var(--space-3);
+  background: linear-gradient(to bottom, var(--color-button-top), var(--color-button-bottom));
+  border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-input); }
+.combo .dd { width: 20px; height: 100%; display: flex; align-items: center; justify-content: center; border-left: var(--border-width) solid var(--color-border); }
+
+/* QPushButton */
+.btn { height: var(--control-height); min-width: 28px; padding: 0 var(--space-4); display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(to bottom, var(--color-button-top), var(--color-button-bottom));
+  border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-button); color: var(--color-text); gap: 6px; }
+.btn.hover { background: var(--color-button-hover); }
+.btn.checked { background: var(--color-checked-bg); border-color: var(--color-checked-border); color: var(--color-selection-text); }
+.btn.default { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text); }
+.btn.disabled { color: var(--color-text-disabled); border-color: var(--color-border); background: var(--color-window); }
+.btn.mode { height: 38px; flex: 1 1 0; }
+
+/* QCheckBox / QRadioButton */
+.chk { display: flex; align-items: center; gap: 6px; height: var(--row-height); }
+.chk .box { width: 14px; height: 14px; border: var(--border-width) solid var(--color-border-strong); background: var(--color-input-bg); border-radius: 2px; display:flex; align-items:center; justify-content:center; }
+.chk.on .box { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text); }
+.chk .box svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* QGroupBox */
+.group { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-group); padding: 14px var(--space-3) var(--space-3); position: relative; margin-top: 8px; }
+.group > .gt { position: absolute; top: -7px; left: 8px; padding: 0 4px; background: var(--color-panel); font-weight: var(--font-weight-strong); font-size: var(--font-size-title); }
+
+/* QTabBar (inside panels) */
+.tabbar { display: flex; height: var(--dock-tab-height); background: var(--color-window); border-bottom: var(--border-width) solid var(--color-border); }
+.tab { padding: 0 var(--space-4); display: flex; align-items: center; color: var(--color-text-muted);
+  border: var(--border-width) solid transparent; border-bottom: 0; border-radius: var(--radius-tab) var(--radius-tab) 0 0; margin-right: 1px; }
+.tab.hover { color: var(--color-text); background: var(--color-hover); }
+.tab.selected { color: var(--color-text); background: var(--color-tab-selected); border-color: var(--color-border);
+  border-top: var(--tab-indicator-width) solid var(--color-accent); margin-bottom: -1px; height: calc(100% + 1px); }
+
+/* ads::CDockAreaWidget: title bar with tabs and buttons */
+.dock { display: flex; flex-direction: column; background: var(--color-panel); border: var(--border-width) solid var(--color-border); min-height: 0; }
+.dock-title { height: var(--dock-tab-height); flex: none; display: flex; align-items: stretch; justify-content: space-between;
+  background: linear-gradient(to bottom, var(--color-titlebar-top), var(--color-titlebar-bottom)); border-bottom: var(--border-width) solid var(--color-border); }
+.dock-title .dt { display: flex; align-items: stretch; }
+.dock-title .dtab { display: flex; align-items: center; padding: 0 var(--space-4); color: var(--color-text-muted); font-weight: var(--font-weight-strong); font-size: var(--font-size-title); }
+.dock-title .dtab.selected { color: var(--color-text); background: var(--color-panel); border-bottom: var(--tab-indicator-width) solid var(--color-accent); margin-bottom: -1px; }
+.dock-title .db { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); color: var(--color-text-muted); }
+.dock-body { padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); min-height: 0; flex: 1 1 auto; }
+
+/* QTreeView / QListView */
+.view { background: var(--color-base); border: var(--border-width) solid var(--color-border); min-height: 0; display: flex; flex-direction: column; }
+.view .hdr { height: var(--row-height); display: flex; align-items: center; background: var(--color-window); border-bottom: var(--border-width) solid var(--color-border); color: var(--color-text-muted); }
+.view .hdr > div, .view .r > div { padding: 0 var(--space-3); display: flex; align-items: center; height: 100%; }
+.view .r { height: var(--row-height); display: flex; align-items: center; gap: 0; }
+.view .r:nth-child(even) { background: var(--color-alt-base); }
+.view .r.hover { background: var(--color-hover); }
+.view .r.sel { background: var(--color-selection); color: var(--color-selection-text); }
+.view .r.sub { color: var(--color-text-muted); font-weight: var(--font-weight-strong); background: var(--color-window); }
+.view .r.dis { color: var(--color-text-disabled); }
+.sw { width: 14px; height: 14px; border: var(--border-width) solid var(--color-border-strong); margin-right: 8px; flex: none; }
+.id { color: var(--color-text-muted); font-size: var(--font-size-small); }
+.r.sel .id { color: var(--color-selection-text); }
+
+/* QMenu popup */
+.menu { background: var(--color-menu-bg); border: var(--border-width) solid var(--color-border-strong); padding: var(--space-2) 0; width: 260px; }
+.menu .m { height: 24px; display: flex; align-items: center; padding: 0 var(--space-3) 0 28px; justify-content: space-between; position: relative; }
+.menu .m.sel { background: var(--color-selection); color: var(--color-selection-text); }
+.menu .m.dis { color: var(--color-text-disabled); }
+.menu .m .ic { position: absolute; left: 6px; top: 4px; }
+.menu .m .sc { color: var(--color-text-muted); }
+.menu .m.sel .sc { color: var(--color-selection-text); }
+.menu .ms { height: 1px; background: var(--color-border); margin: 3px 0; }
+
+/* QStatusBar */
+.statusbar { height: var(--statusbar-height); flex: none; display: flex; align-items: center; background: var(--color-window);
+  border-top: var(--border-width) solid var(--color-border); font-size: var(--font-size-small); color: var(--color-text-muted); padding: 0 var(--space-3); gap: 0; }
+.statusbar .seg { padding: 0 var(--space-3); border-left: var(--border-width) solid var(--color-border); height: 14px; display: flex; align-items: center; }
+.statusbar .seg:first-of-type { border-left: 0; }
+
+/* Viewport placeholder (GLWidget is OpenGL, not styled) */
+.viewport { background: var(--color-viewport); position: relative; overflow: hidden; }
+.viewport .patch { position: absolute; }
+.viewport .hud { position: absolute; font-size: var(--font-size-small); color: #e6e6e6; background: rgba(0,0,0,0.55); padding: 3px 6px; }
+.combo, .menu .m, .btn, .edit, .tab, .dtab, .statusbar .seg, .tbtn { white-space: nowrap; }
+.menu .m { gap: 16px; }

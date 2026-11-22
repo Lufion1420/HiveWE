@@ -1,0 +1,182 @@
+/* HiveWE UI tokens. One set of names, four value sets:
+   direction (flat | warcraft) x theme (dark | light).
+   Each name maps 1:1 to a @token in a future Dark.qss / Light.qss generator.
+   Select with <html data-dir="flat|warcraft" data-theme="dark|light">. */
+
+/* ---- shared (all directions and themes) ---- */
+:root {
+  --font-family: "Inter", "Segoe UI", sans-serif;
+  --font-size-base: 12px;     /* QWidget font */
+  --font-size-small: 11px;    /* status bar, hints, list secondary text */
+  --font-size-title: 12px;    /* dock tab / group box title */
+  --font-weight-normal: 400;
+  --font-weight-strong: 600;  /* dock title, group box title */
+
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+
+  --border-width: 1px;
+  --row-height: 22px;         /* QTreeView / QListView row */
+  --control-height: 24px;     /* QPushButton, QComboBox, QLineEdit */
+  --menubar-height: 24px;
+  --toolbar-height: 36px;
+  --toolbar-button: 28px;     /* QToolButton box */
+  --toolbar-icon: 20px;       /* QToolBar iconSize */
+  --dock-tab-height: 24px;    /* ads title bar */
+  --statusbar-height: 22px;
+  --tab-indicator-width: 2px;
+}
+
+/* ---- direction-level shape (same in dark and light) ---- */
+[data-dir="flat"] {
+  --radius-button: 3px;
+  --radius-input: 3px;
+  --radius-tab: 0px;
+  --radius-group: 3px;
+}
+[data-dir="warcraft"] {
+  --radius-button: 2px;
+  --radius-input: 2px;
+  --radius-tab: 2px;
+  --radius-group: 2px;
+}
+
+/* ================= A: Flat Dark IDE ================= */
+[data-dir="flat"][data-theme="dark"] {
+  --color-window: #2b2d30;
+  --color-base: #1e1f22;
+  --color-alt-base: #25272a;
+  --color-panel: #2b2d30;
+  --color-menu-bg: #2b2d30;
+  --color-border: #393b40;
+  --color-border-strong: #4e5157;
+  --color-text: #dfe1e5;
+  --color-text-muted: #9da0a8;
+  --color-text-disabled: #5c5f66;
+  --color-accent: #3574f0;
+  --color-accent-hover: #4682f4;
+  --color-accent-text: #ffffff;
+  --color-hover: #393b40;
+  --color-selection: #2e436e;
+  --color-selection-text: #dfe1e5;
+  --color-checked-bg: #2e436e;
+  --color-checked-border: #3574f0;
+  --color-button-top: #393b40;
+  --color-button-bottom: #393b40;
+  --color-button-hover: #43454a;
+  --color-button-pressed: #4e5157;
+  --color-titlebar-top: #2b2d30;
+  --color-titlebar-bottom: #2b2d30;
+  --color-tab-selected: #1e1f22;
+  --color-input-bg: #1e1f22;
+  --color-focus: #3574f0;
+  --color-ok: #5fb865;
+  --color-warn: #e0a030;
+  --color-error: #e5534b;
+  --color-viewport: #2f3d2c;
+}
+/* ================= A: Flat Light ================= */
+[data-dir="flat"][data-theme="light"] {
+  --color-window: #f2f3f5;
+  --color-base: #ffffff;
+  --color-alt-base: #f7f8fa;
+  --color-panel: #f2f3f5;
+  --color-menu-bg: #ffffff;
+  --color-border: #d1d3d9;
+  --color-border-strong: #b4b8bf;
+  --color-text: #1e1f22;
+  --color-text-muted: #6c707e;
+  --color-text-disabled: #a8adb8;
+  --color-accent: #3574f0;
+  --color-accent-hover: #2a62d6;
+  --color-accent-text: #ffffff;
+  --color-hover: #e6e8ec;
+  --color-selection: #d5e2fc;
+  --color-selection-text: #1e1f22;
+  --color-checked-bg: #d5e2fc;
+  --color-checked-border: #3574f0;
+  --color-button-top: #e6e8ec;
+  --color-button-bottom: #e6e8ec;
+  --color-button-hover: #dcdee3;
+  --color-button-pressed: #c9ccd3;
+  --color-titlebar-top: #f2f3f5;
+  --color-titlebar-bottom: #f2f3f5;
+  --color-tab-selected: #ffffff;
+  --color-input-bg: #ffffff;
+  --color-focus: #3574f0;
+  --color-ok: #2e8b3d;
+  --color-warn: #b87500;
+  --color-error: #c9372c;
+  --color-viewport: #2f3d2c;
+}
+
+/* ================= B: Warcraft gold and stone, Dark ================= */
+[data-dir="warcraft"][data-theme="dark"] {
+  --color-window: #26221f;
+  --color-base: #181513;
+  --color-alt-base: #1f1b18;
+  --color-panel: #2d2824;
+  --color-menu-bg: #2d2824;
+  --color-border: #4a4137;
+  --color-border-strong: #7a6840;
+  --color-text: #e8dcc0;
+  --color-text-muted: #a89a7c;
+  --color-text-disabled: #6a604e;
+  --color-accent: #c8a24a;
+  --color-accent-hover: #dcb85e;
+  --color-accent-text: #1a1408;
+  --color-hover: #3a332b;
+  --color-selection: #5a4a22;
+  --color-selection-text: #fff1c9;
+  --color-checked-bg: #5a4a22;
+  --color-checked-border: #c8a24a;
+  --color-button-top: #4a4238;
+  --color-button-bottom: #373028;
+  --color-button-hover: #574d40;
+  --color-button-pressed: #2b251f;
+  --color-titlebar-top: #3a342e;
+  --color-titlebar-bottom: #2b2622;
+  --color-tab-selected: #181513;
+  --color-input-bg: #181513;
+  --color-focus: #c8a24a;
+  --color-ok: #7ab55c;
+  --color-warn: #e0a030;
+  --color-error: #d9534f;
+  --color-viewport: #2f3d2c;
+}
+/* ================= B: Warcraft parchment, Light ================= */
+[data-dir="warcraft"][data-theme="light"] {
+  --color-window: #e4d9bf;
+  --color-base: #f6efdc;
+  --color-alt-base: #efe6cf;
+  --color-panel: #e9dec4;
+  --color-menu-bg: #f0e7d0;
+  --color-border: #b8a67c;
+  --color-border-strong: #8a7440;
+  --color-text: #2e2414;
+  --color-text-muted: #6f5f3e;
+  --color-text-disabled: #a39776;
+  --color-accent: #8a5f12;
+  --color-accent-hover: #a0720f;
+  --color-accent-text: #fff8e6;
+  --color-hover: #dccfae;
+  --color-selection: #e3c97a;
+  --color-selection-text: #2e2414;
+  --color-checked-bg: #e3c97a;
+  --color-checked-border: #8a5f12;
+  --color-button-top: #e8dcba;
+  --color-button-bottom: #d3c49c;
+  --color-button-hover: #efe4c4;
+  --color-button-pressed: #c4b48a;
+  --color-titlebar-top: #d8c9a5;
+  --color-titlebar-bottom: #c9b98f;
+  --color-tab-selected: #f6efdc;
+  --color-input-bg: #f6efdc;
+  --color-focus: #8a5f12;
+  --color-ok: #3f7a2c;
+  --color-warn: #9a6200;
+  --color-error: #a82a24;
+  --color-viewport: #2f3d2c;
+}

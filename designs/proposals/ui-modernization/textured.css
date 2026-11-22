@@ -1,0 +1,46 @@
+/* B2 "Warcraft Textured": layered on tokens.css + widgets.css via <html data-tex>.
+   Only QSS-expressible techniques: background-image + background-repeat tiles, and
+   border-image (9-slice, with fill for the middle). Textures are original (make_textures.py). */
+[data-theme="dark"] {
+  --tex-stone: url(textures/stone.png);
+  --tex-stone-bar: url(textures/stone-bar.png);
+  --tex-btn: url(textures/btn.png);
+  --tex-btn-hover: url(textures/btn-hover.png);
+  --tex-btn-checked: url(textures/btn-checked.png);
+  --tex-frame: url(textures/frame.png);
+  --color-gold-rule: #7a6840;
+}
+[data-theme="light"] {
+  --tex-stone: url(textures/stone-light.png);
+  --tex-stone-bar: url(textures/stone-bar-light.png);
+  --tex-btn: url(textures/btn-light.png);
+  --tex-btn-hover: url(textures/btn-hover-light.png);
+  --tex-btn-checked: url(textures/btn-checked-light.png);
+  --tex-frame: url(textures/frame-light.png);
+  --color-gold-rule: #8a7440;
+}
+/* tiled backgrounds */
+[data-tex] .menubar, [data-tex] .toolbar { background-color: var(--color-window); background-image: var(--tex-stone-bar); background-repeat: repeat; }
+[data-tex] .menubar { border-bottom: 0; }
+[data-tex] .toolbar { border-bottom: 1px solid var(--color-gold-rule); }
+[data-tex] .statusbar { background-image: var(--tex-stone-bar); background-repeat: repeat; border-top: 1px solid var(--color-gold-rule); }
+[data-tex] .dock-title { background-image: var(--tex-stone-bar); background-repeat: repeat; border-bottom: 1px solid var(--color-gold-rule); }
+[data-tex] .dock-title .dtab.selected { background: none; background-color: rgba(0,0,0,0.28); }
+[data-tex] .sidebar { background-image: var(--tex-stone); background-repeat: repeat; padding: 4px; }
+[data-tex] .bodybg { background-image: var(--tex-stone); background-repeat: repeat; }
+/* 9-slice buttons (border-width = slice, fill paints the face) */
+[data-tex] .tbtn, [data-tex] .btn { border: 5px solid transparent; border-radius: 0; background: none;
+  border-image: var(--tex-btn) 5 fill / 5px stretch; }
+[data-tex] .tbtn { width: 30px; height: 30px; }
+[data-tex] .tbtn.drop { width: 42px; }
+[data-tex] .tbtn.hover, [data-tex] .btn.hover { border-image: var(--tex-btn-hover) 5 fill / 5px stretch; background: none; }
+[data-tex] .tbtn.checked, [data-tex] .btn.checked { border-image: var(--tex-btn-checked) 5 fill / 5px stretch; background: none; }
+[data-tex] .tbtn.disabled { opacity: 1; }
+[data-tex] .btn.disabled { border-image: var(--tex-btn) 5 fill / 5px stretch; background: none; }
+/* gold-rimmed dock frame */
+[data-tex] .dock { border: 4px solid transparent; border-image: var(--tex-frame) 4 / 4px stretch; }
+[data-tex] .tsep { background: var(--color-gold-rule); }
+/* contrast on textured strips */
+[data-tex] .statusbar, [data-tex] .dock-title .dtab, [data-tex] .dock-title .db { color: var(--color-text); }
+[data-tex] .dock-title .dtab:not(.selected) { opacity: 1; color: var(--color-text-muted); }
+[data-theme="light"][data-tex] .dock-title .dtab:not(.selected), [data-theme="light"][data-tex] .statusbar .seg { color: var(--color-text); }
