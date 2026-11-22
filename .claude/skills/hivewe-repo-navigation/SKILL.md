@@ -24,6 +24,7 @@ description: >-
 | `src/base/hierarchy.ixx` | Asset lookup order |
 | `src/models/` + editor folder | Tables/tree views |
 | `tests/` | Existing parser/format coverage |
+| `src/main_window/theme.cpp`, `flat_chrome.cpp` | Flat themes: see "Flat themes" in `.claude/rules/hivewe-qt-ui.md` |
 
 ## Workflow
 

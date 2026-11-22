@@ -43,6 +43,9 @@ description: >-
 - Bash tool heredocs eat backslashes and apostrophes: write sources and Windows paths with Write or Edit, or build them with `chr(92)` / `string.char(92)`. `cat > f` without a heredoc waits on stdin.
 - PowerShell: aliases shadow function names (`R`, `Diff`) and variables are case-insensitive (`$Repo` is `$repo`); `Start-Process -ArgumentList` drops quoting; `run_in_background` on a wrapper returns when `Start-Process` returns, so background the runner script itself and poll for its output file.
 - Git Bash `sed -i` strips CRLF from CRLF files; check `git ls-files --eol` after edits.
+- Tests must never construct a `QApplication` or `QWidget`: `HiveWE_tests` has no Qt platform plugin and the failure shows a modal Windows error on the user's desktop (happened 2026-11-22).
+- `hivewe.h` is CRLF while `hivewe.cpp` is LF; keep each as it is.
+- `doctest.h` forward-declares `std::char_traits`, so a test that only has `import std` and uses `std::string` needs `#include <string>` before `doctest.h`.
 - Asana MCP calls can time out: check with `get_task` whether the change landed before retrying.
 
 ## Verification checklist

@@ -65,3 +65,12 @@ All helpers must refuse any HWND not owned by the started process ID. Never use 
 Captures are written to a `captures\` folder next to the scripts. Copy the scripts into your scratchpad and run them there so captures stay out of the repo. Launch HiveWE only from a sandbox working directory (see `skills/hivewe-build-and-debug`).
 
 `wins.ps1` (copied from a session scratchpad 2026-11-09): window-listing helper used for the UIA-only open/save flow (ribbon Open, Open Map Directory edit 1152 via WM_SETTEXT, button id 1). Needs verification that it still runs unchanged.
+
+## Offscreen QA runs (user request 2026-11-22: test windows must not disturb the user)
+
+- Launch HiveWE only with `--qa-offscreen --theme "<name>" --palette <terrain|doodads|units|pathing|regions> --window-size WxH`. `--qa-dump-layout <file>` writes widget widths and the markers `OVER_VIEWPORT` and `DEEPEST_OFFENDER`.
+- Start it with .NET `ProcessStartInfo` (`UseShellExecute=false`, `CreateNoWindow=true`). `Start-Process` on the console-subsystem exe pops a console window that takes foreground; `-WindowStyle Hidden` leaves the Qt window unpainted.
+- No UIA Toggle or Invoke on the window (UIA Toggle activates even an off-screen no-activate window), no `SetForegroundWindow`, no F5 theme reload: restart with another `--theme`.
+- Sample `GetForegroundWindow` after launch to prove there was no focus steal.
+- Wait at least 8 s after a resize before `PrintWindow`, and retry blank (about 20 KB) captures. Use a tall `--window-size` (for example 1500x1700) to see palette controls below the fold.
+- Under `--qa-offscreen`, theme-failure messages go to stderr. A minimized Qt window reports a 199x34 rect.

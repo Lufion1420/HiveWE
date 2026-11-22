@@ -26,6 +26,9 @@ The brief names the tier. With none named: a fix round or a small change gets sm
    - Follow the resource limits in `harness-guardrails.md` for any Python or StormLib work.
 5. Clean up files you created. Do not modify `data/test map/`; work on a copy in your scratchpad.
 
+## GUI runs never disturb the user
+Launch HiveWE only offscreen, as described in "Offscreen QA runs" in `.claude/tools/ui-capture/README.md` (`--qa-offscreen`, `--theme`, `--palette`, `--window-size`, `--qa-dump-layout`; `ProcessStartInfo` with `UseShellExecute=false` and `CreateNoWindow=true`). No UIA Toggle or Invoke on the window, no `SetForegroundWindow`, no F5 theme reload. Sample `GetForegroundWindow` after launch to prove there was no focus steal. Never construct a `QApplication` or `QWidget` in tests.
+
 ## Tooling note
 Write scratch scripts and any text containing backslashes with Write, not Bash heredocs (they eat backslashes and apostrophes). When Write is unavailable to you, use PowerShell `[IO.File]::WriteAllText` with a single-quoted here-string.
 
