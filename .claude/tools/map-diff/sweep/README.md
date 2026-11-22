@@ -24,6 +24,8 @@ The 78-kind classifier from reports 1-3 is not in the repo and was not rebuilt.
 
 `%TEMP%/input.lua` is shared by every HiveWE process: see `../scripts/README.md`. To check for a clash, compare the hash and size of each generated script (all distinct, none the user's map) instead of watching processes: `Win32_Process.CommandLine` can be empty for a process that has just started.
 
+Wrapper scripts must not reuse the sweep's env var names as variables (a `locked.sh` with `S=` overrode the sweep root `S`). fdiff JSONs embed the orig/new absolute paths: compare them with those keys ignored. The sweep setup (`stock`, `stock_scripts`, `w4`) lives in a session scratchpad; copy it when available instead of rebuilding.
+
 PowerShell variable names are case-insensitive (`$s` and `$S` are the same variable): use distinct names in sweep and QA scripts.
 
 ## Open question

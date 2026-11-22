@@ -44,6 +44,8 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 - `ColorButton::changeColor` has no `ShowAlphaChannel`, so a picked colour gets alpha 255 (ticketed as backlog).
 - `HiveWE::save_current_map_as` creates the target folder and sets `hierarchy.map_directory` before `Map::save` runs, so a save refusal check must run before the folder picker, as `Map::ensure_unit_ids_fit` does.
 
+- Shortcuts (verified 2026-11-22): Ctrl+W is "Show or hide water". Ctrl+T is bound twice (Test Map in `HiveWE.ui`, Wireframe `QShortcut` in `hivewe.cpp`); the UI modernization plan moves Wireframe to Ctrl+Shift+W.
+
 ## Verification
 
 Open affected window/palette; check shortcuts, focus, docking, save/reload if editing map data.

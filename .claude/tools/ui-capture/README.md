@@ -35,7 +35,8 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - Qt dialogs are reachable only through `AutomationElement.FromHandle`, not by top-level name lookup.
 - For an edit you can read back, toggle a checkbox such as Melee map in Map Description. Name, author and description edits may be dropped (ticket "Map Description drops edits when the name, author or description is a literal"). Needs verification: that this applies to `data/test map`.
 - A UIA walk of the whole main window can exceed 60 seconds. Run it detached or scope to a dialog HWND.
-- Never name a PowerShell function `H` or `Cls`: they are built-in aliases, so the call silently runs something else.
+- Never name a PowerShell function `H`, `R` or `Cls`: they are built-in aliases (`R` is `Invoke-History`), so the call silently runs something else.
+- Map Protector opens via `post-click.ps1`, not `ui-act.ps1` invoke. The ribbon Save button plus the `ribbonMapMeta` text confirm which map path the editor is on.
 - Posted-message brush strokes only draw a brush preview and do not register in `world_undo`, so they cannot create a tracked unsaved edit. Brush, copy/paste and undo checks need an in-process test from `cpp-dev`, not the user (guardrails, 2026-11-09).
 - Qt File popups close when focus shifts, so invoke File and post the click in the same script.
 - UIA can Invoke ribbon buttons only on the selected tab, so select the tab first with `ui-act.ps1 select -Type TabItem`. Map Protector is on Home, Item Tables is on Units.

@@ -116,3 +116,7 @@ Checks: `.claude/tools/script-check/`.
 - Both wtg variable readers in `src/base/triggers/triggers.ixx` assign every `TriggerVariable` field, so default member values on that struct affect only editor-created variables. New ones use `make_new_trigger_variable` (type "integer", unknown=1; unknown=1 Needs verification against a World Editor-written wtg).
 - HiveWE's object-data writer puts 0 in the end token where the World Editor writes the object id. The wts writer drops `//` comments (found by fdiff on Forgotten Hollow).
 - StormLib: never enumerate with `SFileFindFirstFile` on these maps (hang, 20 GB RAM); see `harness-guardrails.md`.
+
+## Save temp files and folder listings (verified 2026-11-22)
+
+- Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `export_mpq`, `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy.

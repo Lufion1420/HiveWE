@@ -46,7 +46,7 @@ Add-ons on any track:
 - **New window or changed layout:** run `designer` first. Stop at `AWAITING_APPROVAL` until the user approves the rendered PNGs (gate 1). The first `cpp-dev` step is then a real Qt prototype screenshotted with `ui-capture`, which the user approves (gate 2) before the rest of the UI work. After shipping, run `designer` again to refresh the screenshots in `designs/current/`.
 - **Durable fact or convention learned:** run `docs-keeper`.
 - **Toolchain failure:** run `build-engineer`.
-- **Agent definition files (`.claude/agents/*.md` must stay LF).** A CRLF rewrite made an agent unavailable for the rest of a WarMash session (the registry does not reload mid-session). `.gitattributes` pins `eol=lf`, but the working copy can still be CRLF: check `git ls-files --eol` after any edit and convert with `sed -i 's/\r$//'`.
+- **Agent definition files (`.claude/agents/*.md` must stay LF).** A CRLF rewrite made an agent unavailable for the rest of a WarMash session (the registry does not reload mid-session). `.gitattributes` pins `eol=lf`, but the working copy can still be CRLF: check `git ls-files --eol` after any edit and convert with `sed -i 's/\r$//'`. `.claude/rules/*.md` can be CRLF in the working copy too (`harness-guardrails.md` was on 2026-11-22): check them the same way.
 
 Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPROVE on Standard and Risky). Internal-only changes get no changelog entry, so `release-manager` is skipped for them.
 

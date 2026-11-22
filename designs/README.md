@@ -38,4 +38,4 @@ Use the Playwright-installed Chromium (or `msedge`); the Python and npm playwrig
 %LOCALAPPDATA%\ms-playwright\chromium-<newest>\chrome-win\chrome.exe --headless --disable-gpu --hide-scrollbars --window-size=W,H --screenshot=<abs png> file:///<abs html>
 ```
 
-Use absolute paths. Pick the newest `chromium-*` folder. Needs verification: the exact folder name on a given machine.
+Use absolute paths. Add `--virtual-time-budget=8000` so web fonts load before the screenshot. Pick the newest `chromium-*` folder. Needs verification: the exact folder name on a given machine.
