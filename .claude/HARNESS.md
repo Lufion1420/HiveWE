@@ -14,7 +14,7 @@ Created 2026-11-08, adapted from the Lendrill harness; reworked 2026-11-20 on th
 | `reviewer` | Adversarial diff review, APPROVE or REJECT; never builds | Nothing | Opus |
 | `qa-verifier` | Rebuilds, runs tests, writes manual UI checks; PASS, FAIL or COULD-NOT-RUN; owns `build/Agent` | Nothing | Sonnet |
 | `release-manager` | Changelog, version bumps, `release.yml`, publishing releases | Changelog, version strings, release workflow | Sonnet |
-| `designer` | `.pen` mockups for approval, and the as-built baseline | `designs/` only | Sonnet |
+| `designer` | HTML/CSS mockups plus rendered PNGs for approval, and the as-built screenshot baseline | `designs/` only | Sonnet |
 | `wc3-format-specialist` | Sourced note on formats and compatibility before implementation | Nothing | Opus |
 | `build-engineer` | CMake, vcpkg, overlay ports, CI, ICE and linker failures | Build files | Sonnet |
 | `docs-keeper` | `.claude/rules/`, `.claude/skills/`, `.claude/plans/`, `.claude/agents/`, `.claude/HARNESS.md`, `CLAUDE.md` | Docs only | Sonnet |
@@ -43,7 +43,7 @@ QA tiers: the orchestrator names the tier in each QA brief.
 Pipelining: read-only prep for task N+1 (`wc3-format-specialist`, `Explore`, `Plan`) may run during review and QA of task N. Never two builds at once.
 
 Add-ons on any track:
-- **New window or changed layout:** run `designer` first. Stop at `AWAITING_APPROVAL` until the user approves the frames. After shipping, run `designer` again to update `designs/current/`.
+- **New window or changed layout:** run `designer` first. Stop at `AWAITING_APPROVAL` until the user approves the rendered PNGs (gate 1). The first `cpp-dev` step is then a real Qt prototype screenshotted with `ui-capture`, which the user approves (gate 2) before the rest of the UI work. After shipping, run `designer` again to refresh the screenshots in `designs/current/`.
 - **Durable fact or convention learned:** run `docs-keeper`.
 - **Toolchain failure:** run `build-engineer`.
 - **Agent definition files (`.claude/agents/*.md` must stay LF).** A CRLF rewrite made an agent unavailable for the rest of a WarMash session (the registry does not reload mid-session). `.gitattributes` pins `eol=lf`, but the working copy can still be CRLF: check `git ls-files --eol` after any edit and convert with `sed -i 's/\r$//'`.
@@ -76,14 +76,14 @@ Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPRO
 
 ## Limits
 - The orchestrator-only rule lives in `CLAUDE.md` as an instruction; nothing mechanically enforces it. The orchestrator still uses read-only lookups, codegraph and git.
-- `.claude/settings.json` mechanically denies Read and Grep on `.pen`, configuring or building any auto-running preset (`Release`, `ReleaseTracing`, `Debug`, `RelWithDebInfo`: `HIVEWE_AUTO_RUN_AFTER_BUILD` defaults to ON, only `Agent` sets it OFF), pushing to `upstream`, force, mirror, `+refspec` and `:`-delete pushes, deleting `main` on origin, changing repo visibility, `gh auth switch`, and killing `HiveWE`, Warcraft III or `code` by image name. `--force-with-lease` is on "ask". Deny patterns match the whole command line, so a commit message containing the literal text of such a push in the same command is blocked too: commit and push in separate commands.
+- `.claude/settings.json` mechanically denies Read and Grep on `.pen` (archived Pencil files), configuring or building any auto-running preset (`Release`, `ReleaseTracing`, `Debug`, `RelWithDebInfo`: `HIVEWE_AUTO_RUN_AFTER_BUILD` defaults to ON, only `Agent` sets it OFF), pushing to `upstream`, force, mirror, `+refspec` and `:`-delete pushes, deleting `main` on origin, changing repo visibility, `gh auth switch`, and killing `HiveWE`, Warcraft III or `code` by image name. `--force-with-lease` is on "ask". Deny patterns match the whole command line, so a commit message containing the literal text of such a push in the same command is blocked too: commit and push in separate commands.
 - Lendrill's push-guard hook was not ported: it was disabled there for causing too many prompts.
 - Only one build and one designer can run at a time, so development runs sequentially.
 - No automated UI testing exists. A headless `data/test map` load/save round-trip test would be the biggest verification upgrade.
 
 ## Sources
 
-What each agent's process drew on. `wc3-format-specialist` and `designer` are essentially ours: nothing suitable exists for WC3 formats or Qt-faithful Pencil mockups. Collections such as wshobson/agents and VoltAgent/awesome-claude-code-subagents were rejected as generic personas for the wrong toolchain.
+What each agent's process drew on. `wc3-format-specialist` and `designer` are essentially ours: nothing suitable exists for WC3 formats or Qt-faithful mockups. Collections such as wshobson/agents and VoltAgent/awesome-claude-code-subagents were rejected as generic personas for the wrong toolchain.
 
 - `reviewer`: Qt's [qt-cpp-review rules](https://github.com/TheQtCompanyRnD/agent-skills) (vendored, BSD-3, in `references/qt-review-rules.md`), [chrxh/alien reviewer](https://github.com/chrxh/alien/blob/HEAD/.claude/agents/reviewer.md).
 - `cpp-dev`: obra/superpowers [implementer prompt](https://github.com/obra/superpowers/blob/HEAD/skills/subagent-driven-development/implementer-prompt.md) and test-driven-development.
@@ -92,4 +92,4 @@ What each agent's process drew on. `wc3-format-specialist` and `designer` are es
 - `docs-keeper`: Anthropic [claude-md-improver update guidelines](https://github.com/anthropics/claude-plugins-official/blob/HEAD/plugins/claude-md-management/skills/claude-md-improver/references/update-guidelines.md), superpowers writing-skills.
 - `build-engineer`: [Yuzu build-ci](https://github.com/DevNullLtd/Yuzu) and Jinja2Cpp ci-triage failure classes (ideas only; AGPL and MPL).
 - `wc3-format-specialist`: reference list in the agent file (WC3MapSpecification, War3Net, mdx-m3-viewer, StormLib, WC3MapTranslator). wenbinio/wc3 has no license and was not used.
-- `designer`: Pencil's own skill docs plus our first baseline run; pen.dev style advice deliberately ignored.
+- `designer`: our own process (HTML/CSS mockups limited to QSS-expressible CSS, headless Chromium render); Pencil was used until 2026-11-22.

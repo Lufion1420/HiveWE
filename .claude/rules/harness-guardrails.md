@@ -24,10 +24,14 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - Publishing a release (version tag) happens only when the user asks for it; `release-manager` prepares it.
 
 ## Designs
-- All `.pen` files live in `designs/`. Never Read or Grep them; use `mcp__pencil__*`.
-- The file must be open and active in VS Code. Agents open and focus it themselves with `code --reuse-window`, without asking the user. Run one designer at a time.
-- The user's Claude chat is a locked editor group in VS Code (2026-11-22): `code --reuse-window` opens the `.pen` in the other group. Never close tabs or hide the chat; if the group is not locked, have the orchestrator tell the user. See `designs/README.md`.
-- New windows and changed layouts need user-approved frames before `cpp-dev` starts.
+Decided 2026-11-22: Pencil (`.pen`) was dropped for HTML/CSS mockups plus a Qt prototype gate. Pencil's VS Code extension exposes one fixed named pipe per machine (`\.\pipe\pencil-visual_studio_code`); with two VS Code windows open the first window owns it, so the MCP server talks to the wrong window and `get_app_state` keeps saying "A document needs to be open". Each Claude session also starts its own pencil MCP server. Too fragile.
+- Mockups are plain text in `designs/proposals/<name>/` (`index.html` or several pages, one shared `tokens.css` for Dark and Light, SVG icons, PNGs in `renders/`). Process, CSS limits and rendering command: `designs/README.md`.
+- Only CSS that QSS can express: no box-shadow, blur/filter, backdrop, transforms, transitions or animation, grid tricks Qt layouts cannot do; border-radius and gradients only where Qt stylesheets support them. Fonts: the bundled UI font plus system fallback. Icons: the SVG files the app will ship.
+- Render headless (no window, no VS Code, no MCP). Do not require the Python or npm playwright packages; they are not installed.
+- Gate 1: the user approves the rendered PNGs (direction pick). Gate 2: the first `cpp-dev` step of an approved UI change is a real Qt prototype (the actual window with the theme QSS applied), screenshotted with `.claude/tools/ui-capture/`; the user approves that screenshot before the rest of the UI work proceeds. QA window announcements (see Chat rules) still apply.
+- Run one designer at a time.
+- Archived `.pen` files in `designs/archive/pencil/` are encrypted: never Read or Grep them (`settings.json` denies it).
+- New windows and changed layouts need both approvals before the rest of the implementation.
 
 ## Map data
 - Never modify `data/test map/` or a user's map in place. Use a copy.
