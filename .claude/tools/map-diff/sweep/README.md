@@ -23,3 +23,9 @@ Scripts of the differential sweep (fourth sweep, 2026-11-20). Not run since bein
 The 78-kind classifier from reports 1-3 is not in the repo and was not rebuilt.
 
 `%TEMP%/input.lua` is shared by every HiveWE process: see `../scripts/README.md`. To check for a clash, compare the hash and size of each generated script (all distinct, none the user's map) instead of watching processes: `Win32_Process.CommandLine` can be empty for a process that has just started.
+
+PowerShell variable names are case-insensitive (`$s` and `$S` are the same variable): use distinct names in sweep and QA scripts.
+
+## Open question
+
+The World Editor passes the base id as the skin argument of `BlzCreateDestructableZWithSkin` in all 2754 stock calls (468 stock scripts), none of which had a differing skin. Whether it passes a differing .doo skin is unknown. HiveWE emits the .doo skin (`map_script.cpp`). Settling it needs a skinned destructable saved by the real World Editor (sixth sweep, `reports/2026-11-22-sixth-sweep.md`).
