@@ -16,3 +16,5 @@ designs/
 - New windows and changed layouts start as a proposal, and are built only after approval.
 - After a change ships, its frames are updated in `current/`.
 - Frames are named `<Window> / <State>`.
+
+Needs verification: after a VS Code "Reload Window" the Pencil MCP stays disconnected for the running Claude session (`get_app_state` says "A document needs to be open" while the canvas shows). A new session, or an `/mcp` reconnect of `pencil`, is needed.
