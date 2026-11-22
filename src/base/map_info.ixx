@@ -7,6 +7,7 @@ import BinaryWriter;
 import Hierarchy;
 import MapFormatCheck;
 import Utilities;
+import SLK;
 import <glm/glm.hpp>;
 
 export enum class PlayerType {
@@ -33,6 +34,54 @@ export glm::u8vec4 w3i_color_to_rgba(const glm::u8vec4 stored) {
 /// The inverse of w3i_color_to_rgba: an R, G, B, A colour in the byte order w3i stores it.
 export glm::u8vec4 rgba_to_w3i_color(const glm::u8vec4 rgba) {
 	return { rgba[2], rgba[1], rgba[0], rgba[3] };
+}
+
+/// The global weather id as w3i stores it: a four character effect id (such as "RAlr") read as raw bytes, 0 for none.
+export std::string w3i_weather_id_to_string(const int weather_id) {
+	std::string out(4, '\0');
+	std::memcpy(out.data(), &weather_id, 4);
+	while (!out.empty() && out.back() == '\0') {
+		out.pop_back();
+	}
+	return out;
+}
+
+/// The inverse of w3i_weather_id_to_string. Short strings are zero padded and anything past four bytes is ignored.
+export int w3i_weather_id_from_string(const std::string_view id) {
+	int out = 0;
+	std::memcpy(&out, id.data(), std::min<size_t>(id.size(), 4));
+	return out;
+}
+
+/// What Map Info writes for the weather: 0 when global weather is off, the selected raw 4-byte id otherwise. When nothing usable is
+/// selected (0), the stored id is kept instead of being cleared.
+export int w3i_weather_id_for_save(const bool enabled, const int selected_id, const int stored_id) {
+	if (!enabled) {
+		return 0;
+	}
+	if (selected_id == 0) {
+		return stored_id;
+	}
+	return selected_id;
+}
+
+export struct WeatherEntry {
+	std::string name;
+	int id;
+};
+
+/// The (name, raw id) list for the weather combo. In Weather.slk the effect id is the first column, which the SLK keeps as the row
+/// key (`index_to_row`), not as a data column. Data rows start at index 0. Rows without an id are skipped.
+export std::vector<WeatherEntry> w3i_weather_entries(const slk::SLK& weather_slk) {
+	std::vector<WeatherEntry> entries;
+	for (size_t i = 0; i < weather_slk.rows(); i++) {
+		const auto row = weather_slk.index_to_row.find(i);
+		if (row == weather_slk.index_to_row.end() || row->second.empty()) {
+			continue;
+		}
+		entries.push_back({ weather_slk.data<std::string>("name", i), w3i_weather_id_from_string(row->second) });
+	}
+	return entries;
 }
 
 export struct PlayerData {

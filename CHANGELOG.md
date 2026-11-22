@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Pressing OK in Scenario > Map Options no longer clears the map's global weather** — The weather list now shows every entry (the first one was missing and the entries had no usable ids), and the current weather is shown by name.
 - **The Map Info dialog shows and saves the water tint and fog colours correctly** — Red and blue were swapped before, and an unchanged dialog now keeps the colours' alpha byte.
 - **Saved maps set the water colour when water tinting is on** — The generated map script now calls `SetWaterBaseColor` like the World Editor, so tinted water no longer falls back to the default colour in game. Not game-tested yet.
 - **Start location priorities in the generated map script match the World Editor** — `SetStartLocPrio` and `SetEnemyStartLocPrio` are written in the World Editor's order with its values, and maps without priorities no longer get an empty `InitAllyPriorities`. Not game-tested yet.

@@ -90,15 +90,20 @@ MapInfoEditor::MapInfoEditor(QWidget* parent) : QDialog(parent) {
 	slk::SLK weather_slk("TerrainArt/Weather.slk");
 	weather_slk.substitute(world_edit_strings, "WorldEditStrings");
 
-	ui.globalWeather->setChecked(map->info.weather_id != 0);
-	for (size_t i = 1; i < weather_slk.rows(); i++) {
-		ui.globalWeatherCombo->addItem(
-			QString::fromUtf8(weather_slk.data<std::string_view>("name", i)),
-			QString::fromUtf8(weather_slk.data<std::string_view>("effectid", i))
-		);
+	// The item data is the raw 4-byte id, so a stored id that is not valid UTF-8 is written back byte-identical.
+	for (const WeatherEntry& entry : w3i_weather_entries(weather_slk)) {
+		ui.globalWeatherCombo->addItem(QString::fromUtf8(entry.name), entry.id);
 	}
-	std::string weather_id = {reinterpret_cast<char*>(&map->info.weather_id), 4};
-	ui.globalWeatherCombo->setCurrentText(QString::fromUtf8(weather_slk.data<std::string_view>("name", weather_id)));
+	// Select by id, not by name. A stored id that is not in the SLK gets its own entry so saving keeps it.
+	if (map->info.weather_id != 0) {
+		int index = ui.globalWeatherCombo->findData(map->info.weather_id);
+		if (index == -1) {
+			const std::string raw = w3i_weather_id_to_string(map->info.weather_id);
+			ui.globalWeatherCombo->addItem(QString::fromLatin1(raw.data(), static_cast<qsizetype>(raw.size())), map->info.weather_id);
+			index = ui.globalWeatherCombo->count() - 1;
+		}
+		ui.globalWeatherCombo->setCurrentIndex(index);
+	}
 
 	// Custom Sound
 	slk::SLK environment_sounds_slk("UI/SoundInfo/EnvironmentSounds.slk");
@@ -238,11 +243,9 @@ bool MapInfoEditor::save() const {
 	map->info.fog_color = rgba_to_w3i_color(glm::u8vec4(ui.fogColor->get_glm_color()));
 
 	// Global Weather
-	if (ui.globalWeather->isChecked()) {
-		map->info.weather_id = *reinterpret_cast<int*>(ui.globalWeatherCombo->currentData().toString().toStdString().data());
-	} else {
-		map->info.weather_id = 0;
-	}
+	map->info.weather_id = w3i_weather_id_for_save(
+		ui.globalWeather->isChecked(), ui.globalWeatherCombo->currentData().toInt(), map->info.weather_id
+	);
 
 	// Custom Sound
 	if (ui.customSound->isChecked()) {
