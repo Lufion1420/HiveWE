@@ -50,6 +50,7 @@ PowerShell helpers for driving and capturing the running HiveWE without SendInpu
 - A Qt QComboBox exposes only the Invoke, Value and ExpandCollapse patterns. The Value pattern returns the displayed text, so it confirms a selection; popup items cannot be listed or picked.
 - `data/test map` w3i (v33) has weather_id at byte offset 0xB3. Patching `RAlr` there in a sandbox copy gives a weather test input (no stock map with RAlr was found).
 - MPQ test archives can be built with `StormLib.dll` through ctypes.
+- `ui-act.ps1` accepts `-Like` on the Trigger Editor toolbar; the Create Variable button's UIA name is `actionCreateVariable`. A variable's type is not exposed through UIA (the explorer tree shows names only), so verify it from the saved wtg or script. The Output pane (QPlainTextEdit) returned no text through UIA.
 
 ### Safety: recent maps (incident 2026-11-08)
 

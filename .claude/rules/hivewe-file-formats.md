@@ -80,11 +80,13 @@ Checks: `.claude/tools/script-check/`.
 - The World Editor creates `ugol` with `CreateBlightedGoldmine(p, x, y, face)`, not `BlzCreateUnitWithSkin` (40 JASS maps).
 - `InitAllyPriorities` is omitted by the World Editor when no player has a priority on another (463/466; 3 unexplained, Needs verification).
 - `generate_map_script` writes fixed shared paths (`%TEMP%/input.lua`, `data/tools/war3map.j`), so saves and resaves cannot run in parallel. On a script compile error, HiveWE's generated script can be taken from `%TEMP%/input.lua` right after the resave.
+- Save pitfall (Asana 1220330960297388, open): the Lua step writes `%TEMP%/input.lua` unchecked (`src/base/triggers/map_script.cpp`). A failed open makes HiveWE copy the previous save's script, possibly another map's, into war3map.lua and still report success. Map Protector's `run_sync_save_and_restore` (`src/map_protector/protection_pipeline.ixx`) does not catch a throwing `map->save`.
 - `MapScriptWriter::call` formats float args with `"{}"` (can produce exponents), and `string_view` concatenations can format as char ranges. Pre-format arguments as `std::string`.
 - Identifiers: every non-`[A-Za-z0-9_]` becomes `_`, trim first, and use the same helper at declaration and use.
 - Lua globals: `__jarray(0)`, `__jarray(false)` or `__jarray("")` by base type, `{}` for handle arrays; scalars `0`, `false`, `""`, `nil`.
 - `gg_unit_` and `gg_dest_` numbers are zero-padded to 4 (`{:0>4}`). Declared names come from scanning trigger text, created names from placed objects. Any padding, length or type difference leaves a global undeclared (JASS) or nil (Lua). Known open: unit numbers of 10000 and above are truncated by the fixed 4-char scan.
-- Test seam: `generate_*` and `MapScriptWriter` are private to `Triggers`. Export narrow helpers from `triggers.ixx` to test them.
+- Test seam: `generate_*` and `MapScriptWriter` are private to `Triggers`. Export a narrow helper declared in `triggers.ixx` and defined in the `module Triggers;` unit (example: `generate_variable_script`); no `Map` is needed.
+- Test setup: `ini::INI::set_whole_data` supplies TriggerTypes/TriggerTypeDefaults (a missing section makes `data()` throw). `const T x;` fails with C2737 when only some members have default initialisers. `data/test map` is a JASS map, so `resave_smoke` produces no war3map.lua and Lua save output is covered only by unit tests.
 - WC3 3.0.1 writes no Lua runtime errors to `Documents\Warcraft III\Logs\War3Log.txt`, and Lua errors in `UITimer` callbacks fail silently. Use the simulator in `script-check`.
 
 ## w3i facts (strict parse of 466 stock maps, 2026-11-08)
@@ -111,5 +113,6 @@ Checks: `.claude/tools/script-check/`.
 - w3s: 2^32 (0x4F800000) for pitch and distances, and -1 for channel and volume, mean "default"; the World Editor writes no setter for them. Duration is not stored in w3s; the World Editor computes it from the audio file (Ogg: last granule * 1000 / sample rate). 3.0 dialogue audio exists only under `_locales\enus.w3mod` in CASC.
 - The script generator binds `gg_unit_`/`gg_dest_`/`gg_item_` globals from trigger text. The declared type comes from the trigger text and the assigned type from the placed object; they must match (enforced for items and units).
 - 1.31+ wtg: the first int after the seven deleted-id lists is a count followed by that many ints (1 in human05 and undead02, 0 elsewhere). `Triggers::load_version_31` reads a fixed three ints. Needs verification in C++.
+- Both wtg variable readers in `src/base/triggers/triggers.ixx` assign every `TriggerVariable` field, so default member values on that struct affect only editor-created variables. New ones use `make_new_trigger_variable` (type "integer", unknown=1; unknown=1 Needs verification against a World Editor-written wtg).
 - HiveWE's object-data writer puts 0 in the end token where the World Editor writes the object id. The wts writer drops `//` comments (found by fdiff on Forgotten Hollow).
 - StormLib: never enumerate with `SFileFindFirstFile` on these maps (hang, 20 GB RAM); see `harness-guardrails.md`.
