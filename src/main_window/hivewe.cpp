@@ -34,6 +34,7 @@ import "terrain_palette.h";
 import "doodad_palette.h";
 import "unit_palette.h";
 import "region_palette.h";
+import "selection_properties_panel.h";
 import "object_editor/icon_view.h";
 import "trigger_editor.h";
 #include "QMessageBox"
@@ -1773,6 +1774,15 @@ void HiveWE::ensure_palette_view(const SidebarPaletteView view) {
 		connect(doodad_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
 		connect(doodad_palette, &Palette::tool_page_activated, this, &HiveWE::on_tool_page_activated);
 		connect(doodad_palette, &DoodadPalette::preview_doodad_changed, this, &HiveWE::update_doodad_model_preview);
+		connect(&doodad_palette->current_brush(), &Brush::selection_changed, this, [this]() {
+			if (!selection_panel) {
+				return;
+			}
+			const DoodadBrush& brush = doodad_palette->current_brush();
+			if (!brush.selections.empty() || selection_panel->owned_by(&brush)) {
+				selection_panel->show_selection(brush);
+			}
+		});
 		connect(this, &HiveWE::palette_changed, doodad_palette, &Palette::deactivate);
 	}
 
@@ -1783,6 +1793,15 @@ void HiveWE::ensure_palette_view(const SidebarPaletteView view) {
 		connect(unit_palette, &Palette::ribbon_tab_requested, this, &HiveWE::set_current_custom_tab);
 		connect(unit_palette, &Palette::tool_page_activated, this, &HiveWE::on_tool_page_activated);
 		connect(unit_palette, &UnitPalette::preview_unit_changed, this, &HiveWE::update_unit_model_preview);
+		connect(&unit_palette->current_brush(), &Brush::selection_changed, this, [this]() {
+			if (!selection_panel) {
+				return;
+			}
+			const UnitBrush& brush = unit_palette->current_brush();
+			if (!brush.selections.empty() || selection_panel->owned_by(&brush)) {
+				selection_panel->show_selection(brush);
+			}
+		});
 		connect(this, &HiveWE::palette_changed, unit_palette, &Palette::deactivate);
 	}
 
@@ -1802,6 +1821,10 @@ void HiveWE::reset_palettes() {
 	}
 
 	hide_palette_sidebar();
+	// The panel holds no pointers to the selected objects, but its rows describe a brush that is about to go away.
+	if (selection_panel) {
+		selection_panel->clear_selection();
+	}
 	delete terrain_palette;
 	terrain_palette = nullptr;
 	delete pathing_palette;
@@ -1816,6 +1839,9 @@ void HiveWE::reset_palettes() {
 }
 
 void HiveWE::reset_map_session() {
+	if (selection_panel) {
+		selection_panel->clear_selection();
+	}
 	delete terrain_palette;
 	terrain_palette = nullptr;
 	delete pathing_palette;
@@ -2095,6 +2121,33 @@ void HiveWE::open_qa_palette() {
 		toggle_pathing_sidebar();
 	} else if (qa_palette == "regions") {
 		toggle_region_palette();
+	}
+
+	// Selects the first object of the open palette without a mouse, so the Properties panel can be captured.
+	if (!qa_select_first || !qa_offscreen) {
+		return;
+	}
+	// data/test map has only a start location and no doodads, so a sample object is added to the in-memory map (never saved: the QA run is
+	// offscreen and only captured).
+	if (qa_palette == "units" && unit_palette) {
+		auto& brush = unit_palette->current_brush();
+		auto unit = std::ranges::find_if(map->units.units, [](const Unit& u) { return u.id != "sloc"; });
+		if (unit == map->units.units.end()) {
+			Unit& added = map->units.add_unit("hfoo", glm::vec3(30.f, 30.f, 0.f));
+			added.angle = glm::radians(270.f);
+			added.update_terrain_height(map->terrain);
+			unit = map->units.units.end() - 1;
+		}
+		brush.selections.insert(&*unit);
+		emit brush.selection_changed();
+	} else if (qa_palette == "doodads" && doodad_palette) {
+		auto& brush = doodad_palette->current_brush();
+		if (map->doodads.doodads.empty()) {
+			Doodad& added = map->doodads.add_doodad("LTlt", 0, glm::vec3(30.f, 30.f, 0.f), map->terrain);
+			added.angle = glm::radians(90.f);
+		}
+		brush.selections.insert(&map->doodads.doodads.front());
+		emit brush.selection_changed();
 	}
 }
 

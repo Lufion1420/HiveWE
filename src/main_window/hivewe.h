@@ -48,6 +48,7 @@ class PathingPalette;
 class DoodadPalette;
 class UnitPalette;
 class RegionPalette;
+class SelectionPropertiesPanel;
 class ModelEditorGLWidget;
 
 class HiveWE : public QMainWindow {
@@ -63,6 +64,8 @@ public:
 	static inline QSize qa_window_size = QSize(1600, 1000);
 	/// Set by --palette: the palette (terrain, doodads, units, pathing, regions) opened after the map has loaded, through the mode button's slot.
 	static inline QString qa_palette;
+	/// Set by --qa-select-first: with --palette units or doodads, select the first unit or doodad of the map.
+	static inline bool qa_select_first = false;
 	void open_qa_palette();
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.
 	static inline QString qa_dump_layout_file;
@@ -193,6 +196,8 @@ private:
 	QFrame* flat_minimap_dock = nullptr;
 	QFrame* flat_palette_dock = nullptr;
 	QFrame* flat_properties_dock = nullptr;
+	/// Read-only selection list inside flat_properties_dock. Owned by the Qt tree; null until the Flat layout has been built.
+	SelectionPropertiesPanel* selection_panel = nullptr;
 	QFrame* flat_preview_dock = nullptr;
 	QTimer status_timer;
 	QLabel* status_cursor = nullptr;

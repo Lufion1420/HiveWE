@@ -134,6 +134,7 @@ int main(int argc, char* argv[]) {
 				"  --window-size WxH    Size in pixels of the --qa-offscreen window, for example 1366x768. Ignored without --qa-offscreen.\n"
 				"  --palette <name>     Open a palette after the startup map has loaded: terrain, doodads, units, pathing or regions.\n"
 				"                       Needs a loaded map, so it only works with the startup map (data/test map).\n"
+				"  --qa-select-first    With --palette units or doodads: select the first unit or doodad of the map, adding a sample one in memory if the map has none (for screenshots).\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
 				"  --resave <in> <out>  Load one map folder and save it to another folder without opening the editor window.\n"
@@ -156,6 +157,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_palette = arguments[++i];
+		} else if (arguments[i] == "--qa-select-first") {
+			// The hook adds a sample object to the loaded map, so it must never run in a window the user works in.
+			if (!HiveWE::qa_offscreen && !arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-select-first needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_select_first = true;
 		} else if (arguments[i] == "--qa-dump-layout") {
 			if (i + 1 >= arguments.size()) {
 				std::println(stderr, "--qa-dump-layout needs a file name. See HiveWE --help.");

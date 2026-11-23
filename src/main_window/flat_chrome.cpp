@@ -22,6 +22,7 @@
 #include <QWidget>
 
 #include "brush.h"
+#include "selection_properties_panel.h"
 
 import std;
 import Map;
@@ -410,7 +411,7 @@ void HiveWE::apply_flat_layout(const bool flat) {
 			left_layout->addWidget(flat_palette_dock, 1);
 			left_layout->addStretch(0);
 
-			// Right: Properties | Regions, Preview. Properties and Regions have no backing data yet: honest placeholders.
+			// Right: Properties | Regions, Preview. Properties is the read-only selection list, Regions has no backing data yet: honest placeholder.
 			auto* right_layout = new QVBoxLayout(flat_right);
 			right_layout->setContentsMargins(0, 0, 0, 0);
 			right_layout->setSpacing(4);
@@ -423,7 +424,8 @@ void HiveWE::apply_flat_layout(const bool flat) {
 				label->setAlignment(Qt::AlignCenter);
 				pages->addWidget(label);
 			};
-			placeholder("The properties of the selected unit or doodad will be shown here.");
+			selection_panel = new SelectionPropertiesPanel(pages);
+			pages->addWidget(selection_panel);
 			placeholder("The regions of the map will be listed here.");
 
 			QList<QWidget*> tabs;
@@ -551,6 +553,13 @@ void HiveWE::setup_flat_status_bar() {
 	status_timer.setParent(this);
 	status_timer.setInterval(250);
 	connect(&status_timer, &QTimer::timeout, this, &HiveWE::update_status_bar);
+	// Drags, rotations, nudges, undo/redo and the Unit Properties dialog change the selected objects without a selection_changed signal.
+	// The panel rebuilds from the brush's current selection and only touches its rows when a value differs.
+	connect(&status_timer, &QTimer::timeout, this, [this]() {
+		if (selection_panel && selection_panel->isVisible()) {
+			selection_panel->refresh();
+		}
+	});
 	status_timer.start();
 }
 
