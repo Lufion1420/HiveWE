@@ -150,6 +150,10 @@ export class SkinnedMesh: public Resource {
 			indices += i.faces.size();
 			matrices += i.matrix_groups.size();
 			total_layers += mdx->materials[i.material_id].layers.size();
+			// Refuse before reserving GPU space: the weight buffer holds 8 one-byte entries per vertex.
+			if (!i.skin.empty() && (i.skin.size() != i.vertices.size() * 8 || !mdx::MDX::skin_fits_u8(i))) {
+				throw std::runtime_error(std::format("{}: skin weights do not fit the renderer's 8 bytes per vertex", path.string()));
+			}
 		}
 
 		// Reserve a contiguous range in each global mega-buffer. Mutex-protected; safe from worker threads.
@@ -171,7 +175,7 @@ export class SkinnedMesh: public Resource {
 
 		// Buffer Data
 		struct GeosetBuffers {
-			std::vector<glm::u8vec4> skin_weights; // empty = use i.skin directly
+			std::vector<glm::u8vec4> skin_weights;
 			std::vector<glm::uvec2> vertices_snorm;
 			std::vector<uint32_t> uvs_snorm;
 			std::vector<uint32_t> normals_oct_snorm;
@@ -190,6 +194,8 @@ export class SkinnedMesh: public Resource {
 
 				if (i.skin.empty()) {
 					buf.skin_weights = mdx::MDX::matrix_groups_as_skin_weights(i);
+				} else {
+					buf.skin_weights = mdx::MDX::skin_as_u8_weights(i);
 				}
 
 				buf.vertices_snorm.reserve(i.vertices.size());
@@ -240,16 +246,12 @@ export class SkinnedMesh: public Resource {
 			const GLintptr v_off = vertex_base + local_base_vertex;
 			const GLintptr i_off = index_base + local_base_index;
 
-			if (i.skin.empty()) {
-				glNamedBufferSubData(
-					skinned_mesh_globals.weight_buffer,
-					v_off * sizeof(glm::uvec2),
-					entry.vertices * 8,
-					buf.skin_weights.data()
-				);
-			} else {
-				glNamedBufferSubData(skinned_mesh_globals.weight_buffer, v_off * sizeof(glm::uvec2), entry.vertices * 8, i.skin.data());
-			}
+			glNamedBufferSubData(
+				skinned_mesh_globals.weight_buffer,
+				v_off * sizeof(glm::uvec2),
+				entry.vertices * 8,
+				buf.skin_weights.data()
+			);
 
 			glNamedBufferSubData(
 				skinned_mesh_globals.vertex_snorm_buffer,

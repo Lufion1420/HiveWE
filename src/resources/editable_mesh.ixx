@@ -63,6 +63,13 @@ export class EditableMesh: public Resource {
 		size_t indices = 0;
 		size_t matrices = 0;
 
+		// Refuse before creating GL objects: the weight buffer holds 8 one-byte entries per vertex.
+		for (const auto& i : mdx->geosets) {
+			if (i.lod == 0 && !i.skin.empty() && (i.skin.size() != i.vertices.size() * 8 || !mdx::MDX::skin_fits_u8(i))) {
+				throw std::runtime_error("Skin weights do not fit the renderer's 8 bytes per vertex");
+			}
+		}
+
 		glGenVertexArrays(1, &vao);
 		glBindVertexArray(vao);
 
@@ -154,7 +161,8 @@ export class EditableMesh: public Resource {
 
 				glNamedBufferSubData(weight_buffer, base_vertex * sizeof(glm::uvec2), entry.vertices * 8, skin_weights.data());
 			} else {
-				glNamedBufferSubData(weight_buffer, base_vertex * sizeof(glm::uvec2), entry.vertices * 8, i.skin.data());
+				const std::vector<glm::u8vec4> skin_weights = mdx::MDX::skin_as_u8_weights(i);
+				glNamedBufferSubData(weight_buffer, base_vertex * sizeof(glm::uvec2), entry.vertices * 8, skin_weights.data());
 			}
 
 			glNamedBufferSubData(vertex_buffer, base_vertex * sizeof(glm::vec3), entry.vertices * sizeof(glm::vec3), i.vertices.data());

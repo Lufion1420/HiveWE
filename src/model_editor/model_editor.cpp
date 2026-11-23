@@ -42,6 +42,7 @@
 
 import std;
 import BinaryReader;
+import BinaryWriter;
 import Hierarchy;
 import MDX;
 import Utilities;
@@ -388,7 +389,15 @@ void ModelEditor::save_as_mdx() {
 		return;
 	}
 
-	const auto mdx_data = active->mdx->to_mdx();
+	// Save at the loaded version: a v1800 model keeps its u16 SKIN layout instead of being downgraded to v1200,
+	// where the writer refuses bone indices above 255.
+	BinaryWriter mdx_data;
+	try {
+		mdx_data = active->mdx->to_mdx(active->mdx->version);
+	} catch (const std::exception& e) {
+		QMessageBox::warning(this, "Error saving MDX file", QString("Could not save the model: %1").arg(QString::fromStdString(e.what())));
+		return;
+	}
 	std::ofstream file(fs::path(file_name.toStdWString()), std::ios::binary);
 	if (file) {
 		file.write(reinterpret_cast<const char*>(mdx_data.buffer.data()), mdx_data.buffer.size());

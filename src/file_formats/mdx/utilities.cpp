@@ -24,7 +24,7 @@ namespace mdx {
 			}
 
 			// Zero skin weights because we will have only 1 bone
-			geoset.skin = std::vector<std::uint8_t>(geoset.vertices.size() * 8, 0);
+			geoset.skin = std::vector<std::uint16_t>(geoset.vertices.size() * 8, 0);
 			// Set the contribution of the first bone to 255
 			for (size_t i = 0; i < geoset.skin.size(); i += 8) {
 				geoset.skin[i + 4] = 255;
@@ -109,6 +109,22 @@ namespace mdx {
 		}
 
 		return skin_weights;
+	}
+
+	bool MDX::skin_fits_u8(const Geoset& geoset) {
+		return std::ranges::all_of(geoset.skin, [](const uint16_t entry) { return entry <= 255; });
+	}
+
+	std::vector<glm::u8vec4> MDX::skin_as_u8_weights(const Geoset& geoset) {
+		if (!skin_fits_u8(geoset)) {
+			throw std::runtime_error("Skin bone index above 255: the renderer packs skin entries into one byte each");
+		}
+		std::vector<glm::u8vec4> packed;
+		packed.reserve(geoset.skin.size() / 4);
+		for (size_t i = 0; i + 4 <= geoset.skin.size(); i += 4) {
+			packed.emplace_back(geoset.skin[i], geoset.skin[i + 1], geoset.skin[i + 2], geoset.skin[i + 3]);
+		}
+		return packed;
 	}
 
 	MDX& MDX::calculate_extents() {

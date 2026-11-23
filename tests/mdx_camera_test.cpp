@@ -336,7 +336,7 @@ namespace {
 
 // Real-model sweep, skipped unless HIVEWE_MDX_DIR names a folder of extracted .mdx files (no Blizzard assets in the repo).
 // The CAMS chunk is also parsed on its own (MDLX + the file's VERS + CAMS), so the camera reader is checked even when
-// another chunk reader refuses the whole model. Whole-model failures are reported as warnings, not failures.
+// another chunk reader refuses the whole model. Every model must also load whole, and HD skins are checked and resaved.
 TEST_CASE("MDX CAMS: stock models in HIVEWE_MDX_DIR parse and round-trip their cameras") {
 #pragma warning(suppress : 4996) // getenv: read on a single-threaded test.
 	const char* const dir = std::getenv("HIVEWE_MDX_DIR");
@@ -348,6 +348,7 @@ TEST_CASE("MDX CAMS: stock models in HIVEWE_MDX_DIR parse and round-trip their c
 	size_t files_checked = 0;
 	size_t cameras_checked = 0;
 	size_t whole_model_failures = 0;
+	size_t skinned_models = 0;
 	for (const auto& entry : std::filesystem::directory_iterator(dir)) {
 		if (!entry.is_regular_file() || entry.path().extension() != ".mdx") {
 			continue;
@@ -369,6 +370,36 @@ TEST_CASE("MDX CAMS: stock models in HIVEWE_MDX_DIR parse and round-trip their c
 			whole_ok = false;
 			whole_model_failures++;
 			std::printf("%s: whole model refused: %s\n", file.c_str(), e.what());
+		}
+
+		// HD skins: 8 entries per vertex, weights summing to 255, unchanged through a same-version save.
+		if (whole_ok) {
+			bool any_skin = false;
+			for (const auto& geoset : whole.geosets) {
+				if (geoset.skin.empty()) {
+					continue;
+				}
+				any_skin = true;
+				REQUIRE_EQ(geoset.skin.size(), geoset.vertices.size() * 8);
+				size_t bad_sums = 0;
+				for (size_t v = 0; v < geoset.vertices.size(); v++) {
+					const auto* w = geoset.skin.data() + v * 8 + 4;
+					if (w[0] + w[1] + w[2] + w[3] != 255) {
+						bad_sums++;
+					}
+				}
+				CHECK_EQ(bad_sums, 0);
+			}
+			if (any_skin) {
+				const BinaryWriter resaved = whole.to_mdx(whole.version);
+				mdx::MDX reread;
+				REQUIRE_NOTHROW(reread = parse(resaved.buffer));
+				REQUIRE_EQ(reread.geosets.size(), whole.geosets.size());
+				for (size_t g = 0; g < whole.geosets.size(); g++) {
+					CHECK(reread.geosets[g].skin == whole.geosets[g].skin);
+				}
+				skinned_models++;
+			}
 		}
 
 		const size_t cams = find_cams_chunk(bytes);
@@ -403,8 +434,8 @@ TEST_CASE("MDX CAMS: stock models in HIVEWE_MDX_DIR parse and round-trip their c
 		check_cameras_equal(model, reread);
 		cameras_checked += model.cameras.size();
 	}
-	std::printf("stock MDX files checked: %zu, cameras round-tripped: %zu, whole models refused: %zu\n", files_checked, cameras_checked,
-		whole_model_failures);
+	std::printf("stock MDX files checked: %zu, cameras round-tripped: %zu, whole models refused: %zu, skinned (HD) models checked: %zu\n",
+		files_checked, cameras_checked, whole_model_failures, skinned_models);
 	CHECK(files_checked > 0);
-	WARN_EQ(whole_model_failures, 0);
+	CHECK_EQ(whole_model_failures, 0);
 }

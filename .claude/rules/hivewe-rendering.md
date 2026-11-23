@@ -27,6 +27,9 @@ paths:
 - The Model Editor and the main-window sidebar Model Preview share `ModelEditorGLWidget`: a playback change there also changes the preview.
 - `SkeletalModelInstance::update(delta, advance_frame, wrapped)`: a caller that owns the clock must pass the loop-wrap flag itself (particle squirt emitters need it).
 - `EditableMesh::geosets` skips `lod != 0` geosets, so its indices differ from `mdx->geosets`. Key per-geoset UI state on `MeshEntry::source_index`.
+- The Model Editor viewport uses the default orbit camera, not the model's CAMS.
+- HD rendering in offscreen hooks follows `HKCU\Software\HiveWE\HiveWE` value `hd`; restore it after the run. Hook script steps are separated by `;`.
+- Model Editor Save MDX is a modal `QFileDialog`, not drivable offscreen: cover the save path with an in-process test.
 
 ## Bug-fix order
 

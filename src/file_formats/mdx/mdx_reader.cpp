@@ -71,8 +71,16 @@ namespace mdx {
 			}
 
 			if (tag == "SKIN") {
-				uint32_t skin_count = reader.read<uint32_t>();
-				geoset.skin = reader.read_vector<uint8_t>(skin_count);
+				// The count is the number of entries (8 per vertex); from v1400 on each entry is a u16.
+				// Needs verification: the 1400 boundary follows upstream HiveWE; only v1800 (u16) and v1000-v1200 (u8)
+				// files were measured, no stock v1300-v1700 sample exists. Keep in step with write_GEOS.
+				const uint32_t skin_count = reader.read<uint32_t>();
+				if (mdx.version >= 1400) {
+					geoset.skin = reader.read_vector<uint16_t>(skin_count);
+				} else {
+					const std::vector<uint8_t> narrow = reader.read_vector<uint8_t>(skin_count);
+					geoset.skin.assign(narrow.begin(), narrow.end());
+				}
 				reader.advance(4); // UVAS
 			}
 

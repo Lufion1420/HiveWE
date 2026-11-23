@@ -751,7 +751,10 @@ namespace mdx {
 				g.skin.reserve(n * 8);
 				for (uint32_t i = 0; i < n * 8; i++) {
 					OUTCOME_TRY(auto v, r.consume_u32());
-					g.skin.push_back(static_cast<uint8_t>(v));
+					if (v > 0xFFFF) {
+						return failure(std::format("SkinWeights entry {} does not fit 16 bits", v));
+					}
+					g.skin.push_back(static_cast<uint16_t>(v));
 				}
 				TRY(r.consume("}"));
 			} else if (kw.text == "VertexGroup") {

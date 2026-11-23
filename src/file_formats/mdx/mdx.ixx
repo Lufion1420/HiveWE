@@ -355,8 +355,10 @@ namespace mdx {
 		std::vector<Extent> sequence_extents;
 
 		std::vector<glm::vec4> tangents;
-		/// vertices.size() * 4 bone indices, each a byte, 4 weights, each a byte
-		std::vector<uint8_t> skin;
+		/// 8 entries per vertex: 4 bone indices, then 4 weights (0-255, summing to 255).
+		/// Files from v1400 on store each entry as a u16 (SKIN count = entries), older files as a u8, so bone
+		/// indices above 255 only survive v1400+ saves. The GPU path packs entries to u8 (skin_as_u8_weights).
+		std::vector<uint16_t> skin;
 		/// We only support one uv set
 		std::vector<std::vector<glm::vec2>> uv_sets;
 	};
@@ -751,6 +753,12 @@ namespace mdx {
 		void merge_with(const MDX& mdx, const glm::mat4& transform);
 
 		static std::vector<glm::u8vec4> matrix_groups_as_skin_weights(const Geoset& geoset);
+
+		/// True when every skin entry fits a byte, which the shaders' u8 skin layout needs.
+		static bool skin_fits_u8(const Geoset& geoset);
+		/// Packs geoset.skin into 2 u8vec4 per vertex (indices, weights) for the GPU.
+		/// Throws std::runtime_error when an entry does not fit a byte (never truncates).
+		static std::vector<glm::u8vec4> skin_as_u8_weights(const Geoset& geoset);
 
 		struct OptimizationStats {
 			size_t materials_removed = 0;

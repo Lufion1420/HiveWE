@@ -56,7 +56,15 @@ void ModelEditorGLWidget::build_scene() {
 		return;
 	}
 
-	mesh = std::make_shared<EditableMesh>(mdx, std::nullopt);
+	try {
+		mesh = std::make_shared<EditableMesh>(mdx, std::nullopt);
+	} catch (const std::exception& e) {
+		// EditableMesh refuses skin data the renderer cannot hold (a bone index above 255): show nothing rather than crash.
+		std::println("Model Editor: cannot display the model: {}", e.what());
+		mesh.reset();
+		skeleton = {};
+		return;
+	}
 	apply_geoset_mask();
 	skeleton = SkeletalModelInstance(mdx);
 

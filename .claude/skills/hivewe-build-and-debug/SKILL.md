@@ -33,6 +33,7 @@ description: >-
 - A first-chance `std::out_of_range` "Trying to read out of range of buffer" on a GL pool thread is normal (caught in `ResourceManager::load_impl`).
 - StormLib via ctypes: `SFILE_FIND_DATA.cFileName` is `[260]`. `SFileFindFirstFile` looped forever on one archive; extracting by names from `(listfile)` works.
 - Run the stock ctest suite without `-j`: `ctest -j` with the CASC stock test failed once with error 2 (Needs verification).
+- An orphaned `HiveWE_tests.exe` from a background `ctest` can lock the link (LNK1104) while `ctest` passes on the stale exe: check the link line in the build output. QA must stop its own ctest children.
 - Use PowerShell for `reg`: Git Bash rewrites `HKCU\Software\HiveWE` into an invalid key.
 - `CloseMainWindow` can be swallowed by an open ribbon popup, so confirm the process really exited.
 - QSettings lives in `HKCU\Software\HiveWE` and holds the user's real layout and recent maps, so running HiveWE changes it. `reg export` before, `reg import` after.

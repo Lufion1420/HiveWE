@@ -98,7 +98,10 @@ Checks: `.claude/tools/script-check/`.
 
 ## MDX reader (2026-11-23)
 
-- All shipped 3.0.1 CASC models are v1800 and `MDX::load` accepts any VERS, so SD v1800 models load. HD v1800 models are still refused as whole models. Suspected cause, unverified (ticketed): the HD SKIN count in `read_GEOS` is half the byte length (16 bytes per vertex).
+- All shipped 3.0.1 CASC models are v1800 and `MDX::load` accepts any VERS, so v1800 models load, SD and HD.
+- GEOS SKIN at v1400+: the count is the number of u16 elements, 8 per vertex (4 bone indices into MATS, then 4 weights summing 255); measured on 10 HD stock models. Below 1400 it is u8. The 1400 boundary is cited from upstream HiveWE, Needs verification (no stock v1300-v1700 files).
+- `Geoset::skin` is `std::vector<uint16_t>` in memory. GPU upload packs to u8 via `MDX::skin_as_u8_weights`, which refuses indices >255 and non-8-per-vertex. The writer for versions <1400 throws on entries >255. `MDX::merge_with` resets skin to zeros+255, so the doodad merge export cannot exceed u8.
+- Model Editor Save MDX writes at the model's own version. `to_mdx()` callers without a version get `LATEST_MDX_VERSION` (1200).
 - Camera entry first dword = 24-bit size (low) + variant byte (top; 3 in all 3.0 files). `write_CAMS` writes variant 0 (plain size). `decode_camera_word` in `src/file_formats/mdx/mdx.ixx` is the single place to switch; variants 1 and 2 are refused (layout unverified). Unknown camera tracks (KCVS, IDUF, ELAF, PTSF) are skipped by `skip_unknown_camera_track` (heuristic) and are NOT preserved on save.
 - Tracks do not describe their value size; the tag decides it. Chunk readers bound loops at reader_pos+size taken before the size dword, 4 bytes short: harmless for well-formed files.
 - `Track::operator==` cannot compare none/linear tracks (tangents uninitialized). Refusal tests use `CHECK_THROWS_AS(..., std::runtime_error)`, not bare `CHECK_THROWS`.

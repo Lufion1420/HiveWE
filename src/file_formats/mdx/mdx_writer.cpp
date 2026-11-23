@@ -77,7 +77,20 @@ namespace mdx {
 			if (geoset.skin.size()) {
 				writer.write_string("SKIN");
 				writer.write<uint32_t>(geoset.skin.size());
-				writer.write_vector(geoset.skin);
+				// Needs verification: the 1400 boundary (see read_GEOS); no stock v1300-v1700 sample was measured.
+				if (version >= 1400) {
+					writer.write_vector(geoset.skin);
+				} else {
+					// Pre-v1400 entries are bytes: refuse rather than truncate a bone index above 255.
+					for (const uint16_t entry : geoset.skin) {
+						if (entry > 255) {
+							throw std::runtime_error(
+								std::format("Skin entry {} does not fit the one-byte SKIN layout of MDX version {}", entry, version)
+							);
+						}
+						writer.write<uint8_t>(static_cast<uint8_t>(entry));
+					}
+				}
 			}
 
 			writer.write_string("UVAS");

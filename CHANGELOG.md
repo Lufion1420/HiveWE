@@ -7,6 +7,8 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **HD (Reforged, v1800) models now load whole instead of being refused** — They open in the Model Editor and show thumbnails in Browse Models.
+- **Model Editor: Save to MDX keeps the model's own version** — Models are no longer downgraded to v1200 on save, and a failed save shows a message instead of crashing.
 - **Model Editor: a failed model open no longer throws, and "Open in Model Editor" opens the tab** — A model that cannot be opened now shows an error instead of an exception, and "Open in Model Editor" from the model browser now actually switches to the Model Editor tab.
 - **Model Editor: failed Save to MDX and Edit MDL writes now warn, and non-ASCII folder paths work** — A write that fails shows a warning instead of failing silently, and models in folders with non-ASCII names can be opened and saved.
 - **Edit in Object Editor no longer crashes when the browser's Custom filter hides the object** — The Object Editor browser now switches to All and selects the object.
