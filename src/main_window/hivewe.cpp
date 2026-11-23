@@ -2208,6 +2208,29 @@ void HiveWE::open_qa_dialog() {
 		shown = new ItemTablesEditor(this);
 	} else if (name == "config") {
 		shown = new ShortcutConfigDialog(this);
+	} else if (name == "model-editor") {
+		// Opens the Model Editor with a stock model, from the event loop so the editor's own GL widget is created after the window exists.
+		bool created = false;
+		auto* editor = window_handler.create_or_raise<ModelEditor>(nullptr, created);
+		shown = editor;
+		QTimer::singleShot(0, editor, [editor]() {
+			// No message box here: a modal box in an offscreen run would hang it. Report the failure to the result file and exit instead.
+			std::string error;
+			if (!editor->show_model(qa_model.toStdString(), false, nullptr, &error)) {
+				std::println(stderr, "--qa-open-dialog model-editor: cannot open {}: {}", qa_model.toStdString(), error);
+				if (!qa_script_out.isEmpty()) {
+					QFile file(qa_script_out);
+					if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+						QTextStream(&file) << "FAIL [open model] " << qa_model << ": " << QString::fromStdString(error) << "\nDONE\n";
+					}
+				}
+				QApplication::exit(3);
+				return;
+			}
+			if (!qa_model_editor_script.isEmpty()) {
+				editor->run_qa_script(qa_model_editor_script, qa_script_out);
+			}
+		});
 	} else if (name == "tile-setter") {
 		shown = new TileSetter(this);
 	} else if (name == "tile-pather") {

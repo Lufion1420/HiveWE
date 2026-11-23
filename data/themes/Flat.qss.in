@@ -1082,3 +1082,42 @@ QPushButton[danger="true"]:enabled {
 	color: @{color-error};
 	font-weight: @{font-weight-strong};
 }
+
+/******************************************************/
+/* Model Editor: inspector docks (QDockWidget), timeline strip, toolbar label, status items */
+
+QDockWidget {
+	color: @{color-text};
+	font-weight: @{font-weight-strong};
+}
+
+QDockWidget::title {
+	background-color: @{color-titlebar-top};
+	border-bottom: 1px solid @{color-border};
+	padding: 4px @{space-3}px;
+	text-align: left;
+}
+
+QDockWidget > QWidget {
+	font-weight: normal;
+}
+
+#modelTimeline {
+	background-color: @{color-window};
+	border-top: 1px solid @{color-border};
+}
+
+#modelTimeline QLabel#timelineReadout {
+	color: @{color-text-muted};
+}
+
+QToolBar QLabel#toolbarLabel {
+	color: @{color-text-muted};
+	padding: 0 @{space-2}px;
+}
+
+QStatusBar QLabel#modelStatusItem {
+	color: @{color-text-muted};
+	border-left: 1px solid @{color-border};
+	padding: 0 @{space-3}px;
+}

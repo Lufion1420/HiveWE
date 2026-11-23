@@ -113,6 +113,9 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"utilities/math_operations.ixx"
 	"utilities/rects.ixx"
 	"utilities/theme_tokens.ixx"
+
+	"model_editor/model_catalog.ixx"
+	"model_editor/timeline_math.ixx"
 	
 	"test.ixx"
 	"object_editor/ability_list_editor.ixx"
@@ -220,6 +223,10 @@ target_sources(HiveWE_lib PRIVATE
 	"model_editor/model_editor_camera.cpp"
 	"model_editor/model_editor.cpp"
 	"model_editor/model_editor_glwidget.cpp"
+	"model_editor/animation_timeline.cpp"
+	"model_editor/animation_timeline.h"
+	"model_editor/model_inspector.cpp"
+	"model_editor/model_inspector.h"
 
 	"object_editor/icon_view.cpp"
 	"object_editor/model_view.cpp"

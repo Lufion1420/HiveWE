@@ -15,24 +15,8 @@ import EditableMesh;
 import SkeletalModelInstance;
 import MDX;
 import Shader;
+import ModelCatalog;
 import <glm/glm.hpp>;
-
-enum class ModelCategory {
-	Abilities,
-	Buildings,
-	Doodads,
-	Environment,
-	Objects,
-	SharedModels,
-	Units,
-	Map,
-	Count
-};
-
-struct ModelEntry {
-	std::filesystem::path path;
-	ModelCategory category;
-};
 
 class ModelGridGLWidget : public QOpenGLWidget {
 	Q_OBJECT

@@ -23,6 +23,8 @@ export class EditableMesh: public Resource {
 		int base_index = 0;
 
 		int material_id = 0;
+		/// Index into mdx->geosets (this list skips geosets with a non-zero lod).
+		int source_index = 0;
 		mdx::Extent extent;
 
 		bool hd = true;
@@ -32,6 +34,9 @@ export class EditableMesh: public Resource {
 	std::shared_ptr<mdx::MDX> mdx;
 
 	std::vector<MeshEntry> geosets;
+
+	/// View-only: geosets (by index into mdx->geosets) that the render passes skip. Not part of the model data.
+	std::vector<bool> hidden_geosets;
 
 	GLuint vao = 0;
 	GLuint vertex_buffer = 0;
@@ -94,11 +99,13 @@ export class EditableMesh: public Resource {
 		int base_vertex = 0;
 		int base_index = 0;
 
-		for (const auto& i : mdx->geosets) {
+		for (size_t geoset_index = 0; geoset_index < mdx->geosets.size(); ++geoset_index) {
+			const auto& i = mdx->geosets[geoset_index];
 			if (i.lod != 0) {
 				continue;
 			}
 			MeshEntry entry;
+			entry.source_index = static_cast<int>(geoset_index);
 			entry.vertices = static_cast<int>(i.vertices.size());
 			entry.base_vertex = base_vertex;
 
@@ -316,6 +323,9 @@ export class EditableMesh: public Resource {
 		glUniformMatrix4fv(11, mdx->bones.size(), false, &skeleton.world_matrices[0][0][0]);
 
 		for (const auto& geoset_entry : geosets) {
+			if (static_cast<size_t>(geoset_entry.source_index) < hidden_geosets.size() && hidden_geosets[geoset_entry.source_index]) {
+				continue;
+			}
 			const auto& layers = mdx->materials[geoset_entry.material_id].layers;
 			const bool geoset_is_opaque = (layers[0].blend_mode == 0 || layers[0].blend_mode == 1);
 			if (geoset_is_opaque != opaque_pass) {

@@ -16,78 +16,31 @@ import Hierarchy;
 import Globals;
 import WindowHandler;
 import Utilities;
+import ModelCatalog;
 
 namespace fs = std::filesystem;
 
-namespace {
-	struct GameCategorySource {
-		ModelCategory category;
-		const char* glob;
-		const char* label;
-	};
-
-	constexpr GameCategorySource k_game_sources[] = {
-		{ModelCategory::Abilities, "war3.w3mod:abilities/*.mdx", "Abilities"},
-		{ModelCategory::Buildings, "war3.w3mod:buildings/*.mdx", "Buildings"},
-		{ModelCategory::Doodads, "war3.w3mod:doodads/*.mdx", "Doodads"},
-		{ModelCategory::Environment, "war3.w3mod:environment/*.mdx", "Environment"},
-		{ModelCategory::Objects, "war3.w3mod:objects/*.mdx", "Objects"},
-		{ModelCategory::SharedModels, "war3.w3mod:sharedmodels/*.mdx", "Shared Models"},
-		{ModelCategory::Units, "war3.w3mod:units/*.mdx", "Units"},
-	};
-
-	constexpr std::string_view k_war3_prefix = "war3.w3mod:";
-} // namespace
-
 ModelView::ModelView(QWidget* parent) : QWidget(parent) {
-	std::vector<ModelEntry> entries;
-	std::unordered_set<std::string> map_keys;
-
+	// Enumerate through Hierarchy; ModelCatalog decides what is a model, which category it is in and which duplicate wins.
+	std::vector<std::string> map_files;
 	if (!hierarchy.map_directory.empty() && fs::exists(hierarchy.map_directory)) {
 		std::error_code ec;
 		for (const auto& it : fs::recursive_directory_iterator(hierarchy.map_directory, ec)) {
 			if (ec) {
 				break;
 			}
-			if (!it.is_regular_file()) {
-				continue;
+			if (it.is_regular_file()) {
+				map_files.push_back(it.path().lexically_relative(hierarchy.map_directory).string());
 			}
-			const auto& p = it.path();
-			if (p.extension() != ".mdx") {
-				continue;
-			}
-			const auto stem = p.stem().string();
-			if (stem.ends_with("_portrait")) {
-				continue;
-			}
-			std::string rel = p.lexically_relative(hierarchy.map_directory).string();
-			normalize_path_to_forward_slash(rel);
-
-			map_keys.insert(to_lowercase_copy(rel));
-			entries.push_back(ModelEntry {fs::path(std::move(rel)), ModelCategory::Map});
 		}
 	}
 
-	for (const auto& src : k_game_sources) {
-		auto names = hierarchy.game_data.find_files(src.glob);
-		for (auto& name : names) {
-			if (name.starts_with(k_war3_prefix)) {
-				name.erase(0, k_war3_prefix.size());
-			}
-
-			std::string key = name;
-			normalize_path_to_forward_slash(key);
-			if (map_keys.contains(key)) {
-				continue;
-			}
-			fs::path p(name);
-			const auto stem = p.stem().string();
-			if (stem.ends_with("_portrait")) {
-				continue;
-			}
-			entries.push_back(ModelEntry {std::move(p), src.category});
-		}
+	std::vector<std::string> game_files;
+	for (const auto& src : game_category_sources) {
+		auto names = hierarchy.game_data.find_files(std::string(src.glob));
+		game_files.insert(game_files.end(), std::make_move_iterator(names.begin()), std::make_move_iterator(names.end()));
 	}
+	const std::vector<ModelEntry> entries = build_model_catalog(map_files, game_files).entries;
 
 	QVBoxLayout* layout = new QVBoxLayout;
 	layout->setContentsMargins(0, 0, 0, 0);
@@ -105,8 +58,8 @@ ModelView::ModelView(QWidget* parent) : QWidget(parent) {
 	QHBoxLayout* category_row = new QHBoxLayout;
 	category_row->setContentsMargins(0, 0, 0, 0);
 	std::vector<QCheckBox*> category_boxes(static_cast<size_t>(ModelCategory::Count), nullptr);
-	for (const auto& src : k_game_sources) {
-		auto* cb = new QCheckBox(src.label);
+	for (const auto& src : game_category_sources) {
+		auto* cb = new QCheckBox(QString::fromUtf8(src.label.data(), static_cast<qsizetype>(src.label.size())));
 		cb->setChecked(true);
 		category_boxes[static_cast<size_t>(src.category)] = cb;
 		category_row->addWidget(cb);
@@ -181,20 +134,18 @@ ModelView::ModelView(QWidget* parent) : QWidget(parent) {
 	grid->set_preview_sequence(preview_animation->currentText());
 
 	connect(open_in_model_editor, &QPushButton::clicked, [this] {
+		if (finalPath->text().isEmpty()) {
+			return;
+		}
+
 		bool created = false;
 		const auto model_editor = window_handler.create_or_raise<ModelEditor>(nullptr, created);
 
 		auto path = fs::path(finalPath->text().toStdString());
 		path.replace_extension(".mdx");
 
-		const auto opened = model_editor->open_model(path, false);
-		if (!opened) {
-			QMessageBox::critical(
-				this,
-				"Error opening model",
-				QString::fromStdString(std::format("Failed to open model with: {}", opened.error()))
-			);
-		}
+		// show_model reports a failed open itself and adds the tab to the editor.
+		model_editor->show_model(path, false);
 	});
 }
 

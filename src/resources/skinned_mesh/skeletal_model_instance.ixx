@@ -131,7 +131,9 @@ export class SkeletalModelInstance {
 		from_rotation_translation_scale_origin(rotation, position, scale, matrix, glm::vec3(0, 0, 0));
 	}
 
-	void update(const double delta) {
+	/// With advance_frame false the caller owns the time: current_frame is left as set and `delta` only drives the particles.
+	/// `wrapped` tells the particle emitters that the caller's own time wrapped, since current_frame is then set before this call.
+	void update(const double delta, const bool advance_frame = true, const bool wrapped = false) {
 		if (model->sequences.empty() || sequence_index == -1) {
 			return;
 		}
@@ -142,13 +144,15 @@ export class SkeletalModelInstance {
 		//if (sequence.flags & mdx::Sequence::non_looping) {
 		//	current_frame = std::min<int>(current_frame + delta * 1000.0, sequence.end_frame);
 		//} else {
-		current_frame += delta * 1000.0;
-		if (current_frame > sequence.end_frame) {
-			current_frame = sequence.start_frame;
+		if (advance_frame) {
+			current_frame += delta * 1000.0;
+			if (current_frame > sequence.end_frame) {
+				current_frame = sequence.start_frame;
+			}
 		}
 		//}
 
-		const bool sequence_wrapped = sequence_just_started || (current_frame < frame_before_advance);
+		const bool sequence_wrapped = sequence_just_started || wrapped || (current_frame < frame_before_advance);
 		sequence_just_started = false;
 
 		for (const auto& i : render_nodes) {

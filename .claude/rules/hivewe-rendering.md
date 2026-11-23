@@ -22,6 +22,12 @@ paths:
 - Debug overlay (`glwidget.cpp`): distinguish HiveWE terrain-space vs Warcraft world-space; user readouts prefer Warcraft coordinates.
 - Treat debug overlays as user-facing tools — trim low-signal entries.
 
+## Model Editor and preview
+
+- The Model Editor and the main-window sidebar Model Preview share `ModelEditorGLWidget`: a playback change there also changes the preview.
+- `SkeletalModelInstance::update(delta, advance_frame, wrapped)`: a caller that owns the clock must pass the loop-wrap flag itself (particle squirt emitters need it).
+- `EditableMesh::geosets` skips `lod != 0` geosets, so its indices differ from `mdx->geosets`. Key per-geoset UI state on `MeshEntry::source_index`.
+
 ## Bug-fix order
 
 Resource loading → GL context/thread assumptions → render toggles → shaders last.

@@ -71,6 +71,12 @@ public:
 	static inline QString qa_open_dialog;
 	/// Set by --qa-dialog-tab: tab index selected in the first tab widget of the --qa-open-dialog window.
 	static inline int qa_dialog_tab = -1;
+	/// Set by --qa-model-editor-script (needs --qa-offscreen and --qa-open-dialog model-editor): steps run against the Model Editor, see ModelEditor::run_qa_script.
+	static inline QString qa_model_editor_script;
+	/// Set by --qa-script-out: the file that receives the result lines of that script.
+	static inline QString qa_script_out;
+	/// Set by --qa-model: the model the model-editor hook opens (default units/human/footman/footman.mdx).
+	static inline QString qa_model = "units/human/footman/footman.mdx";
 	/// Opens qa_open_dialog with sample data. Never saves: nothing here accepts a dialog.
 	void open_qa_dialog();
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.

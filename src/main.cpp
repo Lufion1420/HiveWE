@@ -143,7 +143,12 @@ int main(int argc, char* argv[]) {
 				"  --qa-select-first    With --palette units or doodads: select the first unit or doodad of the map, adding a sample one in memory if the map has none (for screenshots).\n"
 				"  --qa-open-dialog <name>  Needs --qa-offscreen. Open one dialog or tool window with sample data after the map has loaded (never saved). Names:\n"
 				"                       settings, unit-properties, item-drop, map-settings, scenario, gameplay-constants, new-map, object-editor,\n"
-				"                       asset-manager, map-protector, import-object-data (empty package), item-tables, config, tile-setter, tile-pather.\n"
+				"                       asset-manager, map-protector, import-object-data (empty package), item-tables, config, tile-setter, tile-pather,\n"
+				"                       model-editor (stock model units/human/footman/footman.mdx).\n"
+				"  --qa-model-editor-script \"<steps>\"  With --qa-open-dialog model-editor and --qa-script-out <file>: drive the Model Editor's widgets in-process\n"
+				"                       (steps separated by ';', for example \"wait:3000;pause;slider:500;expect:timefrac=0.5\") and write PASS/FAIL/INFO lines to the file, then quit.\n"
+				"                       The steps are listed above ModelEditor::run_qa_script in src/model_editor/model_editor.cpp.\n"
+				"  --qa-model <path>    With --qa-open-dialog model-editor: the model to open instead of units/human/footman/footman.mdx.\n"
 				"  --qa-dialog-tab <n>  With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -176,7 +181,7 @@ int main(int argc, char* argv[]) {
 			HiveWE::qa_select_first = true;
 		} else if (arguments[i] == "--qa-open-dialog") {
 			static const QStringList names = { "settings", "unit-properties", "item-drop", "map-settings", "scenario", "gameplay-constants", "new-map",
-				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-pather" };
+				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-pather", "model-editor" };
 			if (i + 1 >= arguments.size() || !names.contains(arguments[i + 1])) {
 				std::println(stderr, "--qa-open-dialog needs one of: {}. See HiveWE --help.", names.join(", ").toStdString());
 				return 2;
@@ -187,6 +192,19 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_open_dialog = arguments[++i];
+		} else if (arguments[i] == "--qa-model") {
+			if (i + 1 >= arguments.size() || !arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-model needs a model path and --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_model = arguments[++i];
+		} else if (arguments[i] == "--qa-model-editor-script" || arguments[i] == "--qa-script-out") {
+			const bool is_script = arguments[i] == "--qa-model-editor-script";
+			if (i + 1 >= arguments.size() || !arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "{} needs a value and --qa-offscreen. See HiveWE --help.", arguments[i].toStdString());
+				return 2;
+			}
+			(is_script ? HiveWE::qa_model_editor_script : HiveWE::qa_script_out) = arguments[++i];
 		} else if (arguments[i] == "--qa-dialog-tab") {
 			bool tab_ok = false;
 			const int tab = i + 1 < arguments.size() ? arguments[i + 1].toInt(&tab_ok) : 0;

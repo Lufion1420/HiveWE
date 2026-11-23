@@ -23,6 +23,7 @@ add_executable(HiveWE_tests
 	map_save_failure_test.cpp
 	theme_tokens_test.cpp
 	selection_hit_points_test.cpp
+	model_editor_logic_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
