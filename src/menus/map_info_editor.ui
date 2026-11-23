@@ -14,7 +14,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MapInfoEditor</string>
+   <string>Map Settings</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_5">
    <item>

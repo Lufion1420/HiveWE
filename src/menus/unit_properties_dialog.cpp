@@ -7,6 +7,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QGridLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
@@ -18,6 +19,7 @@
 
 #include "item_drop_editor.h"
 #include "item_tables_editor.h"
+#include "theme.h"
 
 import std;
 import Globals;
@@ -134,7 +136,26 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 	setWindowTitle("Unit Properties");
 	resize(680, 520);
 
-	setStyleSheet(
+	// Flat themes style the dialog from the application style sheet; the old themes keep the dark look below.
+	const bool flat = theme::current_is_flat();
+	// Panels are plain frames with an upper case caption in the old themes and titled group boxes in the Flat themes.
+	const auto make_panel = [flat](const QString& flat_title) -> QWidget* {
+		if (flat) {
+			return new QGroupBox(flat_title);
+		}
+		auto* frame = new QFrame;
+		frame->setObjectName("unitPropertiesPanel");
+		return frame;
+	};
+
+	const auto make_caption = [flat](const QString& text) {
+		auto* label = new QLabel(text);
+		label->setProperty("mutedLabel", flat);
+		return label;
+	};
+
+	if (!flat) {
+		setStyleSheet(
 		"QDialog {"
 		"background: rgb(18, 24, 32);"
 		"color: rgb(232, 237, 242);"
@@ -216,16 +237,17 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 		"background: rgb(70, 126, 192);"
 		"border-color: rgb(112, 172, 242);"
 		"}"
-	);
+		);
+	}
 
 	auto* root = new QVBoxLayout(this);
-	root->setContentsMargins(20, 20, 20, 20);
-	root->setSpacing(16);
+	root->setContentsMargins(flat ? 12 : 20, flat ? 12 : 20, flat ? 12 : 20, flat ? 12 : 20);
+	root->setSpacing(flat ? 8 : 16);
 
 	QFrame* hero = new QFrame;
 	hero->setObjectName("unitPropertiesHero");
 	auto* hero_layout = new QHBoxLayout(hero);
-	hero_layout->setContentsMargins(16, 16, 16, 16);
+	hero_layout->setContentsMargins(flat ? 0 : 16, flat ? 0 : 16, flat ? 0 : 16, flat ? 0 : 16);
 	hero_layout->setSpacing(14);
 
 	icon = new QLabel;
@@ -251,15 +273,14 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 	tabs = new QTabWidget;
 	auto* general_tab = new QWidget;
 	auto* general_layout = new QVBoxLayout(general_tab);
-	general_layout->setContentsMargins(16, 16, 16, 16);
-	general_layout->setSpacing(14);
+	general_layout->setContentsMargins(flat ? 8 : 16, flat ? 8 : 16, flat ? 8 : 16, flat ? 8 : 16);
+	general_layout->setSpacing(flat ? 8 : 14);
 
-	QFrame* identity_panel = new QFrame;
-	identity_panel->setObjectName("unitPropertiesPanel");
+	QWidget* identity_panel = make_panel("Identity");
 	auto* identity_layout = new QFormLayout(identity_panel);
-	identity_layout->setContentsMargins(14, 14, 14, 14);
+	identity_layout->setContentsMargins(flat ? 10 : 14, flat ? 10 : 14, flat ? 10 : 14, flat ? 10 : 14);
 	identity_layout->setHorizontalSpacing(14);
-	identity_layout->setVerticalSpacing(12);
+	identity_layout->setVerticalSpacing(flat ? 6 : 12);
 
 	player = new QComboBox;
 	for (const auto& player_info : map->info.players) {
@@ -293,15 +314,15 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 	auto* stats_row = new QHBoxLayout;
 	stats_row->setSpacing(14);
 
-	QFrame* state_panel = new QFrame;
-	state_panel->setObjectName("unitPropertiesPanel");
+	QWidget* state_panel = make_panel("State");
 	auto* state_layout = new QGridLayout(state_panel);
-	state_layout->setContentsMargins(14, 14, 14, 14);
+	state_layout->setContentsMargins(flat ? 10 : 14, flat ? 10 : 14, flat ? 10 : 14, flat ? 10 : 14);
 	state_layout->setHorizontalSpacing(10);
-	state_layout->setVerticalSpacing(12);
+	state_layout->setVerticalSpacing(flat ? 6 : 12);
 
 	auto* state_label = new QLabel("STATE");
 	state_label->setObjectName("unitPropertiesSection");
+	state_label->setVisible(!flat);
 	state_layout->addWidget(state_label, 0, 0, 1, 3);
 
 	const int hp_maximum = std::max(1, base_hit_points(*unit));
@@ -332,15 +353,15 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 	state_layout->addWidget(level, 3, 1);
 	stats_row->addWidget(state_panel, 1);
 
-	QFrame* attributes_panel = new QFrame;
-	attributes_panel->setObjectName("unitPropertiesPanel");
+	QWidget* attributes_panel = make_panel("Attributes");
 	auto* attributes_layout = new QGridLayout(attributes_panel);
-	attributes_layout->setContentsMargins(14, 14, 14, 14);
+	attributes_layout->setContentsMargins(flat ? 10 : 14, flat ? 10 : 14, flat ? 10 : 14, flat ? 10 : 14);
 	attributes_layout->setHorizontalSpacing(10);
-	attributes_layout->setVerticalSpacing(12);
+	attributes_layout->setVerticalSpacing(flat ? 6 : 12);
 
 	auto* attributes_label = new QLabel("ATTRIBUTES");
 	attributes_label->setObjectName("unitPropertiesSection");
+	attributes_label->setVisible(!flat);
 	attributes_layout->addWidget(attributes_label, 0, 0, 1, 2);
 
 	default_attributes = new QCheckBox("Use Default Attributes");
@@ -378,18 +399,18 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 
 	auto* drops_tab = new QWidget;
 	auto* drops_layout = new QVBoxLayout(drops_tab);
-	drops_layout->setContentsMargins(16, 16, 16, 16);
-	drops_layout->setSpacing(14);
+	drops_layout->setContentsMargins(flat ? 8 : 16, flat ? 8 : 16, flat ? 8 : 16, flat ? 8 : 16);
+	drops_layout->setSpacing(flat ? 8 : 14);
 
-	QFrame* mode_panel = new QFrame;
-	mode_panel->setObjectName("unitPropertiesPanel");
+	QWidget* mode_panel = make_panel("Items Dropped");
 	auto* mode_layout = new QGridLayout(mode_panel);
-	mode_layout->setContentsMargins(14, 14, 14, 14);
+	mode_layout->setContentsMargins(flat ? 10 : 14, flat ? 10 : 14, flat ? 10 : 14, flat ? 10 : 14);
 	mode_layout->setHorizontalSpacing(12);
-	mode_layout->setVerticalSpacing(12);
+	mode_layout->setVerticalSpacing(flat ? 6 : 12);
 
 	auto* drops_label = new QLabel("ITEMS DROPPED");
 	drops_label->setObjectName("unitPropertiesSection");
+	drops_label->setVisible(!flat);
 	mode_layout->addWidget(drops_label, 0, 0, 1, 2);
 
 	item_drop_mode = new QComboBox;
@@ -413,12 +434,11 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 	auto* custom_layout = new QHBoxLayout;
 	custom_layout->setSpacing(14);
 
-	QFrame* sets_panel = new QFrame;
-	sets_panel->setObjectName("unitPropertiesPanel");
+	QWidget* sets_panel = flat ? new QWidget : make_panel("");
 	auto* sets_layout = new QVBoxLayout(sets_panel);
-	sets_layout->setContentsMargins(14, 14, 14, 14);
+	sets_layout->setContentsMargins(flat ? 0 : 14, flat ? 0 : 14, flat ? 0 : 14, flat ? 0 : 14);
 	sets_layout->setSpacing(10);
-	sets_layout->addWidget(new QLabel("Sets"));
+	sets_layout->addWidget(make_caption("Sets"));
 	custom_sets = new QListWidget;
 	sets_layout->addWidget(custom_sets, 1);
 	auto* set_buttons = new QHBoxLayout;
@@ -429,12 +449,11 @@ UnitPropertiesDialog::UnitPropertiesDialog(Unit* unit, QWidget* parent) : QDialo
 	sets_layout->addLayout(set_buttons);
 	custom_layout->addWidget(sets_panel, 1);
 
-	QFrame* items_panel = new QFrame;
-	items_panel->setObjectName("unitPropertiesPanel");
+	QWidget* items_panel = flat ? new QWidget : make_panel("");
 	auto* items_layout = new QVBoxLayout(items_panel);
-	items_layout->setContentsMargins(14, 14, 14, 14);
+	items_layout->setContentsMargins(flat ? 0 : 14, flat ? 0 : 14, flat ? 0 : 14, flat ? 0 : 14);
 	items_layout->setSpacing(10);
-	items_layout->addWidget(new QLabel("Items"));
+	items_layout->addWidget(make_caption("Items"));
 	custom_items = new QListWidget;
 	items_layout->addWidget(custom_items, 1);
 	auto* item_buttons = new QHBoxLayout;

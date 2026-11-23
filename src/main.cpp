@@ -7,6 +7,8 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QFont>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QMessageBox>
 #include <QPalette>
 #include <QSurfaceFormat>
@@ -55,6 +57,10 @@ class NoActivateFilter : public QObject {
 			if (widget && (widget->windowType() == Qt::Window || widget->windowType() == Qt::Dialog) && !widget->isVisible()) {
 				widget->setAttribute(Qt::WA_ShowWithoutActivating);
 				widget->setWindowFlag(Qt::WindowDoesNotAcceptFocus, true);
+				// A window without a parent would open on the primary screen. Dialogs with a parent are centred on it, which is already off screen.
+				if (!widget->parentWidget() && !widget->testAttribute(Qt::WA_Moved)) {
+					widget->move(QGuiApplication::primaryScreen()->virtualGeometry().left() - 4000, 0);
+				}
 			}
 		}
 		return false;
@@ -135,6 +141,10 @@ int main(int argc, char* argv[]) {
 				"  --palette <name>     Open a palette after the startup map has loaded: terrain, doodads, units, pathing or regions.\n"
 				"                       Needs a loaded map, so it only works with the startup map (data/test map).\n"
 				"  --qa-select-first    With --palette units or doodads: select the first unit or doodad of the map, adding a sample one in memory if the map has none (for screenshots).\n"
+				"  --qa-open-dialog <name>  Needs --qa-offscreen. Open one dialog or tool window with sample data after the map has loaded (never saved). Names:\n"
+				"                       settings, unit-properties, item-drop, map-settings, scenario, gameplay-constants, new-map, object-editor,\n"
+				"                       asset-manager, map-protector, import-object-data (not available yet), item-tables, config, tile-setter, tile-pather.\n"
+				"  --qa-dialog-tab <n>  With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
 				"  --resave <in> <out>  Load one map folder and save it to another folder without opening the editor window.\n"
@@ -164,6 +174,28 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_select_first = true;
+		} else if (arguments[i] == "--qa-open-dialog") {
+			static const QStringList names = { "settings", "unit-properties", "item-drop", "map-settings", "scenario", "gameplay-constants", "new-map",
+				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-pather" };
+			if (i + 1 >= arguments.size() || !names.contains(arguments[i + 1])) {
+				std::println(stderr, "--qa-open-dialog needs one of: {}. See HiveWE --help.", names.join(", ").toStdString());
+				return 2;
+			}
+			// The hook adds sample data to the loaded map, so it must never run in a window the user works in.
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-open-dialog needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_open_dialog = arguments[++i];
+		} else if (arguments[i] == "--qa-dialog-tab") {
+			bool tab_ok = false;
+			const int tab = i + 1 < arguments.size() ? arguments[i + 1].toInt(&tab_ok) : 0;
+			if (!tab_ok || tab < 0) {
+				std::println(stderr, "--qa-dialog-tab needs a tab index like 1. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_dialog_tab = tab;
+			++i;
 		} else if (arguments[i] == "--qa-dump-layout") {
 			if (i + 1 >= arguments.size()) {
 				std::println(stderr, "--qa-dump-layout needs a file name. See HiveWE --help.");
@@ -291,6 +323,7 @@ int main(int argc, char* argv[]) {
 	// map->load("C:/Users/User/Desktop/MCFC.w3x");
 
 	w.open_qa_palette();
+	w.open_qa_dialog();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

@@ -67,6 +67,12 @@ public:
 	/// Set by --qa-select-first: with --palette units or doodads, select the first unit or doodad of the map.
 	static inline bool qa_select_first = false;
 	void open_qa_palette();
+	/// Set by --qa-open-dialog (needs --qa-offscreen): the dialog or tool window opened after the map has loaded, so it can be captured without clicks.
+	static inline QString qa_open_dialog;
+	/// Set by --qa-dialog-tab: tab index selected in the first tab widget of the --qa-open-dialog window.
+	static inline int qa_dialog_tab = -1;
+	/// Opens qa_open_dialog with sample data. Never saves: nothing here accepts a dialog.
+	void open_qa_dialog();
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.
 	static inline QString qa_dump_layout_file;
 	/// Writes the widget tree of the open palette (class, objectName, size hints, size policy, geometry) to qa_dump_layout_file, so a too wide

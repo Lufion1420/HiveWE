@@ -133,17 +133,17 @@ QVariant SingleModel::headerData(int section, Qt::Orientation orientation, int r
 		} else if (role == CommonRole) {
 			return is_common_row(section);
 		} else if (role == Qt::ForegroundRole) {
+			// An unmodified row has no colour of its own: the header uses the theme's text colour.
 			if (is_modified_row(section)) {
 				return QColor("violet");
-			} else {
-				return QColor("white");
 			}
+			return {};
 		}
 	} else if (role == Qt::DisplayRole) {
 		return "Value";
 	} else if (role == Qt::ForegroundRole) {
 		if (orientation == Qt::Orientation::Vertical) {
-			return is_modified_row(section) ? QColor("violet") : QColor("white");
+			return is_modified_row(section) ? QVariant(QColor("violet")) : QVariant();
 		}
 	}
 	return QAbstractProxyModel::headerData(section, orientation, role);
@@ -474,11 +474,16 @@ void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logical
 	const QPalette::ColorGroup color_group = has_focus ? QPalette::Active : QPalette::Inactive;
 	painter->fillRect(rect, palette().color(color_group, is_selected ? QPalette::Highlight : QPalette::Base));
 
-	const QString title = model()->headerData(logicalIndex, orientation(), SingleModel::DisplayNameRole).toString();
+	QString title = model()->headerData(logicalIndex, orientation(), SingleModel::DisplayNameRole).toString();
+	// Some field names (Gameplay Constants) come wrapped in literal quote characters.
+	if (title.size() >= 2 && title.startsWith('"') && title.endsWith('"')) {
+		title = title.mid(1, title.size() - 2);
+	}
 	const QString meta = model()->headerData(logicalIndex, orientation(), SingleModel::MetaRole).toString();
 	const bool category_start = model()->headerData(logicalIndex, orientation(), SingleModel::CategoryStartRole).toBool();
+	const QColor row_color = model()->headerData(logicalIndex, orientation(), Qt::ForegroundRole).value<QColor>();
 	const QColor text_color = is_selected ? palette().color(color_group, QPalette::HighlightedText)
-										  : model()->headerData(logicalIndex, orientation(), Qt::ForegroundRole).value<QColor>();
+										  : (row_color.isValid() ? row_color : palette().color(color_group, QPalette::Text));
 	const QColor meta_color = is_selected ? palette().color(color_group, QPalette::HighlightedText).lighter(120)
 										  : palette().color(QPalette::Disabled, QPalette::Text);
 	const int margin = 2 * style()->pixelMetric(QStyle::PM_HeaderMargin, nullptr, this);
@@ -500,7 +505,19 @@ void AlterHeader::paintSection(QPainter* painter, const QRect& rect, int logical
 	title_font.setBold(is_selected);
 	painter->setFont(title_font);
 	painter->setPen(QPen(text_color));
-	painter->drawText(content_rect, Qt::AlignLeft | Qt::AlignTop, title);
+	// Rows too short for a second line (Gameplay Constants) show the name only, centred.
+	const bool compact = rect.height() < (category_start ? 28 + 40 : 40);
+	if (compact) {
+		painter->drawText(rect.adjusted(margin, category_start ? 28 : 0, -8, 0), Qt::AlignLeft | Qt::AlignVCenter, title);
+	} else {
+		painter->drawText(content_rect, Qt::AlignLeft | Qt::AlignTop, title);
+	}
+
+	if (compact) {
+		painter->setPen(QPen(palette().color(QPalette::Mid)));
+		painter->drawLine(rect.x(), rect.bottom(), rect.right(), rect.bottom());
+		return;
+	}
 
 	QFont meta_font = font();
 	meta_font.setPointSize(std::max(7, meta_font.pointSize() - 1));

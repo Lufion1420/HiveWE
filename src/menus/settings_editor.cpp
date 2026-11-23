@@ -22,6 +22,16 @@ void setTestArgs(Ui::SettingsEditor &ui) {
 SettingsEditor::SettingsEditor(QWidget* parent)
 	: QDialog(parent) {
 	ui.setupUi(this);
+	if (theme::current_is_flat()) {
+		// Flat mockup: combo boxes keep a compact width and the Testing labels sit left of their fields.
+		for (auto* combo : findChildren<QComboBox*>()) {
+			combo->setMaximumWidth(200);
+		}
+		ui.formLayout_4->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+		ui.formLayout_4->setVerticalSpacing(8);
+		ui.formLayout_2->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+		ui.formLayout_2->setVerticalSpacing(8);
+	}
 	QSettings settings;
 	ui.theme->setCurrentText(settings.value("theme", "Dark").toString());
 	ui.comments->setChecked(settings.value("comments", "True").toString() != "False");

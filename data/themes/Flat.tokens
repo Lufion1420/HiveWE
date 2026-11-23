@@ -10,6 +10,7 @@ font-family-name = Inter
 font-size-base = 12
 font-size-small = 11
 font-size-title = 12
+font-size-heading = 16
 font-weight-strong = 600
 
 space-1 = 2

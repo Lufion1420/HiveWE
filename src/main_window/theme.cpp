@@ -142,7 +142,18 @@ bool write_assets(const QString& directory, const theme_tokens::TokenMap& tokens
 		painter.drawPolyline(QPolygonF { QPointF(7, 14.5), QPointF(12, 19.5), QPointF(21, 8.5) });
 	}
 
-	return arrow_image(0).save(directory + "/arrow-down.png") && arrow_image(1).save(directory + "/arrow-up.png")
+	// The dot of a checked radio button; the ring is the border of the indicator.
+	QImage radio_image(28, 28, QImage::Format_ARGB32_Premultiplied);
+	radio_image.fill(Qt::transparent);
+	{
+		QPainter painter(&radio_image);
+		painter.setRenderHint(QPainter::Antialiasing);
+		painter.setPen(Qt::NoPen);
+		painter.setBrush(token_color(tokens, "color-accent"));
+		painter.drawEllipse(QPointF(14, 14), 6.0, 6.0);
+	}
+
+	return radio_image.save(directory + "/radio-dot.png") && arrow_image(0).save(directory + "/arrow-down.png") && arrow_image(1).save(directory + "/arrow-up.png")
 		&& arrow_image(2).save(directory + "/arrow-right.png") && check_image.save(directory + "/check.png");
 }
 

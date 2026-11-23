@@ -1,0 +1,150 @@
+/* Extra Flat widgets for the secondary windows. Built only from tokens.css; each class maps to a QSS selector
+   (noted in comments). No shadows, filters, transforms, transitions. */
+html, body { background: var(--color-border); }
+body { padding: 16px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+.cap { font-size: 12px; font-weight: 600; color: var(--color-text); margin-bottom: -8px; }
+.note { font-size: 11px; color: var(--color-text-muted); }
+.pagerow { display: flex; gap: 16px; align-items: flex-start; }
+.pagecol { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+
+/* Native window (Windows draws the title bar; shown only for context) */
+.win { display: flex; flex-direction: column; background: var(--color-window); border: 1px solid var(--color-border-strong); min-height: 0; overflow: hidden; }
+.wtitle { height: 30px; flex: none; display: flex; align-items: center; gap: 8px; padding-left: 10px; background: var(--color-window);
+  color: var(--color-text); font-size: 12px; }
+.wtitle .grow { flex: 1 1 auto; }
+.wtitle .wb { width: 40px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--color-text-muted); font-size: 12px; }
+.wtitle .wb svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 1; }
+.wbody { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.pad { padding: 12px; }
+.gap4 { gap: 4px; } .gap8 { gap: 8px; } .gap12 { gap: 12px; }
+.flex1 { flex: 1 1 0; min-width: 0; min-height: 0; }
+.shrink0 { flex: none; }
+
+/* QDialogButtonBox */
+.dlgbtns { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 12px 12px; flex: none; }
+.dlgbtns .btn { min-width: 74px; }
+
+/* Label + control rows (QFormLayout) */
+.frow { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.frow > .l { width: 120px; flex: none; color: var(--color-text); }
+.frow > .l.top { align-self: flex-start; padding-top: 5px; }
+.hint { font-size: 11px; color: var(--color-text-muted); }
+
+/* QTextEdit / QPlainTextEdit */
+.text { background: var(--color-input-bg); border: 1px solid var(--color-border-strong); border-radius: var(--radius-input); padding: 5px 8px; line-height: 1.35; color: var(--color-text); }
+.text .ph { color: var(--color-text-muted); }
+.text.focus { border-color: var(--color-focus); }
+
+/* QSpinBox (16px buttons, left border) */
+.spin { height: var(--control-height); display: flex; align-items: center; justify-content: space-between; padding: 0 0 0 8px; background: var(--color-input-bg);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-input); }
+.spin .ud { width: 16px; height: 100%; border-left: 1px solid var(--color-border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--color-text-muted); }
+.spin .up { width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid currentColor; }
+.spin .dn { width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 4px solid currentColor; }
+.edit.dis, .combo.dis, .spin.dis { color: var(--color-text-disabled); border-color: var(--color-border); background: var(--color-window); }
+.combo.dis { background: var(--color-window); }
+.combo.focus { border-color: var(--color-focus); }
+.btn.sm { height: 22px; padding: 0 8px; }
+.btn.ico { min-width: 24px; width: 24px; padding: 0; }
+
+/* QRadioButton */
+.rad { display: flex; align-items: center; gap: 6px; height: var(--row-height); }
+.rad .dot { width: 14px; height: 14px; border-radius: 7px; border: 1px solid var(--color-border-strong); background: var(--color-input-bg); display: flex; align-items: center; justify-content: center; }
+.rad.on .dot { border-color: var(--color-accent); }
+.rad.on .dot::after { content: ""; width: 6px; height: 6px; border-radius: 3px; background: var(--color-accent); }
+.chk.dis { color: var(--color-text-disabled); }
+.chk.dis .box { border-color: var(--color-border); background: var(--color-window); }
+.chk.dis.on .box { background: var(--color-border-strong); border-color: var(--color-border-strong); }
+
+/* QTabWidget pane */
+.tabpane { background: var(--color-panel); border: 1px solid var(--color-border); border-top: 0; display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; padding: 12px; gap: 8px; }
+.tabbar.flush { border-bottom: 0; background: transparent; }
+.tabbar.flush .tab { height: 100%; }
+.tabbar.flush .tab.selected { margin-bottom: 0; height: 100%; border-bottom: 1px solid var(--color-tab-selected); }
+.tabwrap { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.tabwrap > .tabbar { border-bottom: 1px solid var(--color-border); }
+
+/* Tables and trees (QTableView / QTreeView). Cells are .c with explicit width or flex. */
+.view .hdr > div { border-right: 1px solid var(--color-border); }
+.view .hdr > div:last-child { border-right: 0; }
+.view .r > div.c { height: 100%; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; }
+.view.body { overflow: hidden; }
+.view .r.dim { color: var(--color-text-muted); }
+.view .r.mod .v { color: var(--color-accent); }
+.view .r.err { color: var(--color-error); }
+.view .r.tall { height: 28px; }
+.view .r.sel .muted, .view .r.sel .id { color: var(--color-selection-text); }
+.tw { width: 0; height: 0; flex: none; margin: 0 5px 0 2px; }
+.tw.c { border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid var(--color-text-muted); }
+.tw.o { border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--color-text-muted); margin-top: 2px; }
+.tw.n { width: 11px; border: 0; }
+.ic16 { width: 16px; height: 16px; flex: none; border: 1px solid var(--color-border-strong); }
+.ic16.f { border-radius: 0; background: var(--color-text-muted); border: 0; height: 12px; margin-top: 2px; }
+svg.i.t { width: 16px; height: 16px; flex: none; }
+.sb { position: absolute; top: 0; right: 0; bottom: 0; width: 12px; background: var(--color-base); }
+.sb .h { position: absolute; left: 2px; right: 2px; background: var(--color-border-strong); border-radius: 3px; }
+.sbh { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: var(--color-base); }
+.sbh .h { position: absolute; top: 2px; bottom: 2px; background: var(--color-border-strong); border-radius: 3px; }
+.view { position: relative; }
+
+/* Chips and badges (QToolButton#objectEditorChip, QLabel badge) */
+.chip { height: 22px; padding: 0 10px; display: flex; align-items: center; border: 1px solid var(--color-border-strong); border-radius: var(--radius-button); background: var(--color-button-top); color: var(--color-text); white-space: nowrap; }
+.chip.checked { background: var(--color-checked-bg); border-color: var(--color-checked-border); }
+.badge { height: 18px; padding: 0 6px; display: inline-flex; align-items: center; border: 1px solid var(--color-border-strong); border-radius: var(--radius-button); font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
+.badge.mod { color: var(--color-warn); border-color: var(--color-warn); }
+.badge.cus { color: var(--color-accent); border-color: var(--color-accent); }
+.badge.ok { color: var(--color-ok); border-color: var(--color-ok); }
+.badge.err { color: var(--color-error); border-color: var(--color-error); }
+.sect { font-size: 11px; font-weight: 600; color: var(--color-text-muted); }
+.title1 { font-size: 16px; font-weight: 600; }
+.title2 { font-size: 13px; font-weight: 600; }
+
+/* Code editor (QScintilla JassEditor): colours from tokens only */
+.code { background: var(--color-input-bg); border: 1px solid var(--color-border); font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; line-height: 1.45; display: flex; min-height: 0; overflow: hidden; }
+.code .gut { width: 40px; flex: none; text-align: right; padding: 4px 8px 0 0; color: var(--color-text-disabled); background: var(--color-alt-base); border-right: 1px solid var(--color-border); white-space: pre; }
+.code .src { padding: 4px 8px; white-space: pre; flex: 1 1 auto; }
+.code .kw { color: var(--color-accent); font-weight: 600; } .code .cm { color: var(--color-text-muted); }
+.code .str { color: var(--color-ok); } .code .num { color: var(--color-warn); } .code .hl { background: var(--color-selection); }
+.code .er { color: var(--color-error); }
+
+/* QProgressBar */
+.prog { height: 18px; background: var(--color-input-bg); border: 1px solid var(--color-border-strong); border-radius: var(--radius-input); position: relative; overflow: hidden; }
+.prog .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--color-accent); }
+.prog .pt { position: relative; text-align: center; line-height: 16px; font-size: 11px; color: var(--color-text); }
+
+/* QMessageBox */
+.msg { display: flex; gap: 14px; padding: 16px 16px 4px; }
+.msg .big { width: 32px; height: 32px; flex: none; }
+.msg .big svg { width: 32px; height: 32px; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.msg .txt { display: flex; flex-direction: column; gap: 6px; }
+
+/* Colour button / swatch, thumbnail */
+.cbtn { width: 56px; height: 24px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-button); display: flex; align-items: center; justify-content: center; }
+.cbtn i { display: block; width: 40px; height: 14px; border: 1px solid var(--color-border-strong); }
+.thumb { border: 1px solid var(--color-border-strong); position: relative; overflow: hidden; }
+.sep-h { height: 1px; background: var(--color-border); flex: none; }
+.splitter { width: 4px; flex: none; background: var(--color-window); }
+
+/* Window toolbar variants */
+.toolbar .tlabel { padding: 0 6px; }
+.tbtn.txt { width: auto; padding: 0 8px; gap: 6px; }
+.dockhost { display: flex; gap: 4px; padding: 4px; background: var(--color-window); flex: 1 1 auto; min-height: 0; }
+.ads-tabs { height: 28px; flex: none; display: flex; align-items: stretch; background: var(--color-window); border-bottom: 1px solid var(--color-border); }
+.ads-tabs .dtab { display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--color-text-muted); border-right: 0; }
+.ads-tabs .dtab.selected { color: var(--color-text); background: var(--color-panel); border-bottom: 2px solid var(--color-accent); margin-bottom: -1px; }
+.ads-tabs .x { color: var(--color-text-muted); }
+.ads-tabs .ab { display: flex; align-items: center; margin-left: 4px; }
+.menu.pop { position: relative; }
+.menu .m .arr { width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid currentColor; }
+.tabwrap > .tabbar { flex: none; }
+.ads-tabs .dtab { font-weight: var(--font-weight-strong); font-size: var(--font-size-title); }
+.dock-title .dtab .x { margin-left: 8px; color: var(--color-text-muted); font-weight: 400; }
+.dock-title .dtab { gap: 0; }
+.view .r.hover { background: var(--color-hover); }
+.view .r > div.c { min-width: 0; }
+.chk .box:empty { }
+.view.hassb .r, .view.hassb .hdr { padding-right: 12px; }
+.view .r.mod .v { font-weight: 600; }
+.view .r.sel.mod .v { color: var(--color-selection-text); }
+.view .r, .view .hdr { flex: none; }
+.dock { overflow: hidden; }

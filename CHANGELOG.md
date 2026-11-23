@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Unit Properties and Gameplay Constants names display cleanly** — Player names in Unit Properties no longer show stray quote characters, and Gameplay Constants names are readable in the Flat Light theme and no longer show quote characters.
 - **A theme that fails to load no longer stops HiveWE from starting** — HiveWE falls back to the Dark theme and shows a message.
 - **A failed save no longer says "Map saved" or damages your map files** — If a save fails or is interrupted (disk full, read-only or locked file), the error is shown, and map files are written to a temporary file and swapped in so a failed write no longer truncates the existing good file. `--resave` exits with a non-zero code on these failures.
 - **A failed map script step no longer puts a stale script into your map** — If the Lua temp file cannot be written, or JassHelper fails, times out or exits with an error, HiveWE keeps the map's previous `war3map.lua` / `war3map.j` instead of copying an old script (possibly from another map), and shows "Saved without a new map script" instead of "Map saved".
@@ -51,6 +52,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ### New Features
 - **New "Flat Dark" and "Flat Light" themes (File > Settings > Theme)** — A modern flat look with the bundled Inter font, a compact menu bar and icon toolbar instead of the ribbon, the sidebar on the left with mode buttons, Minimap and the palette, Properties and Preview panels on the right, and a status bar (cursor position, tileset, map size, brush, saved state). The terrain palette uses Texture / Cliff / Deformation / Cell tabs, and all palettes scroll so the window fits small screens. The old Dark and Light themes are unchanged.
 - **Flat themes: the Properties panel shows the selected unit or doodad** — A read-only panel lists type, owner with player colour, facing in degrees, hit points as a percentage with the absolute value, position, scale and other fields, and follows the selection live while you move, rotate or undo. With several objects selected it shows the first one plus a count. The Regions tab is still a placeholder.
+- **Flat themes: more dialogs now match the theme** — The Settings, Unit Properties (including Edit Drop Item), Map Settings, Scenario Properties and Gameplay Constants dialogs follow Flat Dark and Flat Light instead of keeping the old look.
 - **Shortcut change: Ctrl+T now runs Test Map** — Ctrl+T used to toggle Wireframe; Wireframe moved to Ctrl+Shift+W.
 - **New command-line options for automated testing** — `--qa-offscreen`, `--theme`, `--palette` and `--window-size` (see `--help`).
 - **Command-line map resave (`HiveWE.exe --resave <in> <out>`)** — HiveWE loads a map folder and saves it to another folder without opening the editor. The exit code shows whether the save worked and whether the generated map script compiled (0 ok, 1 refused or failed, 2 wrong usage, 3 saved but the script did not compile, 4 no game data or OpenGL). Used for automated comparisons against World Editor output.

@@ -241,6 +241,7 @@ QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus, QPlainTe
 
 QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled {
 	color: @{color-text-disabled};
+	background-color: @{color-window};
 	border-color: @{color-border};
 }
 
@@ -338,6 +339,96 @@ QCheckBox::indicator:disabled {
 	background-color: @{color-window};
 }
 
+QCheckBox::indicator:checked:disabled, QGroupBox::indicator:checked:disabled {
+	border-color: @{color-border};
+	background-color: @{color-border};
+}
+
+QGroupBox:disabled {
+	color: @{color-text-disabled};
+	border-color: @{color-border};
+}
+
+/******************************************************/
+/* QRadioButton */
+
+QRadioButton {
+	spacing: 6px;
+}
+
+QRadioButton::indicator {
+	width: 14px;
+	height: 14px;
+	border: 1px solid @{color-border-strong};
+	background-color: @{color-input-bg};
+	border-radius: 8px;
+}
+
+QRadioButton::indicator:hover {
+	border-color: @{color-accent};
+}
+
+QRadioButton::indicator:checked {
+	border-color: @{color-accent};
+	image: url(@{asset-dir}/radio-dot.png);
+}
+
+QRadioButton::indicator:disabled {
+	border-color: @{color-border};
+	background-color: @{color-window};
+}
+
+QCheckBox:disabled, QRadioButton:disabled, QLabel:disabled {
+	color: @{color-text-disabled};
+}
+
+/******************************************************/
+/* Dialogs: buttons, message boxes */
+
+QDialogButtonBox QPushButton {
+	min-width: 62px;
+}
+
+QMessageBox QLabel {
+	background: transparent;
+}
+
+QProgressBar {
+	background-color: @{color-input-bg};
+	border: 1px solid @{color-border-strong};
+	border-radius: @{radius-input}px;
+	color: @{color-text};
+	text-align: center;
+	min-height: 14px;
+}
+
+QProgressBar::chunk {
+	background-color: @{color-accent};
+	border-radius: 2px;
+}
+
+/* Heading, meta and icon tile of the Unit Properties dialog (src/menus/unit_properties_dialog.cpp) */
+QFrame#unitPropertiesHero {
+	background: transparent;
+	border: none;
+}
+
+QLabel#unitPropertiesTitle {
+	font-size: @{font-size-heading}px;
+	font-weight: @{font-weight-strong};
+	color: @{color-text};
+}
+
+QLabel#unitPropertiesMeta {
+	font-size: @{font-size-small}px;
+	color: @{color-text-muted};
+}
+
+QLabel#unitPropertiesIcon {
+	background-color: @{color-base};
+	border: 1px solid @{color-border};
+}
+
 /******************************************************/
 /* QGroupBox */
 
@@ -354,6 +445,20 @@ QGroupBox::title {
 	subcontrol-position: top left;
 	left: 8px;
 	padding: 0 4px;
+}
+
+QGroupBox::indicator {
+	width: 14px;
+	height: 14px;
+	border: 1px solid @{color-border-strong};
+	background-color: @{color-input-bg};
+	border-radius: 2px;
+}
+
+QGroupBox::indicator:checked {
+	background-color: @{color-accent};
+	border-color: @{color-accent};
+	image: url(@{asset-dir}/check.png);
 }
 
 /******************************************************/
@@ -404,6 +509,10 @@ QTreeView, QListView, QTableView {
 	outline: 0;
 }
 
+QHeaderView {
+	background-color: @{color-window};
+}
+
 QHeaderView::section {
 	background-color: @{color-window};
 	color: @{color-text-muted};
@@ -426,7 +535,12 @@ QTreeView::branch:open:has-children {
 	image: url(@{asset-dir}/arrow-down.png);
 }
 
-QTableView::indicator {
+/* Dialogs only: the main window palettes, icon picker, trigger explorer and Object Editor keep their own item painting. */
+QDialog QTreeView::item, QDialog QListView::item {
+	min-height: @{row-height}px;
+}
+
+QTableView::indicator, QDialog QTreeView::indicator, QDialog QListView::indicator {
 	width: 14px;
 	height: 14px;
 	border: 1px solid @{color-border-strong};
@@ -434,7 +548,7 @@ QTableView::indicator {
 	border-radius: 2px;
 }
 
-QTableView::indicator:checked {
+QTableView::indicator:checked, QDialog QTreeView::indicator:checked, QDialog QListView::indicator:checked {
 	background-color: @{color-accent};
 	border-color: @{color-accent};
 	image: url(@{asset-dir}/check.png);

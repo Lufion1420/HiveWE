@@ -2,6 +2,8 @@
 #include "ui_HiveWE.h"
 #include "new_map_dialog.h"
 #include "shortcut_config_dialog.h"
+#include "unit_properties_dialog.h"
+#include "item_drop_editor.h"
 #include "theme.h"
 #define __STORMLIB_NO_STATIC_LINK__
 #include "StormLib.h"
@@ -65,6 +67,8 @@ import "trigger_editor.h";
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QTextDocument>
+#include <QTabWidget>
+#include <QTimer>
 import "menus/gameplay_constants_editor.h";
 import "menus/item_tables_editor.h";
 import "menus/scenario_properties_editor.h";
@@ -2148,6 +2152,71 @@ void HiveWE::open_qa_palette() {
 		}
 		brush.selections.insert(&map->doodads.doodads.front());
 		emit brush.selection_changed();
+	}
+}
+
+void HiveWE::open_qa_dialog() {
+	if (!qa_offscreen || qa_open_dialog.isEmpty()) {
+		return;
+	}
+
+	// Dialogs get the main window as parent so Qt centres them on it, which is outside every monitor. Parentless windows are moved there
+	// by the --qa-offscreen filter in main.cpp. Nothing below accepts a dialog, so nothing is written to the map or the settings.
+	QWidget* shown = nullptr;
+	const QString& name = qa_open_dialog;
+	if (name == "settings") {
+		shown = new SettingsEditor(this);
+	} else if (name == "unit-properties" || name == "item-drop") {
+		// data/test map has only a start location: add a sample hero with two item sets, in memory only.
+		auto unit = std::ranges::find_if(map->units.units, [](const Unit& u) { return u.id != "sloc"; });
+		if (unit == map->units.units.end()) {
+			Unit& added = map->units.add_unit("Hamg", glm::vec3(30.f, 30.f, 0.f));
+			added.angle = glm::radians(270.f);
+			added.item_sets = { ItemSet { .items = { { 60, "phea" }, { 40, "stwp" } } }, ItemSet { .items = { { 35, "YiI2" } } } };
+			unit = map->units.units.end() - 1;
+		}
+		if (name == "item-drop") {
+			// The editor runs its own event loop, so open it from the loop instead of from startup.
+			QTimer::singleShot(0, this, [this]() {
+				std::pair<int, std::string> entry { 60, "phea" };
+				edit_item_drop_entry(entry, this);
+			});
+			return;
+		}
+		shown = new UnitPropertiesDialog(&*unit, this);
+		shown->show();
+	} else if (name == "map-settings") {
+		shown = new MapInfoEditor(this);
+	} else if (name == "scenario") {
+		shown = new ScenarioPropertiesEditor(this);
+	} else if (name == "gameplay-constants") {
+		shown = new GameplayConstantsEditor(this);
+	} else if (name == "new-map") {
+		shown = new NewMapDialog(this);
+		shown->show();
+	} else if (name == "object-editor") {
+		shown = new ObjectEditor(nullptr);
+	} else if (name == "asset-manager") {
+		shown = new AssetManager(this);
+	} else if (name == "map-protector") {
+		shown = new MapProtector(nullptr);
+		shown->show();
+	} else if (name == "item-tables") {
+		shown = new ItemTablesEditor(this);
+	} else if (name == "config") {
+		shown = new ShortcutConfigDialog(this);
+	} else if (name == "tile-setter") {
+		shown = new TileSetter(this);
+	} else if (name == "tile-pather") {
+		shown = new TilePather(this);
+	} else {
+		// import-object-data needs a loaded package from disk, which a QA run has no sample for.
+		std::println(stderr, "--qa-open-dialog {}: this dialog cannot be opened by the hook yet.", name.toStdString());
+		return;
+	}
+
+	if (auto* tabs = shown->findChild<QTabWidget*>(); tabs && qa_dialog_tab >= 0 && qa_dialog_tab < tabs->count()) {
+		tabs->setCurrentIndex(qa_dialog_tab);
 	}
 }
 
