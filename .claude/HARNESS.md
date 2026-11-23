@@ -63,7 +63,7 @@ Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPRO
 ## Gates
 - `reviewer` REJECT goes back to `cpp-dev`, then review and QA rerun together; the QA result of the rejected round is discarded. After 3 rejections, stop and ask the user. If review rejects while QA holds `build/Agent`, wait for QA before resuming `cpp-dev`.
 - `qa-verifier` FAIL goes back to `cpp-dev`, then review and QA again. COULD-NOT-RUN is not a pass.
-- Fix rounds resume the same `cpp-dev`, `reviewer` and `qa-verifier` with SendMessage (keeps context). Use a fresh agent once the old one is above about 400k tokens.
+- Fix rounds resume the same `cpp-dev`, `reviewer` and `qa-verifier` with SendMessage (keeps context). Use a fresh agent once the old one is above about 400k tokens (`cpp-dev`: about 350k).
 - A QA FAIL can be a wrong expectation in the brief: check the expectation against the code or specialist note before a fix round. When a brief contains a switch default, check it against the specialist note line by line.
 - Unverified WE/WC3 behaviour goes in one switchable function plus a pinning test.
 - "Premise did not reproduce" from `cpp-dev` is accepted only with tests that pin the current behaviour.
