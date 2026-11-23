@@ -46,6 +46,9 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 
 - Shortcuts (074f2d1, 2026-11-22): Ctrl+T is Test Map, Ctrl+Shift+W is Wireframe, Ctrl+W is "Show or hide water". `HiveWE.ui` `actionTest_Map` had never been added to a widget, so Ctrl+T used to only toggle Wireframe.
 - Layout traps (verified 2026-11-22): a `QStackedWidget` takes the largest `minimumSizeHint` of all pages (wrap tall pages in a `QScrollArea`); a `QComboBox` defaults to its longest item width; `FlowLayout::minimumSize()` is the widest laid-out row unless `set_shrinkable()` (opt-in) is used; `Palette::fit_to_column()` runs for every theme, so a palette layout change needs a check under the old Dark and Light themes too.
+- Unit/doodad selection edits (drag, rotate, nudge, undo of `UnitStateAction`) do not emit `Brush::selection_changed`. Read-only views of the selection need their own refresh: the Flat Properties panel polls from the 250 ms status timer, guarded by an address-in-vector check that is safe for read-only displays but not for edits.
+- `Unit::health` is a percentage of max (-1 = default). WorldEditStrings `WESTRING_UNITCOLOR_xx` values contain literal quote characters; strip them before display.
+- Qt stylesheets cannot target top-level `QTreeWidget` items: build per-item colours from palette tokens in code and rebuild them on `QEvent::PaletteChange`.
 - UIA Toggle on a `QPushButton` emits `toggled`, not `clicked`; the sidebar mode buttons use `toggled`.
 
 ## Flat themes (074f2d1)

@@ -74,3 +74,6 @@ Captures are written to a `captures\` folder next to the scripts. Copy the scrip
 - Sample `GetForegroundWindow` after launch to prove there was no focus steal.
 - Wait at least 8 s after a resize before `PrintWindow`, and retry blank (about 20 KB) captures. Use a tall `--window-size` (for example 1500x1700) to see palette controls below the fold.
 - Under `--qa-offscreen`, theme-failure messages go to stderr. A minimized Qt window reports a 199x34 rect.
+- `data/test map` has no units except the start location (`sloc`) and no doodads. `--qa-select-first` (needs `--qa-offscreen`, exits 2 without it; use with `--palette units|doodads`) adds a sample footman (`hfoo`) or `LTlt` doodad to the in-memory map and selects it, so selection-dependent UI can be captured. Never saved.
+- `shot.ps1`: do not pipe it into `Select-Object` (the pipeline stops before the capture and the old PNG stays; check PNG timestamps). Call `& shot.ps1 ...` once per command. Capture launch exit codes with `WaitForExit(30000)` and no Kill fallback.
+- Background subagents cannot be prompted, so `.claude/settings.local.json` needs allow rules for the Agent-preset cmake/ctest and `build.lock` commands, or they get PowerShell denials. Compound commands containing a kill are denied.
