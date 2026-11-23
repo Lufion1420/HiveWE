@@ -74,6 +74,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Browse Models shows file sizes in MB** — You can see how large a model is before picking it.
 - **Browse Models sidebar has "Models" and "VFX/SFX" filters** — Effect models can be separated from unit and doodad models.
 - **Object Editor: double-clicking a model field opens the Browse Models picker** — The picker has a Path line, so typed paths and clearing the field still work, and it replaces the old model picker.
+- **Browse Models tiles now animate** — Tiles in view play their Stand animation instead of showing still pictures, up to 12 at once, and pause while you scroll or when the window is inactive.
 
 ---
 

@@ -111,6 +111,43 @@ export class ResourceManager {
 		return count;
 	}
 
+	/// Drops the finished entries among `keys` that nobody but the cache still holds, and removes from `keys` every key that is no
+	/// longer cached afterwards (dropped here or by someone else). Keys outside `keys` are never touched. Returns how many were dropped.
+	/// Destroys on the calling thread, like evict_unused_since.
+	std::size_t evict_unused_in(std::unordered_set<std::string>& keys) {
+		std::vector<std::shared_ptr<Resource>> dropped;
+		{
+			std::lock_guard lock(mutex);
+			std::vector<std::string> erase_keys;
+			for (auto it = keys.begin(); it != keys.end();) {
+				const auto found = resources.find(*it);
+				if (found == resources.end()) {
+					it = keys.erase(it);
+					continue;
+				}
+				const auto& future = found->second;
+				if (future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+					const auto& result = future.get();
+					if (!result || result->use_count() == 1) {
+						if (result) {
+							dropped.push_back(*result);
+						}
+						erase_keys.push_back(*it);
+						it = keys.erase(it);
+						continue;
+					}
+				}
+				++it;
+			}
+			for (const std::string& key : erase_keys) {
+				resources.erase(key);
+			}
+		}
+		const std::size_t count = dropped.size();
+		dropped.clear();
+		return count;
+	}
+
 	/// Releases all cached resources. Call when unloading a map.
 	void clear() {
 		std::lock_guard lock(mutex);

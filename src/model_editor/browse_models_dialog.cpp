@@ -28,11 +28,21 @@
 #include "hivewe.h"
 #include "model_inspector.h"
 
+#ifdef _WIN32
+	// Memory readings for the --qa-open-dialog browse-models reopen cycle only.
+	#define NOMINMAX
+	#define WIN32_LEAN_AND_MEAN
+	#include <windows.h>
+	#include <psapi.h>
+#endif
+
 import std;
 import BinaryReader;
 import Hierarchy;
 import MDX;
 import ModelCatalog;
+import ResourceManager;
+import TileAnimation;
 import Utilities;
 
 namespace fs = std::filesystem;
@@ -169,6 +179,9 @@ class ModelListModel : public QAbstractListModel {
 			case Qt::DisplayRole:
 				return QString::fromStdWString(all[visible[index.row()]].path.filename().wstring());
 			case Qt::DecorationRole: {
+				if (const QPixmap frame = cache.animated_pixmap(path); !frame.isNull()) {
+					return frame;
+				}
 				const QPixmap pixmap = cache.pixmap(path);
 				return pixmap.isNull() ? ModelThumbnailCache::placeholder(cache.failed(path)) : pixmap;
 			}
@@ -263,6 +276,7 @@ BrowseModelsDialog::BrowseModelsDialog(QWidget* parent) : QDialog(parent, Qt::Wi
 	view->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 	view->verticalScrollBar()->setSingleStep(40);
+	view->setMouseTracking(true); // `entered`, for the hovered tile's animation priority
 
 	status = new QLabel;
 	status->setObjectName("browseStatus");
@@ -344,9 +358,29 @@ BrowseModelsDialog::BrowseModelsDialog(QWidget* parent) : QDialog(parent, Qt::Wi
 	connect(visible_timer, &QTimer::timeout, this, &BrowseModelsDialog::request_visible);
 
 	connect(cache, &ModelThumbnailCache::thumbnail_ready, this, [this](const QString& path) { list_model->thumbnail_ready(path); });
+	connect(cache, &ModelThumbnailCache::animation_frame, this, [this](const QString& path) { list_model->thumbnail_ready(path); });
 	connect(categories, &QListWidget::currentRowChanged, this, &BrowseModelsDialog::select_category);
 	connect(search, &QLineEdit::textChanged, this, [this] { apply_filter(); });
-	connect(view->verticalScrollBar(), &QScrollBar::valueChanged, this, [this] { visible_timer->start(60); });
+	// Scrolling pauses the animated tiles; request_visible picks the new visible set once the scrolling settles.
+	connect(view->verticalScrollBar(), &QScrollBar::valueChanged, this, [this] {
+		scrolling = true;
+		cache->pause_animation();
+		visible_timer->start(60);
+	});
+	// Hover only reorders the animated set, through the same debounce as scrolling; nothing changes while a scroll is settling.
+	connect(view, &QListView::entered, this, [this](const QModelIndex& index) {
+		hovered_row = index.isValid() ? index.row() : -1;
+		if (!scrolling) {
+			visible_timer->start(60);
+		}
+	});
+	connect(view, &QListView::viewportEntered, this, [this] {
+		hovered_row = -1;
+		if (!scrolling) {
+			update_animation();
+		}
+	});
+	view->viewport()->installEventFilter(this); // QEvent::Leave resets the hovered row
 	connect(view, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
 		if (index.isValid()) {
 			accept();
@@ -360,6 +394,7 @@ BrowseModelsDialog::BrowseModelsDialog(QWidget* parent) : QDialog(parent, Qt::Wi
 			}
 			show_preview(list_model->path_at(current.row()));
 		}
+		update_animation();
 	});
 	connect(animation, &QComboBox::activated, this, [this](const int index) { preview->set_sequence(index); });
 
@@ -387,8 +422,47 @@ void BrowseModelsDialog::accept() {
 
 void BrowseModelsDialog::done(const int result) {
 	cache->cancel();
+	cache->stop_animation();
 	visible_timer->stop();
 	QDialog::done(result);
+}
+
+void BrowseModelsDialog::showEvent(QShowEvent* event) {
+	QDialog::showEvent(event);
+	if (visible_timer) {
+		visible_timer->start(0); // thumbnails and animated tiles for what is in view
+	}
+}
+
+void BrowseModelsDialog::hideEvent(QHideEvent* event) {
+	if (cache) {
+		cache->stop_animation();
+	}
+	QDialog::hideEvent(event);
+}
+
+void BrowseModelsDialog::changeEvent(QEvent* event) {
+	QDialog::changeEvent(event);
+	if (visible_timer && (event->type() == QEvent::ActivationChange || event->type() == QEvent::WindowStateChange)) {
+		update_animation(); // pauses while another window is active or the dialog is minimized
+	}
+}
+
+bool BrowseModelsDialog::eventFilter(QObject* watched, QEvent* event) {
+	if (view && watched == view->viewport() && event->type() == QEvent::Leave && hovered_row >= 0) {
+		hovered_row = -1;
+		if (!scrolling) {
+			visible_timer->start(60);
+		}
+	}
+	return QDialog::eventFilter(watched, event);
+}
+
+void BrowseModelsDialog::resizeEvent(QResizeEvent* event) {
+	QDialog::resizeEvent(event);
+	if (visible_timer) {
+		visible_timer->start(60); // more or fewer tiles fit
+	}
 }
 
 void BrowseModelsDialog::set_picker_mode(const QString& current) {
@@ -451,6 +525,10 @@ void BrowseModelsDialog::apply_filter() {
 	const QString previous = selected_path();
 	const QString typed = path_edit ? path_edit->text() : QString();
 	open_button->setEnabled(picker);
+	// Paused; request_visible then picks the tiles of the new list, and animate() releases those no longer in view (a tile that stays in
+	// view keeps playing, so typing a search does not reload it on every key).
+	cache->pause_animation();
+	hovered_row = -1;
 	list_model->show(filter_model_entries(list_model->entries(), category, search->text().toStdString(), kind));
 	if (const int row = list_model->row_for(previous); row >= 0) {
 		view->setCurrentIndex(list_model->index(row, 0)); // still listed: keep it selected (currentChanged enables Open)
@@ -481,6 +559,8 @@ void BrowseModelsDialog::update_status() {
 /// Asks the cache for the rows in view plus a margin below them, nearest first. Anything queued earlier is dropped.
 void BrowseModelsDialog::request_visible() {
 	const int count = list_model->rowCount();
+	scrolling = false;
+	update_animation();
 	if (count == 0) {
 		cache->request({});
 		return;
@@ -501,6 +581,53 @@ void BrowseModelsDialog::request_visible() {
 		paths << list_model->path_at(row);
 	}
 	cache->request(paths);
+}
+
+std::vector<int> BrowseModelsDialog::visible_rows() const {
+	std::vector<int> rows;
+	const int count = list_model->rowCount();
+	const QRect port = view->viewport()->rect();
+	if (count == 0 || port.isEmpty()) {
+		return rows;
+	}
+	// The grid flows left to right, top to bottom, so the bottom edges only grow with the row: find the first tile that reaches into view.
+	int low = 0;
+	int high = count;
+	while (low < high) {
+		const int middle = low + (high - low) / 2;
+		if (view->visualRect(list_model->index(middle, 0)).bottom() < port.top()) {
+			low = middle + 1;
+		} else {
+			high = middle;
+		}
+	}
+	for (int row = low; row < count; ++row) {
+		const QRect rect = view->visualRect(list_model->index(row, 0));
+		if (rect.top() > port.bottom()) {
+			break;
+		}
+		if (rect.intersects(port)) {
+			rows.push_back(row);
+		}
+	}
+	return rows;
+}
+
+void BrowseModelsDialog::update_animation() {
+	if (!animate_browse_tiles) {
+		return;
+	}
+	// The offscreen QA run never has an active window.
+	if (!isVisible() || isMinimized() || !(isActiveWindow() || HiveWE::qa_offscreen)) {
+		cache->pause_animation();
+		return;
+	}
+	const std::vector<int> visible = visible_rows();
+	QStringList paths;
+	for (const int row : choose_animated_rows(visible, hovered_row, view->currentIndex().row(), max_animated_tiles)) {
+		paths << list_model->path_at(row);
+	}
+	cache->animate(paths);
 }
 
 void BrowseModelsDialog::show_preview(const QString& path) {
@@ -531,22 +658,15 @@ void BrowseModelsDialog::show_preview(const QString& path) {
 	const QSignalBlocker blocker(animation);
 	animation->clear();
 	animation->setEnabled(mdx && !mdx->sequences.empty());
-	int chosen = 0;
 	if (mdx) {
 		// A plain "Stand" first, then any sequence with "stand" in its name ("Stand Alternate" can be a curled-up pose), else the first.
-		int contains_stand = -1;
-		int exact_stand = -1;
-		for (int i = 0; i < static_cast<int>(mdx->sequences.size()); ++i) {
-			animation->addItem(QString::fromStdString(mdx->sequences[i].name));
-			const std::string lowered = to_lowercase_copy(mdx->sequences[i].name);
-			if (exact_stand < 0 && (lowered == "stand" || lowered == "stand - 1")) {
-				exact_stand = i;
-			}
-			if (contains_stand < 0 && lowered.contains("stand")) {
-				contains_stand = i;
-			}
+		// Every sequence counts here (the user can pick any of them); the animated tiles skip the empty ones.
+		std::vector<SequenceCandidate> candidates;
+		for (const mdx::Sequence& sequence : mdx->sequences) {
+			animation->addItem(QString::fromStdString(sequence.name));
+			candidates.push_back({ sequence.name, true });
 		}
-		chosen = exact_stand >= 0 ? exact_stand : std::max(0, contains_stand);
+		const int chosen = std::max(0, preferred_preview_sequence(candidates));
 		if (!mdx->sequences.empty()) {
 			animation->setCurrentIndex(chosen);
 			preview->set_sequence(chosen);
@@ -606,7 +726,9 @@ void BrowseModelsDialog::run_qa(const QString& out_file) {
 
 void BrowseModelsDialog::qa_step() {
 	// An offscreen window is never exposed, so the preview's own repaint loop is stopped: paint it by hand.
-	(void)preview->grabFramebuffer();
+	if (isVisible()) {
+		(void)preview->grabFramebuffer();
+	}
 
 	const bool timed_out = qa_clock.elapsed() > 150'000;
 	const auto settled = [&] { return (qa_phase_clock.elapsed() >= 2000 && cache->pending() == 0) || timed_out; };
@@ -620,6 +742,46 @@ void BrowseModelsDialog::qa_step() {
 			return;
 		}
 		qa_log << QString("%1 [thumbnails] first page drawn (pending=%2)").arg(cache->pending() == 0 ? "PASS" : "FAIL").arg(cache->pending());
+		qa_animated_paths.clear();
+		qa_animated_before.clear();
+		next(8);
+	} else if (qa_phase == 8) {
+		// Animated tiles: some play, never more than the cap, and their frames change over time.
+		const int tiles = cache->animated_tiles();
+		const bool phase_timed_out = qa_phase_clock.elapsed() > 15'000 || timed_out;
+		if (qa_animated_before.empty()) {
+			if (!phase_timed_out && (qa_phase_clock.elapsed() < 1500 || tiles == 0 || cache->animation_frames() < tiles * 3)) {
+				return;
+			}
+			for (const int row : visible_rows()) {
+				const QString path = list_model->path_at(row);
+				if (const QPixmap frame = cache->animated_pixmap(path); !frame.isNull()) {
+					qa_animated_paths << path;
+					qa_animated_before.push_back(frame.toImage());
+				}
+			}
+			qa_phase_clock.restart();
+			if (!qa_animated_before.empty()) {
+				return; // second sample in a second
+			}
+		} else if (qa_phase_clock.elapsed() < 1000) {
+			return;
+		}
+		int changed = 0;
+		for (int i = 0; i < qa_animated_paths.size(); ++i) {
+			changed += cache->animated_pixmap(qa_animated_paths[i]).toImage() != qa_animated_before[i];
+		}
+		const int visible = static_cast<int>(visible_rows().size());
+		qa_log << QString("%1 [animation] %2 tiles play (visible=%3, cap=%4, frames=%5)")
+					  .arg(tiles > 0 && tiles <= static_cast<int>(max_animated_tiles) && tiles <= visible ? "PASS" : "FAIL")
+					  .arg(tiles)
+					  .arg(visible)
+					  .arg(max_animated_tiles)
+					  .arg(cache->animation_frames());
+		qa_log << QString("%1 [animation] %2 of %3 sampled tiles changed within a second")
+					  .arg(changed > 0 ? "PASS" : "FAIL")
+					  .arg(changed)
+					  .arg(qa_animated_paths.size());
 		qa_rows_before_search = list_model->rowCount();
 		view->setCurrentIndex(list_model->index(0, 0));
 		qa_log << QString("%1 [open] enabled with a model selected (rows=%2)").arg(open_button->isEnabled() ? "PASS" : "FAIL").arg(qa_rows_before_search);
@@ -646,6 +808,9 @@ void BrowseModelsDialog::qa_step() {
 					  .arg(list_model->rowCount() == 0 && !open_button->isEnabled() && selected_path().isEmpty() ? "PASS" : "FAIL")
 					  .arg(list_model->rowCount())
 					  .arg(open_button->isEnabled());
+		qa_log << QString("%1 [animation] no tile plays after a search with no match (tiles=%2)")
+					  .arg(cache->animated_tiles() == 0 ? "PASS" : "FAIL")
+					  .arg(cache->animated_tiles());
 		search->clear();
 		categories->setCurrentRow(category_row_offset + static_cast<int>(ModelCategory::Map)); // an empty category
 		next(3);
@@ -702,7 +867,6 @@ void BrowseModelsDialog::qa_step() {
 		if (qa_phase_clock.elapsed() < 2500) {
 			return;
 		}
-		qa_timer->stop();
 
 		const bool has_model = preview->mdx != nullptr;
 		qa_log << QString("%1 [preview] model loaded, %2 animations, open button enabled=%3")
@@ -746,14 +910,135 @@ void BrowseModelsDialog::qa_step() {
 		for (const std::string& why : cache->failure_log()) {
 			qa_log << QString("INFO [failure] %1").arg(QString::fromStdString(why));
 		}
-		qa_log << "DONE";
 
-		QFile file(qa_out);
-		if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-			QTextStream(&file) << qa_log.join('\n') << '\n';
-		} else {
-			std::println(stderr, "--qa-script-out: cannot write {}", qa_out.toStdString());
+		// HIVEWE_QA_HOLD_SECONDS=<n>: keep this dialog open and animating for n seconds, sampling memory every 5 seconds (soak runs).
+		qa_hold_seconds = std::clamp(qEnvironmentVariableIntValue("HIVEWE_QA_HOLD_SECONDS"), 0, 3600);
+		qa_cycle = 0;
+		qa_cycle_closing = false;
+		next(qa_hold_seconds > 0 ? 10 : 9);
+	} else if (qa_phase == 10) {
+		const qint64 elapsed = qa_phase_clock.elapsed();
+		if (elapsed / 5000 >= qa_hold_samples) {
+			qa_log << QString("INFO [soak] t=%1s working_set=%2MB private=%3MB tiles=%4 frames=%5 resources=%6")
+						  .arg(elapsed / 1000)
+						  .arg(qa_working_set_mb(false), 0, 'f', 1)
+						  .arg(qa_working_set_mb(true), 0, 'f', 1)
+						  .arg(cache->animated_tiles())
+						  .arg(cache->animation_frames())
+						  .arg(resource_manager.snapshot_keys().size());
+			++qa_hold_samples;
 		}
-		QApplication::quit();
+		if (elapsed >= qa_hold_seconds * 1000LL) {
+			next(9);
+		}
+	} else if (qa_phase == 9) {
+		qa_reopen_step();
 	}
+}
+
+/// Closes this dialog and opens a new one three times without leaving the app: each new dialog draws its thumbnails and plays its
+/// tiles, then is closed and deleted. Memory and the resource cache are compared before and after.
+void BrowseModelsDialog::qa_reopen_step() {
+	// HIVEWE_QA_REOPEN_CYCLES=<n> for longer leak runs.
+	const int cycles = qEnvironmentVariableIsSet("HIVEWE_QA_REOPEN_CYCLES") ? std::clamp(qEnvironmentVariableIntValue("HIVEWE_QA_REOPEN_CYCLES"), 1, 100) : 5;
+	if (qa_cycle == 0 && !qa_child && !qa_cycle_closing) {
+		if (isVisible()) {
+			cache->cancel();
+			hide(); // stops this dialog's tiles (hideEvent)
+			qa_phase_clock.restart();
+			return;
+		}
+		if (qa_phase_clock.elapsed() < 500) {
+			return;
+		}
+		qa_ws_start = qa_working_set_mb(false);
+		qa_resources_start = resource_manager.snapshot_keys().size();
+		qa_log << QString("INFO [reopen] before: working_set=%1MB private=%2MB resources=%3")
+					  .arg(qa_ws_start, 0, 'f', 1)
+					  .arg(qa_working_set_mb(true), 0, 'f', 1)
+					  .arg(qa_resources_start);
+	}
+
+	if (!qa_child && !qa_cycle_closing) {
+		if (qa_cycle >= cycles) {
+			const double ws_end = qa_working_set_mb(false);
+			const std::size_t resources_end = resource_manager.snapshot_keys().size();
+			qa_log << QString("%1 [reopen] working set grew %2MB over %3 reopen cycles (%4 -> %5 MB, limit 50)")
+						  .arg(ws_end - qa_ws_start < 50.0 ? "PASS" : "FAIL")
+						  .arg(ws_end - qa_ws_start, 0, 'f', 1)
+						  .arg(cycles)
+						  .arg(qa_ws_start, 0, 'f', 1)
+						  .arg(ws_end, 0, 'f', 1);
+			qa_log << QString("%1 [reopen] cached resources do not grow after the first cycle (after 1: %2, after %3: %4, before: %5)")
+						  .arg(resources_end <= qa_resources_after_first ? "PASS" : "FAIL")
+						  .arg(qa_resources_after_first)
+						  .arg(cycles)
+						  .arg(resources_end)
+						  .arg(qa_resources_start);
+			qa_finish();
+			return;
+		}
+		qa_child = new BrowseModelsDialog(parentWidget());
+		qa_child->show();
+		qa_phase_clock.restart();
+		return;
+	}
+
+	if (qa_child) {
+		const bool playing = qa_child->cache->pending() == 0 && qa_child->cache->animated_tiles() > 0 && qa_child->cache->animation_frames() > 0;
+		const bool timed_out = qa_phase_clock.elapsed() > 30'000;
+		if (!(playing && qa_phase_clock.elapsed() > 1500) && !timed_out) {
+			return;
+		}
+		qa_log << QString("%1 [reopen] cycle %2: tiles=%3 frames=%4 generated=%5")
+					  .arg(playing ? "PASS" : "FAIL")
+					  .arg(qa_cycle + 1)
+					  .arg(qa_child->cache->animated_tiles())
+					  .arg(qa_child->cache->animation_frames())
+					  .arg(qa_child->cache->generated());
+		qa_child->done(QDialog::Rejected);
+		delete qa_child;
+		qa_child = nullptr;
+		qa_cycle_closing = true;
+		qa_phase_clock.restart();
+		return;
+	}
+
+	// Closing: let deferred deletes run, then measure.
+	if (qa_phase_clock.elapsed() < 750) {
+		return;
+	}
+	qa_cycle_closing = false;
+	++qa_cycle;
+	const std::size_t resources = resource_manager.snapshot_keys().size();
+	if (qa_cycle == 1) {
+		qa_resources_after_first = resources;
+	}
+	qa_log << QString("INFO [reopen] after cycle %1: working_set=%2MB private=%3MB resources=%4")
+				  .arg(qa_cycle)
+				  .arg(qa_working_set_mb(false), 0, 'f', 1)
+				  .arg(qa_working_set_mb(true), 0, 'f', 1)
+				  .arg(resources);
+}
+
+double BrowseModelsDialog::qa_working_set_mb(const bool private_bytes) {
+#ifdef _WIN32
+	PROCESS_MEMORY_COUNTERS_EX counters {};
+	if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof(counters))) {
+		return static_cast<double>(private_bytes ? counters.PrivateUsage : counters.WorkingSetSize) / (1024.0 * 1024.0);
+	}
+#endif
+	return 0.0;
+}
+
+void BrowseModelsDialog::qa_finish() {
+	qa_timer->stop();
+	qa_log << "DONE";
+	QFile file(qa_out);
+	if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+		QTextStream(&file) << qa_log.join('\n') << '\n';
+	} else {
+		std::println(stderr, "--qa-script-out: cannot write {}", qa_out.toStdString());
+	}
+	QApplication::quit();
 }

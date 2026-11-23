@@ -5,6 +5,7 @@
 
 #include <QDialog>
 #include <QElapsedTimer>
+#include <QImage>
 #include <QString>
 #include <QStringList>
 
@@ -49,20 +50,37 @@ class BrowseModelsDialog : public QDialog {
 	/// Stops the thumbnail work at once when the dialog closes (accepted, rejected or closed).
 	void done(int result) override;
 
+  protected:
+	void showEvent(QShowEvent* event) override;
+	void hideEvent(QHideEvent* event) override;
+	void changeEvent(QEvent* event) override;
+	void resizeEvent(QResizeEvent* event) override;
+	bool eventFilter(QObject* watched, QEvent* event) override;
+
   private:
 	void select_category(int row);
 	void apply_filter();
 	void request_visible();
+	/// The rows whose tile is at least partly inside the viewport, in order.
+	std::vector<int> visible_rows() const;
+	/// Animated tiles (see TileAnimation): the visible rows, hovered and selected first, up to max_animated_tiles; paused while the
+	/// dialog is hidden, minimized or not the active window.
+	void update_animation();
 	void show_preview(const QString& path);
 	void update_status();
 	void qa_step();
+	void qa_reopen_step();
+	void qa_finish();
+	/// Working set (or private bytes) of this process in MB; 0 where not available.
+	static double qa_working_set_mb(bool private_bytes);
 
-	ModelThumbnailCache* cache;
-	ModelListModel* list_model;
+	// Null until the constructor sets them: the window events below can arrive while it runs (winId()).
+	ModelThumbnailCache* cache = nullptr;
+	ModelListModel* list_model = nullptr;
 
 	QListWidget* categories;
 	QLineEdit* search;
-	QListView* view;
+	QListView* view = nullptr;
 	QLabel* status;
 	ModelEditorGLWidget* preview;
 	QLabel* preview_title;
@@ -71,7 +89,9 @@ class BrowseModelsDialog : public QDialog {
 	QPushButton* open_button;
 	QLineEdit* path_edit = nullptr;
 	bool picker = false;
-	QTimer* visible_timer;
+	QTimer* visible_timer = nullptr;
+	int hovered_row = -1;
+	bool scrolling = false; // between a scroll bar move and the request_visible that settles it
 
 	QString preview_path;
 	std::size_t total_models = 0;
@@ -87,4 +107,14 @@ class BrowseModelsDialog : public QDialog {
 	QElapsedTimer qa_phase_clock;
 	int qa_phase = 0;
 	int qa_rows_before_search = 0;
+	QStringList qa_animated_paths;
+	std::vector<QImage> qa_animated_before;
+	int qa_hold_seconds = 0;
+	qint64 qa_hold_samples = 0;
+	int qa_cycle = 0;
+	bool qa_cycle_closing = false;
+	BrowseModelsDialog* qa_child = nullptr; // deleted by the reopen cycle itself
+	double qa_ws_start = 0.0;
+	std::size_t qa_resources_start = 0;
+	std::size_t qa_resources_after_first = 0;
 };

@@ -26,6 +26,7 @@ add_executable(HiveWE_tests
 	theme_tokens_test.cpp
 	selection_hit_points_test.cpp
 	model_editor_logic_test.cpp
+	tile_animation_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
