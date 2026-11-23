@@ -5,6 +5,8 @@
 #include <QScrollArea>
 #include <QPalette>
 
+#include "theme.h"
+#include "hivewe.h"
 #include "DockAreaTitleBar.h"
 #include "DockAreaTabBar.h"
 #include <QToolBar>
@@ -396,7 +398,7 @@ class ObjectTreeDelegate : public QStyledItemDelegate {
 		if (selected) {
 			painter->fillRect(opt.rect, opt.palette.highlight());
 		} else if (opt.state.testFlag(QStyle::State_MouseOver)) {
-			painter->fillRect(opt.rect, QColor(255, 255, 255, 10));
+			painter->fillRect(opt.rect, theme::current_is_flat() ? opt.palette.color(QPalette::Light) : QColor(255, 255, 255, 10));
 		}
 
 		const QRect content_rect = opt.rect.adjusted(6, 0, -8, 0);
@@ -433,7 +435,9 @@ class ObjectTreeDelegate : public QStyledItemDelegate {
 			painter->drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft, main_text);
 
 			QRect id_rect = text_rect.adjusted(main_width + gap, 0, 0, 0);
-			QColor id_color = selected ? opt.palette.highlightedText().color().lighter(115) : QColor(152, 158, 168);
+			QColor id_color = selected ? opt.palette.highlightedText().color().lighter(115)
+				: theme::current_is_flat() ? opt.palette.color(QPalette::PlaceholderText)
+										   : QColor(152, 158, 168);
 			painter->setPen(id_color);
 			painter->drawText(id_rect, Qt::AlignVCenter | Qt::AlignLeft, id_text);
 		}
@@ -447,9 +451,17 @@ class ObjectTreeDelegate : public QStyledItemDelegate {
 			const int badge_width = badge_metrics.horizontalAdvance(badge) + 12;
 			QRect badge_rect(opt.rect.right() - badge_width - 8, opt.rect.top() + (opt.rect.height() - 16) / 2, badge_width, 16);
 			painter->setPen(Qt::NoPen);
-			painter->setBrush(QColor(214, 112, 255, 38));
+			QColor badge_fill(214, 112, 255, 38);
+			QColor badge_text(224, 160, 255);
+			if (theme::current_is_flat()) {
+				// The accent, like the Custom chip in the mockup.
+				badge_text = opt.palette.color(QPalette::Link);
+				badge_fill = badge_text;
+				badge_fill.setAlpha(40);
+			}
+			painter->setBrush(badge_fill);
 			painter->drawRoundedRect(badge_rect, 8, 8);
-			painter->setPen(QColor(224, 160, 255));
+			painter->setPen(badge_text);
 			painter->drawText(badge_rect, Qt::AlignCenter, badge);
 		}
 
@@ -632,7 +644,8 @@ ObjectEditor::ObjectEditor(QWidget* parent) : QMainWindow(parent) {
 	dock_manager = new ads::CDockManager;
 	dock_manager->setStyleSheet("");
 	setCentralWidget(dock_manager);
-	setStyleSheet(
+	// The Flat themes style this window from the application style sheet (data/themes/Flat.qss.in); the old themes keep the dark look below.
+	if (!theme::current_is_flat()) setStyleSheet(
 		"ObjectEditor { background: rgb(24, 29, 35); color: rgb(232, 236, 241); }"
 		"ObjectEditor QWidget { color: rgb(232, 236, 241); }"
 		"ObjectEditor QAbstractScrollArea, ObjectEditor QScrollArea, ObjectEditor QFrame { background: transparent; }"
@@ -879,6 +892,12 @@ void ObjectEditor::save_tree_state(const QString& key, const QTreeView* view) co
 }
 
 void ObjectEditor::closeEvent(QCloseEvent* event) {
+	// An automated --qa-offscreen run must not write the user's saved editor state.
+	if (HiveWE::qa_offscreen) {
+		QMainWindow::closeEvent(event);
+		return;
+	}
+
 	QSettings settings;
 	settings.setValue("ObjectEditor/currentTab", explorer_area ? explorer_area->currentIndex() : 0);
 	settings.setValue("ObjectEditor/fieldSearch", current_field_search);
@@ -910,8 +929,11 @@ void ObjectEditor::closeEvent(QCloseEvent* event) {
 }
 
 void ObjectEditor::itemClicked(QTreeView* view, const QSortFilterProxyModel* model, TableModel* table, const QModelIndex& index) {
+	if (!index.isValid()) {
+		return;
+	}
 	const BaseTreeItem* item = static_cast<BaseTreeItem*>(model->mapToSource(index).internalPointer());
-	if (item->baseCategory || item->subCategory) {
+	if (item == nullptr || item->baseCategory || item->subCategory) {
 		return;
 	}
 
@@ -1752,7 +1774,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	view->setWordWrap(true);
 	view->setSizeAdjustPolicy(QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents);
 	view->setStyleSheet("QTableView::item { padding-left: 8px; padding-right: 8px; }");
-	{
+	if (!theme::current_is_flat()) {
 		QPalette palette = view->palette();
 		palette.setColor(QPalette::Base, QColor(24, 29, 35));
 		palette.setColor(QPalette::AlternateBase, QColor(28, 34, 41));
@@ -1946,7 +1968,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	QWidget* column_header = new QWidget;
 	column_header->setObjectName("objectEditorColumnHeader");
 	column_header->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-	column_header->setStyleSheet(
+	if (!theme::current_is_flat()) column_header->setStyleSheet(
 		"#objectEditorColumnHeader {"
 		"background: rgb(32, 38, 45);"
 		"border-bottom: 1px solid rgba(255, 255, 255, 16);"
@@ -2133,7 +2155,7 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 
 	QScrollArea* area = new QScrollArea;
 	area->setObjectName("objectEditorDetailsScrollArea");
-	area->setStyleSheet(
+	if (!theme::current_is_flat()) area->setStyleSheet(
 		"QScrollArea#objectEditorDetailsScrollArea { background: rgb(24, 29, 35); border: none; }"
 		"QScrollArea#objectEditorDetailsScrollArea > QWidget > QWidget { background: rgb(24, 29, 35); }"
 	);
@@ -2197,7 +2219,7 @@ void ObjectEditor::addTypeTreeView(
 	view->setAllColumnsShowFocus(true);
 	view->installEventFilter(this);
 	view->viewport()->installEventFilter(this);
-	view->setStyleSheet(
+	if (!theme::current_is_flat()) view->setStyleSheet(
 		"QTreeView {"
 		"border: 1px solid rgba(255, 255, 255, 16);"
 		"border-radius: 10px;"
@@ -2776,7 +2798,7 @@ void ObjectEditor::addTypeTreeView(
 	if (explorer_area != nullptr) {
 		if (auto* title_bar = explorer_area->titleBar()) {
 			title_bar->setAttribute(Qt::WA_StyledBackground, true);
-			title_bar->setStyleSheet(
+			if (!theme::current_is_flat()) title_bar->setStyleSheet(
 				"ads--CDockAreaTitleBar {"
 				"background: rgb(32, 38, 45);"
 				"border-bottom: 1px solid rgba(255, 255, 255, 16);"
@@ -2787,11 +2809,13 @@ void ObjectEditor::addTypeTreeView(
 				tab_bar->setAttribute(Qt::WA_StyledBackground, true);
 				tab_bar->viewport()->setAutoFillBackground(true);
 
-				QPalette viewport_palette = tab_bar->viewport()->palette();
-				viewport_palette.setColor(QPalette::Window, QColor(32, 38, 45));
-				tab_bar->viewport()->setPalette(viewport_palette);
+				if (!theme::current_is_flat()) {
+					QPalette viewport_palette = tab_bar->viewport()->palette();
+					viewport_palette.setColor(QPalette::Window, QColor(32, 38, 45));
+					tab_bar->viewport()->setPalette(viewport_palette);
+				}
 
-				tab_bar->setStyleSheet(
+				if (!theme::current_is_flat()) tab_bar->setStyleSheet(
 					"ads--CDockAreaTabBar {"
 					"background: rgb(32, 38, 45);"
 					"border: none;"
@@ -2859,56 +2883,48 @@ void ObjectEditor::select_id(Category category, const std::string& id) {
 	const auto edit = explorer_area->currentDockWidget()->findChild<QLineEdit*>("search");
 	edit->clear();
 
+	const auto select = [&](QTreeView* view, BaseFilter* filter, auto* tree_model) {
+		QModelIndex index = filter->mapFromSource(tree_model->getIdIndex(id));
+		if (!index.isValid()) {
+			// The Custom toggle of the browser hides stock objects: show everything and look again.
+			for (auto* button : explorer_area->currentDockWidget()->findChildren<QToolButton*>("objectEditorChip")) {
+				if (button->text() == "All" && !button->isChecked()) {
+					button->setChecked(true);
+				}
+			}
+			index = filter->mapFromSource(tree_model->getIdIndex(id));
+		}
+		if (!index.isValid()) {
+			return;
+		}
+
+		view->setCurrentIndex(index);
+		view->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
+		emit view->clicked(index);
+	};
+
 	switch (category) {
-		case Category::unit: {
-			const auto index = unitTreeFilter->mapFromSource(unitTreeModel->getIdIndex(id));
-			unit_explorer->setCurrentIndex(index);
-			unit_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit unit_explorer->clicked(index);
+		case Category::unit:
+			select(unit_explorer, unitTreeFilter, unitTreeModel);
 			break;
-		}
-		case Category::item: {
-			const auto index = itemTreeFilter->mapFromSource(itemTreeModel->getIdIndex(id));
-			item_explorer->setCurrentIndex(index);
-			item_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit item_explorer->clicked(index);
+		case Category::item:
+			select(item_explorer, itemTreeFilter, itemTreeModel);
 			break;
-		}
-		case Category::doodad: {
-			const auto index = doodadTreeFilter->mapFromSource(doodadTreeModel->getIdIndex(id));
-			doodad_explorer->setCurrentIndex(index);
-			doodad_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit doodad_explorer->clicked(index);
+		case Category::doodad:
+			select(doodad_explorer, doodadTreeFilter, doodadTreeModel);
 			break;
-		}
-		case Category::destructible: {
-			const auto index = destructibleTreeFilter->mapFromSource(destructibleTreeModel->getIdIndex(id));
-			destructible_explorer->setCurrentIndex(index);
-			destructible_explorer->scrollTo(index, QAbstractItemView::PositionAtCenter);
-			emit destructible_explorer->clicked(index);
+		case Category::destructible:
+			select(destructible_explorer, destructibleTreeFilter, destructibleTreeModel);
 			break;
-		}
-		case Category::ability: {
-			const auto index = abilityTreeFilter->mapFromSource(abilityTreeModel->getIdIndex(id));
-			ability_explorer->setCurrentIndex(index);
-			ability_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit ability_explorer->clicked(index);
+		case Category::ability:
+			select(ability_explorer, abilityTreeFilter, abilityTreeModel);
 			break;
-		}
-		case Category::upgrade: {
-			const auto index = upgradeTreeFilter->mapFromSource(upgradeTreeModel->getIdIndex(id));
-			upgrade_explorer->setCurrentIndex(index);
-			upgrade_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit upgrade_explorer->clicked(index);
+		case Category::upgrade:
+			select(upgrade_explorer, upgradeTreeFilter, upgradeTreeModel);
 			break;
-		}
-		case Category::buff: {
-			const auto index = buffTreeFilter->mapFromSource(buffTreeModel->getIdIndex(id));
-			buff_explorer->setCurrentIndex(index);
-			buff_explorer->scrollTo(index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			emit buff_explorer->clicked(index);
+		case Category::buff:
+			select(buff_explorer, buffTreeFilter, buffTreeModel);
 			break;
-		}
 	}
 }
 

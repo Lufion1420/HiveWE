@@ -299,10 +299,15 @@ export class BaseTreeModel : public QAbstractProxyModel {
 		endResetModel();
 	}
 
+	/// The index of the item with this id, or an invalid index when the tree has no such item.
 	QModelIndex getIdIndex(const std::string& id) {
-		const BaseTreeItem* parent_item = items.at(id)->parent;
-		const int row = parent_item->children.indexOf(items.at(id));
-		return createIndex(row, 0, items.at(id));
+		const auto found = items.find(id);
+		if (found == items.end()) {
+			return {};
+		}
+		const BaseTreeItem* parent_item = found->second->parent;
+		const int row = parent_item->children.indexOf(found->second);
+		return createIndex(row, 0, found->second);
 	}
 
 	BaseTreeItem* rootItem;

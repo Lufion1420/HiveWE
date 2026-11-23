@@ -2195,7 +2195,10 @@ void HiveWE::open_qa_dialog() {
 		shown = new NewMapDialog(this);
 		shown->show();
 	} else if (name == "object-editor") {
-		shown = new ObjectEditor(nullptr);
+		auto* editor = new ObjectEditor(nullptr);
+		shown = editor;
+		// Opens the details panel of a stock unit so the field table, summary and bookmarks can be captured.
+		QTimer::singleShot(2000, editor, [editor]() { editor->select_id(ObjectEditor::Category::unit, "hfoo"); });
 	} else if (name == "asset-manager") {
 		shown = new AssetManager(this);
 	} else if (name == "map-protector") {
@@ -2209,9 +2212,14 @@ void HiveWE::open_qa_dialog() {
 		shown = new TileSetter(this);
 	} else if (name == "tile-pather") {
 		shown = new TilePather(this);
+	} else if (name == "import-object-data") {
+		// An empty package: the dialog shows its tabs and buttons with empty tables. Never accepted, so nothing is imported.
+		ObjectDataImportPackage package;
+		package.format = "qa-sample";
+		shown = new ObjectDataImportDialog(std::move(package), this);
+		shown->show();
 	} else {
-		// import-object-data needs a loaded package from disk, which a QA run has no sample for.
-		std::println(stderr, "--qa-open-dialog {}: this dialog cannot be opened by the hook yet.", name.toStdString());
+		std::println(stderr, "--qa-open-dialog {}: unknown dialog name.", name.toStdString());
 		return;
 	}
 

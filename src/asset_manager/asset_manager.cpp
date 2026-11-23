@@ -1,3 +1,4 @@
+#include "theme.h"
 #include "asset_manager.h"
 
 #include <QApplication>
@@ -316,7 +317,11 @@ AssetManager::AssetManager(QWidget* parent) : QDialog(parent) {
 	delete_button = new QPushButton(this);
 	delete_button->setIcon(QApplication::style()->standardIcon(QStyle::SP_TrashIcon));
 	delete_button->setText("Delete");
-	delete_button->setStyleSheet("QPushButton:enabled { color: #d9534f; font-weight: bold; }");
+	if (theme::current_is_flat()) {
+		delete_button->setProperty("danger", true);
+	} else {
+		delete_button->setStyleSheet("QPushButton:enabled { color: #d9534f; font-weight: bold; }");
+	}
 	action_row->addWidget(delete_button);
 	layout->addLayout(action_row);
 

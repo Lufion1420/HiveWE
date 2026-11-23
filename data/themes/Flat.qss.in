@@ -942,3 +942,143 @@ QFrame[sidebarPaletteHost="true"] {
 	background: transparent;
 	border: none;
 }
+
+/******************************************************/
+/* Object Editor (src/object_editor/object_editor.cpp): the inline dark style sheet is skipped under Flat, these rules replace it. */
+
+QToolButton#objectEditorChip, QToolButton#objectEditorSummaryAction {
+	background-color: @{color-button-top};
+	color: @{color-text};
+	border: 1px solid @{color-border-strong};
+	border-radius: @{radius-button}px;
+	padding: 0 @{space-3}px;
+	min-height: @{control-inner}px;
+}
+
+QToolButton#objectEditorChip:hover, QToolButton#objectEditorSummaryAction:hover {
+	background-color: @{color-button-hover};
+}
+
+QToolButton#objectEditorChip:checked, QToolButton#objectEditorSummaryAction:checked {
+	background-color: @{color-checked-bg};
+	border-color: @{color-checked-border};
+	color: @{color-selection-text};
+}
+
+QToolButton#objectEditorChip:disabled, QToolButton#objectEditorSummaryAction:disabled {
+	color: @{color-text-disabled};
+	border-color: @{color-border};
+}
+
+#objectEditorSummary, #objectEditorFilterBar, #objectEditorBookmarksBar, #objectEditorSectionStrip, #objectEditorBrowserBar {
+	background: transparent;
+	border: none;
+}
+
+#objectEditorSelectionStrip, #objectEditorInspectorBar {
+	background-color: @{color-base};
+	border: 1px solid @{color-border};
+	border-radius: @{radius-group}px;
+}
+
+#objectEditorInsights {
+	background: transparent;
+	border: 1px solid @{color-accent};
+	border-radius: @{radius-group}px;
+}
+
+#objectEditorEmptyState {
+	background: transparent;
+	border: 1px dashed @{color-border-strong};
+	border-radius: @{radius-group}px;
+}
+
+#objectEditorPill {
+	background: transparent;
+	color: @{color-warn};
+	border: 1px solid @{color-warn};
+	border-radius: 2px;
+	padding: 0 @{space-2}px;
+}
+
+#objectEditorBrowserStack {
+	background-color: @{color-base};
+	border: 1px solid @{color-border};
+}
+
+#objectEditorBrowserContainer, #objectEditorDetailsRoot, #objectEditorDetailsScrollContainer {
+	background-color: @{color-window};
+}
+
+QScrollArea#objectEditorDetailsScrollArea {
+	background-color: @{color-window};
+	border: none;
+}
+
+#objectEditorColumnHeader {
+	background-color: @{color-window};
+	border-bottom: 1px solid @{color-border};
+}
+
+#objectEditorSummaryTitle {
+	font-size: @{font-size-heading}px;
+	font-weight: @{font-weight-strong};
+}
+
+#objectEditorBrowserTitle, #objectEditorSelectionTitle, #objectEditorInsightsTitle, #objectEditorEmptyTitle {
+	font-weight: @{font-weight-strong};
+}
+
+#objectEditorSummaryMeta, #objectEditorSummaryKey, #objectEditorSelectionMeta, #objectEditorInsightsMeta, #objectEditorEmptyMeta,
+#objectEditorFilterState, #objectEditorBrowserMeta, #objectEditorInspectorMeta {
+	color: @{color-text-muted};
+}
+
+/******************************************************/
+/* New Create Map dialog (src/menus/new_map_dialog.cpp) */
+
+QLabel#newMapTitle {
+	font-size: @{font-size-heading}px;
+	font-weight: @{font-weight-strong};
+}
+
+QLabel#newMapIntro, QLabel#newMapSectionSubtitle {
+	color: @{color-text-muted};
+	font-size: @{font-size-small}px;
+}
+
+QFrame#newMapSection, QFrame#newMapSummaryCard {
+	background: transparent;
+	border: 1px solid @{color-border};
+	border-radius: @{radius-group}px;
+}
+
+QFrame#newMapSummaryCard, QFrame#newMapTilesetPreview {
+	background-color: @{color-base};
+	border: 1px solid @{color-border};
+}
+
+QLabel#newMapSectionTitle {
+	font-weight: @{font-weight-strong};
+}
+
+QLabel#newMapSummaryLabel {
+	color: @{color-text-muted};
+	font-size: @{font-size-small}px;
+	font-weight: @{font-weight-strong};
+}
+
+QLabel#newMapSummaryValue {
+	font-size: @{font-size-heading}px;
+	font-weight: @{font-weight-strong};
+}
+
+QLabel#newMapTileThumb {
+	border: 1px solid @{color-border};
+	padding: 2px;
+}
+
+QPushButton[danger="true"]:enabled {
+	color: @{color-error};
+	font-weight: @{font-weight-strong};
+}

@@ -242,7 +242,8 @@ bool SingleModel::is_modified_row(const int row) const {
 }
 
 bool SingleModel::starts_new_category(const int row) const {
-	return row == 0 || category_label(row - 1) != category_label(row);
+	// A row without a category (Gameplay Constants) gets no empty caption band.
+	return !category_label(row).isEmpty() && (row == 0 || category_label(row - 1) != category_label(row));
 }
 
 bool SingleModel::is_common_row(const int row) const {

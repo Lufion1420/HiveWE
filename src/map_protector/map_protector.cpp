@@ -1,3 +1,4 @@
+#include "hivewe.h"
 #include "map_protector.h"
 
 import std;
@@ -386,7 +387,8 @@ void MapProtector::load_settings() {
 	const bool use_current_map = settings.value("useCurrentMap", default_use_current_map).toBool();
 	source_current_map_radio->setChecked(use_current_map);
 	source_external_radio->setChecked(!use_current_map);
-	source_path_edit->setText(settings.value("sourcePath", "").toString());
+	// A --qa-offscreen capture must not show the user's saved map path.
+	source_path_edit->setText(HiveWE::qa_offscreen ? QString() : settings.value("sourcePath", "").toString());
 	// outputPath is deliberately not restored: it must always default freshly from whichever
 	// source is selected (see populate_default_output_path()), not a stale path remembered from a
 	// previous, possibly unrelated map.
@@ -407,6 +409,11 @@ void MapProtector::load_settings() {
 }
 
 void MapProtector::save_settings() const {
+	// An automated --qa-offscreen run must not write the user's saved Map Protector settings.
+	if (HiveWE::qa_offscreen) {
+		return;
+	}
+
 	QSettings settings;
 	settings.beginGroup("MapProtector");
 	settings.setValue("useCurrentMap", source_current_map_radio->isChecked());

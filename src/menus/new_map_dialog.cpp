@@ -1,4 +1,5 @@
 #include "new_map_dialog.h"
+#include "theme.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -44,7 +45,8 @@ NewMapDialog::NewMapDialog(QWidget* parent) : QDialog(parent) {
 	setModal(true);
 	resize(760, 520);
 
-	setStyleSheet(
+	// The Flat themes style this dialog from the application style sheet (data/themes/Flat.qss.in).
+	if (!theme::current_is_flat()) setStyleSheet(
 		"QDialog {"
 		"background: rgb(17, 23, 31);"
 		"color: rgb(234, 239, 244);"
@@ -210,7 +212,7 @@ NewMapDialog::NewMapDialog(QWidget* parent) : QDialog(parent) {
 
 	playable_summary = new QLabel;
 	playable_summary->setWordWrap(true);
-	playable_summary->setStyleSheet("color: rgb(213, 223, 234); font-size: 13px;");
+	if (!theme::current_is_flat()) playable_summary->setStyleSheet("color: rgb(213, 223, 234); font-size: 13px;");
 	summary_layout->addWidget(playable_summary);
 
 	QLabel* tileset_label = new QLabel("Tileset Preview");

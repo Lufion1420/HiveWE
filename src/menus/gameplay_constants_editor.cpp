@@ -76,7 +76,18 @@ GameplayConstantsEditor::GameplayConstantsEditor(QWidget* parent) : QDialog(pare
 			view->setRowHeight(row, height);
 		}
 	};
-	const auto schedule_fit_rows = [view, fit_rows]() { QTimer::singleShot(0, view, fit_rows); };
+	// One refit per event loop pass, however many row signals a search change emits.
+	const auto fit_pending = std::make_shared<bool>(false);
+	const auto schedule_fit_rows = [view, fit_rows, fit_pending]() {
+		if (*fit_pending) {
+			return;
+		}
+		*fit_pending = true;
+		QTimer::singleShot(0, view, [fit_rows, fit_pending]() {
+			*fit_pending = false;
+			fit_rows();
+		});
+	};
 	connect(proxy_model, &QAbstractItemModel::rowsInserted, this, schedule_fit_rows);
 	connect(proxy_model, &QAbstractItemModel::rowsRemoved, this, schedule_fit_rows);
 	connect(proxy_model, &QAbstractItemModel::layoutChanged, this, schedule_fit_rows);

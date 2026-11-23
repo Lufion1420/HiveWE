@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
 				"  --qa-select-first    With --palette units or doodads: select the first unit or doodad of the map, adding a sample one in memory if the map has none (for screenshots).\n"
 				"  --qa-open-dialog <name>  Needs --qa-offscreen. Open one dialog or tool window with sample data after the map has loaded (never saved). Names:\n"
 				"                       settings, unit-properties, item-drop, map-settings, scenario, gameplay-constants, new-map, object-editor,\n"
-				"                       asset-manager, map-protector, import-object-data (not available yet), item-tables, config, tile-setter, tile-pather.\n"
+				"                       asset-manager, map-protector, import-object-data (empty package), item-tables, config, tile-setter, tile-pather.\n"
 				"  --qa-dialog-tab <n>  With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
