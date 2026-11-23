@@ -1,0 +1,101 @@
+﻿/* Shared widget classes. Each maps to a Qt widget (comment on the right). Placeholder ground textures (.tx-*) stand in for the
+   real BLP pixels that ground_texture_to_icon() would paint; Qt would show the actual texture. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--color-window); color: var(--color-text); font: var(--font-size-base)/1.25 var(--font-family); }
+body { width: 100vw; height: 100vh; overflow: hidden; }
+
+.win { width: 100%; height: 100%; display: flex; flex-direction: column; border: 1px solid var(--color-border-strong); background: var(--color-window); }
+.titlebar { height: 30px; display: flex; align-items: center; padding: 0 0 0 10px; gap: 8px; background: var(--color-window); border-bottom: 1px solid var(--color-border); flex: none; }
+.titlebar .ico { width: 14px; height: 14px; background: var(--color-accent); border-radius: 3px; }
+.titlebar .t { flex: 1; }
+.titlebar .wb { width: 40px; text-align: center; color: var(--color-text-muted); font-size: 14px; }
+.body { flex: 1; padding: 11px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.row { display: flex; gap: 6px; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.grow { flex: 1; min-width: 0; }
+.spacer { flex: 1; }
+
+.heading { font-size: var(--font-size-heading); font-weight: var(--font-weight-strong); }  /* QLabel, 600 */
+.muted { color: var(--color-text-muted); }
+.small { font-size: var(--font-size-small); }
+.strong { font-weight: var(--font-weight-strong); }
+.ok { color: var(--color-ok); } .warn { color: var(--color-warn); } .err { color: var(--color-error); }
+.mono { font-family: "Cascadia Mono", Consolas, monospace; }
+
+/* QPushButton */
+.btn { height: var(--control-height); padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--color-button-top); border: 1px solid var(--color-border); border-radius: var(--radius-button); color: var(--color-text); white-space: nowrap; }
+.btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text); min-width: 96px; }
+.btn.secondary { min-width: 96px; }
+.btn.disabled { color: var(--color-text-disabled); background: transparent; }
+.btn.primary.disabled { background: var(--color-button-top); border-color: var(--color-border); color: var(--color-text-disabled); }
+
+/* QLineEdit / QComboBox / QSpinBox */
+.edit { height: var(--control-height); padding: 0 6px; display: flex; align-items: center; background: var(--color-input-bg); border: 1px solid var(--color-border); border-radius: var(--radius-input); min-width: 0; overflow: hidden; white-space: nowrap; }
+.edit.focus { border-color: var(--color-focus); }
+.edit.error { border-color: var(--color-error); }
+.edit .ph { color: var(--color-text-disabled); }
+.combo { justify-content: space-between; }
+.combo::after { content: ""; width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 4px solid var(--color-text-muted); margin-left: 8px; flex: none; }
+.edit.disabled { color: var(--color-text-disabled); background: var(--color-alt-base); }
+
+/* QCheckBox / QRadioButton */
+.chk { display: inline-flex; align-items: center; gap: 6px; }
+.chk i { width: 14px; height: 14px; border: 1px solid var(--color-border-strong); border-radius: 3px; background: var(--color-input-bg); display: inline-block; position: relative; flex: none; }
+.chk.on i { background: var(--color-accent); border-color: var(--color-accent); }
+.chk.on i::after { content: "\2713"; position: absolute; left: 2px; top: -1px; color: #fff; font-size: 11px; font-weight: 700; }
+
+/* QGroupBox / section frame */
+.group { border: 1px solid var(--color-border); border-radius: var(--radius-group); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.group > .gt { margin: -17px 0 0 0; align-self: flex-start; background: var(--color-window); padding: 0 4px; font-weight: var(--font-weight-strong); }
+.hline { height: 1px; background: var(--color-border); }
+
+/* QTabWidget */
+.tabs { display: flex; border-bottom: 1px solid var(--color-border); gap: 2px; }
+.tabs .tab { padding: 5px 12px; color: var(--color-text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs .tab.sel { color: var(--color-text); border-bottom-color: var(--color-accent); }
+
+/* ---- ground textures (placeholders for real BLP pixels) ---- */
+.tx { background-color: var(--c, #777);
+  background-image: repeating-linear-gradient(45deg, rgba(0,0,0,.14) 0 2px, transparent 2px 6px), repeating-linear-gradient(-28deg, rgba(255,255,255,.09) 0 1px, transparent 1px 5px); }
+.tx-adrt { --c: #7a5a3a; } .tx-agrs { --c: #4f7a35; } .tx-arck { --c: #7d7f82; } .tx-agrd { --c: #6b6a38; }
+.tx-avin { --c: #3d5f2a; } .tx-adrg { --c: #5c6a30; } .tx-alvd { --c: #8a6a2a; } .tx-acbl { --c: #6a6258; }
+.tx-ldrt { --c: #8b6b47; } .tx-ldro { --c: #6f5238; } .tx-lrok { --c: #8d8f94; } .tx-lgrs { --c: #5d8a3c; } .tx-lgrd { --c: #77723f; }
+.tx-cx01 { --c: #6a4a7a; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.16) 0 8px, transparent 8px 16px), repeating-linear-gradient(90deg, rgba(0,0,0,.2) 0 8px, transparent 8px 16px); }
+.tx-cx02 { --c: #3f6f8f; }
+.tx-cx03 { --c: #a8923c; }
+
+/* QPushButton with icon, 64 px icon, fixed 72 px (was 64 so the checked frame had no room) */
+.tile { width: 72px; height: 72px; padding: 3px; background: var(--color-button-top); border: 1px solid var(--color-border); border-radius: var(--radius-button); position: relative; flex: none; }
+.tile .img { width: 64px; height: 64px; position: relative; }
+.tile.checked { background: var(--color-checked-bg); border: 2px solid var(--color-checked-border); padding: 2px; }
+.tile.disabled { opacity: .45; }
+/* painted into the QIcon by code (QPainter), not child widgets */
+.tile .id { position: absolute; left: 0; right: 0; bottom: 0; height: 14px; background: rgba(0,0,0,.62); color: #fff; font-size: 10px; line-height: 14px; padding-left: 3px; font-family: "Cascadia Mono", Consolas, monospace; }
+.tile .badge { position: absolute; right: 0; top: 0; height: 13px; padding: 0 4px; font-size: 9px; line-height: 13px; font-weight: 600; color: #fff; }
+.badge.new { background: #2e8b3d; } .badge.rm { background: #c9372c; } .badge.lock { background: #4e5157; } .badge.cust { background: #8a4fd0; }
+.tile.removed .img { opacity: .5; }
+.tile.removed .img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top right, transparent 47%, #e5534b 47%, #e5534b 53%, transparent 53%); }
+.tiles { display: flex; flex-wrap: wrap; gap: 4px; }
+.thumb { width: 32px; height: 32px; border: 1px solid var(--color-border-strong); flex: none; }
+.thumb.s24 { width: 24px; height: 24px; }
+.thumb.s48 { width: 48px; height: 48px; }
+.big { width: 128px; height: 128px; border: 1px solid var(--color-border-strong); }
+.swatch { width: 96px; height: 96px; border: 1px solid var(--color-border-strong); display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+.swatch div { border-right: 1px solid rgba(0,0,0,.10); border-bottom: 1px solid rgba(0,0,0,.10); }
+
+/* QTreeWidget / QTableWidget / QListWidget */
+.view { background: var(--color-base); border: 1px solid var(--color-border); border-radius: var(--radius-input); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.vh { display: flex; background: var(--color-alt-base); border-bottom: 1px solid var(--color-border); height: 22px; align-items: center; color: var(--color-text-muted); }
+.vh > div, .vr > div { padding: 0 6px; display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.vr { display: flex; min-height: 36px; align-items: center; border-bottom: 1px solid var(--color-border); }
+.vr.sel { background: var(--color-selection); }
+.vr.tight { min-height: 22px; }
+.vr.grp { background: var(--color-alt-base); min-height: 22px; font-weight: var(--font-weight-strong); }
+.vr.alt { background: var(--color-alt-base); }
+.strike { text-decoration: line-through; color: var(--color-text-muted); }
+.arrow { color: var(--color-text-muted); font-size: 14px; }
+.pill { padding: 0 6px; height: 16px; line-height: 16px; border: 1px solid currentColor; border-radius: 3px; font-size: 10px; }
+.note { display: block; }
+.note b { font-weight: var(--font-weight-strong); }
+

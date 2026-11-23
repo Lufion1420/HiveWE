@@ -4,8 +4,8 @@ import std;
 
 void ModelEditorCamera::reset() {
 	distance = 20;
-	horizontal_angle = 0.0f;
-	vertical_angle = -0.977f;
+	horizontal_angle = default_horizontal_angle;
+	vertical_angle = default_vertical_angle;
 	update(0);
 }
 
@@ -48,7 +48,8 @@ void ModelEditorCamera::update(double delta) {
 void ModelEditorCamera::mouse_move_event(QMouseEvent* event, const InputHandler& my_input_handler) {
 	glm::vec2 diff = my_input_handler.mouse - my_input_handler.previous_mouse;
 
-	if (rolling || (event->buttons() == Qt::RightButton && event->modifiers() & Qt::ControlModifier)) {
+	// Left drag, middle drag or Ctrl + right drag orbit; plain right drag pans.
+	if (rolling || event->buttons() == Qt::LeftButton || (event->buttons() == Qt::RightButton && event->modifiers() & Qt::ControlModifier)) {
 		horizontal_angle += diff.x * 0.01f;
 		vertical_angle -= diff.y * 0.01f;
 		vertical_angle = std::max(-glm::pi<float>() / 2.f + 0.001f, std::min(vertical_angle, glm::pi<float>() / 2.f - 0.001f));

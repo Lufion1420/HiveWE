@@ -1,0 +1,22 @@
+<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><title>Import Custom Tile / Folder</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css"><script src="common.js"></script></head>
+<body><div class="win" id="w"></div>
+<script>
+const r = (on,id,file,size,tid,name,status,cls,sel) => `<div class="vr ${sel?'sel':''}" style="min-height:34px"><div style="width:34px">${chk(on,'')}</div><div style="width:42px">${id?thumb(id,'s24'):'<div class="thumb s24" style="border-style:dashed"></div>'}</div>
+ <div style="width:150px">${file}</div><div style="width:76px" class="muted">${size}</div><div style="width:66px"><span class="edit ${cls==='err'?'error':''}" style="height:22px;width:56px"><span class="mono">${tid}</span></span></div>
+ <div class="grow">${name}</div><div style="width:150px" class="small ${cls}">${status}</div></div>`;
+w.innerHTML = titlebar('Import Custom Tile') + `
+<div class="body" style="gap:8px">
+ <div class="tabs"><div class="tab">Single File</div><div class="tab sel">Folder</div></div>
+ <div class="row"><div style="width:60px" class="muted">Folder</div><span class="edit grow">D:\\Textures\\Frostmourne Tiles</span><span class="btn">Browse&hellip;</span></div>
+ <div class="small muted">3 BLP/TGA files found. Tile IDs are suggested from the first free Cxxx.</div>
+ <div class="view grow">
+  <div class="vh"><div style="width:34px"></div><div style="width:42px"></div><div style="width:150px">File</div><div style="width:76px">Size</div><div style="width:66px">Tile ID</div><div class="grow">Name</div><div style="width:150px">Status</div></div>
+  ${r(true,'Cx01','marble_tile.blp','256 &times; 256','Cx01','Marble Tiles','Ready','ok',true)}
+  ${r(true,'Cx02','frozen_moss.blp','256 &times; 256','Cx02','Frozen Moss','Ready','ok')}
+  ${r(false,'','sand stone.tga','100 &times; 100','Cx03','Sand Stone','Not a power of two','err')}
+  ${r(false,'Adrt','dirt.blp','64 &times; 64','Adrt','Dirt','ID already in use','err')}
+ </div>
+ <div class="row"><span class="small muted">Imported tiles are added to the map imports; none are added to the map tileset until you press Add.</span><span class="spacer"></span><span class="btn primary">Import 2 Tiles</span><span class="btn secondary">Cancel</span></div>
+</div>`;
+</script></body></html>

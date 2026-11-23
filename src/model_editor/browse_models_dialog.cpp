@@ -39,6 +39,11 @@ namespace fs = std::filesystem;
 
 namespace {
 	constexpr int category_all = -1;
+	// Sidebar rows that filter by kind (see model_kind) instead of by folder category.
+	constexpr int filter_models = -2;
+	constexpr int filter_effects = -3;
+	/// Sidebar rows before the first category row: "All models", "Models", "VFX/SFX".
+	constexpr int category_row_offset = 3;
 
 	QString to_qstring(const fs::path& path) {
 		return QString::fromStdWString(path.generic_wstring());
@@ -200,6 +205,9 @@ BrowseModelsDialog::BrowseModelsDialog(QWidget* parent) : QDialog(parent, Qt::Wi
 	ModelCatalog catalog = enumerate_catalog();
 	total_models = catalog.total();
 	category_counts.assign(catalog.counts.begin(), catalog.counts.end());
+	for (const ModelEntry& entry : catalog.entries) {
+		++(model_kind(entry) == ModelKind::Effect ? effect_count : model_count);
+	}
 	list_model = new ModelListModel(std::move(catalog.entries), *cache, this);
 
 	const QLocale locale;
@@ -215,6 +223,12 @@ BrowseModelsDialog::BrowseModelsDialog(QWidget* parent) : QDialog(parent, Qt::Wi
 		auto* all_item = new QListWidgetItem("All models", categories);
 		all_item->setData(Qt::UserRole, category_all);
 		all_item->setData(Qt::UserRole + 1, locale.toString(static_cast<qulonglong>(total_models)));
+		auto* models_item = new QListWidgetItem("Models", categories);
+		models_item->setData(Qt::UserRole, filter_models);
+		models_item->setData(Qt::UserRole + 1, locale.toString(static_cast<qulonglong>(model_count)));
+		auto* effects_item = new QListWidgetItem("VFX/SFX", categories);
+		effects_item->setData(Qt::UserRole, filter_effects);
+		effects_item->setData(Qt::UserRole + 1, locale.toString(static_cast<qulonglong>(effect_count)));
 		for (int i = 0; i < static_cast<int>(ModelCategory::Count); ++i) {
 			const auto category = static_cast<ModelCategory>(i);
 			auto* item = new QListWidgetItem(QString::fromUtf8(model_category_label(category).data()), categories);
@@ -339,8 +353,11 @@ BrowseModelsDialog::BrowseModelsDialog(QWidget* parent) : QDialog(parent, Qt::Wi
 		}
 	});
 	connect(view->selectionModel(), &QItemSelectionModel::currentChanged, this, [this](const QModelIndex& current) {
-		open_button->setEnabled(current.isValid());
+		open_button->setEnabled(current.isValid() || picker);
 		if (current.isValid()) {
+			if (path_edit) {
+				path_edit->setText(list_model->path_at(current.row()));
+			}
 			show_preview(list_model->path_at(current.row()));
 		}
 	});
@@ -350,7 +367,7 @@ BrowseModelsDialog::BrowseModelsDialog(QWidget* parent) : QDialog(parent, Qt::Wi
 	// filled by hand: currentRowChanged is not emitted when the row is already current, which would leave the grid empty.
 	{
 		const QSignalBlocker blocker(categories);
-		categories->setCurrentRow(category_counts[static_cast<int>(ModelCategory::Units)] > 0 ? 1 + static_cast<int>(ModelCategory::Units) : 0);
+		categories->setCurrentRow(category_counts[static_cast<int>(ModelCategory::Units)] > 0 ? category_row_offset + static_cast<int>(ModelCategory::Units) : 0);
 	}
 	apply_filter();
 }
@@ -361,7 +378,8 @@ BrowseModelsDialog::~BrowseModelsDialog() {
 
 void BrowseModelsDialog::accept() {
 	// Open can only be enabled with a selection, but a double click or Enter must not slip through an empty one either.
-	if (selected_path().isEmpty()) {
+	// A picker accepts anything, an empty line too (it clears the field).
+	if (!picker && selected_path().isEmpty()) {
 		return;
 	}
 	QDialog::accept();
@@ -371,6 +389,39 @@ void BrowseModelsDialog::done(const int result) {
 	cache->cancel();
 	visible_timer->stop();
 	QDialog::done(result);
+}
+
+void BrowseModelsDialog::set_picker_mode(const QString& current) {
+	picker = true;
+	open_button->setText("OK");
+	open_button->setEnabled(true);
+
+	path_edit = new QLineEdit(current);
+	path_edit->setObjectName("browsePath");
+	path_edit->setPlaceholderText("Model path (empty clears the field)");
+	auto* row = new QHBoxLayout;
+	row->addWidget(new QLabel("Path"));
+	row->addWidget(path_edit, 1);
+	auto* box = static_cast<QVBoxLayout*>(layout());
+	box->insertLayout(box->count() - 1, row);
+
+	// Preselect the current value when the catalog has it (the stored value may be .mdl or use backslashes). "All models" so it is listed.
+	if (!current.isEmpty()) {
+		std::string key = normalize_typed_model_path(current.toStdString());
+		if (const auto dot = key.rfind('.'); dot != std::string::npos) {
+			key.replace(dot, std::string::npos, ".mdx");
+		}
+		categories->setCurrentRow(0);
+		if (const int row_index = list_model->row_for(QString::fromStdString(key)); row_index >= 0) {
+			view->setCurrentIndex(list_model->index(row_index, 0));
+			view->scrollTo(list_model->index(row_index, 0), QAbstractItemView::PositionAtCenter);
+		}
+	}
+	path_edit->setText(current); // after the preselect, which overwrote it with the catalog spelling
+}
+
+QString BrowseModelsDialog::picked_text() const {
+	return path_edit ? QString::fromStdString(normalize_typed_model_path(path_edit->text().toStdString())) : QString();
 }
 
 QString BrowseModelsDialog::selected_path() const {
@@ -385,17 +436,29 @@ void BrowseModelsDialog::select_category(const int row) {
 
 void BrowseModelsDialog::apply_filter() {
 	std::optional<ModelCategory> category;
-	if (const auto* item = categories->currentItem(); item && item->data(Qt::UserRole).toInt() != category_all) {
-		category = static_cast<ModelCategory>(item->data(Qt::UserRole).toInt());
+	std::optional<ModelKind> kind;
+	if (const auto* item = categories->currentItem()) {
+		const int value = item->data(Qt::UserRole).toInt();
+		if (value == filter_models) {
+			kind = ModelKind::Model;
+		} else if (value == filter_effects) {
+			kind = ModelKind::Effect;
+		} else if (value != category_all) {
+			category = static_cast<ModelCategory>(value);
+		}
 	}
 	// A model reset clears the current row without a currentChanged, so Open is switched off by hand and back on only for a real row.
 	const QString previous = selected_path();
-	open_button->setEnabled(false);
-	list_model->show(filter_model_entries(list_model->entries(), category, search->text().toStdString()));
+	const QString typed = path_edit ? path_edit->text() : QString();
+	open_button->setEnabled(picker);
+	list_model->show(filter_model_entries(list_model->entries(), category, search->text().toStdString(), kind));
 	if (const int row = list_model->row_for(previous); row >= 0) {
 		view->setCurrentIndex(list_model->index(row, 0)); // still listed: keep it selected (currentChanged enables Open)
 	}
-	open_button->setEnabled(view->currentIndex().isValid());
+	open_button->setEnabled(view->currentIndex().isValid() || picker);
+	if (path_edit) {
+		path_edit->setText(typed); // re-selecting the previous row above must not replace what the user typed
+	}
 	view->scrollToTop();
 	update_status();
 	visible_timer->start(0);
@@ -405,7 +468,10 @@ void BrowseModelsDialog::update_status() {
 	const QLocale locale;
 	const auto* item = categories->currentItem();
 	const int category = item ? item->data(Qt::UserRole).toInt() : category_all;
-	const std::size_t in_category = category == category_all ? total_models : category_counts[category];
+	const std::size_t in_category = category == category_all ? total_models
+		: category == filter_models                           ? model_count
+		: category == filter_effects                          ? effect_count
+															   : category_counts[category];
 	status->setText(QString("%1 models in %2, %3 shown")
 						.arg(locale.toString(static_cast<qulonglong>(in_category)))
 						.arg(item ? item->text() : QString("All models"))
@@ -504,7 +570,7 @@ void BrowseModelsDialog::show_preview(const QString& path) {
 	set_value(1, locale.toString(static_cast<qulonglong>(counts.vertices)));
 	set_value(2, locale.toString(static_cast<qulonglong>(counts.triangles)));
 	set_value(3, locale.toString(static_cast<qulonglong>(mdx->sequences.size())));
-	set_value(4, locale.toString(static_cast<qulonglong>((file_size + 512) / 1024)) + " KB");
+	set_value(4, QString::fromStdString(format_file_size_mb(file_size)));
 }
 
 // --- --qa-open-dialog browse-models ------------------------------------------------------------------------------------------------------------
@@ -581,7 +647,7 @@ void BrowseModelsDialog::qa_step() {
 					  .arg(list_model->rowCount())
 					  .arg(open_button->isEnabled());
 		search->clear();
-		categories->setCurrentRow(1 + static_cast<int>(ModelCategory::Map)); // an empty category
+		categories->setCurrentRow(category_row_offset + static_cast<int>(ModelCategory::Map)); // an empty category
 		next(3);
 	} else if (qa_phase == 3) {
 		if (qa_phase_clock.elapsed() < 400) {
@@ -591,7 +657,7 @@ void BrowseModelsDialog::qa_step() {
 					  .arg(list_model->rowCount() == category_counts[static_cast<int>(ModelCategory::Map)] && !open_button->isEnabled() ? "PASS" : "FAIL")
 					  .arg(list_model->rowCount())
 					  .arg(open_button->isEnabled());
-		categories->setCurrentRow(1 + static_cast<int>(ModelCategory::Units));
+		categories->setCurrentRow(category_row_offset + static_cast<int>(ModelCategory::Units));
 		next(4);
 	} else if (qa_phase == 4) {
 		if (!settled()) {
@@ -600,6 +666,36 @@ void BrowseModelsDialog::qa_step() {
 		qa_log << QString("%1 [category] Units shows %2 of %3 rows again").arg(list_model->rowCount() == static_cast<int>(category_counts[static_cast<int>(ModelCategory::Units)]) ? "PASS" : "FAIL")
 					  .arg(list_model->rowCount())
 					  .arg(category_counts[static_cast<int>(ModelCategory::Units)]);
+		categories->setCurrentRow(2); // VFX/SFX
+		next(6);
+	} else if (qa_phase == 6) {
+		if (qa_phase_clock.elapsed() < 400) {
+			return;
+		}
+		const QLocale locale;
+		const bool effects_ok = list_model->rowCount() == static_cast<int>(effect_count)
+			&& status->text().startsWith(locale.toString(static_cast<qulonglong>(effect_count)) + " models in VFX/SFX");
+		qa_log << QString("%1 [kind] VFX/SFX shows %2 rows, expected %3, status '%4'")
+					  .arg(effects_ok ? "PASS" : "FAIL")
+					  .arg(list_model->rowCount())
+					  .arg(effect_count)
+					  .arg(status->text());
+		categories->setCurrentRow(1); // Models
+		next(7);
+	} else if (qa_phase == 7) {
+		if (qa_phase_clock.elapsed() < 400) {
+			return;
+		}
+		const QLocale locale;
+		const bool models_ok = list_model->rowCount() == static_cast<int>(model_count)
+			&& status->text().startsWith(locale.toString(static_cast<qulonglong>(model_count)) + " models in Models");
+		qa_log << QString("%1 [kind] Models shows %2 rows, expected %3, status '%4'; Models + VFX/SFX = %5, total %6")
+					  .arg(models_ok && model_count + effect_count == total_models ? "PASS" : "FAIL")
+					  .arg(list_model->rowCount())
+					  .arg(model_count)
+					  .arg(status->text())
+					  .arg(model_count + effect_count)
+					  .arg(total_models);
 		view->setCurrentIndex(list_model->index(0, 0));
 		next(5);
 	} else if (qa_phase == 5) {

@@ -1,6 +1,6 @@
 #include "single_model.h"
 
-#include "model_view.h"
+#include "model_editor/browse_models_dialog.h"
 
 #include <QPainter>
 #include <QPlainTextEdit>
@@ -633,7 +633,7 @@ QWidget* TableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem
 	} else if (type == "hotkey") {
 		return create_hotkey_editor(parent);
 	} else if (type == "model") {
-		return create_model_editor(parent);
+		return create_model_editor(parent, index.data(Qt::EditRole).toString());
 	} else if (type == "targetList") {
 		return create_target_list_editor(parent);
 	} else if (type == "unitList") {
@@ -712,8 +712,7 @@ void TableDelegate::setEditorData(QWidget* editor, const QModelIndex& index) con
 			box->setChecked((mask & bit) != 0);
 		}
 	} else if (type == "model") {
-		ModelView* list = editor->findChild<ModelView*>("modelView");
-		list->set_current_model_path(index.data(Qt::EditRole).toString());
+		editor->setProperty("modelPath", index.data(Qt::EditRole).toString());
 	} else if (type == "unitList") {
 		QListWidget* list = editor->findChild<QListWidget*>("unitList");
 
@@ -827,8 +826,7 @@ void TableDelegate::setModelData(QWidget* editor, QAbstractItemModel* model, con
 	} else if (type == "hotkey") {
 		model->setData(index, static_cast<QLineEdit*>(editor)->text().trimmed().left(1).toUpper(), Qt::EditRole);
 	} else if (type == "model") {
-		ModelView* list = editor->findChild<ModelView*>("modelView");
-		model->setData(index, list->current_model_path());
+		model->setData(index, editor->property("modelPath").toString());
 	} else if (type == "unitList") {
 		QListWidget* list = editor->findChild<QListWidget*>("unitList");
 
@@ -962,27 +960,19 @@ QWidget* TableDelegate::create_list_editor(QWidget* parent) const {
 	return editor;
 }
 
-QWidget* TableDelegate::create_model_editor(QWidget* parent) const {
+QWidget* TableDelegate::create_model_editor(QWidget* parent, const QString& current_path) const {
 	auto editor = new QWidget(parent);
 
-	QDialog* dialog = new QDialog(editor, Qt::WindowTitleHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+	// The same Browse Models dialog the Model Editor uses. It returns the chosen path on Open or double click; the path travels to
+	// setModelData as the "modelPath" property of `editor` (set from setEditorData, replaced by the path line on accept).
+	auto* dialog = new BrowseModelsDialog(editor);
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
-	dialog->resize(1200, 720);
 	dialog->setWindowModality(Qt::WindowModality::WindowModal);
-
-	// Force native window, otherwise ModelView causes switch to OpenGL-capable
-	// surface which unmaps the window and shows white flash.
-	dialog->setAttribute(Qt::WA_NativeWindow);
-	(void)dialog->winId();
-
-	ModelView* view = new ModelView();
-	view->setObjectName("modelView");
-
-	QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-	connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
-	connect(buttonBox, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+	// Free text like the old picker: any path, and an empty one clears the field.
+	dialog->set_picker_mode(current_path);
 
 	connect(dialog, &QDialog::accepted, [=]() {
+		editor->setProperty("modelPath", dialog->picked_text());
 		const auto delegate = const_cast<TableDelegate*>(this);
 		emit delegate->commitData(editor);
 		emit delegate->closeEditor(editor);
@@ -992,10 +982,6 @@ QWidget* TableDelegate::create_model_editor(QWidget* parent) const {
 		const auto delegate = const_cast<TableDelegate*>(this);
 		emit delegate->closeEditor(editor);
 	});
-
-	QVBoxLayout* layout = new QVBoxLayout(dialog);
-	layout->addWidget(view);
-	layout->addWidget(buttonBox);
 
 	dialog->show();
 

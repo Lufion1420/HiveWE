@@ -1,0 +1,35 @@
+<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><title>Change Tileset / A Icon grid + preview / Default</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css"><script src="common.js"></script></head>
+<body><div class="win" id="w"></div>
+<script>
+const sel = 'Agrd';
+const map = [['Adrt',{badge:['lock','CLIFF']}],['Agrs'],['Arck',{badge:['lock','CLIFF']}],['Agrd',{checked:true}],['Avin'],['Adrg'],['Alvd'],['Acbl']];
+const avail = ['Ldrt','Ldro','Lrok','Lgrs','Lgrd'];
+w.innerHTML = titlebar('Change Tileset') + `
+<div class="body"><div class="row" style="align-items:stretch;flex:1;gap:10px">
+ <div class="col grow">
+  <div class="heading">Map Tileset <span class="muted small strong" style="font-weight:400">8 of 64 tiles</span></div>
+  <div class="tiles">${map.map(([i,o])=>tile(i,o)).join('')}</div>
+  <div class="row"><span class="btn">Shift Left</span><span class="btn">Shift Right</span><span class="btn">Remove</span><span class="spacer"></span><span class="muted">Tile: Grassy Dirt</span></div>
+  <div class="hline" style="margin:4px 0"></div>
+  <div class="row"><span class="heading">Additional Tiles</span><span class="edit combo grow">Lordaeron Summer</span><span class="btn">Import Custom Tile&hellip;</span></div>
+  <div class="tiles">${avail.map(i=>tile(i,i==='Lgrs'?{checked:true}:{})).join('')}</div>
+  <div class="row"><span class="btn">Add</span><span class="spacer"></span><span class="muted">Tile: Grass</span></div>
+  <div class="group" style="margin-top:14px;flex:1"><div class="gt">Tile Mapping (old &#8594; new)</div>
+    <div class="muted" style="padding:14px 4px">No changes yet. Add or remove tiles to see which old tile becomes which new tile.</div>
+  </div>
+ </div>
+ <div class="col" style="width:176px;flex:none">
+  <div class="heading">Preview <span class="muted small" style="font-weight:400">Map tileset</span></div>
+  <div class="big tx tx-agrd"></div>
+  <div class="strong">Grassy Dirt</div>
+  <div class="small"><span class="muted">Tile ID </span><span class="mono">Agrd</span></div>
+  <div class="small muted" style="word-break:break-all">TerrainArt\\Ashenvale\\Ashen_GrassyDirt.blp</div>
+  <div class="small muted" style="margin-top:4px">Terrain swatch (3 &times; 3 cells)</div>
+  ${swatch('Agrd')}
+  <div class="small muted" style="margin-top:4px">Pathing</div>
+  <div class="small">${chk(false,'Unwalkable')}</div><div class="small">${chk(false,'Unflyable')}</div><div class="small">${chk(false,'Unbuildable')}</div>
+ </div>
+</div>
+<div class="row"><span class="spacer"></span><span class="btn primary">OK</span><span class="btn secondary">Cancel</span></div></div>`;
+</script></body></html>

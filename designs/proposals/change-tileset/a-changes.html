@@ -1,0 +1,44 @@
+﻿<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><title>Change Tileset / A Icon grid + preview / Changes pending, custom tile selected</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css"><script src="common.js"></script></head>
+<body><div class="win" id="w"></div>
+<script>
+const map = [['Adrt',{badge:['lock','CLIFF']}],['Agrs'],['Arck',{badge:['lock','CLIFF']}],['Agrd',{removed:true,badge:['rm','REMOVE']}],['Avin',{removed:true,badge:['rm','REMOVE']}],['Adrg'],['Alvd'],
+ ['Acbl'],['Lgrs',{badge:['new','NEW']}],['Cx01',{checked:true,badge:['cust','CUSTOM']}]];
+const avail = ['Cx01','Cx02','Cx03'];
+const row = (o,oc,n,nc) => `<div class="vr"><div style="width:230px">${thumb(o)}<span><span class="strike">${T[o][0]}</span> <span class="mono muted small">${o}</span></span></div>
+  <div style="width:30px" class="arrow">&#8594;</div><div class="grow">${thumb(n)}<span class="edit combo" style="width:240px;flex:none;height:22px">${T[n][0]} &nbsp;<span class="mono muted small">${n}</span></span></div>
+</div>`;
+w.innerHTML = titlebar('Change Tileset') + `
+<div class="body"><div class="row" style="align-items:stretch;flex:1;gap:10px">
+ <div class="col grow">
+  <div class="heading">Map Tileset <span class="muted small" style="font-weight:400">10 of 64 tiles</span></div>
+  <div class="tiles">${map.map(([i,o])=>tile(i,o)).join('')}</div>
+  <div class="row"><span class="btn">Shift Left</span><span class="btn">Shift Right</span><span class="btn">Remove</span><span class="spacer"></span><span class="muted">Tile: Marble Tiles (custom)</span></div>
+  <div class="hline" style="margin:4px 0"></div>
+  <div class="row"><span class="heading">Additional Tiles</span><span class="edit combo grow">Custom (map imports)</span><span class="btn">Import Custom Tile&hellip;</span></div>
+  <div class="tiles">${tile('Cx01',{disabled:true,badge:['cust','CUSTOM']})}${tile('Cx02',{badge:['cust','CUSTOM']})}${tile('Cx03',{badge:['cust','CUSTOM']})}</div>
+  <div class="row"><span class="btn disabled">Add</span><span class="spacer"></span><span class="muted">Tile: Marble Tiles (already in tileset)</span></div>
+  <div class="group" style="margin-top:14px;flex:1"><div class="gt">Tile Mapping (old &#8594; new) <span class="muted small" style="font-weight:400">2 removed, 2 added, 6 kept</span></div>
+    <div class="view"><div class="vh"><div style="width:230px">Removed tile</div><div style="width:30px"></div><div class="grow">Replace with</div></div>
+     ${row('Agrd','','Adrg','')}${row('Avin','','Agrs','')}
+    </div>
+    <div class="small muted">New tiles Lgrs and Cx01 are appended after Acbl; no existing cells change for them.</div>
+  </div>
+ </div>
+ <div class="col" style="width:176px;flex:none">
+  <div class="heading">Preview <span class="muted small" style="font-weight:400">Map tileset</span></div>
+  <div class="big tx tx-cx01"></div>
+  <div class="strong">Marble Tiles</div>
+  <div class="small"><span class="muted">Tile ID </span><span class="mono">Cx01</span> <span class="pill" style="color:#a66be0">CUSTOM</span></div>
+  <div class="small muted" style="word-break:break-all">ReplaceableTextures\\CustomTiles\\marble_tile.blp</div>
+  <div class="small muted" style="margin-top:4px">Terrain swatch (3 &times; 3 cells)</div>
+  ${swatch('Cx01')}
+  <div class="small muted" style="margin-top:4px">Pathing</div>
+  <div class="small">${chk(false,'Unwalkable')}</div><div class="small">${chk(false,'Unflyable')}</div><div class="small">${chk(false,'Unbuildable')}</div>
+ </div>
+</div>
+<div class="row"><span class="spacer"></span><span class="btn primary">OK</span><span class="btn secondary">Cancel</span></div></div>`;
+</script></body></html>
+
+
+

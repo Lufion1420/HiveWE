@@ -195,3 +195,47 @@ TEST_CASE("a map model with a non-ASCII name is catalogued, deduplicated and fou
 	CHECK(filter_model_entries(catalog.entries, std::nullopt, "custom").size() == 2);
 	CHECK(utf8_from_path(path_from_utf8(cyrillic)) == cyrillic);
 }
+
+TEST_CASE("model_kind: abilities and vfx/sfx/effect paths are effects, everything else is a model") {
+	const auto kind = [](const char* path, const ModelCategory category) { return model_kind(ModelEntry { path_from_utf8(path), category }); };
+	CHECK(kind("abilities/spells/human/stormbolt/stormboltmissile.mdx", ModelCategory::Abilities) == ModelKind::Effect);
+	CHECK(kind("units/human/footman/footman.mdx", ModelCategory::Units) == ModelKind::Model);
+	CHECK(kind("buildings/human/farm/farm.mdx", ModelCategory::Buildings) == ModelKind::Model);
+	CHECK(kind("doodads/terrain/tree.mdx", ModelCategory::Doodads) == ModelKind::Model);
+	CHECK(kind("Objects/SpecialEffects/Fire.mdx", ModelCategory::Objects) == ModelKind::Effect);
+	CHECK(kind("war3mapImported/My_VFX_Burst.mdx", ModelCategory::Map) == ModelKind::Effect);
+	CHECK(kind("war3mapImported/sfx/hit.mdx", ModelCategory::Map) == ModelKind::Effect);
+	CHECK(kind("war3mapImported/hero.mdx", ModelCategory::Map) == ModelKind::Model);
+}
+
+TEST_CASE("filter_model_entries by kind keeps Models and VFX/SFX counts consistent with the total") {
+	const std::vector<ModelEntry> entries {
+		{ path_from_utf8("units/human/footman/footman.mdx"), ModelCategory::Units },
+		{ path_from_utf8("abilities/spells/x/x.mdx"), ModelCategory::Abilities },
+		{ path_from_utf8("sharedmodels/fx/vfx_thing.mdx"), ModelCategory::SharedModels },
+		{ path_from_utf8("doodads/a.mdx"), ModelCategory::Doodads },
+	};
+	const auto models = filter_model_entries(entries, std::nullopt, "", ModelKind::Model);
+	const auto effects = filter_model_entries(entries, std::nullopt, "", ModelKind::Effect);
+	CHECK(models == std::vector<std::size_t> { 0, 3 });
+	CHECK(effects == std::vector<std::size_t> { 1, 2 });
+	CHECK(models.size() + effects.size() == entries.size());
+	CHECK(filter_model_entries(entries, ModelCategory::Units, "", ModelKind::Effect).empty());
+	CHECK(filter_model_entries(entries, std::nullopt, "vfx", ModelKind::Effect) == std::vector<std::size_t> { 2 });
+}
+
+TEST_CASE("format_file_size_mb always shows megabytes") {
+	CHECK(format_file_size_mb(1310720) == "1.25 MB");
+	CHECK(format_file_size_mb(1048576) == "1.00 MB");
+	CHECK(format_file_size_mb(512 * 1024) == "0.50 MB");
+	CHECK(format_file_size_mb(0) == "0.00 MB");
+}
+
+TEST_CASE("normalize_typed_model_path trims, drops the war3.w3mod prefix and allows empty") {
+	CHECK(normalize_typed_model_path(R"(  units\human\footman\footman.mdl )" "\t") == R"(units\human\footman\footman.mdl)");
+	CHECK(normalize_typed_model_path("war3.w3mod:units/human/footman/footman.mdx") == "units/human/footman/footman.mdx");
+	CHECK(normalize_typed_model_path(R"(UI\Glues\Foo.mdx)") == R"(UI\Glues\Foo.mdx)");
+	CHECK(normalize_typed_model_path("units/orc/grunt/grunt_portrait.mdx") == "units/orc/grunt/grunt_portrait.mdx");
+	CHECK(normalize_typed_model_path("").empty());
+	CHECK(normalize_typed_model_path("   ").empty());
+}

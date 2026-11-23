@@ -32,6 +32,13 @@ class BrowseModelsDialog : public QDialog {
 	/// The model path as Hierarchy knows it (for example units/human/footman/footman.mdx), empty when nothing is selected.
 	QString selected_path() const;
 
+	/// Picker mode (Object Editor model fields): adds an editable path line seeded with `current`, overwritten by every grid pick, and the
+	/// current value is preselected in the grid when it is a catalog model. Open is always enabled and accepts the typed text, empty included.
+	void set_picker_mode(const QString& current);
+
+	/// Picker mode result: the path line, normalized (see normalize_typed_model_path). Empty clears the field.
+	QString picked_text() const;
+
 	/// Driven by --qa-open-dialog browse-models (needs --qa-offscreen): waits for the thumbnails of the visible rows, checks the search box,
 	/// selects the first model, writes the result lines to `out_file` and a PNG of the dialog next to it (same name, `.png`), then quits.
 	void run_qa(const QString& out_file);
@@ -62,10 +69,14 @@ class BrowseModelsDialog : public QDialog {
 	QComboBox* animation;
 	QTableWidget* info;
 	QPushButton* open_button;
+	QLineEdit* path_edit = nullptr;
+	bool picker = false;
 	QTimer* visible_timer;
 
 	QString preview_path;
 	std::size_t total_models = 0;
+	std::size_t model_count = 0;
+	std::size_t effect_count = 0;
 	std::vector<std::size_t> category_counts;
 
 	// --qa-open-dialog browse-models

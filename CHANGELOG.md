@@ -70,6 +70,10 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Doodad files (`war3map.doo`) v12 and v13 can be read and saved** — The new doodad fields (group id, roll, pitch, lights) are kept, and a v12 or v13 file saves back as the same version. Roll, pitch and lights are not rendered or editable yet.
 - **Unit files (`war3mapUnits.doo`) v12 and v13 can be read and saved** — These are the versions written by Warcraft III 1.32+ and Reforged. The version and subversion are kept on save.
 - **Warcraft III 3.0 maps now open** — HiveWE reads and saves region files (`war3map.w3r` v7), keeping each region's camera blocker and minimap colour; a v7 file saves as v7 and older ones as v5. Camera files (`war3map.w3c` v3) are read and saved back unchanged. Damaged v7 or v3 files are refused with a dialog. Known gaps: some 3.0 models and textures log load errors, the new 3.0 camera script calls are not yet written to the map script, and this has not been tested in the game yet.
+- **Model previews can be orbited with left-drag and start from the front of the model** — This applies to the Selection panel, the Model Editor and Browse Models, so a model no longer opens facing away from you.
+- **Browse Models shows file sizes in MB** — You can see how large a model is before picking it.
+- **Browse Models sidebar has "Models" and "VFX/SFX" filters** — Effect models can be separated from unit and doodad models.
+- **Object Editor: double-clicking a model field opens the Browse Models picker** — The picker has a Path line, so typed paths and clearing the field still work, and it replaces the old model picker.
 
 ---
 

@@ -1,0 +1,36 @@
+<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><title>Import Custom Tile / Single file (valid and error via hash)</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css"><script src="common.js"></script></head>
+<body><div class="win" id="w"></div>
+<script>
+// hash: "dark" | "light" | "dark-error" | "light-error"
+const err = location.hash.includes('error');
+document.documentElement.dataset.theme = location.hash.slice(1).split('-')[0];
+const lbl = t => `<div style="width:92px;flex:none" class="muted">${t}</div>`;
+const good = !err;
+const tx = good ? 'tx-cx01' : 'tx-cx03';
+w.innerHTML = titlebar('Import Custom Tile') + `
+<div class="body" style="gap:8px">
+ <div class="tabs"><div class="tab sel">Single File</div><div class="tab">Folder</div></div>
+ <div class="row">${lbl('Texture')}<span class="edit grow focus">${good?'D:\\Textures\\marble_tile.blp':'D:\\Textures\\sand stone.tga'}</span><span class="btn">Browse&hellip;</span></div>
+ <div class="row" style="margin-left:98px"><span class="small muted">BLP or TGA, power-of-two width and height</span></div>
+ <div class="row" style="align-items:flex-start;gap:14px;margin-top:2px">
+  <div class="big tx ${tx}"></div>
+  <div class="col" style="gap:2px"><div class="small muted">3 &times; 3 swatch</div>${swatch(good?'Cx01':'Cx03')}</div>
+  <div class="col grow small" style="gap:3px">
+   <div class="strong">${good?'256 &times; 256, BLP':'100 &times; 100, TGA'}</div>
+   <div class="muted">${good?'Extended tile (4 &times; 4 variations)':'Size is not a power of two'}</div>
+  </div>
+ </div>
+ ${err?`<div class="note err"><b>Not importable:</b> width and height must be a power of two (64, 128, 256 &hellip;). Resize the file and pick it again.</div>`:''}
+ <div class="hline"></div>
+ <div class="row">${lbl('Name')}<span class="edit grow ${err?'error':''}">${good?'Marble Tiles':'<span class="ph">Tile name (shown in the editor)</span>'}</span></div>
+ <div class="row">${lbl('Tile ID')}<span class="edit ${err?'error':''}" style="width:80px"><span class="mono">${good?'Cx01':'Adrt'}</span></span>
+   <span class="small ${good?'ok':'err'}">${good?'Available. Four characters, unique in this map.':'Already used by Dirt (Ashenvale). Choose another ID.'}</span></div>
+ <div class="row">${lbl('Map path')}<span class="edit grow">${good?'ReplaceableTextures\\CustomTiles\\marble_tile.blp':'ReplaceableTextures\\CustomTiles\\sand stone.tga'}</span></div>
+ <div class="row" style="margin-left:98px"><span class="small muted">The file is added to the map's imports and the tile to the map's terrain table.</span></div>
+ <div class="row">${lbl('Pathing')}${chk(false,'Unwalkable')}<span style="width:8px"></span>${chk(false,'Unflyable')}<span style="width:8px"></span>${chk(false,'Unbuildable')}</div>
+ <div class="spacer"></div>
+ <div class="row"><span class="small muted">The tile appears under Additional Tiles &rsaquo; Custom (map imports).</span><span class="spacer"></span>
+  <span class="btn primary ${err?'disabled':''}">Import</span><span class="btn secondary">Cancel</span></div>
+</div>`;
+</script></body></html>

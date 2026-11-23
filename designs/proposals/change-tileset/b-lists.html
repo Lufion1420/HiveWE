@@ -1,0 +1,46 @@
+<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><title>Change Tileset / B Dual list / Changes pending</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css"><script src="common.js"></script></head>
+<body><div class="win" id="w"></div>
+<script>
+const avail = ['Ldrt','Ldro','Lrok','Lgrs','Lgrd'];
+const slot = (n,id,res,o={}) => `<div class="vr tight ${o.sel?'sel':''}" style="min-height:30px"><div style="width:30px" class="muted">${n}</div><div style="width:170px">${thumb(id,'s24')}${T[id][0]}</div><div style="width:50px" class="mono">${id}</div><div class="grow ${o.cls||''}">${res}</div></div>`;
+const rem = (id,to) => `<div class="vr tight" style="min-height:30px"><div style="width:30px" class="muted"></div><div style="width:170px">${thumb(id,'s24')}<span class="strike">${T[id][0]}</span></div><div style="width:50px" class="mono muted">${id}</div>
+  <div class="grow"><span class="arrow">&#8594;</span>${thumb(to,'s24')}<span class="edit combo" style="height:22px;width:150px">${T[to][0]}</span></div></div>`;
+w.innerHTML = titlebar('Change Tileset') + `
+<div class="body"><div class="row" style="align-items:stretch;flex:1;gap:8px;min-height:0">
+ <div class="col" style="width:290px;flex:none">
+  <div class="heading">Available Tiles</div>
+  <div class="edit combo">Lordaeron Summer</div>
+  <div class="view grow">
+   ${avail.map(i=>`<div class="vr tight ${i==='Lgrs'?'sel':''}" style="min-height:34px"><div style="width:200px">${thumb(i,'s24')}${T[i][0]}</div><div class="mono muted">${i}</div></div>`).join('')}
+  </div>
+  <div class="btn">Import Custom Tile&hellip;</div>
+ </div>
+ <div class="col" style="width:92px;flex:none;justify-content:center">
+  <span class="btn">Add &#8594;</span><span class="btn">&#8592; Remove</span><div style="height:8px"></div><span class="btn">Move Up</span><span class="btn">Move Down</span>
+ </div>
+ <div class="col grow">
+  <div class="heading">Map Tileset <span class="muted small" style="font-weight:400">10 of 64 tiles after changes</span></div>
+  <div class="view grow">
+   <div class="vh"><div style="width:30px">#</div><div style="width:170px">Tile</div><div style="width:50px">ID</div><div class="grow">Result</div></div>
+   ${slot(1,'Adrt','Kept, cliff tile',{cls:'muted'})}${slot(2,'Agrs','Kept',{cls:'muted'})}${slot(3,'Arck','Kept, cliff tile',{cls:'muted'})}${slot(4,'Adrg','Kept',{cls:'muted'})}
+   ${slot(5,'Alvd','Kept',{cls:'muted'})}${slot(6,'Acbl','Kept',{cls:'muted'})}${slot(7,'Lgrs','<span class="pill ok">NEW</span>')}${slot(8,'Cx01','<span class="pill" style="color:#a66be0">CUSTOM</span> <span class="ok">new</span>',{sel:true})}
+   <div class="vr grp"><div>Removed tiles: map cells are repainted with</div></div>
+   ${rem('Agrd','Adrg')}${rem('Avin','Agrs')}
+  </div>
+ </div>
+</div>
+<div class="group" style="margin-top:10px"><div class="gt">Selected Tile</div>
+ <div class="row" style="align-items:flex-start;gap:14px">
+  <div class="big tx tx-cx01" style="width:112px;height:112px"></div>
+  ${swatch('Cx01')}
+  <div class="col grow" style="gap:3px">
+   <div class="strong">Marble Tiles <span class="pill" style="color:#a66be0">CUSTOM</span></div>
+   <div class="small"><span class="muted">Tile ID </span><span class="mono">Cx01</span></div>
+   <div class="small"><span class="muted">File </span>ReplaceableTextures\\CustomTiles\\marble_tile.blp</div>
+   <div class="small"><span class="muted">Size </span>256 &times; 256, BLP</div>
+   <div class="row small" style="gap:14px;margin-top:4px"><span class="muted">Pathing</span>${chk(false,'Unwalkable')}${chk(false,'Unflyable')}${chk(false,'Unbuildable')}</div>
+  </div>
+ </div></div>
+<div class="row"><span class="spacer"></span><span class="btn primary">OK</span><span class="btn secondary">Cancel</span></div></div>`;
+</script></body></html>

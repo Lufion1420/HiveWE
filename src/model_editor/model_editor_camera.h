@@ -38,8 +38,13 @@ struct ModelEditorCamera {
 	glm::vec3 decomposed_skew;
 	glm::vec4 decomposed_perspective;
 
-	float horizontal_angle = 0.f;
-	float vertical_angle = -0.977f;
+	/// WC3 models face +X. The camera sits at position - direction * distance, so a horizontal angle of -pi/2 (direction = -X) puts it on
+	/// the +X side, looking at the model's face. (Angle 0 looked along +Y, at the model's left side.)
+	static constexpr float default_horizontal_angle = -1.5707964f;
+	static constexpr float default_vertical_angle = -0.977f;
+
+	float horizontal_angle = default_horizontal_angle;
+	float vertical_angle = default_vertical_angle;
 
 	bool rolling = false;
 

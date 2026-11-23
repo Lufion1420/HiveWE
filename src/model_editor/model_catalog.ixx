@@ -39,6 +39,12 @@ export struct ModelEntry {
 	ModelCategory category;
 };
 
+/// The browser's "Models" and "VFX/SFX" filters. Every entry is exactly one of the two, so their counts add up to the total.
+export enum class ModelKind {
+	Model,
+	Effect
+};
+
 export struct GameCategorySource {
 	ModelCategory category;
 	std::string_view glob;
@@ -111,6 +117,40 @@ export std::optional<ModelCategory> game_model_category(std::string_view path) {
 	return std::nullopt;
 }
 
+/// Deterministic Models vs VFX/SFX rule ("SFX" here means special effects, not sound). An entry is an Effect when
+///  - it is in the game's `abilities/` folder (spell effects, missiles, buffs), or
+///  - its lower-cased path contains "vfx", "sfx" or "effect" anywhere (covers imported map effects and e.g. `objects/.../specialeffects`).
+/// Everything else (units, buildings, doodads, environment, other objects and shared models, map models without those words) is a Model.
+export ModelKind model_kind(const ModelEntry& entry) {
+	if (entry.category == ModelCategory::Abilities) {
+		return ModelKind::Effect;
+	}
+	const std::string key = model_catalog_key(utf8_from_path(entry.path));
+	if (key.contains("vfx") || key.contains("sfx") || key.contains("effect")) {
+		return ModelKind::Effect;
+	}
+	return ModelKind::Model;
+}
+
+/// What the Object Editor stores for a typed or picked model path: surrounding whitespace removed and a leading `war3.w3mod:` dropped.
+/// Anything else is kept as typed (UI paths, ReplaceableTextures, .mdl, portraits, imported files); an empty text clears the field.
+export std::string normalize_typed_model_path(const std::string_view text) {
+	const auto first = text.find_first_not_of(" \t\r\n");
+	if (first == std::string_view::npos) {
+		return {};
+	}
+	std::string result(text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1));
+	if (result.starts_with(war3_mod_prefix)) {
+		result.erase(0, war3_mod_prefix.size());
+	}
+	return result;
+}
+
+/// "1.25 MB" (two decimals, binary megabytes, always MB, even below 1 MB: 0 bytes is "0.00 MB").
+export std::string format_file_size_mb(const std::uint64_t bytes) {
+	return std::format("{:.2f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
+}
+
 export struct ModelCatalog {
 	std::vector<ModelEntry> entries;
 	std::array<std::size_t, static_cast<std::size_t>(ModelCategory::Count)> counts {};
@@ -125,11 +165,13 @@ export struct ModelCatalog {
 };
 
 /// Indices into `entries` of the models the browser shows: those in `category` (all when empty) whose path contains every
-/// whitespace-separated term of `query` (letter case and slash direction do not matter). An empty query keeps everything.
+/// whitespace-separated term of `query` (letter case and slash direction do not matter) and are of `kind` (all when empty).
+/// An empty query keeps everything.
 export std::vector<std::size_t> filter_model_entries(
 	const std::span<const ModelEntry> entries,
 	const std::optional<ModelCategory> category,
-	const std::string_view query
+	const std::string_view query,
+	const std::optional<ModelKind> kind = std::nullopt
 ) {
 	std::vector<std::string> terms;
 	{
@@ -151,6 +193,9 @@ export std::vector<std::size_t> filter_model_entries(
 	std::vector<std::size_t> result;
 	for (std::size_t i = 0; i < entries.size(); ++i) {
 		if (category && entries[i].category != *category) {
+			continue;
+		}
+		if (kind && model_kind(entries[i]) != *kind) {
 			continue;
 		}
 		if (!terms.empty()) {
