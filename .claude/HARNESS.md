@@ -11,7 +11,7 @@ Created 2026-11-08, adapted from the Lendrill harness; reworked 2026-11-20 on th
 | Agent | Job | Edits | Model |
 |---|---|---|---|
 | `cpp-dev` | Implements the change and tests, compiles before returning | Source, tests | Sonnet; Opus on the risky track |
-| `reviewer` | Adversarial diff review, APPROVE or REJECT; never builds | Nothing | Opus |
+| `reviewer` | Adversarial diff review, APPROVE or REJECT; never builds | Nothing | Opus; Sonnet for a re-review of a small fix-round diff |
 | `qa-verifier` | Rebuilds, runs tests, writes manual UI checks; PASS, FAIL or COULD-NOT-RUN; owns `build/Agent` | Nothing | Sonnet |
 | `release-manager` | Changelog, version bumps, `release.yml`, publishing releases | Changelog, version strings, release workflow | Sonnet |
 | `designer` | HTML/CSS mockups plus rendered PNGs for approval, and the as-built screenshot baseline | `designs/` only | Sonnet |
@@ -19,7 +19,7 @@ Created 2026-11-08, adapted from the Lendrill harness; reworked 2026-11-20 on th
 | `build-engineer` | CMake, vcpkg, overlay ports, CI, ICE and linker failures | Build files | Sonnet |
 | `docs-keeper` | `.claude/rules/`, `.claude/skills/`, `.claude/plans/`, `.claude/agents/`, `.claude/HARNESS.md`, `CLAUDE.md` | Docs only | Sonnet |
 
-Model rule (user, 2026-11-19, adopted from WarMash 2026-11-20): main session Opus 5.5; subagents Sonnet by default, Opus for `reviewer`, `wc3-format-specialist` and `cpp-dev` on the risky track. Never Fable, and no fallback to Fable or usage credits.
+Model rule (user, 2026-11-19, adopted from WarMash 2026-11-20): main session Opus 5.5; subagents Sonnet by default, Opus for `reviewer`, `wc3-format-specialist` and `cpp-dev` on the risky track. Exception (user, 2026-11-24): a `reviewer` re-review of a fix round with a small diff may run on Sonnet; the first review of a Standard or Risky task stays Opus. Never Fable, and no fallback to Fable or usage credits.
 
 Left out of the roster: `api-chronicler` (`release-manager` owns `CHANGELOG.md`; HiveWE has no script-API docs) and a docs-site agent (HiveWE has no docs site). Add either when first needed.
 
@@ -37,6 +37,7 @@ Parallel review and QA: as soon as `cpp-dev` returns, launch `reviewer` and `qa-
 
 QA tiers: the orchestrator names the tier in each QA brief.
 - **Smoke:** `ctest --preset Agent` plus one `data/test map` save. For small changes and every fix round.
+- **Build mode (name it in every QA brief):** `reuse` or `rebuild`. `reuse` is allowed only when `cpp-dev`'s report states the exact build and `ctest` result on the current tree and no source file is newer than `build/Agent/Release/HiveWE.exe` and `HiveWE_tests.exe` (staleness recipe in `agents/qa-verifier.md`); QA then skips build and `ctest` and runs only the targeted offscreen checks and hooks. Anything else is `rebuild`. The lock file, one-build-at-a-time and offscreen rules apply unchanged (user, 2026-11-24).
 - **Targeted:** map-diff on a map subset for the changed writer.
 - **Full:** the 237-map map-diff sweep, once per task on the final round, and always when a writer or the script generator changed.
 
@@ -63,8 +64,10 @@ Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPRO
 ## Gates
 - `reviewer` REJECT goes back to `cpp-dev`, then review and QA rerun together; the QA result of the rejected round is discarded. After 3 rejections, stop and ask the user. If review rejects while QA holds `build/Agent`, wait for QA before resuming `cpp-dev`.
 - `qa-verifier` FAIL goes back to `cpp-dev`, then review and QA again. COULD-NOT-RUN is not a pass.
+- **Trivial fix round** (user-approved rule, 2026-11-24): a fix round whose diff touches only tests, comments, docs or `CHANGELOG.md`, with no change to any non-test source line that compiles into the app (code, CMake, `.ui`, shaders, data files), after `cpp-dev` already ran `ctest` green on that tree. It needs no new `qa-verifier` run and no new full review: the orchestrator may commit once `reviewer` confirms the diff is trivial (a short check on Sonnet), or without review when only docs or changelog changed. Any change to non-test source behaviour, including a "tiny" one, still needs review and QA as above. Edits that change test expectations to make a failing test pass are not trivial.
 - Fix rounds resume the same `cpp-dev`, `reviewer` and `qa-verifier` with SendMessage (keeps context). Use a fresh agent once the old one is above about 400k tokens (`cpp-dev`: about 350k).
 - A QA FAIL can be a wrong expectation in the brief: check the expectation against the code or specialist note before a fix round. When a brief contains a switch default, check it against the specialist note line by line.
+- `cpp-dev` time cap (user, 2026-11-24): an open-ended investigation (bisecting a leak, chasing an unexplained bug) stops after about 20 minutes of work or two failed hypotheses and returns `NEEDS_DECISION:` with the ruled-out list and a recommended fallback.
 - Unverified WE/WC3 behaviour goes in one switchable function plus a pinning test.
 - "Premise did not reproduce" from `cpp-dev` is accepted only with tests that pin the current behaviour.
 - For a "still broken" report, check with `git merge-base --is-ancestor <fix> <user's build commit>` whether the user's build had the fix.

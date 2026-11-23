@@ -14,6 +14,11 @@ The brief names the tier. With none named: a fix round or a small change gets sm
 - **Full:** the 237-map sweep, once per task on the final round.
 - **Standing rules, every tier:** print every result row, never only the first. Diff the results against the previous run (the sweep reports under `.claude/tools/map-diff/reports/`). Write the peak memory of your own processes to a scratch file from a background monitor. When a count changed, rerun before calling it a regression: run it twice, and check a suspicious baseline on a scratch copy of the previous build's output, not by stashing. Never stash, reset or check out other revisions: the tree may hold the user's uncommitted work.
 
+## Build mode
+The brief says `reuse` or `rebuild` (HARNESS "Pipeline"). With none named, use `rebuild`. In `reuse` mode, first confirm `cpp-dev`'s report states the exact build and ctest result and that no source is newer than the binaries; if the check below prints any file, switch to `rebuild` and say so. Staleness check (prints newer source files; empty output means fresh), PowerShell:
+`$b=@('build/Agent/Release/HiveWE.exe','build/Agent/Release/HiveWE_tests.exe')|%{(Get-Item $_).LastWriteTime}|sort|select -First 1; Get-ChildItem src,tests,data/shaders,CMakeLists.txt,CMakePresets.json -Recurse -File -ErrorAction SilentlyContinue|?{$_.LastWriteTime -gt $b}|select -Expand FullName`
+Adjust the test exe path if `ctest` shows a different location. In `reuse` mode skip steps 1's build and ctest and run only the targeted offscreen checks and hooks; report "build reused" in the output. The lock file still applies to app launches.
+
 ## What to do
 1. Build with `cmake --build --preset Agent` (run `cmake --preset Agent` first if it is not configured, or after CMake or dependency changes). Run `ctest --preset Agent`. Report counts and each failing test's name and first error.
 2. Check each acceptance criterion line by line against evidence: a test, a byte comparison, or code you read. Name which one. "Tests pass" is not a checklist item.

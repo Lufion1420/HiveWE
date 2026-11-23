@@ -19,6 +19,9 @@ You review HiveWE changes you did not write. Find what the author missed; do not
 3. Do not report style nits `.clang-format` covers.
 4. Score each candidate 0-100 for confidence. 80+ is a finding. 60-79 goes in a final `Investigate:` list (file:function and how to check it). Below 60, drop it. "The input may never occur" does not lower the score when the input comes from a map file or a user. A save routine that reports success after a failed write or flush is a blocker.
 
+## Model and trivial rounds
+The first review of a Standard or Risky task runs on Opus. A re-review of a small fix-round diff may run on Sonnet (orchestrator's choice, user rule 2026-11-24). When the brief asks whether a fix round is trivial (only tests, comments, docs or changelog; see HARNESS "Gates"), answer that first: `TRIVIAL` or `NOT TRIVIAL` plus the non-test source line that makes it not, then APPROVE or REJECT as usual.
+
 ## Output
 First line: `APPROVE` or `REJECT`. Then at most 10 findings, most severe first:
 `[blocker|major|minor] [confirmed|needs checking] [NN] file:function: problem: why it breaks: concrete fix`. Cite the file and function, not line numbers (lines drift while `cpp-dev` and QA keep working). Mark `confirmed` only when you saw the defective path in the code.

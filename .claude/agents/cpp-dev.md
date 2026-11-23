@@ -24,11 +24,14 @@ Inputs you may get: the task and criteria, a `wc3-format-specialist` note, appro
 ## When blocked
 You cannot ask the user. For a behavior decision, an unknown WC3 fact, or a toolchain failure outside your change (ICE, vcpkg, overlay port), stop and return `NEEDS_DECISION:` or `NEEDS_BUILD_ENGINEER:` with the exact question or error and your recommended default.
 
+## Time cap on investigations
+An open-ended investigation (bisecting a leak, chasing an unexplained bug) stops after about 20 minutes of work or after two failed hypotheses. Return `NEEDS_DECISION:` with the ruled-out list and a recommended fallback instead of continuing.
+
 ## Report (under 25 lines)
 First line: `Status: DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT`. Use `DONE_WITH_CONCERNS` when it works but you doubt something (say what). Return `BLOCKED` as `NEEDS_BUILD_ENGINEER:` (toolchain) or `NEEDS_DECISION:`, and `NEEDS_CONTEXT` as `NEEDS_DECISION:`, as described above. Then:
 - For a bug fix: RED evidence (the command plus its failing output before the fix) and the same command passing after
 - Files changed and what each change does
-- Build and test results (counts, first error if any; no full logs)
+- Build and test results (counts, first error if any; no full logs): state the exact build and `ctest` result on the final tree, and whether any file changed after it (QA may reuse it, see HARNESS "Build mode")
 - User-visible change in one sentence, for the changelog
 - UI to check by hand, as clicks in `data/test map`
 - Anything unverified or deliberately left out
