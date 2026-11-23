@@ -227,6 +227,10 @@ target_sources(HiveWE_lib PRIVATE
 	"model_editor/animation_timeline.h"
 	"model_editor/model_inspector.cpp"
 	"model_editor/model_inspector.h"
+	"model_editor/model_thumbnail_cache.cpp"
+	"model_editor/model_thumbnail_cache.h"
+	"model_editor/browse_models_dialog.cpp"
+	"model_editor/browse_models_dialog.h"
 
 	"object_editor/icon_view.cpp"
 	"object_editor/model_view.cpp"

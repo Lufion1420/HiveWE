@@ -144,7 +144,8 @@ int main(int argc, char* argv[]) {
 				"  --qa-open-dialog <name>  Needs --qa-offscreen. Open one dialog or tool window with sample data after the map has loaded (never saved). Names:\n"
 				"                       settings, unit-properties, item-drop, map-settings, scenario, gameplay-constants, new-map, object-editor,\n"
 				"                       asset-manager, map-protector, import-object-data (empty package), item-tables, config, tile-setter, tile-pather,\n"
-				"                       model-editor (stock model units/human/footman/footman.mdx).\n"
+				"                       model-editor (stock model units/human/footman/footman.mdx), browse-models (the Model Editor's model browser; with --qa-script-out <file>\n"
+				"                       it waits for the thumbnails, writes result lines to <file> and a PNG of the dialog next to it).\n"
 				"  --qa-model-editor-script \"<steps>\"  With --qa-open-dialog model-editor and --qa-script-out <file>: drive the Model Editor's widgets in-process\n"
 				"                       (steps separated by ';', for example \"wait:3000;pause;slider:500;expect:timefrac=0.5\") and write PASS/FAIL/INFO lines to the file, then quit.\n"
 				"                       The steps are listed above ModelEditor::run_qa_script in src/model_editor/model_editor.cpp.\n"
@@ -181,7 +182,7 @@ int main(int argc, char* argv[]) {
 			HiveWE::qa_select_first = true;
 		} else if (arguments[i] == "--qa-open-dialog") {
 			static const QStringList names = { "settings", "unit-properties", "item-drop", "map-settings", "scenario", "gameplay-constants", "new-map",
-				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-pather", "model-editor" };
+				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-pather", "model-editor", "browse-models" };
 			if (i + 1 >= arguments.size() || !names.contains(arguments[i + 1])) {
 				std::println(stderr, "--qa-open-dialog needs one of: {}. See HiveWE --help.", names.join(", ").toStdString());
 				return 2;

@@ -1,9 +1,23 @@
+module;
+
+#include <QString> // Unicode-aware lower casing and UTF-8 conversion; no widgets, no application object needed
+
 export module ModelCatalog;
 
 import std;
 import Utilities;
 
 namespace fs = std::filesystem;
+
+/// Paths cross this module as UTF-8 `std::string`s. `fs::path::string()` and `generic_string()` use the ANSI code page on MSVC, which
+/// garbles (or throws on) a map model with a non-ANSI name, so these two helpers go through the wide path instead.
+export std::string utf8_from_path(const fs::path& path) {
+	return QString::fromStdWString(path.generic_wstring()).toUtf8().toStdString();
+}
+
+export fs::path path_from_utf8(const std::string_view text) {
+	return fs::path(QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size())).toStdWString());
+}
 
 /// Non-GL list of the models the Model Editor and the model browser offer. Enumerating the files stays with the callers (they go
 /// through Hierarchy); this module only decides what counts as a model, which category it belongs to and which duplicate wins.
@@ -62,16 +76,18 @@ export std::string_view model_category_label(const ModelCategory category) {
 /// True for a `.mdx` file (any letter case) that is not a portrait model. A leftover `<name>.mdx.hivewe-tmp` has the extension
 /// `.hivewe-tmp`, so it is refused here too.
 export bool is_model_file(const fs::path& path) {
-	if (to_lowercase_copy(path.extension().string()) != ".mdx") {
+	if (QString::fromStdWString(path.extension().wstring()).toLower() != ".mdx") {
 		return false;
 	}
-	return !to_lowercase_copy(path.stem().string()).ends_with("_portrait");
+	return !QString::fromStdWString(path.stem().wstring()).toLower().endsWith("_portrait");
 }
 
-/// Lower case, forward slashes, without the `war3.w3mod:` prefix: the key that decides whether two paths are the same model.
+/// UTF-8, lower case (Unicode aware), forward slashes, without the `war3.w3mod:` prefix: the key that decides whether two paths are the
+/// same model. `path` is UTF-8.
 export std::string model_catalog_key(std::string_view path) {
-	std::string key = to_lowercase_copy(path);
-	normalize_path_to_forward_slash(key);
+	QString folded = QString::fromUtf8(path.data(), static_cast<qsizetype>(path.size())).toLower();
+	folded.replace('\\', '/');
+	std::string key = folded.toUtf8().toStdString();
 	if (key.starts_with(war3_mod_prefix)) {
 		key.erase(0, war3_mod_prefix.size());
 	}
@@ -108,7 +124,80 @@ export struct ModelCatalog {
 	}
 };
 
-/// `map_files` are paths relative to the map folder, `game_files` are Hierarchy names (with or without `war3.w3mod:`). Map models come
+/// Indices into `entries` of the models the browser shows: those in `category` (all when empty) whose path contains every
+/// whitespace-separated term of `query` (letter case and slash direction do not matter). An empty query keeps everything.
+export std::vector<std::size_t> filter_model_entries(
+	const std::span<const ModelEntry> entries,
+	const std::optional<ModelCategory> category,
+	const std::string_view query
+) {
+	std::vector<std::string> terms;
+	{
+		const std::string lowered = model_catalog_key(query);
+		std::size_t start = 0;
+		while (start < lowered.size()) {
+			const std::size_t end = lowered.find_first_of(" \t", start);
+			if (end == std::string::npos) {
+				terms.push_back(lowered.substr(start));
+				break;
+			}
+			if (end > start) {
+				terms.push_back(lowered.substr(start, end - start));
+			}
+			start = end + 1;
+		}
+	}
+
+	std::vector<std::size_t> result;
+	for (std::size_t i = 0; i < entries.size(); ++i) {
+		if (category && entries[i].category != *category) {
+			continue;
+		}
+		if (!terms.empty()) {
+			const std::string key = model_catalog_key(utf8_from_path(entries[i].path));
+			if (!std::ranges::all_of(terms, [&](const std::string& term) { return key.contains(term); })) {
+				continue;
+			}
+		}
+		result.push_back(i);
+	}
+	return result;
+}
+
+/// Bumped whenever the thumbnail rendering changes, so old files on disk are not reused.
+export inline constexpr int model_thumbnail_version = 1;
+
+/// What decides which file Hierarchy returns for a path besides the path itself.
+export struct ThumbnailContext {
+	bool hd = false;
+	bool teen = false;
+	char tileset = 'L';
+	std::string_view locale;
+};
+
+/// File name (without extension) of a model's thumbnail on disk and in the memory cache. It changes with the model path, the Hierarchy
+/// context (HD, teen, tileset, locale) and `stamp` (the source file's modification time for a map model, the game build for a stock one),
+/// never with the letter case or slash direction of the path. FNV-1a over a canonical text, so it is the same on every run.
+export std::string model_thumbnail_key(const std::string_view path, const ThumbnailContext& context, const std::string_view stamp) {
+	const std::string canonical = std::format(
+		"v{}|{}|hd{}|teen{}|ts{}|loc{}|{}",
+		model_thumbnail_version,
+		model_catalog_key(path),
+		context.hd ? 1 : 0,
+		context.teen ? 1 : 0,
+		context.tileset,
+		context.locale,
+		stamp
+	);
+	std::uint64_t hash = 14695981039346656037ull;
+	for (const char c : canonical) {
+		hash ^= static_cast<std::uint8_t>(c);
+		hash *= 1099511628211ull;
+	}
+	return std::format("{:016x}", hash);
+}
+
+/// `map_files` are UTF-8 paths relative to the map folder, `game_files` are Hierarchy names (with or without `war3.w3mod:`). Map models come
 /// first and win over a game model at the same path. Files that are not models, game files outside the known folders and repeated
 /// paths are dropped.
 export ModelCatalog build_model_catalog(const std::span<const std::string> map_files, const std::span<const std::string> game_files) {
@@ -121,7 +210,7 @@ export ModelCatalog build_model_catalog(const std::span<const std::string> map_f
 	};
 
 	for (const std::string& file : map_files) {
-		if (!is_model_file(fs::path(file))) {
+		if (!is_model_file(path_from_utf8(file))) {
 			continue;
 		}
 		std::string key = model_catalog_key(file);
@@ -130,11 +219,11 @@ export ModelCatalog build_model_catalog(const std::span<const std::string> map_f
 		}
 		std::string path = file;
 		normalize_path_to_forward_slash(path);
-		add(fs::path(std::move(path)), ModelCategory::Map);
+		add(path_from_utf8(path), ModelCategory::Map);
 	}
 
 	for (const std::string& file : game_files) {
-		if (!is_model_file(fs::path(file))) {
+		if (!is_model_file(path_from_utf8(file))) {
 			continue;
 		}
 		const auto category = game_model_category(file);
@@ -148,7 +237,7 @@ export ModelCatalog build_model_catalog(const std::span<const std::string> map_f
 		if (name.starts_with(war3_mod_prefix)) {
 			name.erase(0, war3_mod_prefix.size());
 		}
-		add(fs::path(std::move(name)), *category);
+		add(path_from_utf8(name), *category);
 	}
 
 	return catalog;

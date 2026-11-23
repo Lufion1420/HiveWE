@@ -1121,3 +1121,46 @@ QStatusBar QLabel#modelStatusItem {
 	border-left: 1px solid @{color-border};
 	padding: 0 @{space-3}px;
 }
+
+/******************************************************/
+/* Model Editor: Browse Models dialog */
+
+QDialog#browseModelsDialog QLabel#browseSectionHeader {
+	color: @{color-text-muted};
+	font-weight: @{font-weight-strong};
+	padding-top: @{space-2}px;
+}
+
+QDialog#browseModelsDialog QLabel#browsePreviewName,
+QDialog#browseModelsDialog QLabel#browseStatus {
+	color: @{color-text-muted};
+}
+
+QListView#browseList {
+	background-color: @{color-base};
+	border: 1px solid @{color-border};
+	outline: 0;
+}
+
+QListView#browseList::item {
+	color: @{color-text};
+	border: 1px solid transparent;
+	padding: 2px;
+	min-height: 0;
+}
+
+QListView#browseList::item:selected {
+	background-color: @{color-selection};
+	color: @{color-selection-text};
+	border: 1px solid @{color-accent};
+}
+
+QListWidget#browseCategories::item {
+	padding: 2px 0;
+}
+
+QTableWidget#browseInfo {
+	background-color: @{color-base};
+	alternate-background-color: @{color-alt-base};
+	border: 1px solid @{color-border};
+}

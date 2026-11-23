@@ -37,7 +37,7 @@
 #include <DockComponentsFactory.h>
 
 #include "hivewe.h"
-#include "model_view.h"
+#include "browse_models_dialog.h"
 #include "theme.h"
 
 import std;
@@ -417,30 +417,16 @@ void ModelEditor::open_file() {
 }
 
 void ModelEditor::browse_models(ads::CDockAreaWidget* parent) {
-	QDialog* dialog = new QDialog(parent, Qt::WindowTitleHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+	auto* dialog = new BrowseModelsDialog(parent);
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
-	dialog->resize(1200, 720);
 	dialog->setWindowModality(Qt::WindowModality::WindowModal);
 
-	// Force native window, otherwise ModelView causes switch to OpenGL-capable
-	// surface which unmaps the window and shows white flash.
-	dialog->setAttribute(Qt::WA_NativeWindow);
-	(void)dialog->winId();
-
-	ModelView* view = new ModelView(dialog);
-
-	QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-	connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
-	connect(buttonBox, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-	connect(view, &ModelView::doubleClicked, dialog, &QDialog::accept);
-
-	connect(dialog, &QDialog::accepted, this, [this, view, parent] {
-		show_model(view->current_model_path().toStdString(), false, parent);
+	connect(dialog, &QDialog::accepted, this, [this, dialog, parent] {
+		const QString path = dialog->selected_path();
+		if (!path.isEmpty()) {
+			show_model(fs::path(path.toStdWString()), false, parent);
+		}
 	});
-
-	QVBoxLayout* layout = new QVBoxLayout(dialog);
-	layout->addWidget(view);
-	layout->addWidget(buttonBox);
 
 	dialog->show();
 }

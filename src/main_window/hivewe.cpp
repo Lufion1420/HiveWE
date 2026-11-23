@@ -24,6 +24,7 @@ import ResourceManager;
 import WindowHandler;
 import "pathing_palette.h";
 import "object_editor/object_editor.h";
+import "model_editor/browse_models_dialog.h";
 import "model_editor/model_editor.h";
 import "model_editor/model_editor_glwidget.h";
 import "tile_setter.h";
@@ -2231,6 +2232,14 @@ void HiveWE::open_qa_dialog() {
 				editor->run_qa_script(qa_model_editor_script, qa_script_out);
 			}
 		});
+	} else if (name == "browse-models") {
+		// Never accepted, so no model is opened. The dialog writes the result file and quits the application itself.
+		auto* browser = new BrowseModelsDialog(this);
+		shown = browser;
+		browser->show();
+		if (!qa_script_out.isEmpty()) {
+			QTimer::singleShot(0, browser, [browser]() { browser->run_qa(qa_script_out); });
+		}
 	} else if (name == "tile-setter") {
 		shown = new TileSetter(this);
 	} else if (name == "tile-pather") {

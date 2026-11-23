@@ -72,6 +72,45 @@ export class ResourceManager {
 		return load_impl<T>(key, paths);
 	}
 
+	/// The keys cached right now. Pair with evict_unused_since.
+	std::unordered_set<std::string> snapshot_keys() {
+		std::lock_guard lock(mutex);
+		std::unordered_set<std::string> keys;
+		for (const auto& [key, future] : resources) {
+			keys.insert(key);
+		}
+		return keys;
+	}
+
+	/// Drops the finished entries that are not in `before` and that nobody but the cache still holds. Everything that was cached before,
+	/// or is still in use, stays. Returns how many were dropped. The dropped resources are destroyed here, on the calling thread, so a GPU
+	/// resource needs the caller's GL context to be current.
+	std::size_t evict_unused_since(const std::unordered_set<std::string>& before) {
+		std::vector<std::shared_ptr<Resource>> dropped;
+		{
+			std::lock_guard lock(mutex);
+			std::vector<std::string> erase_keys; // not erased while iterating: the map may move entries on erase
+			for (const auto& [key, future] : resources) {
+				if (before.contains(key) || future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+					continue;
+				}
+				const auto& result = future.get();
+				if (!result) {
+					erase_keys.push_back(key); // a failed load holds nothing
+				} else if (result->use_count() == 1) {
+					dropped.push_back(*result);
+					erase_keys.push_back(key);
+				}
+			}
+			for (const std::string& key : erase_keys) {
+				resources.erase(key);
+			}
+		}
+		const std::size_t count = dropped.size();
+		dropped.clear();
+		return count;
+	}
+
 	/// Releases all cached resources. Call when unloading a map.
 	void clear() {
 		std::lock_guard lock(mutex);
