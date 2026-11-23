@@ -651,13 +651,54 @@ namespace mdx {
 		}
 	}
 
-	void read_CAMS(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
-		const uint32_t size = reader.read<uint32_t>();
+	/// Skips a camera track with an unknown tag (KCVS, DOF tracks), reader positioned after the tag.
+	/// The value size is unknown, so try the common sizes and accept one that ends exactly at the entry end
+	/// or right before a known camera track tag. Returns false if none fits.
+	bool skip_unknown_camera_track(BinaryReader& reader, const size_t entry_end) {
+		const size_t start = reader.position;
+		if (start + 12 > entry_end) {
+			return false;
+		}
+		const uint64_t key_count = reader.read<uint32_t>();
+		const auto interpolation = static_cast<InterpolationType>(reader.read<int32_t>());
+		reader.advance(4); // global sequence id
+		const uint64_t values_per_key =
+			(interpolation == InterpolationType::hermite || interpolation == InterpolationType::bezier) ? 3 : 1;
 
-		while (reader.position < reader_pos + size) {
+		for (const uint64_t value_size : {4, 12, 8, 16}) {
+			const uint64_t end = start + 12 + key_count * (4 + value_size * values_per_key);
+			if (end == entry_end) {
+				reader.position = end;
+				return true;
+			}
+			if (end + 4 <= entry_end) {
+				uint32_t next;
+				std::memcpy(&next, reader.buffer.data() + end, 4);
+				const auto next_tag = static_cast<TrackTag>(next);
+				if (next_tag == TrackTag::KCTR || next_tag == TrackTag::KCRL || next_tag == TrackTag::KTTR) {
+					reader.position = end;
+					return true;
+				}
+			}
+		}
+		reader.position = start;
+		return false;
+	}
+
+	void read_CAMS(BinaryReader& reader, MDX& mdx) {
+		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
+		if (chunk_end > reader.buffer.size()) {
+			throw std::runtime_error("MDX CAMS chunk extends past the end of the file");
+		}
+
+		while (reader.position < chunk_end) {
 			const size_t entry_start = reader.position;
-			const uint32_t inclusive_size = reader.read<uint32_t>();
+			const CameraWord word = decode_camera_word(reader.read<uint32_t>());
+			const size_t entry_end = entry_start + word.size;
+			if (entry_end > chunk_end) {
+				throw std::runtime_error("MDX camera entry extends past the end of the CAMS chunk");
+			}
 
 			Camera camera;
 			camera.name = reader.read_string(80);
@@ -665,9 +706,13 @@ namespace mdx {
 			camera.field_of_view = reader.read<float>();
 			camera.far_clip = reader.read<float>();
 			camera.near_clip = reader.read<float>();
+			reader.advance(word.extra);
 			camera.target_position = reader.read<glm::vec3>();
+			if (word.variant != 0) {
+				std::print("MDX camera {}: variant byte {} is not preserved on save (written as 0)\n", camera.name, word.variant);
+			}
 
-			while (reader.position < entry_start + inclusive_size) {
+			while (reader.position < entry_end) {
 				const TrackTag tag = static_cast<TrackTag>(reader.read<int32_t>());
 				if (tag == TrackTag::KCTR) {
 					camera.KCTR = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
@@ -675,9 +720,17 @@ namespace mdx {
 					camera.KCRL = TrackHeader<float>(reader, mdx.unique_tracks++);
 				} else if (tag == TrackTag::KTTR) {
 					camera.KTTR = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
+				} else if (skip_unknown_camera_track(reader, entry_end)) {
+					std::print("MDX camera {}: unknown track tag {} skipped, not preserved on save\n", camera.name, static_cast<uint32_t>(tag));
 				} else {
-					std::print("Unknown track tag {}\n", static_cast<uint32_t>(tag));
+					// Unknown data with no recognisable track layout: skip the rest of the entry
+					std::print("MDX camera {}: unknown track tag {}, rest of the camera skipped, not preserved on save\n", camera.name,
+						static_cast<uint32_t>(tag));
+					reader.position = entry_end;
 				}
+			}
+			if (reader.position != entry_end) {
+				throw std::runtime_error("MDX camera track data overruns the camera entry");
 			}
 
 			mdx.cameras.push_back(std::move(camera));

@@ -656,6 +656,37 @@ namespace mdx {
 		TrackHeader<glm::vec3> KTTR; // Target translation
 	};
 
+	/// First dword of a CAMS entry: entry size (inclusive) in the low 24 bits, a variant in the top byte.
+	/// Real 2.0+ files use 0x03000078 (size 120, variant 3). Variants 0 and 3 share the 120-byte fixed layout.
+	/// Variants 1 and 2 may carry 12 extra bytes after near_clip (Needs verification). No shipped file uses them,
+	/// so they are refused; if verified, set `extra` here and the reader skips it.
+	export struct CameraWord {
+		uint32_t size;
+		uint32_t variant;
+		uint32_t extra; // bytes after near_clip that HiveWE skips
+	};
+
+	export constexpr uint32_t camera_fixed_size = 120;
+
+	/// Throws std::runtime_error for variants other than 0 and 3 or a size smaller than the fixed part.
+	export CameraWord decode_camera_word(const uint32_t word) {
+		CameraWord result;
+		result.size = word & 0xFFFFFF;
+		result.variant = word >> 24;
+		switch (result.variant) {
+			case 0:
+			case 3:
+				result.extra = 0;
+				break;
+			default:
+				throw std::runtime_error(std::format("Unsupported MDX camera variant {}", result.variant));
+		}
+		if (result.size < camera_fixed_size + result.extra) {
+			throw std::runtime_error(std::format("MDX camera entry size {} is smaller than {}", result.size, camera_fixed_size + result.extra));
+		}
+		return result;
+	}
+
 	struct TextureAnimation {
 		TrackHeader<glm::vec3> KTAT; // Translation
 		TrackHeader<glm::quat> KTAR; // Rotation

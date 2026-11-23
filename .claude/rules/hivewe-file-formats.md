@@ -35,7 +35,7 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 
 ## Game version support
 
-- As of 2026-11-08 HiveWE tracks formats through 2.0.3a, plus a w3i v39 parser (commit 3a5c6ed). doo v12/v13 and units v12/v13 have a reader and writer. w3r 7 and w3c 3 are supported since 2026-11-09 (accepted w3r {2,3,5,7}, w3c {0,3} in `map_format_check.ixx`). MDX v1800 is not supported.
+- As of 2026-11-08 HiveWE tracks formats through 2.0.3a, plus a w3i v39 parser (commit 3a5c6ed). doo v12/v13 and units v12/v13 have a reader and writer. w3r 7 and w3c 3 are supported since 2026-11-09 (accepted w3r {2,3,5,7}, w3c {0,3} in `map_format_check.ixx`). MDX: see "MDX reader (2026-11-23)".
 - w3r v7 saves as v7, other versions as v5. `GameCameras::save()` is empty, so the w3c file is kept as is and camera deletions by resize are lost on save for every version (pre-existing). The 3.0 World Editor writes w3r v7 and w3c v3 even for empty maps, and its `war3map.j` emits `CAMERA_FIELD_DEPTH_OF_FIELD_DISTANCE`/`_SCALE`, `CAMERA_FIELD_ZABSOLUTE` and `BlzCameraSetupSetCameraType` for v3 cameras (our script generator does not yet: ticket "[3.0] Emit 3.0 calls in the script generator").
 - Units v12/v13 (`Units::load`/`save`): version and subversion are kept on save (`format_version`, `format_subversion`); older files save as (8,11). On v12+ the reader refuses leftover bytes, truncation, a `war3map.w3i` game version below 1.32, ids with bytes after the first NUL, and a non-zero third trailer value (save writes 0 there). `group_id` and the first two trailer values are opaque and preserved. A subversion 9 file is promoted to 11 on save only while some unit holds a non-default item table pointer or str/agi/int.
 - `Units::load` replaces every stored unit z with `Terrain::interpolated_height` (`Unit::update_terrain_height`), with no version check. Measured in `(1)silverpinesprint.w3x`: 12 start locations are stored at z -767 on terrain at 791.75. Whether the game reads the stored z: Needs verification.
@@ -95,6 +95,14 @@ Checks: `.claude/tools/script-check/`.
 - v39 player `hud_skin` exists only when editor_version >= 6140. Samples: 6117 and 6127 have none; 6140, 7000, 7003 have it; 6128-6139 have no samples. A wrong gate still reaches EOF on most maps with names shifted, so test by comparing names, not EOF.
 
 - Map Info water and fog colours are stored B,G,R,A. Fog confirmed by `SetTerrainFogEx` on stock map 0415 (2026-11-20).
+
+## MDX reader (2026-11-23)
+
+- All shipped 3.0.1 CASC models are v1800 and `MDX::load` accepts any VERS, so SD v1800 models load. HD v1800 models are still refused as whole models. Suspected cause, unverified (ticketed): the HD SKIN count in `read_GEOS` is half the byte length (16 bytes per vertex).
+- Camera entry first dword = 24-bit size (low) + variant byte (top; 3 in all 3.0 files). `write_CAMS` writes variant 0 (plain size). `decode_camera_word` in `src/file_formats/mdx/mdx.ixx` is the single place to switch; variants 1 and 2 are refused (layout unverified). Unknown camera tracks (KCVS, IDUF, ELAF, PTSF) are skipped by `skip_unknown_camera_track` (heuristic) and are NOT preserved on save.
+- Tracks do not describe their value size; the tag decides it. Chunk readers bound loops at reader_pos+size taken before the size dword, 4 bytes short: harmless for well-formed files.
+- `Track::operator==` cannot compare none/linear tracks (tangents uninitialized). Refusal tests use `CHECK_THROWS_AS(..., std::runtime_error)`, not bare `CHECK_THROWS`.
+- Env-gated stock test: set `HIVEWE_MDX_DIR` for the "stock models" case in `tests/mdx_camera_test.cpp`. QA needs it for real-asset checks of MDX reader changes; without it the case passes with 0 assertions.
 
 ## Tests
 
