@@ -19,7 +19,8 @@ Inputs you may get: the task and criteria, a `wc3-format-specialist` note, appro
 7. Before returning, self-review the diff: every acceptance criterion met; nothing built that was not asked for; no stray debug output or unrelated edits; new files registered in CMake; error paths and malformed input handled; the test asserts behavior, not just that code runs.
 8. Check every string key you write against its registry: SLK and object-data meta field ids (`*Metadata.slk`), `war3mapSkin.txt` keys, UIA `objectName`s that scripts or tests look up. A misspelled key compiles and silently does nothing.
 9. Write sources containing backslashes (Windows paths, escape sequences) with Write or Edit, not Bash heredocs, which eat them.
-10. Do not commit, push, or edit `CHANGELOG.md` or docs. The orchestrator and the other agents own those. You cannot ask the user, so never wait for an answer.
+10. When replacing or re-pointing an existing UI component, first list its current behaviours (free text, clear/empty value, preselect current value, cancel semantics, keyboard shortcuts, other callers) and keep each one or state why it is dropped in the report.
+11. Do not commit, push, or edit `CHANGELOG.md` or docs. The orchestrator and the other agents own those. You cannot ask the user, so never wait for an answer.
 
 ## When blocked
 You cannot ask the user. For a behavior decision, an unknown WC3 fact, or a toolchain failure outside your change (ICE, vcpkg, overlay port), stop and return `NEEDS_DECISION:` or `NEEDS_BUILD_ENGINEER:` with the exact question or error and your recommended default.

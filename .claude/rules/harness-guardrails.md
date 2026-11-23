@@ -71,10 +71,21 @@ Decided 2026-11-22: Pencil (`.pen`) was dropped for HTML/CSS mockups plus a Qt p
   4. `Next step`: names an Asana ticket from "Next up".
   5. `Backlog only, not next steps`: one line of leftovers.
   6. `Decisions`: the user's, then orchestrator calls the user may overrule, each dated.
-  7. `Scratch`: absolute paths of scratchpad files the next session needs (they may vanish; say so).
+  7. `Retro`: one line with the numbers and accepted proposals from the session retrospective (below).
+  8. `Scratch`: absolute paths of scratchpad files the next session needs (they may vanish; say so).
 - Every suggestion includes a paste-ready prompt in the message.
 - The user does not read the MD files, including `HANDOFF.md`. Every paste-ready prompt tells the next session to start by listing in chat every check or decision waiting on the user (from `HANDOFF.md` "Open questions"), with exact steps.
 - Anything the user must do is stated in chat, not only in a file.
+
+## Session retrospective (decided 2026-11-24)
+Before every handoff the orchestrator runs a retrospective, reports it in chat (short, with numbers) and records the `Retro` line in `HANDOFF.md`. It covers:
+1. Timing: wall-clock per task and per subagent run (task-notification `duration_ms`), rounds per task, longest runs, time spent waiting on the build lock or the one-build-at-a-time rule.
+2. Why slow: bug hunts, edge-case chasing, repeated fix rounds, oversized briefs, redundant QA or rebuilds, premature opus use.
+3. For each cause: can it be optimized, and should it be (cost against benefit)? Propose a rule or brief change.
+4. Quality guard: every speed-up must keep code quality. No removal of review on non-trivial source changes, no weaker tests, no skipping QA on behaviour changes. State why each proposal does not lower quality.
+5. What went well and should be kept.
+6. Bug-hunt guard: an investigation past the time cap, or a finding outside HARNESS.md 'Choosing work' criteria, is filed, not chased.
+- `docs-keeper` applies proposals that change harness rules without asking only if they weaken no safety rule and no quality gate. Anything else goes to the user as a one-line question.
 
 ## Chat rules
 - The numbered test list for the user goes in the LAST message of the turn (a list posted before the final tool call was missed).

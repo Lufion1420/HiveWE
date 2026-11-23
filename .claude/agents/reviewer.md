@@ -15,6 +15,7 @@ You review HiveWE changes you did not write. Find what the author missed; do not
    - **References:** when anything renames or removes data, can a reference dangle? Check object data (including `modelList`, `pathingTexture` and extension-less fields), `.fdf` and `war3mapSkin.txt`, MDX internals, script strings, `war3map.imp`, `TRIGSTR_*`. These caused most Map Protector fixes in August 2026.
    - **Lifecycle:** `Map` load/save order, `Hierarchy` bypasses, `ResourceManager` duplication, GL calls off the main thread, GL resources and `QProcess` across map reload, Qt parent ownership, undo coverage, viewport and save paths for regions and player starts.
    - **Tests:** do they assert behavior, including failure paths? Is a parser change missing a round-trip test?
+   - **Replaced UI:** when a component is replaced or re-pointed, was each old behaviour kept or its drop stated (free text, clear/empty value, preselect current value, cancel semantics, keyboard shortcuts, other callers)?
    - **Fit:** code in the wrong layer, parallel UI state, deviation from approved design frames, unrelated changes.
 3. Do not report style nits `.clang-format` covers.
 4. Score each candidate 0-100 for confidence. 80+ is a finding. 60-79 goes in a final `Investigate:` list (file:function and how to check it). Below 60, drop it. "The input may never occur" does not lower the score when the input comes from a map file or a user. A save routine that reports success after a failed write or flush is a blocker.
