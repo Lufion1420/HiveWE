@@ -26,7 +26,7 @@ description: >-
 
 ## Running HiveWE and CI
 
-- `src/main.cpp` always loads `data/test map/` relative to the working directory (line 154) and writes `data/tools/` (lines 108-111). **Never launch HiveWE with the repo as working directory.** Use a sandbox folder with a FULL copy of `data/` (`robocopy data <sandbox>\data /E`): without `data/warcraft` the app aborts at startup (0xc0000409) in `Terrain::load` on `data/warcraft/Cliffs.slk`. `build/Agent/Release/data` is a symlink to the repo `data/`; when copying the exe and DLLs into a sandbox, exclude `data` or the repo's test map overwrites the map under test.
+- `src/main.cpp` always loads `data/test map/` relative to the working directory (line 154) and writes `data/tools/` (lines 108-111). **Never launch HiveWE with the repo as working directory.** Use a sandbox folder with a FULL copy of `data/` (`robocopy data <sandbox>\data /E`): without `data/warcraft` the app aborts at startup (0xc0000409) in `Terrain::load` on `data/warcraft/Cliffs.slk`. `build/Agent/Release/data` is a symlink to the repo `data/`; when copying the exe and DLLs into a sandbox, exclude `data` or the repo's test map overwrites the map under test. A sandbox for `--qa-*` runs needs the exe, DLLs, `platforms/`, `styles/`, `imageformats/` and the `data/` copy including `data/warcraft`; otherwise "Opening map failed" blocks on a message box and the run hangs.
 - To test any map without UI driving, replace the sandbox's `data/test map/` with the unpacked map. A stock 3.0 map (e.g. `(1)ForgottenHollow`) used to crash HiveWE (0xc0000409) about 2 seconds after start; it now shows the refusal dialog and exits with code 1 (see `rules/hivewe-file-formats.md`).
 - Crash debugging: the `Agent` preset produces no PDB. `cdbX64.exe` from the WindowsApps alias works, and `.exr -1` names the C++ exception class.
 - 0xc0000409 crashes leave minidumps in `%LOCALAPPDATA%\CrashDumps`. In cdb, `!peb` shows the working dir, `s -d @rsp L?8000 e06d7363` then `.exr <addr>` recovers the C++ exception type, and `ub HiveWE+0x<ret>` finds the throwing call without a PDB.
@@ -43,6 +43,9 @@ description: >-
 
 - Bash tool heredocs eat backslashes and apostrophes: write sources and Windows paths with Write or Edit, or build them with `chr(92)` / `string.char(92)`. `cat > f` without a heredoc waits on stdin.
 - PowerShell: aliases shadow function names (`R`, `Diff`) and variables are case-insensitive (`$Repo` is `$repo`); `Start-Process -ArgumentList` drops quoting; `run_in_background` on a wrapper returns when `Start-Process` returns, so background the runner script itself and poll for its output file.
+- Never chain `sed` or other steps after a command that can hang (a hung app blocks the whole chain).
+- `ctest -R` matches ctest test names, not doctest case names (there is no prefix): use `HiveWE_tests.exe -tc="*name*"` or `ctest -R` on a keyword in the name. `git diff --stat` omits untracked new test files, so list them with `git status`.
+- A stale `build.lock` (no build processes running, file older than about 10 minutes) is reported by the agent that finds it and cleared by the orchestrator; one cost about 740 s of waiting on 2026-11-24.
 - Git Bash `sed -i` strips CRLF from CRLF files; check `git ls-files --eol` after edits.
 - Tests must never construct a `QApplication` or `QWidget`: `HiveWE_tests` has no Qt platform plugin and the failure shows a modal Windows error on the user's desktop (happened 2026-11-22).
 - `hivewe.h` is CRLF while `hivewe.cpp` is LF; keep each as it is.

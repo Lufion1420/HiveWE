@@ -140,6 +140,13 @@ Checks: `.claude/tools/script-check/`.
 - HiveWE's object-data writer puts 0 in the end token where the World Editor writes the object id. The wts writer drops `//` comments (found by fdiff on Forgotten Hollow).
 - StormLib: never enumerate with `SFileFindFirstFile` on these maps (hang, 20 GB RAM); see `harness-guardrails.md`.
 
+## MPQ extraction (2026-11-24)
+
+- `MPQ::extract_file` returns `ExtractResult {extracted, absent, failed}`: it checks `file_exists` first, and a name the archive holds but that is unsafe (`mpq::is_safe_archive_name`) is `failed`, as is an `unpack` entry that would write outside the target. Open Map (MPQ) and Map Protector refuse such archives and name the failed files (in CHANGELOG).
+- Inside methods with a local named `mpq`, write `decltype(mpq)::ExtractResult`. doctest `CHECK(enum_class)` compiles silently, so when changing a bool return, grep the tests for old callers.
+- `prepare_source_path` is the exported seam for testing Map Protector's archive unpack.
+- Known gaps (filed): `.string()` narrow paths in `extract_file`/`unpack` on CJK code pages; `war3map.imp` names written to `temp_dir/name` are validated but import-parser edge cases are unreviewed.
+
 ## Save temp files and folder listings (verified 2026-11-22)
 
 - Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `export_mpq`, `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy.

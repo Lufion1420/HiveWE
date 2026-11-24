@@ -58,7 +58,7 @@ Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPRO
 - Sweep-driven parity work counts as leftover work (user concern, 2026-11-22): the subtasks of "World Editor parity: map output on save" (1220328838360686) and any new sweep kinds. At most one parity ticket or batch per session. The handoff "Next step" list alternates: the first item is a non-parity "Next up" ticket (a feature, a user-reported bug or a decision ticket), and a parity item may follow. Background: in sessions up to 2026-11-20 the Next step always named the next save-parity item from the sweep, while the tickets created on 2026-11-08 (UI modernization 1220328401966062, trigger variable types, save-reports-success) sat untouched. WarMash had the same drift in sessions 56-61.
 - Current order is the user's decision of 2026-11-22; it is in the Decisions list of `HANDOFF.md`.
 - Before every handoff the orchestrator runs the session retrospective: `.claude/rules/harness-guardrails.md` "Session retrospective".
-- At session start, sweep "Next up" and "Harness and quality follow-ups" for completed tasks and move them to "Done — shipped" (section 1220328136214002).
+- At session start, sweep "Next up" and "Harness and quality follow-ups" for completed tasks and move them to "Done — shipped" (section 1220328136214002). Completing a ticket is not enough (user, 2026-11-24): also add it to that section with `update_tasks` `add_projects` (project 1220328345553589); subtasks have no membership and are only completed.
 - JASS-only parity waits unless a map needs it (Lua first).
 - The orchestrator picks the next ticket itself without asking (orchestrator decision; the user may overrule).
 
