@@ -514,7 +514,7 @@ export FileRewriteResult rewrite_object_data_file(
 	const slk::SLK& template_slk,
 	const slk::SLK& meta_slk,
 	const bool optional_ints,
-	const bool skin,
+	[[maybe_unused]] const bool skin, // the file is rewritten with its own fields either way, see the write below
 	const std::unordered_map<std::string, const RenameCandidate*>& candidates_by_match_key
 ) {
 	if (!fs::exists(file_path)) {
@@ -624,7 +624,9 @@ export FileRewriteResult rewrite_object_data_file(
 			return { false, std::format("{} field(s) cannot be written. First: object {}, field {}: {}", errors.size(), first.object_id,
 										first.field, first.message), false };
 		}
-		hierarchy.map_file_write(file_name, build_modification_file_buffer_with_raw(scratch, meta_slk, optional_ints, skin, preserved_objects));
+		// skin=false on purpose: a war3mapSkin.* file from the World Editor carries real fields in the normal table
+		// layout, and the writer's skin=true mode emits zero fields per object, which would drop them all.
+		hierarchy.map_file_write(file_name, build_modification_file_buffer_with_raw(scratch, meta_slk, optional_ints, false, preserved_objects));
 	}
 
 	return { true, "", changed };

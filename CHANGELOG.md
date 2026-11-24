@@ -82,6 +82,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Ctrl+Z after deleting or cutting doodads restores them again** — Undo restored nothing before, a regression from an earlier refactor.
 
 #### Map Protector
+- **Asset Path Obfuscation no longer wipes the object fields stored in a map's war3mapSkin.* files when it renames a path in them.**
 - **Asset Path Obfuscation no longer fails on maps with a custom object whose base object is unknown** (for example humanx03's leftover unit on `nbsh`) — such an object is copied into the protected map's object data unchanged, and all other objects are still rewritten.
 - **"Remove listfile" now really leaves `(listfile)` out of the protected map** — The option was ignored before and `(listfile)` was always written into the protected archive.
 - **Map Protector no longer leaves later reads and writes pointed at its temp folder when a map's terrain file (war3map.w3e) is truncated.**

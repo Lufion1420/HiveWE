@@ -238,6 +238,52 @@ TEST_CASE("rewrite_object_data_file rewrites a model-typed field but leaves a st
 	hierarchy.map_directory = original_map_directory;
 }
 
+TEST_CASE("rewrite_object_data_file keeps every field of an existing war3mapSkin.* file when it rewrites a path") {
+	// A World Editor skin file carries real visual fields in the normal table layout. Rewriting it must
+	// write those fields back; Map::save's skin=true (empty field lists) is for HiveWE's own output only.
+	const fs::path dir = make_scratch_dir("rewrite_skin_file");
+	const fs::path original_map_directory = hierarchy.map_directory;
+	hierarchy.map_directory = dir;
+
+	const slk::SLK meta = make_test_meta();
+	slk::SLK template_slk = make_test_template("hfoo");
+	template_slk.add_row("hpea");
+
+	slk::SLK modification_data;
+	modification_data.add_row("hfoo");
+	modification_data.set_shadow_data("file", "hfoo", "war3mapImported\\Custom.mdx");
+	modification_data.set_shadow_data("name", "hfoo", "Footman");
+	modification_data.add_row("hpea");
+	modification_data.set_shadow_data("name", "hpea", "Peasant");
+	const std::vector<u8> buffer = build_modification_file_buffer(modification_data, meta, false, false);
+
+	const fs::path skin_path = dir / "war3mapSkin.w3u";
+	{
+		std::ofstream out(skin_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(skin_path, "war3mapSkin.w3u", template_slk, meta, false, true, candidates_by_match_key);
+	CHECK(result.success);
+	CHECK(result.changed);
+
+	const auto reloaded = extract_modification_shadow_map_path(skin_path, template_slk, meta, false);
+	REQUIRE(reloaded.has_value());
+	REQUIRE(reloaded->contains("hfoo"));
+	CHECK(reloaded->at("hfoo").at("file") == "a3f9c1e2.mdx");
+	CHECK(reloaded->at("hfoo").at("name") == "Footman");
+	REQUIRE(reloaded->contains("hpea"));
+	CHECK(reloaded->at("hpea").at("name") == "Peasant");
+
+	hierarchy.map_directory = original_map_directory;
+}
+
 TEST_CASE("rewrite_object_data_file leaves the file untouched when no field matches a candidate") {
 	const fs::path dir = make_scratch_dir("rewrite_no_match");
 	const fs::path original_map_directory = hierarchy.map_directory;
@@ -868,4 +914,78 @@ TEST_CASE("rewrite_object_data_file keeps a custom object with an unknown base i
 		CHECK(skipped.front().id == "n003");
 		CHECK(loaded.data("file", "h001") == "a3f9c1e2.mdx");
 	}
+}
+
+TEST_CASE("rewrite_object_data_file leaves a war3mapSkin.* file whose objects have zero fields untouched") {
+	// HiveWE's own skin output lists each object with no fields; nothing in it can match a candidate.
+	const fs::path dir = make_scratch_dir("rewrite_skin_zero_fields");
+	const TestMapDirectoryRestore restore_map_directory;
+	hierarchy.map_directory = dir;
+
+	const slk::SLK meta = make_test_meta();
+	const slk::SLK template_slk = make_test_template("hfoo");
+
+	slk::SLK modification_data;
+	modification_data.add_row("hfoo");
+	modification_data.set_shadow_data("file", "hfoo", "war3mapImported\\Custom.mdx");
+	const std::vector<u8> buffer = build_modification_file_buffer(modification_data, meta, false, true);
+
+	const fs::path skin_path = dir / "war3mapSkin.w3u";
+	{
+		std::ofstream out(skin_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+	}
+	const auto before = read_file(skin_path);
+	REQUIRE(before.has_value());
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(skin_path, "war3mapSkin.w3u", template_slk, meta, false, true, candidates_by_match_key);
+	CHECK_MESSAGE(result.success, result.error);
+	CHECK_FALSE(result.changed);
+
+	const auto after = read_file(skin_path);
+	REQUIRE(after.has_value());
+	CHECK(std::vector<u8>(before->buffer.begin(), before->buffer.end()) == std::vector<u8>(after->buffer.begin(), after->buffer.end()));
+}
+
+TEST_CASE("rewrite_object_data_file rewrites a custom object in a war3mapSkin.* file and keeps its fields") {
+	const fs::path dir = make_scratch_dir("rewrite_skin_custom_object");
+	const TestMapDirectoryRestore restore_map_directory;
+	hierarchy.map_directory = dir;
+
+	const slk::SLK meta = make_test_meta();
+	const slk::SLK template_slk = make_test_template("hfoo");
+
+	BinaryWriter writer;
+	writer.write<u32>(3);
+	writer.write<u32>(0); // no original-object table
+	writer.write<u32>(1);
+	write_test_object(writer, 3, false, "hfoo", "h001", "Ymdl", "war3mapImported/Custom.mdx");
+
+	const fs::path skin_path = dir / "war3mapSkin.w3u";
+	{
+		std::ofstream out(skin_path, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(writer.buffer.data()), static_cast<std::streamsize>(writer.buffer.size()));
+	}
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+	const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+	const FileRewriteResult result = rewrite_object_data_file(skin_path, "war3mapSkin.w3u", template_slk, meta, false, true, candidates_by_match_key);
+	CHECK_MESSAGE(result.success, result.error);
+	CHECK(result.changed);
+
+	const auto reloaded = extract_modification_shadow_map_path(skin_path, template_slk, meta, false);
+	REQUIRE(reloaded.has_value());
+	REQUIRE(reloaded->contains("h001"));
+	CHECK(reloaded->at("h001").at("file") == "a3f9c1e2.mdx");
+	CHECK(reloaded->at("h001").at("oldid") == "hfoo");
 }
