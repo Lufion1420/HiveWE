@@ -508,6 +508,98 @@ const RenameCandidate* find_object_data_candidate(
 	return found != candidates_by_match_key.end() ? found->second : nullptr;
 }
 
+/// Rewrites asset paths inside a raw-kept custom object (see RawCustomObject: unknown base id, so field types are unknown).
+/// Only string values (type 3), and per comma segment only those that carry a known asset extension and match a candidate, are
+/// rewritten, so an extension-less value is never guessed. Returns true if any value changed; on a malformed record the bytes are
+/// left untouched and false is returned.
+export bool rewrite_raw_custom_object_paths(
+	RawCustomObject& raw,
+	const bool optional_ints,
+	const std::unordered_map<std::string, const RenameCandidate*>& candidates_by_match_key
+) {
+	static constexpr std::array<std::string_view, 5> known_extensions = { ".blp", ".tga", ".png", ".mdx", ".mdl" };
+	const std::vector<uint8_t>& in = raw.bytes;
+	const size_t size = in.size();
+
+	const auto read_u32 = [&](const size_t at) {
+		uint32_t value = 0;
+		std::memcpy(&value, in.data() + at, sizeof(value));
+		return value;
+	};
+
+	constexpr size_t header_size = 4 + 4 + 4 + 4 + 4; // id, base id, set count, set flags, modification count
+	if (size < header_size) {
+		return false;
+	}
+
+	std::vector<uint8_t> out(in.begin(), in.begin() + header_size);
+	const uint32_t modifications = read_u32(header_size - sizeof(uint32_t));
+	size_t pos = header_size;
+	bool changed = false;
+
+	for (uint32_t i = 0; i < modifications; ++i) {
+		const size_t fixed = 4 + 4 + (optional_ints ? 8 : 0); // field id, type, [level, data pointer]
+		if (pos + fixed > size) {
+			return false;
+		}
+		const uint32_t type = read_u32(pos + 4);
+		out.insert(out.end(), in.begin() + pos, in.begin() + pos + fixed);
+		pos += fixed;
+
+		if (type == 3) {
+			const auto end = std::find(in.begin() + pos, in.end(), uint8_t{ 0 });
+			if (end == in.end()) {
+				return false;
+			}
+			const std::string value(in.begin() + pos, end);
+			pos = static_cast<size_t>(end - in.begin()) + 1;
+
+			std::vector<std::string> segments = absl::StrSplit(value, ',');
+			bool any_changed = false;
+			for (std::string& segment : segments) {
+				const std::string key = asset_match_key(segment);
+				if (!std::ranges::any_of(known_extensions, [&](const std::string_view ext) { return key.ends_with(ext); })) {
+					continue;
+				}
+				if (const RenameCandidate* found = find_object_data_candidate(segment, "", candidates_by_match_key)) {
+					segment = found->new_relative_path.string();
+					any_changed = true;
+				}
+			}
+			if (any_changed) {
+				const std::string rewritten = absl::StrJoin(segments, ",");
+				out.insert(out.end(), rewritten.begin(), rewritten.end());
+				changed = true;
+			} else {
+				out.insert(out.end(), value.begin(), value.end());
+			}
+			out.push_back(0);
+		} else if (type <= 2) {
+			if (pos + 4 > size) {
+				return false;
+			}
+			out.insert(out.end(), in.begin() + pos, in.begin() + pos + 4);
+			pos += 4;
+		} else {
+			return false;
+		}
+
+		if (pos + 4 > size) {
+			return false;
+		}
+		out.insert(out.end(), in.begin() + pos, in.begin() + pos + 4); // trailing 4 bytes
+		pos += 4;
+	}
+
+	if (pos != size) {
+		return false;
+	}
+	if (changed) {
+		raw.bytes = std::move(out);
+	}
+	return changed;
+}
+
 export FileRewriteResult rewrite_object_data_file(
 	const fs::path& file_path,
 	const std::string_view file_name,
@@ -612,6 +704,13 @@ export FileRewriteResult rewrite_object_data_file(
 				continue;
 			}
 			value = found->new_relative_path.string();
+			changed = true;
+		}
+	}
+
+	// Raw-kept objects have no known field types: only extension-bearing string values are rewritten.
+	for (RawCustomObject& raw : preserved_objects) {
+		if (rewrite_raw_custom_object_paths(raw, optional_ints, candidates_by_match_key)) {
 			changed = true;
 		}
 	}

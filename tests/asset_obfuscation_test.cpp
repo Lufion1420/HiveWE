@@ -916,6 +916,110 @@ TEST_CASE("rewrite_object_data_file keeps a custom object with an unknown base i
 	}
 }
 
+namespace {
+	RawCustomObject make_raw_object(const bool optional_ints, const std::vector<std::string>& values) {
+		BinaryWriter writer;
+		writer.write_string("nbsh");
+		writer.write_string("n003");
+		writer.write<u32>(1);
+		writer.write<u32>(0);
+		writer.write<u32>(static_cast<u32>(values.size()));
+		for (const std::string& value : values) {
+			writer.write_string("Ymdl");
+			writer.write<u32>(3);
+			if (optional_ints) {
+				writer.write<u32>(2);
+				writer.write<u32>(0);
+			}
+			writer.write_c_string(value);
+			writer.write<u32>(0);
+		}
+		return RawCustomObject{ "n003", "nbsh", std::vector<u8>(writer.buffer.begin(), writer.buffer.end()) };
+	}
+}
+
+TEST_CASE("rewrite_raw_custom_object_paths rewrites only extension-bearing string values that match a candidate") {
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+	RenameCandidate bare;
+	bare.original_relative_path = "war3mapImported/Icon.blp";
+	bare.new_relative_path = "b7e1d4f0.blp";
+	bare.match_key = asset_match_key("war3mapImported/Icon.blp");
+	const std::unordered_map<std::string, const RenameCandidate*> by_key = { { candidate.match_key, &candidate }, { bare.match_key, &bare } };
+
+	for (const bool optional_ints : { false, true }) {
+		// hit, with a case difference and backslashes
+		RawCustomObject hit = make_raw_object(optional_ints, { "WAR3MAPIMPORTED\\custom.MDX", "Leftover" });
+		CHECK(rewrite_raw_custom_object_paths(hit, optional_ints, by_key));
+		CHECK(hit.bytes == make_raw_object(optional_ints, { "a3f9c1e2.mdx", "Leftover" }).bytes);
+
+		// miss: unknown path, a name without extension (even though an extension-less lookup would hit), a non-matching name
+		RawCustomObject miss = make_raw_object(optional_ints, { "war3mapImported/Other.mdx", "war3mapImported/Icon", "Custom" });
+		const std::vector<u8> before = miss.bytes;
+		CHECK_FALSE(rewrite_raw_custom_object_paths(miss, optional_ints, by_key));
+		CHECK(miss.bytes == before);
+
+		// comma list: matching segments are replaced, the others stay
+		RawCustomObject list = make_raw_object(optional_ints, { "war3mapImported/Custom.mdx,keep.mdx,war3mapImported/Icon.blp" });
+		CHECK(rewrite_raw_custom_object_paths(list, optional_ints, by_key));
+		CHECK(list.bytes == make_raw_object(optional_ints, { "a3f9c1e2.mdx,keep.mdx,b7e1d4f0.blp" }).bytes);
+
+		// a malformed record is left alone
+		RawCustomObject broken = make_raw_object(optional_ints, { "war3mapImported/Custom.mdx" });
+		broken.bytes.resize(broken.bytes.size() - 2);
+		const std::vector<u8> broken_before = broken.bytes;
+		CHECK_FALSE(rewrite_raw_custom_object_paths(broken, optional_ints, by_key));
+		CHECK(broken.bytes == broken_before);
+	}
+}
+
+TEST_CASE("rewrite_object_data_file rewrites a path inside a raw-kept object and the file still parses and verifies") {
+	for (const bool optional_ints : { false, true }) {
+		const fs::path dir = make_scratch_dir(std::format("rewrite_raw_paths_{}", optional_ints));
+		const TestMapDirectoryRestore restore_map_directory;
+		hierarchy.map_directory = dir;
+
+		slk::SLK meta = make_test_meta();
+		meta.set_shadow_data("repeat", "Ymdl", "0");
+		const slk::SLK template_slk = make_test_template("hfoo");
+
+		BinaryWriter writer;
+		writer.write<u32>(3);
+		writer.write<u32>(0);
+		writer.write<u32>(1);
+		write_test_object(writer, 3, optional_ints, "nbsh", "n003", "Ymdl", "war3mapImported/Custom.mdx");
+		const fs::path w3u_path = dir / "war3map.w3u";
+		{
+			std::ofstream out(w3u_path, std::ios::binary);
+			out.write(reinterpret_cast<const char*>(writer.buffer.data()), static_cast<std::streamsize>(writer.buffer.size()));
+		}
+
+		RenameCandidate candidate;
+		candidate.original_relative_path = "war3mapImported/Custom.mdx";
+		candidate.new_relative_path = "a3f9c1e2.mdx";
+		candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+		const std::unordered_map<std::string, const RenameCandidate*> by_key = { { candidate.match_key, &candidate } };
+
+		// Before the rewrite the verify scan flags the old path; after it, it agrees.
+		CHECK_FALSE(verify_no_dangling_text_references(dir, { candidate }).success);
+		const FileRewriteResult result = rewrite_object_data_file(w3u_path, "war3map.w3u", template_slk, meta, optional_ints, false, by_key);
+		CHECK_MESSAGE(result.success, result.error);
+		CHECK(result.changed);
+		CHECK(verify_no_dangling_text_references(dir, { candidate }).success);
+
+		std::vector<RawCustomObject> preserved;
+		const auto reloaded = extract_modification_shadow_map_path(w3u_path, template_slk, meta, optional_ints, &preserved);
+		REQUIRE(reloaded.has_value());
+		REQUIRE(preserved.size() == 1);
+		CHECK(preserved.front().id == "n003");
+		BinaryWriter expected;
+		write_test_object(expected, 3, optional_ints, "nbsh", "n003", "Ymdl", "a3f9c1e2.mdx");
+		CHECK(preserved.front().bytes == std::vector<u8>(expected.buffer.begin(), expected.buffer.end()));
+	}
+}
+
 TEST_CASE("rewrite_object_data_file leaves a war3mapSkin.* file whose objects have zero fields untouched") {
 	// HiveWE's own skin output lists each object with no fields; nothing in it can match a candidate.
 	const fs::path dir = make_scratch_dir("rewrite_skin_zero_fields");
