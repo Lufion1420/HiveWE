@@ -87,6 +87,17 @@ import MapArchiveCheck;
 namespace fs = std::filesystem;
 
 namespace {
+/// A path as UTF-8 text. path::string() throws on MSVC for characters outside the system code page (CJK or Cyrillic map folders).
+std::string utf8_path(const fs::path& path) {
+	const std::u8string text = path.u8string();
+	return std::string(text.begin(), text.end());
+}
+
+/// A path for Qt display or settings. Never use QString::fromStdString(path.string()) on a map path.
+QString display_path(const fs::path& path) {
+	return QString::fromStdWString(path.wstring());
+}
+
 /// Map::save() with any exception shown in a dialog, so a throw while saving cannot close the editor without a message.
 bool save_map_reporting_errors(const fs::path& path) {
 	try {
@@ -621,7 +632,7 @@ void HiveWE::load_map(const fs::path& directory) {
 void HiveWE::add_recent_map(const fs::path& directory) {
 	QSettings settings;
 	QStringList recent_maps = settings.value("recentMaps").toStringList();
-	const QString map_path = QString::fromStdString(directory.lexically_normal().string());
+	const QString map_path = display_path(directory.lexically_normal());
 
 	recent_maps.removeAll(map_path);
 	recent_maps.prepend(map_path);
@@ -646,7 +657,7 @@ void HiveWE::update_recent_maps_menu() {
 			break;
 		}
 
-		const fs::path directory = map_path.toStdString();
+		const fs::path directory = map_path.toStdWString();
 		if (!fs::exists(directory / "war3map.w3i")) {
 			continue;
 		}
@@ -672,7 +683,7 @@ void HiveWE::open_recent_map(int index) {
 		return;
 	}
 
-	const fs::path directory = recent_maps[index].toStdString();
+	const fs::path directory = recent_maps[index].toStdWString();
 	if (!fs::exists(directory / "war3map.w3i")) {
 		QMessageBox::information(this, "Opening map failed", "The recent map path no longer exists.");
 		update_recent_maps_menu();
@@ -705,7 +716,7 @@ void HiveWE::load_folder() {
 
 	settings.setValue("openDirectory", folder_name);
 
-	fs::path directory = folder_name.toStdString();
+	fs::path directory = folder_name.toStdWString();
 
 	if (!fs::exists(directory / "war3map.w3i")) {
 		QMessageBox::information(this, "Opening map failed", "Opening the map failed. Select a map that is saved in folder mode or use the Open Map (MPQ) option");
@@ -722,7 +733,7 @@ void HiveWE::load_folder() {
 		return;
 	}
 
-	QMessageBox* loading_box = new QMessageBox(QMessageBox::Icon::Information, "Loading Map", "Loading " + QString::fromStdString(directory.filename().string()));
+	QMessageBox* loading_box = new QMessageBox(QMessageBox::Icon::Information, "Loading Map", "Loading " + display_path(directory.filename()));
 	loading_box->show();
 
 	load_map(directory);
@@ -778,7 +789,7 @@ void HiveWE::load_mpq() {
 								   this, "Choose Unpacking Location",
 								   settings.value("openDirectory", QDir::current().path()).toString(),
 								   QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks)
-								   .toStdString();
+								   .toStdWString();
 
 	if (unpack_location.empty()) {
 		return;
@@ -877,13 +888,13 @@ bool HiveWE::save_current_map_as() {
 	fs::path file_name = QFileDialog::getExistingDirectory(this, "Choose Save Location",
 														   settings.value("openDirectory", QDir::current().path()).toString(),
 														   QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks)
-							 .toStdString();
+							 .toStdWString();
 
 	if (file_name.empty()) {
 		return false;
 	}
 
-	settings.setValue("openDirectory", QString::fromStdString(file_name.string()));
+	settings.setValue("openDirectory", display_path(file_name));
 
 	emit saving_initiated();
 	if (!map->filesystem_path.empty() && fs::exists(file_name) && fs::equivalent(file_name, map->filesystem_path)) {
@@ -892,13 +903,13 @@ bool HiveWE::save_current_map_as() {
 		}
 	} else {
 		const QString fallback_name = sanitized_folder_name(QString::fromStdString(map->name));
-		const fs::path target_directory = file_name / fallback_name.toStdString();
+		const fs::path target_directory = file_name / fallback_name.toStdWString();
 		fs::create_directories(target_directory);
 
 		hierarchy.map_directory = target_directory;
 		if (map->filesystem_path.empty()) {
 			map->filesystem_path = fs::absolute(target_directory) / "";
-			map->name = (*--(--map->filesystem_path.end())).string();
+			map->name = utf8_path(*--(--map->filesystem_path.end()));
 			hierarchy.map_directory = map->filesystem_path;
 			if (!save_map_reporting_errors(map->filesystem_path)) {
 				return false;
@@ -927,7 +938,7 @@ void HiveWE::export_mpq() {
 	}
 
 	QSettings settings;
-	const QString directory = settings.value("openDirectory", QDir::current().path()).toString() + "/" + QString::fromStdString(map->filesystem_path.filename().string());
+	const QString directory = settings.value("openDirectory", QDir::current().path()).toString() + "/" + display_path(map->filesystem_path.filename());
 	std::wstring file_name = QFileDialog::getSaveFileName(this, "Export Map to MPQ", directory, "Warcraft III Scenario (*.w3x)").toStdWString();
 
 	if (file_name.empty()) {
@@ -948,9 +959,10 @@ void HiveWE::export_mpq() {
 
 	for (const auto& entry : fs::recursive_directory_iterator(map->filesystem_path)) {
 		if (entry.is_regular_file() && !is_map_write_temp_file(entry.path())) {
-			bool success = SFileAddFileEx(handle, entry.path().c_str(), entry.path().lexically_relative(map->filesystem_path).string().c_str(), MPQ_FILE_COMPRESS, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
+			const std::string archive_name = utf8_path(entry.path().lexically_relative(map->filesystem_path));
+			bool success = SFileAddFileEx(handle, entry.path().c_str(), archive_name.c_str(), MPQ_FILE_COMPRESS, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
 			if (!success) {
-				std::println("Error {} adding file {}", GetLastError(), entry.path().string());
+				std::println("Error {} adding file {}", GetLastError(), utf8_path(entry.path()));
 			}
 		}
 	}
@@ -963,10 +975,10 @@ void HiveWE::play_test() {
 		return;
 	}
 	QProcess* warcraft = new QProcess;
-	const QString warcraft_path = QString::fromStdString(fs::canonical(hierarchy.root_directory / "x86_64" / "Warcraft III.exe").string());
+	const QString warcraft_path = display_path(fs::canonical(hierarchy.root_directory / "x86_64" / "Warcraft III.exe"));
 	QStringList arguments;
 	arguments << "-launch"
-			  << "-loadfile" << QString::fromStdString(fs::canonical(map->filesystem_path).string());
+			  << "-loadfile" << display_path(fs::canonical(map->filesystem_path));
 
 	QSettings settings;
 	if (settings.value("testArgs").toString() != "")
@@ -1167,7 +1179,7 @@ void HiveWE::switch_warcraft() {
 void HiveWE::import_heightmap() {
 	QMessageBox::information(this, "Heightmap information", "Will read the red channel and map this onto the range -16 to +16");
 	QSettings settings;
-	const QString directory = settings.value("openDirectory", QDir::current().path()).toString() + "/" + QString::fromStdString(map->filesystem_path.filename().string());
+	const QString directory = settings.value("openDirectory", QDir::current().path()).toString() + "/" + display_path(map->filesystem_path.filename());
 
 	QString file_name = QFileDialog::getOpenFileName(this, "Open Heightmap Image", directory);
 
@@ -1202,7 +1214,7 @@ QString object_data_default_directory() {
 	if (!map) {
 		return settings.value("openDirectory", QDir::current().path()).toString();
 	}
-	return settings.value("openDirectory", QDir::current().path()).toString() + "/" + QString::fromStdString(map->filesystem_path.filename().string());
+	return settings.value("openDirectory", QDir::current().path()).toString() + "/" + display_path(map->filesystem_path.filename());
 }
 
 bool ensure_map_loaded_for_object_io(QWidget* parent) {
@@ -1438,7 +1450,7 @@ void HiveWE::export_object_data_binary() {
 		return;
 	}
 
-	if (const auto result = export_binary_object_data(directory.toStdString()); !result) {
+	if (const auto result = export_binary_object_data(directory.toStdWString()); !result) {
 		QMessageBox::warning(this, "Export Failed", QString::fromStdString(result.error()));
 		return;
 	}
@@ -1456,7 +1468,7 @@ void HiveWE::export_object_data_text() {
 		return;
 	}
 
-	if (const auto result = export_text_object_data(directory.toStdString()); !result) {
+	if (const auto result = export_text_object_data(directory.toStdWString()); !result) {
 		QMessageBox::warning(this, "Export Failed", QString::fromStdString(result.error()));
 		return;
 	}
@@ -1474,7 +1486,7 @@ void HiveWE::import_object_data_binary() {
 		return;
 	}
 
-	const auto loaded = load_binary_object_data(directory.toStdString(), true);
+	const auto loaded = load_binary_object_data(directory.toStdWString(), true);
 	if (!loaded) {
 		show_import_validation_failure(this, loaded.error());
 		return;
@@ -1500,7 +1512,7 @@ void HiveWE::import_object_data_map_folder() {
 		return;
 	}
 
-	const auto loaded = load_binary_object_data(directory.toStdString(), false);
+	const auto loaded = load_binary_object_data(directory.toStdWString(), false);
 	if (!loaded) {
 		show_import_validation_failure(this, loaded.error());
 		return;
@@ -1526,7 +1538,7 @@ void HiveWE::import_object_data_text() {
 		return;
 	}
 
-	const auto loaded = load_text_object_data(directory.toStdString());
+	const auto loaded = load_text_object_data(directory.toStdWString());
 	if (!loaded) {
 		show_import_validation_failure(this, loaded.error());
 		return;
@@ -1888,8 +1900,8 @@ void HiveWE::update_map_context(const QString& status, const QString& detail_ove
 	QString map_title = QString::fromStdString(map->name);
 
 	if (!map->filesystem_path.empty()) {
-		const QFileInfo map_info(QString::fromStdString(map->filesystem_path.string()));
-		setWindowTitle("HiveWE 0.21 - " + QString::fromStdString(map->filesystem_path.string()));
+		const QFileInfo map_info(display_path(map->filesystem_path));
+		setWindowTitle("HiveWE 0.21 - " + display_path(map->filesystem_path));
 		map_title = map_info.fileName().isEmpty() ? map_title : map_info.fileName();
 		if (detail.isEmpty()) {
 			detail = map_info.absoluteFilePath();
@@ -2268,6 +2280,159 @@ void HiveWE::open_qa_dialog() {
 	if (auto* tabs = shown->findChild<QTabWidget*>(); tabs && qa_dialog_tab >= 0 && qa_dialog_tab < tabs->count()) {
 		tabs->setCurrentIndex(qa_dialog_tab);
 	}
+}
+
+void HiveWE::run_qa_change_tileset() {
+	if (!qa_offscreen || qa_change_tileset.isEmpty()) {
+		return;
+	}
+
+	// From the event loop: the dialog and the map reload need it, and QApplication::exit only works once it runs.
+	QTimer::singleShot(0, this, [this]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+		};
+		const auto finish = [&]() {
+			for (const QString& line : lines) {
+				std::println("{}", line.toStdString());
+			}
+			if (!qa_script_out.isEmpty()) {
+				QFile file(qa_script_out);
+				if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+					file.write(lines.join(QChar('\n')).toUtf8() + "\nDONE\n");
+				}
+			}
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+		// The ids of a tile's texture file, probed like GroundTexture does: .tga, .blp, .dds. Empty when none is found.
+		const auto find_tile_file = [](const std::string& tile_id, std::size_t& size) {
+			const slk::SLK& slk = map->terrain.terrain_slk;
+			const std::string base = slk.data("dir", tile_id) + "/" + slk.data("file", tile_id);
+			for (const char* extension : { ".tga", ".blp", ".dds" }) {
+				if (auto reader = hierarchy.open_file(fs::path(base + extension))) {
+					size = reader->buffer.size();
+					return std::string(extension);
+				}
+			}
+			size = 0;
+			return std::string();
+		};
+
+		const fs::path texture = fs::absolute(fs::path(qa_tile_texture.toStdWString()));
+		const fs::path out = fs::absolute(fs::path(qa_change_tileset.toStdWString()));
+		std::error_code ec;
+		if (!fs::is_regular_file(texture, ec)) {
+			check(false, "the --qa-tile-texture file does not exist");
+			return finish();
+		}
+		if (fs::exists(out, ec) && !fs::is_empty(out, ec)) {
+			check(false, "the output folder must be absent or empty");
+			return finish();
+		}
+
+		// Save As into the output folder FIRST and point the hierarchy at it, so the texture overrides that Change Tileset writes next go
+		// into the copy and never into the startup map folder (data/test map, a symlink into the repository).
+		fs::create_directories(out, ec);
+		hierarchy.map_directory = out;
+		map->headless = true; // no message boxes: they would hang an offscreen run
+		const auto save_to_out = [&](const QString& what) {
+			bool saved = false;
+			try {
+				saved = map->save(out);
+			} catch (const std::exception& e) {
+				check(false, what + " threw: " + e.what());
+			}
+			check(saved, what);
+			return saved;
+		};
+		if (!save_to_out("map copied to the output folder")) {
+			return finish();
+		}
+		check(hierarchy.map_directory == out && fs::equivalent(map->filesystem_path, out, ec), "the map and its asset lookup now point at the output folder");
+		if (!all_passed) {
+			return finish();
+		}
+
+		// Change Tileset exactly as the dialog's OK does it: import, write_pending_overrides, Terrain::change_tileset.
+		const char tileset_letter = map->terrain.tileset;
+		const std::size_t old_count = map->terrain.tileset_ids.size();
+		QString error;
+		std::vector<std::string> custom_tiles;
+		auto* setter = new TileSetter(this);
+		const bool applied = setter->qa_accept_with_custom_tiles(texture, 20, error, custom_tiles);
+		check(applied, "Change Tileset accepted" + (error.isEmpty() ? QString() : ": " + error));
+		if (!applied) {
+			return finish();
+		}
+		const std::vector<std::string> expected_ids = map->terrain.tileset_ids;
+		check(old_count < 20 && expected_ids.size() == 20, QString("tile list grew from %1 to %2 tiles").arg(old_count).arg(expected_ids.size()));
+		check(map->terrain.tileset == tileset_letter, "tileset letter kept in memory");
+		check(custom_tiles.size() == 2, "two tiles got the custom texture");
+
+		if (!save_to_out("map saved again after Change Tileset")) {
+			return finish();
+		}
+
+		std::size_t texture_size = 0;
+		{
+			std::error_code size_error;
+			texture_size = static_cast<std::size_t>(fs::file_size(texture, size_error));
+		}
+		std::string texture_extension;
+		for (const wchar_t c : texture.extension().wstring()) {
+			texture_extension.push_back(static_cast<char>(std::tolower(c < 128 ? c : '?')));
+		}
+		for (const std::string& id : custom_tiles) {
+			const slk::SLK& slk = map->terrain.terrain_slk;
+			const fs::path file = out / (slk.data("dir", id) + "/" + slk.data("file", id) + texture_extension);
+			std::error_code file_error;
+			check(
+				fs::is_regular_file(file, file_error) && fs::file_size(file, file_error) == texture_size,
+				QString("override file of tile %1 is in the saved map").arg(QString::fromStdString(id))
+			);
+		}
+		check(fs::is_regular_file(out / "war3map.w3e", ec), "war3map.w3e is in the saved map");
+
+		// Reload the saved map like Open Map does, but without the recent-maps registry write.
+		if (const auto opening = check_map_for_opening(out); !opening) {
+			check(false, "saved map refused at open: " + QString::fromStdString(opening.error()));
+			return finish();
+		}
+		window_handler.close_all();
+		ui->widget->makeCurrent();
+		reset_map_session();
+		map->load(out);
+		map->headless = true;
+		map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+
+		const auto& terrain = map->terrain;
+		check(terrain.tileset == tileset_letter, "tileset letter kept after reload");
+		check(terrain.tileset_ids == expected_ids, "tileset ids after reload are the saved list");
+		check(terrain.ground_texture_to_id.size() == terrain.tileset_ids.size() + 1, "one ground texture slot per tile plus blight");
+		bool ids_valid = true;
+		for (const std::string& id : terrain.tileset_ids) {
+			ids_valid = ids_valid && terrain.terrain_slk.row_headers.contains(id);
+		}
+		check(ids_valid, "every tile id of the w3e exists in Terrain.slk");
+		check(
+			std::ranges::all_of(terrain.corner_ground_texture, [&](const std::uint8_t texture) { return texture < terrain.tileset_ids.size(); }),
+			"every corner ground texture index is a valid tile slot"
+		);
+		for (std::size_t i = 0; i < terrain.tileset_ids.size(); i++) {
+			const std::string& id = terrain.tileset_ids[i];
+			std::size_t size = 0;
+			const std::string extension = find_tile_file(id, size);
+			const bool custom = std::ranges::contains(custom_tiles, id);
+			// A custom tile must resolve to the map's file (same size as the imported one), not the stock texture.
+			const bool good = !extension.empty() && (!custom || size == texture_size);
+			lines << QString("INFO tile %1 %2 file=%3 bytes=%4").arg(i).arg(QString::fromStdString(id)).arg(QString::fromStdString(extension)).arg(size);
+			check(good, QString("tile %1 (%2) loads %3").arg(i).arg(QString::fromStdString(id)).arg(custom ? "the map's custom texture" : "a real texture, not the placeholder"));
+		}
+		finish();
+	});
 }
 
 void HiveWE::dump_qa_layout() const {

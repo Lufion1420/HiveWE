@@ -7,6 +7,13 @@ import Hierarchy;
 
 namespace fs = std::filesystem;
 
+/// A path as UTF-8 bytes. path::string() throws on MSVC for characters outside the system code page, which would abort every save
+/// of a map holding an imported file such as a Cyrillic or CJK name. ASCII names come out byte-identical.
+std::string utf8_path_string(const fs::path& path) {
+	const std::u8string text = path.u8string();
+	return std::string(text.begin(), text.end());
+}
+
 // HiveWE does not use the war3map.imp file at all, but the old WE does
 // That's why we write the file at save time
 export class Imports {
@@ -60,7 +67,7 @@ export class Imports {
 		int count = 0;
 		for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
 			if (i.is_regular_file()) {
-				std::string file_name = i.path().filename().string();
+				std::string file_name = utf8_path_string(i.path().filename());
 				if (blacklist.contains(file_name) || is_map_write_temp_file(i.path())) {
 					continue;
 				}
@@ -71,8 +78,8 @@ export class Imports {
 
 		for (const auto& i : fs::recursive_directory_iterator(filesystem_path)) {
 			if (i.is_regular_file()) {
-				std::string path = i.path().lexically_relative(filesystem_path).string();
-				std::string file_name = i.path().filename().string();
+				std::string path = utf8_path_string(i.path().lexically_relative(filesystem_path));
+				std::string file_name = utf8_path_string(i.path().filename());
 				if (blacklist.contains(file_name) || is_map_write_temp_file(i.path())) {
 					continue;
 				}

@@ -150,6 +150,9 @@ int main(int argc, char* argv[]) {
 				"                       (steps separated by ';', for example \"wait:3000;pause;slider:500;expect:timefrac=0.5\") and write PASS/FAIL/INFO lines to the file, then quit.\n"
 				"                       The steps are listed above ModelEditor::run_qa_script in src/model_editor/model_editor.cpp.\n"
 				"  --qa-model <path>    With --qa-open-dialog model-editor: the model to open instead of units/human/footman/footman.mdx.\n"
+				"  --qa-change-tileset <out folder>  Needs --qa-offscreen, --qa-tile-texture <blp|tga> and --qa-script-out <file>: grows the startup map to 20 tiles with\n"
+				"                       the texture on two tiles, runs the Change Tileset OK path, saves to <out folder> (absent or empty), reloads it and writes PASS/FAIL lines.\n"
+				"                       Run it from a sandbox working directory: the overrides are written into its data/test map. Exit code 0 only when all pass.\n"
 				"  --qa-dialog-tab <n>  With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -206,6 +209,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			(is_script ? HiveWE::qa_model_editor_script : HiveWE::qa_script_out) = arguments[++i];
+		} else if (arguments[i] == "--qa-change-tileset" || arguments[i] == "--qa-tile-texture") {
+			const bool is_folder = arguments[i] == "--qa-change-tileset";
+			if (i + 1 >= arguments.size() || !arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "{} needs a value and --qa-offscreen. See HiveWE --help.", arguments[i].toStdString());
+				return 2;
+			}
+			(is_folder ? HiveWE::qa_change_tileset : HiveWE::qa_tile_texture) = arguments[++i];
 		} else if (arguments[i] == "--qa-dialog-tab") {
 			bool tab_ok = false;
 			const int tab = i + 1 < arguments.size() ? arguments[i + 1].toInt(&tab_ok) : 0;
@@ -343,6 +353,7 @@ int main(int argc, char* argv[]) {
 
 	w.open_qa_palette();
 	w.open_qa_dialog();
+	w.run_qa_change_tileset();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

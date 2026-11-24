@@ -28,8 +28,17 @@ public:
 	void qa_apply_sample_changes();
 	/// QA hook only: reduces the list to one tile, then to none, and prints the OK and Remove button states of both (also to `out_file`).
 	void qa_report_limits(const QString& out_file);
+	/// QA hook only: the OK path without clicks. Grows the tile list to `tile_count` tiles (when it is longer than the current list), imports
+	/// `texture` through the same code as Import Custom Tile for the first kept non-cliff tile and for the first added tile, then runs the
+	/// OK handler. Errors are returned in `error` instead of a message box (a modal box hangs an offscreen run). True when the map's
+	/// tileset now equals the list.
+	/// If an import fails, it returns at once with the earlier import still pending and the dialog open; that is fine because the hook exits next.
+	/// `custom_tiles` receives the ids of the tiles that got the texture.
+	bool qa_accept_with_custom_tiles(const std::filesystem::path& texture, std::size_t tile_count, QString& error, std::vector<std::string>& custom_tiles);
 
 private:
+	/// Validates and decodes a texture file for tile `id` and records it as pending. False with the reason in `error`.
+	bool import_texture_file(const std::string& id, const std::filesystem::path& source, QString& error);
 	void add_tile();
 	void remove_tile();
 	void move_tile(int delta);
@@ -81,4 +90,6 @@ private:
 	std::vector<std::string> to_ids;
 	/// For each removed tile, the kept tile its cells are repainted with.
 	std::map<std::string, std::string> replacements;
+	/// Set by the QA hook: write_pending_overrides stores its error text here instead of opening a message box.
+	QString* qa_error = nullptr;
 };

@@ -79,6 +79,12 @@ public:
 	static inline QString qa_model = "units/human/footman/footman.mdx";
 	/// Opens qa_open_dialog with sample data. Never saves: nothing here accepts a dialog.
 	void open_qa_dialog();
+	/// Set by --qa-change-tileset <out folder> (needs --qa-offscreen, --qa-tile-texture and --qa-script-out): runs Change Tileset on the loaded
+	/// map without clicks, saves to the out folder, reloads it and writes PASS/FAIL lines to qa_script_out. Exit code 0 only when all pass.
+	static inline QString qa_change_tileset;
+	/// Set by --qa-tile-texture: the BLP or TGA imported as a custom tile texture by that hook.
+	static inline QString qa_tile_texture;
+	void run_qa_change_tileset();
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.
 	static inline QString qa_dump_layout_file;
 	/// Writes the widget tree of the open palette (class, objectName, size hints, size policy, geometry) to qa_dump_layout_file, so a too wide

@@ -57,7 +57,8 @@ namespace {
 		int height = 0;
 		int channels = 0;
 		std::vector<std::uint8_t> pixels;
-		if (path.extension() == ".blp") {
+		// A file named Tile.BLP is still a BLP.
+		if (texture_extension_of(path) == "blp") {
 			std::uint8_t* data = blp::load(*reader, width, height, channels);
 			if (!data) {
 				return std::unexpected("Not a valid BLP texture.");
@@ -598,44 +599,34 @@ void TileSetter::import_custom_tile() {
 		return;
 	}
 
-	const std::filesystem::path source = chosen.toStdWString();
-	// An extension with non-code-page characters makes path::string() throw; it is rejected below anyway, so lossy ASCII is enough.
-	std::string extension;
-	for (const wchar_t c : source.extension().wstring()) {
-		extension.push_back(c < 128 ? static_cast<char>(c) : '?');
+	QString error;
+	if (!import_texture_file(id, chosen.toStdWString(), error)) {
+		QMessageBox::warning(this, "Import Custom Tile", error);
 	}
-	if (!extension.empty()) {
-		extension.erase(0, 1);
-	}
-	std::ranges::transform(extension, extension.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+}
+
+bool TileSetter::import_texture_file(const std::string& id, const std::filesystem::path& source, QString& error) {
+	const std::string extension = texture_extension_of(source);
 	if (extension == "dds") {
-		QMessageBox::warning(
-			this,
-			"Import Custom Tile",
-			"A DDS texture cannot replace a tile: Warcraft III finds the stock BLP before it looks for a DDS. Convert the image to BLP or TGA."
-		);
-		return;
+		error = "A DDS texture cannot replace a tile: Warcraft III finds the stock BLP before it looks for a DDS. Convert the image to BLP or TGA.";
+		return false;
 	}
 	if (!is_tile_texture_extension(extension)) {
-		QMessageBox::warning(this, "Import Custom Tile", "Only BLP and TGA textures can be used as a tile.");
-		return;
+		error = "Only BLP and TGA textures can be used as a tile.";
+		return false;
 	}
 
 	const auto image = decode_tile_image(source);
 	if (!image) {
-		QMessageBox::warning(this, "Import Custom Tile", QString::fromStdString(image.error()));
-		return;
+		error = QString::fromStdString(image.error());
+		return false;
 	}
 	// A tile texture is a 4 x 4 atlas of square tiles (or 8 x 4 with the extended variations).
 	if (image->height < 4 || (image->width != image->height && image->width != image->height * 2)) {
-		QMessageBox::warning(
-			this,
-			"Import Custom Tile",
-			QString("The image is %1 x %2. A tile texture is a 4 x 4 atlas of square tiles, so it must be square (or twice as wide as high).")
-				.arg(image->width)
-				.arg(image->height)
-		);
-		return;
+		error = QString("The image is %1 x %2. A tile texture is a 4 x 4 atlas of square tiles, so it must be square (or twice as wide as high).")
+					.arg(image->width)
+					.arg(image->height);
+		return false;
 	}
 
 	QImage preview_image(image->rgba.data(), image->width, image->height, QImage::Format_RGBA8888);
@@ -647,6 +638,7 @@ void TileSetter::import_custom_tile() {
 	refresh_map_list(std::ranges::contains(to_ids, id) ? id : std::string());
 	update_available_tiles();
 	update_selected_info(id);
+	return true;
 }
 
 /// Copies the imported textures into the map folder under the stock tile's path, all or nothing. False (after telling the user) on failure.
@@ -671,7 +663,11 @@ bool TileSetter::write_pending_overrides() {
 				text += "\n" + QString::fromStdWString(leftover.wstring());
 			}
 		}
-		QMessageBox::critical(this, "Change Tileset", text);
+		if (qa_error) {
+			*qa_error = text; // an offscreen QA run must not open a modal box
+		} else {
+			QMessageBox::critical(this, "Change Tileset", text);
+		}
 		return false;
 	}
 	return true;
@@ -711,6 +707,42 @@ void TileSetter::qa_report_limits(const QString& out_file) {
 		// The result is written: end the run like the browse-models hook does (a capture without --qa-script-out keeps the dialog open).
 		QTimer::singleShot(0, qApp, &QCoreApplication::quit);
 	}
+}
+
+bool TileSetter::qa_accept_with_custom_tiles(const std::filesystem::path& texture, const std::size_t tile_count, QString& error, std::vector<std::string>& custom_tiles) {
+	const std::vector<std::string> original = map->terrain.tileset_ids;
+
+	// Add tiles of any tileset (the dialog lets the user switch the combo), as add_tile does, up to the policy limit.
+	std::string added;
+	for (const auto& [id, row] : map->terrain.terrain_slk.row_headers) {
+		if (to_ids.size() >= std::min(tile_count, max_tiles())) {
+			break;
+		}
+		if (std::ranges::find(to_ids, id) == to_ids.end()) {
+			to_ids.push_back(id);
+			if (added.empty()) {
+				added = id;
+			}
+		}
+	}
+	refresh_map_list(added);
+
+	const auto kept = std::ranges::find_if(to_ids, [&](const std::string& id) {
+		return !is_cliff_tile(id) && std::ranges::contains(original, id);
+	});
+	for (const std::string& id : { kept != to_ids.end() ? *kept : std::string(), added }) {
+		if (!id.empty() && !import_texture_file(id, texture, error)) {
+			return false;
+		}
+		if (!id.empty()) {
+			custom_tiles.push_back(id);
+		}
+	}
+
+	qa_error = &error;
+	save_tiles();
+	qa_error = nullptr;
+	return error.isEmpty() && map->terrain.tileset_ids == to_ids;
 }
 
 void TileSetter::save_tiles() {

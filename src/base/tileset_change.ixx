@@ -34,6 +34,19 @@ export bool is_tile_texture_extension(const std::string_view extension) {
 	return extension == "blp" || extension == "tga";
 }
 
+/// The extension of a file as the checks use it: lower case, no dot, and '?' for a character outside ASCII (such an extension is
+/// rejected anyway, and path::string() would throw for it on MSVC). `Tile.BLP` gives "blp".
+export std::string texture_extension_of(const fs::path& path) {
+	std::string extension;
+	for (const wchar_t c : path.extension().wstring()) {
+		extension.push_back(c < 128 ? static_cast<char>(std::tolower(static_cast<unsigned char>(c))) : '?');
+	}
+	if (!extension.empty()) {
+		extension.erase(0, 1);
+	}
+	return extension;
+}
+
 /// The names under which a texture imported for a tile replaces the stock one, from the tile's Terrain.slk `dir` and `file`
 /// (`file` without extension) and the imported file's extension (lower case, no dot). Empty when the policy writes nothing.
 /// SD: `<dir>/<file>.<ext>`. HD: `_hd.w3mod:<dir>/<file>_diffuse.<ext>`.

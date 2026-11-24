@@ -347,6 +347,63 @@ TEST_CASE("write_tile_overrides names a non-code-page source file in its error m
 	CHECK(result.error().leftovers.empty());
 }
 
+// More than the stock editor's 16 tiles (Asana 1220841004647015): the policy allows 64 (the 6-bit w3e corner field).
+TEST_CASE("a tileset of more than 16 tiles remaps every slot and moves blight behind the last tile") {
+	std::vector<std::string> many;
+	for (int i = 0; i < 40; i++) {
+		many.push_back(std::format("T{:03}", i));
+	}
+	CHECK(many.size() > 16);
+	CHECK(many.size() <= tileset_policy(false).max_tiles);
+
+	// Old tileset: the first five tiles. New: all 40 in reverse order.
+	const std::vector<std::string> old_ids(many.begin(), many.begin() + 5);
+	std::vector<std::string> new_ids(many.rbegin(), many.rend());
+	const std::vector<int> remap = build_tile_remap(old_ids, new_ids, {});
+	REQUIRE(remap.size() == 5);
+	CHECK(remap[0] == 39);
+	CHECK(remap[4] == 35);
+
+	std::vector<std::uint8_t> corners = { 0, 4, 5, 6, 63 }; // tile, tile, blight, past blight, far out of range
+	remap_ground_textures(corners, remap, new_ids.size());
+	CHECK(corners == std::vector<std::uint8_t> { 39, 35, 40, 0, 0 });
+}
+
+// decode_tile_image and import_texture_file in the dialog both take the extension from texture_extension_of.
+TEST_CASE("texture_extension_of folds case, drops the dot and survives non-code-page characters") {
+	CHECK(texture_extension_of("Tile.BLP") == "blp");
+	CHECK(texture_extension_of("a/b/Tile.Tga") == "tga");
+	CHECK(texture_extension_of("noextension").empty());
+	CHECK(texture_extension_of(fs::path(u8"地图/текстура.BLP")) == "blp");
+	CHECK(texture_extension_of(fs::path(u8"x.бмп")) == "???");
+}
+
+TEST_CASE("write_tile_overrides takes a source file whose own extension is upper case") {
+	const fs::path root = make_scratch_dir("upper_case_source");
+	const fs::path map = root / "map";
+	write_all(root / "MARBLE.BLP", "MARBLE");
+
+	// The dialog lower-cases the extension it passes in; the stock tile path decides the written name.
+	const auto result = write_tile_overrides(tileset_policy(false), map, std::vector<TileOverride> { grass(root / "MARBLE.BLP") });
+
+	REQUIRE_MESSAGE(result.has_value(), result.error().message);
+	CHECK(read_all(map / "TerrainArt/LordaeronSummer/Lords_Grass.blp") == "MARBLE");
+}
+
+TEST_CASE("write_tile_overrides copies a non-code-page source file into a non-code-page map folder") {
+	const fs::path root = make_scratch_dir("unicode_source_ok");
+	const fs::path map = root / fs::path(u8"地图_КАРТА");
+	write_all(root / fs::path(u8"текстура.tga"), "TGA");
+	TileOverride item = grass(root / fs::path(u8"текстура.tga"));
+	item.extension = "tga";
+
+	const auto result = write_tile_overrides(tileset_policy(false), map, std::vector<TileOverride> { item });
+
+	REQUIRE_MESSAGE(result.has_value(), result.error().message);
+	CHECK(read_all(map / "TerrainArt/LordaeronSummer/Lords_Grass.tga") == "TGA");
+	CHECK(file_count(map) == 1);
+}
+
 TEST_CASE("a failed write reports no leftovers when the rollback restored everything") {
 	const fs::path root = make_scratch_dir("no_leftovers");
 	const fs::path map = root / "map";

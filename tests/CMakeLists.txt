@@ -28,6 +28,7 @@ add_executable(HiveWE_tests
 	model_editor_logic_test.cpp
 	tile_animation_test.cpp
 	tileset_change_test.cpp
+	imports_test.cpp
 	world_undo_unsaved_test.cpp
 )
 

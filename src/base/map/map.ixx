@@ -139,7 +139,9 @@ export class Map: public QObject {
 
 		hierarchy.map_directory = path;
 		filesystem_path = fs::absolute(path) / "";
-		name = (--(--filesystem_path.end()))->string();
+		// path::string() throws on MSVC for a folder name outside the system code page, so keep the name as UTF-8.
+		const std::u8string folder_name = (--(--filesystem_path.end()))->u8string();
+		name = std::string(folder_name.begin(), folder_name.end());
 
 		// ToDo So for the game data files we should actually load from _balance/custom_v0.w3mod/Units, _balance/custom_v1.w3mod/Units, _balance/melee_v0.w3mod/units or /Units depending on the Game Data set and Game Data Versions
 		// Maybe just ignore RoC so we only need to choose between _balance/custom_v1.w3mod/Units and /Units
@@ -501,7 +503,8 @@ export class Map: public QObject {
 				return false;
 			}
 			filesystem_path = fs::absolute(path) / "";
-			name = (*--(--filesystem_path.end())).string();
+			const std::u8string folder_name = (*--(--filesystem_path.end())).u8string();
+			name = std::string(folder_name.begin(), folder_name.end());
 		}
 
 		if (!ensure_player_start_locations()) {
