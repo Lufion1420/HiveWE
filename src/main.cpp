@@ -386,7 +386,20 @@ int main(int argc, char* argv[]) {
 
 	std::println("Application start: {}ms", start_timer.elapsed_ms());
 
-	map->load(startup_map);
+	// An exception here (for example a missing data file) would otherwise hit std::terminate with no message.
+	try {
+		map->load(startup_map);
+	} catch (const std::exception& e) {
+		QMessageBox::critical(
+			nullptr,
+			"Opening map failed",
+			QString("The map could not be loaded: %1\n\nA data file may be missing or damaged.").arg(QString::fromLocal8Bit(e.what()))
+		);
+		return 1;
+	} catch (...) {
+		QMessageBox::critical(nullptr, "Opening map failed", "The map could not be loaded (unknown error).\n\nA data file may be missing or damaged.");
+		return 1;
+	}
 	// map->load("C:/Users/User/Desktop/MCFC.w3x");
 
 	w.open_qa_palette();
