@@ -96,6 +96,9 @@ Checks: `.claude/tools/script-check/`.
 
 - Map Info water and fog colours are stored B,G,R,A. Fog confirmed by `SetTerrainFogEx` on stock map 0415 (2026-11-20).
 
+- A w3i combo filled from an SLK must not assume the id column is the first SLK column (EnvironmentType in Weather.slk and EnvironmentSounds.slk is column 1 only); read ids from row keys and include the Default row. String combos need a byte-identity test for non-UTF-8 stored ids, or an unchanged OK rewrites them.
+- Any CASC file can be extracted with `.claude/tools/map-diff/sweep/gettd.py`; it needs all vcpkg bin DLLs next to `CascLib.dll` in a scratchpad copy.
+
 ## MDX reader (2026-11-23)
 
 - All shipped 3.0.1 CASC models are v1800 and `MDX::load` accepts any VERS, so v1800 models load, SD and HD.
