@@ -19,6 +19,8 @@ Primary implementation units are `.ixx` modules; Qt UI stays in `.cpp`/`.h`.
 
 Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_thread_pool`. Do not add new globals casually.
 
+`GLThreadPool::submit` futures come from a `packaged_task`, so unlike `std::async` futures they do NOT wait in their destructor. A loop over them that can throw or return early must use the exported `gl_thread_pool` `wait_for_all` (as `Doodads::create` and `Units::create` do), or workers keep running against freed state.
+
 ## Error handling by layer
 
 - UI flows: `QMessageBox`.
