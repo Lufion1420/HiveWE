@@ -262,6 +262,12 @@ export std::expected<std::vector<fs::path>, TileOverrideError> write_tile_overri
 	return written;
 }
 
+/// True when undo snapshots and the terrain clipboard taken under `old_ids` would put wrong or out-of-range ground texture indices into
+/// the corners under `new_ids` (a tile removed, added or moved). The same list in the same order keeps every index valid.
+export bool tile_indices_invalidated(const std::span<const std::string> old_ids, const std::span<const std::string> new_ids) {
+	return !std::ranges::equal(old_ids, new_ids);
+}
+
 /// For every tile of the old tileset (same order), its slot in the new tileset: the same tile where it was kept, else the slot of
 /// `replacements[tile]`, else slot 0. Empty when the new tileset is empty.
 export std::vector<int> build_tile_remap(

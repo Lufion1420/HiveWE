@@ -1070,6 +1070,7 @@ void HiveWE::create_new_map() {
 		cliffset_ids = map->terrain.cliffset_ids;
 	}
 
+	// reset_map_session above already deleted the palettes, so no terrain clipboard survives into the new map.
 	map->terrain.tileset = settings.tileset;
 	map->terrain.cliffset_ids = cliffset_ids;
 	map->terrain.change_tileset(tileset_ids, std::vector<int>(map->terrain.tileset_ids.size(), 0));
@@ -2679,6 +2680,119 @@ void HiveWE::run_qa_refusal_checks() {
 		check(map->units.units.size() == units_before + 1 && has_edit(), "redo after the refusal brings the edit back");
 		map->world_undo.undo(context);
 		check(map->units.units.size() == units_before && !has_edit(), "a second undo removes the edit again");
+
+		finish();
+	});
+}
+
+namespace {
+	/// A world edit that does nothing, so the hook can see whether the undo history survives.
+	class QaNoopCommand final : public WorldCommand {
+	  public:
+		void undo(WorldEditContext&) override {}
+		void redo(WorldEditContext&) override {}
+	};
+}
+
+void HiveWE::run_qa_tileset_clipboard_check() {
+	if (!qa_offscreen || !qa_tileset_clipboard_check) {
+		return;
+	}
+
+	QTimer::singleShot(0, this, [this]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+		};
+		const auto finish = [&]() {
+			for (const QString& line : lines) {
+				std::println("{}", line.toStdString());
+			}
+			if (!qa_script_out.isEmpty()) {
+				QFile file(qa_script_out);
+				if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+					file.write(lines.join(QChar('\n')).toUtf8() + "\nDONE\n");
+				}
+			}
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+
+		if (!terrain_palette) {
+			check(false, "the terrain palette is not open (use --palette terrain)");
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path texture = fs::absolute(fs::path(qa_tile_texture.toStdWString()));
+		if (qa_tile_texture.isEmpty() || !fs::is_regular_file(texture, ec)) {
+			check(false, "--qa-tile-texture <blp|tga> must name an existing file");
+			return finish();
+		}
+		map->headless = true; // no message boxes: they would hang an offscreen run
+		// The texture override is written into the asset lookup's map folder: point it at a fresh temporary folder, never at the startup
+		// map (data/test map is a symlink into the repository).
+		QTemporaryDir scratch;
+		if (!scratch.isValid()) {
+			check(false, "could not create a temporary folder for the texture override");
+			return finish();
+		}
+		hierarchy.map_directory = fs::path(scratch.path().toStdWString());
+		TerrainBrush& brush = terrain_palette->current_brush();
+
+		const auto add_history_and_clipboard = [&]() {
+			map->world_undo.new_undo_group();
+			map->world_undo.add_undo_action(std::make_unique<QaNoopCommand>());
+			brush.qa_fill_clipboard();
+		};
+
+		// The first tile that no cliff type uses as its ground tile can be removed without the cliffs losing their texture.
+		std::vector<std::string> removed_list = map->terrain.tileset_ids;
+		for (auto i = removed_list.rbegin(); i != removed_list.rend(); ++i) {
+			const bool used_by_cliff = std::ranges::any_of(map->terrain.cliffset_ids, [&](const std::string& cliff_id) {
+				return map->terrain.cliff_slk.data("groundtile", cliff_id) == *i;
+			});
+			if (!used_by_cliff) {
+				removed_list.erase(std::next(i).base());
+				break;
+			}
+		}
+		const bool found_removable = removed_list.size() + 1 == map->terrain.tileset_ids.size();
+		check(found_removable, "one tile found that can be removed");
+		if (!found_removable) {
+			return finish();
+		}
+
+		// 1. A removed tile: undo history and clipboard are dropped, and the map still counts as changed.
+		add_history_and_clipboard();
+		map->world_undo.mark_saved();
+		check(map->world_undo.has_pending_changes() && !brush.clipboard_is_empty(), "control: undo history and clipboard are filled before the change");
+		QString error;
+		{
+			auto* setter = new TileSetter(this);
+			const bool applied = setter->qa_apply_list(removed_list, {}, error);
+			check(applied, "Change Tileset with one tile removed accepted" + (error.isEmpty() ? QString() : ": " + error));
+		}
+		check(map->terrain.tile_list_changed, "Terrain reports that the tile list changed");
+		check(brush.clipboard_is_empty(), "removing a tile empties the terrain clipboard");
+		check(!map->world_undo.has_pending_changes(), "removing a tile empties the undo history");
+		check(map->world_undo.has_changes_since_save(), "removing a tile still counts as unsaved work");
+
+		// 2. Only a texture replaced, same list: history and clipboard stay, and the map counts as changed.
+		add_history_and_clipboard();
+		map->world_undo.mark_saved();
+		check(!map->world_undo.has_changes_since_save(), "control: the map counts as saved before the texture change");
+		const std::vector<std::string> same_list = map->terrain.tileset_ids;
+		error.clear();
+		{
+			auto* setter = new TileSetter(this);
+			const bool applied = setter->qa_apply_list(same_list, texture, error);
+			check(applied, "Change Tileset with only a texture replaced accepted" + (error.isEmpty() ? QString() : ": " + error));
+		}
+		check(!map->terrain.tile_list_changed, "Terrain reports that the tile list did not change");
+		check(!brush.clipboard_is_empty(), "a texture-only change keeps the terrain clipboard");
+		check(map->world_undo.has_pending_changes(), "a texture-only change keeps the undo history");
+		check(map->world_undo.has_changes_since_save(), "a texture-only change counts as unsaved work");
 
 		finish();
 	});

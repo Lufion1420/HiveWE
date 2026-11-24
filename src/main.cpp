@@ -153,6 +153,9 @@ int main(int argc, char* argv[]) {
 				"  --qa-change-tileset <out folder>  Needs --qa-offscreen, --qa-tile-texture <blp|tga> and --qa-script-out <file>: grows the startup map to 20 tiles with\n"
 				"                       the texture on two tiles, runs the Change Tileset OK path, saves to <out folder> (absent or empty), reloads it and writes PASS/FAIL lines.\n"
 				"                       Run it from a sandbox working directory: the overrides are written into its data/test map. Exit code 0 only when all pass.\n"
+				"  --qa-tileset-clipboard-check  Needs --qa-offscreen, --palette terrain and --qa-tile-texture <blp|tga> (--qa-script-out <file> optional): fills undo history and\n"
+				"                       terrain clipboard, runs Change Tileset with a tile removed (both dropped), then with only a texture replaced (both kept, map counts as changed).\n"
+				"                       The texture goes into a temporary folder, nothing is written to the map folder. Never saves. Exit code 0 only when all pass.\n"
 				"  --qa-doodad-undo-check  Needs --qa-offscreen and --palette doodads (--qa-script-out <file> optional): adds three doodads in memory, checks delete, undo, redo,\n"
 				"                       undo again and cut with undo through the doodad brush, writes PASS/FAIL lines and quits. Never saves. Exit code 0 only when all pass.\n"
 				"  --qa-refusal-checks  Needs --qa-offscreen (--qa-script-out <file> optional): on sandbox copies of data/test map, checks that Save, Save As, Test Map and\n"
@@ -202,6 +205,14 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_doodad_undo_check = true;
+		} else if (arguments[i] == "--qa-tileset-clipboard-check") {
+			// The hook changes the loaded map's tileset in memory (the texture goes into a temporary folder), so it must never run in a window the user works in.
+			const int palette = arguments.indexOf("--palette");
+			if (!arguments.contains("--qa-offscreen") || palette < 0 || arguments.value(palette + 1) != "terrain" || !arguments.contains("--qa-tile-texture")) {
+				std::println(stderr, "--qa-tileset-clipboard-check needs --qa-offscreen, --palette terrain and --qa-tile-texture <file>. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_tileset_clipboard_check = true;
 		} else if (arguments[i] == "--qa-refusal-checks") {
 			if (!arguments.contains("--qa-offscreen")) {
 				std::println(stderr, "--qa-refusal-checks needs --qa-offscreen. See HiveWE --help.");
@@ -405,6 +416,7 @@ int main(int argc, char* argv[]) {
 	w.open_qa_palette();
 	w.open_qa_dialog();
 	w.run_qa_change_tileset();
+	w.run_qa_tileset_clipboard_check();
 	w.run_qa_doodad_undo_check();
 	w.run_qa_refusal_checks();
 	w.run_qa_object_new_check();

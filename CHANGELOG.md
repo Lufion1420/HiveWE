@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Change Tileset no longer leaves stale tile indices in undo or the terrain clipboard** — When the tile list changes (a tile removed, added or reordered), the undo history is cleared and the copied terrain selection is dropped, so Ctrl+Z or paste can no longer write a texture index that no longer exists into the map. Replacing only a tile's texture keeps both, and still marks the map as having unsaved changes.
 - **Open Map (MPQ) and Map Protector no longer carry on after a file fails to extract** — If a file in a .w3x/.w3m archive cannot be extracted (damaged archive, unwritable target), HiveWE now shows which file failed and does not open the half-unpacked map; an optional file the archive simply lacks is still skipped quietly.
 - **Saving doodads with short or long ids no longer corrupts war3map.doo** — Saving a map with a doodad whose id, skin id or item-drop id is shorter than 4 characters no longer corrupts war3map.doo; ids longer than 4 characters now refuse the save instead of writing a shifted file.
 - **Startup map load failures show an error instead of crashing** — HiveWE now shows an "Opening map failed" error instead of silently crashing when the startup map can't be loaded because a data file is missing or damaged.

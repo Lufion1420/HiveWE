@@ -79,6 +79,20 @@ TEST_CASE("remap_ground_textures with an identical tileset changes nothing") {
 	CHECK(corners == before);
 }
 
+// Undo snapshots and the terrain clipboard hold ground texture indices: they must be dropped when the tile list changes.
+TEST_CASE("tile_indices_invalidated is true when a tile is removed, added or moved") {
+	CHECK(tile_indices_invalidated(original, std::vector<std::string> { "Adrt", "Agrs", "Arck", "Agrd" })); // last removed
+	CHECK(tile_indices_invalidated(original, std::vector<std::string> { "Adrt", "Arck", "Agrd", "Avin" })); // one removed in the middle
+	CHECK(tile_indices_invalidated(original, std::vector<std::string> { "Adrt" }));                         // two or more removed
+	CHECK(tile_indices_invalidated(original, std::vector<std::string> { "Adrt", "Agrs", "Arck", "Agrd", "Avin", "Lgrs" })); // added
+	CHECK(tile_indices_invalidated(original, std::vector<std::string> { "Agrs", "Adrt", "Arck", "Agrd", "Avin" }));         // reordered
+}
+
+TEST_CASE("tile_indices_invalidated is false for the same list, so a texture-only change keeps undo and clipboard") {
+	CHECK_FALSE(tile_indices_invalidated(original, original));
+	CHECK_FALSE(tile_indices_invalidated({}, {}));
+}
+
 // The unresolved Warcraft III behaviour (NEEDS_GAME_TEST) is pinned here: change tileset_policy() and these checks together.
 
 TEST_CASE("tileset_policy pins the unverified Warcraft III assumptions") {

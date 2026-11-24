@@ -309,6 +309,24 @@ void TerrainBrush::clear_selection() {
 	selection_tile_mask.clear();
 }
 
+void TerrainBrush::clear_clipboard() {
+	has_clipboard = false;
+	clipboard_corners.clear();
+	clipboard_pathing_cells_static.clear();
+	clipboard_tile_mask.clear();
+	if (mode == Mode::pasting) {
+		mode = return_mode;
+	}
+}
+
+void TerrainBrush::qa_fill_clipboard() {
+	clipboard_tile_area = TerrainRect(0, 0, 2, 2);
+	clipboard_tile_mask.assign(4, 1);
+	clipboard_corners.assign(9, Corner());
+	clipboard_pathing_cells_static.assign(8 * 8, 0);
+	has_clipboard = true;
+}
+
 void TerrainBrush::place_clipboard() {
 	if (!has_clipboard) {
 		return;

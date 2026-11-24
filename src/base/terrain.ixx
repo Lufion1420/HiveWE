@@ -139,6 +139,8 @@ export class Terrain: public QObject {
 	std::vector<std::string> tileset_ids;
 	/// Counts the forced reloads of tile textures in change_tileset.
 	int ground_texture_reloads = 0;
+	/// Whether the last change_tileset altered the tile list (see tile_indices_invalidated).
+	bool tile_list_changed = false;
 	std::vector<std::string> cliffset_ids;
 
 	/// In corners, not tiles
@@ -696,6 +698,8 @@ export class Terrain: public QObject {
 		const std::vector<int>& old_to_new,
 		const std::vector<std::string>& reloaded_tiles = {}
 	) {
+		// The caller must drop undo history, and the terrain palette its clipboard, when this is set: both hold old ground indices.
+		tile_list_changed = tile_indices_invalidated(tileset_ids, new_tileset_ids);
 		tileset_ids = new_tileset_ids;
 
 		// Map old ids to the new ids, blight included

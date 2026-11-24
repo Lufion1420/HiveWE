@@ -102,6 +102,9 @@ TerrainPalette::~TerrainPalette() {
 
 void TerrainPalette::refresh() {
 	create_terrain_buttons();
+	if (map->terrain.tile_list_changed) {
+		brush.clear_clipboard();
+	}
 	if (tileset_name) {
 		tileset_name->setText(QString::fromStdString(world_edit_data.data<std::string>("TileSets", std::string(1, map->terrain.tileset))));
 	}

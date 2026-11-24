@@ -35,6 +35,19 @@ TEST_CASE("clearing the undo history after an edit still counts as unsaved work"
 	CHECK(undo.has_changes_since_save());
 }
 
+TEST_CASE("mark_changed counts as unsaved work and keeps the undo history") {
+	WorldUndoManager undo;
+	undo.new_undo_group();
+	undo.add_undo_action(std::make_unique<NoopCommand>());
+	undo.mark_saved();
+	REQUIRE_FALSE(undo.has_changes_since_save());
+
+	undo.mark_changed(); // Change Tileset with a replaced texture and an unchanged tile list
+
+	CHECK(undo.has_changes_since_save());
+	CHECK(undo.has_pending_changes());
+}
+
 TEST_CASE("clearing the undo history of a saved world is a change, and saving again makes it clean") {
 	WorldUndoManager undo;
 	undo.mark_saved();

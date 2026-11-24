@@ -36,6 +36,10 @@ public:
 	/// `custom_tiles` receives the ids of the tiles that got the texture.
 	bool qa_accept_with_custom_tiles(const std::filesystem::path& texture, std::size_t tile_count, QString& error, std::vector<std::string>& custom_tiles);
 
+	/// QA hook only: sets the tile list to `ids`, optionally imports `texture` for the first non-cliff tile, then runs the OK handler. Errors go to
+	/// `error` (no message box). True when the map's tileset now equals `ids`.
+	bool qa_apply_list(const std::vector<std::string>& ids, const std::filesystem::path& texture, QString& error);
+
 private:
 	/// Validates and decodes a texture file for tile `id` and records it as pending. False with the reason in `error`.
 	bool import_texture_file(const std::string& id, const std::filesystem::path& source, QString& error);

@@ -85,6 +85,11 @@ public:
 	/// Set by --qa-tile-texture: the BLP or TGA imported as a custom tile texture by that hook.
 	static inline QString qa_tile_texture;
 	void run_qa_change_tileset();
+	/// Set by --qa-tileset-clipboard-check (needs --qa-offscreen, --palette terrain and --qa-tile-texture; --qa-script-out <file> optional): fills the undo history
+	/// and the terrain clipboard, runs Change Tileset with a tile removed (both must be dropped), then with only a texture replaced (both kept, map counts as
+	/// changed). Never saves; the texture goes into a temporary folder and nothing is written to the map folder. The loaded map's tileset changes in memory, hence --qa-offscreen. Exit code 0 only when all pass.
+	static inline bool qa_tileset_clipboard_check = false;
+	void run_qa_tileset_clipboard_check();
 	/// Set by --qa-doodad-undo-check (needs --qa-offscreen and --palette doodads; --qa-script-out <file> optional): adds three doodads in memory, then
 	/// checks delete, undo, redo, undo and cut with undo through DoodadBrush and writes PASS/FAIL lines. Never saves. Exit code 0 only when all pass.
 	static inline bool qa_doodad_undo_check = false;

@@ -745,6 +745,21 @@ bool TileSetter::qa_accept_with_custom_tiles(const std::filesystem::path& textur
 	return error.isEmpty() && map->terrain.tileset_ids == to_ids;
 }
 
+bool TileSetter::qa_apply_list(const std::vector<std::string>& ids, const std::filesystem::path& texture, QString& error) {
+	to_ids = ids;
+	refresh_map_list(ids.empty() ? std::string() : ids.front());
+	if (!texture.empty()) {
+		const auto target = std::ranges::find_if(ids, [&](const std::string& id) { return !is_cliff_tile(id); });
+		if (target == ids.end() || !import_texture_file(*target, texture, error)) {
+			return false;
+		}
+	}
+	qa_error = &error;
+	save_tiles();
+	qa_error = nullptr;
+	return error.isEmpty() && map->terrain.tileset_ids == ids;
+}
+
 void TileSetter::save_tiles() {
 	if (to_ids.empty()) {
 		return;
@@ -766,7 +781,14 @@ void TileSetter::save_tiles() {
 	// The tile textures are created with GL calls, which need the viewport's context (this runs from a dialog slot).
 	context->makeCurrent();
 	map->terrain.change_tileset(to_ids, from_to_id, reloaded);
-	// Undo snapshots of the terrain hold old texture slot indices, so the whole undo history ends here (like Map::resize).
-	map->world_undo.clear_all_undo();
+	// Undo snapshots of the terrain hold old texture slot indices, so the whole undo history ends here (like Map::resize). The terrain
+	// palette dropped its clipboard for the same reason (TerrainPalette::refresh, on Terrain::tileset_changed). An unchanged tile list
+	// (only a texture was replaced) keeps both.
+	if (map->terrain.tile_list_changed) {
+		map->world_undo.clear_all_undo();
+	} else {
+		// The texture files changed in the map: the save prompt must still see unsaved work.
+		map->world_undo.mark_changed();
+	}
 	close();
 }

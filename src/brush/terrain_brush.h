@@ -46,6 +46,13 @@ class TerrainBrush: public Brush {
 	void cut_selection() override;
 	void clear_selection() override;
 	void place_clipboard() override;
+	/// Drops the copied corners (they hold ground texture indices of the tile list they were copied under).
+	void clear_clipboard() override;
+	/// QA hook only: a 2x2 tile clipboard of default corners, without a selection or a GL context.
+	void qa_fill_clipboard();
+	bool clipboard_is_empty() const {
+		return !has_clipboard && clipboard_corners.empty() && clipboard_pathing_cells_static.empty() && clipboard_tile_mask.empty();
+	}
 	void render_selector() const override;
 	void render_selection() const override;
 	void render_clipboard() override;

@@ -86,6 +86,12 @@ export class WorldUndoManager {
 		++revision;
 	}
 
+	/// A change to the world that is not on the undo stacks (for example Change Tileset replacing a texture): the history is kept, but
+	/// has_changes_since_save() becomes true.
+	void mark_changed() {
+		++revision;
+	}
+
 	/// Call after a successful save: the world is saved as it is now.
 	void mark_saved() {
 		saved_revision = revision;
