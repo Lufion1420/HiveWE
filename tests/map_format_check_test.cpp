@@ -991,6 +991,35 @@ TEST_CASE("sanitize_metadata round-trips a v39 war3map.w3i") {
 	check_same_bytes(read_all(temp / "war3map.w3i"), w3i_strict_bytes(spec));
 }
 
+TEST_CASE("a war3map.w3e shorter than its magic restores hierarchy.map_directory") {
+	for (const std::string w3e : { std::string(), std::string("W3"), std::string("W3E") }) {
+		CAPTURE(w3e.size());
+		const fs::path source = make_scratch_dir("protector_short_w3e_source");
+		const fs::path temp = make_scratch_dir("protector_short_w3e_temp");
+		W3iSpec spec;
+		write_all(source / "war3map.w3i", w3i_strict_bytes(spec));
+		write_all(source / "war3map.w3e", w3e);
+
+		ProtectionOptions options;
+		options.clear_author = true;
+		{
+			const ScopedMapDirectory open_map("some/open/map");
+			CHECK_NOTHROW(prepare_source_path(source, temp, options));
+			CHECK(hierarchy.map_directory == fs::path("some/open/map"));
+		}
+
+		RenameCandidate candidate;
+		candidate.original_relative_path = "a.mdx";
+		candidate.new_relative_path = "b.mdx";
+		candidate.match_key = asset_match_key("a.mdx");
+		{
+			const ScopedMapDirectory open_map("some/open/map");
+			CHECK_NOTHROW(rewrite_map_info_references(temp, { candidate }));
+			CHECK(hierarchy.map_directory == fs::path("some/open/map"));
+		}
+	}
+}
+
 TEST_CASE("prepare_source_path unpacks a real archive into the temp folder and drops the listfile") {
 	const fs::path dir = make_scratch_dir("protector_archive_ok");
 	const auto files = valid_map_files();

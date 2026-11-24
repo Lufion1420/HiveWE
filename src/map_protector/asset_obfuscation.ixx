@@ -709,17 +709,21 @@ export AssetObfuscationResult rewrite_map_info_references(const fs::path& temp_d
 		candidates_by_match_key[candidate.match_key] = &candidate;
 	}
 
-	const fs::path original_map_directory = hierarchy.map_directory;
+	// Restored on every exit, including a throw from the w3e header read below.
+	struct MapDirectoryRestore {
+		fs::path original = hierarchy.map_directory;
+		~MapDirectoryRestore() { hierarchy.map_directory = original; }
+	} restore_map_directory;
 	hierarchy.map_directory = temp_dir;
-
-	char tileset = 'L';
-	if (auto w3e = hierarchy.map_file_read("war3map.w3e"); w3e && w3e->read_string(4) == "W3E!") {
-		w3e->advance(4); // format version
-		tileset = w3e->read<char>();
-	}
 
 	AssetObfuscationResult result{ true, "" };
 	try {
+		char tileset = 'L';
+		if (auto w3e = hierarchy.map_file_read("war3map.w3e"); w3e && w3e->read_string(4) == "W3E!") {
+			w3e->advance(4); // format version
+			tileset = w3e->read<char>();
+		}
+
 		MapInfo info;
 		info.load();
 
@@ -741,7 +745,6 @@ export AssetObfuscationResult rewrite_map_info_references(const fs::path& temp_d
 		result = { false, std::string("Failed to rewrite asset references in war3map.w3i: ") + e.what() };
 	}
 
-	hierarchy.map_directory = original_map_directory;
 	return result;
 }
 

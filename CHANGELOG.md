@@ -80,6 +80,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 
 #### Map Protector
 - **"Remove listfile" now really leaves `(listfile)` out of the protected map** — The option was ignored before and `(listfile)` was always written into the protected archive.
+- **Map Protector no longer leaves later reads and writes pointed at its temp folder when a map's terrain file (war3map.w3e) is truncated.**
 
 ### New Features
 - **Change Tileset shows a preview and mapping per tile and can import custom tiles** — Each tile has a preview and a mapping, and removed tiles are repainted with a replacement you choose; the blight index is remapped too. You can import a BLP or TGA texture as a custom tile, saved into the map folder as a texture override. Everything is applied only on OK, all-or-nothing. DDS is rejected because Warcraft III would find the stock BLP first.

@@ -300,17 +300,21 @@ SyncSaveResult sanitize_metadata(const fs::path& temp_dir, const ProtectionOptio
 		return { true, "" };
 	}
 
-	const fs::path original_map_directory = hierarchy.map_directory;
+	// Restored on every exit, including a throw from the w3e header read below.
+	struct MapDirectoryRestore {
+		fs::path original = hierarchy.map_directory;
+		~MapDirectoryRestore() { hierarchy.map_directory = original; }
+	} restore_map_directory;
 	hierarchy.map_directory = temp_dir;
-
-	char tileset = 'L';
-	if (auto w3e = hierarchy.map_file_read("war3map.w3e"); w3e && w3e->read_string(4) == "W3E!") {
-		w3e->advance(4); // format version
-		tileset = w3e->read<char>();
-	}
 
 	SyncSaveResult result{ true, "" };
 	try {
+		char tileset = 'L';
+		if (auto w3e = hierarchy.map_file_read("war3map.w3e"); w3e && w3e->read_string(4) == "W3E!") {
+			w3e->advance(4); // format version
+			tileset = w3e->read<char>();
+		}
+
 		MapInfo info;
 		info.load();
 		if (options.clear_author) {
@@ -332,7 +336,6 @@ SyncSaveResult sanitize_metadata(const fs::path& temp_dir, const ProtectionOptio
 		result = { false, std::string("Failed to sanitize map metadata: ") + e.what() };
 	}
 
-	hierarchy.map_directory = original_map_directory;
 	return result;
 }
 
@@ -483,17 +486,21 @@ SyncSaveResult inline_map_info_trigger_strings(const fs::path& temp_dir, const s
 		return { true, "" };
 	}
 
-	const fs::path original_map_directory = hierarchy.map_directory;
+	// Restored on every exit, including a throw from the w3e header read below.
+	struct MapDirectoryRestore {
+		fs::path original = hierarchy.map_directory;
+		~MapDirectoryRestore() { hierarchy.map_directory = original; }
+	} restore_map_directory;
 	hierarchy.map_directory = temp_dir;
-
-	char tileset = 'L';
-	if (auto w3e = hierarchy.map_file_read("war3map.w3e"); w3e && w3e->read_string(4) == "W3E!") {
-		w3e->advance(4); // format version
-		tileset = w3e->read<char>();
-	}
 
 	SyncSaveResult result{ true, "" };
 	try {
+		char tileset = 'L';
+		if (auto w3e = hierarchy.map_file_read("war3map.w3e"); w3e && w3e->read_string(4) == "W3E!") {
+			w3e->advance(4); // format version
+			tileset = w3e->read<char>();
+		}
+
 		MapInfo info;
 		info.load();
 
@@ -533,7 +540,6 @@ SyncSaveResult inline_map_info_trigger_strings(const fs::path& temp_dir, const s
 		result = { false, std::string("Failed to inline trigger strings into war3map.w3i: ") + e.what() };
 	}
 
-	hierarchy.map_directory = original_map_directory;
 	return result;
 }
 
