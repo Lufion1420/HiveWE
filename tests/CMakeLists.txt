@@ -27,6 +27,8 @@ add_executable(HiveWE_tests
 	selection_hit_points_test.cpp
 	model_editor_logic_test.cpp
 	tile_animation_test.cpp
+	tileset_change_test.cpp
+	world_undo_unsaved_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

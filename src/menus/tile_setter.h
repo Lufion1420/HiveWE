@@ -1,13 +1,22 @@
 #pragma once
 
-#include <vector>
-#include <QButtonGroup>
 #include <QDialog>
+#include <QString>
+#include <QIcon>
+#include <filesystem>
+#include <map>
+#include <string>
+#include <vector>
 #include "ui_tile_setter.h"
 
-#include <vector>
-
-import FlowLayout;
+class QComboBox;
+class QDialogButtonBox;
+class QGroupBox;
+class QLabel;
+class QPushButton;
+class QTreeWidget;
+class QTreeWidgetItem;
+class QCheckBox;
 
 class TileSetter : public QDialog {
 	Q_OBJECT
@@ -15,25 +24,61 @@ class TileSetter : public QDialog {
 public:
 	explicit TileSetter(QWidget* parent = nullptr);
 
+	/// QA hook only: adds the first addable tile and removes the last removable one, so a capture shows pending changes.
+	void qa_apply_sample_changes();
+	/// QA hook only: reduces the list to one tile, then to none, and prints the OK and Remove button states of both (also to `out_file`).
+	void qa_report_limits(const QString& out_file);
+
 private:
-	void add_tile() const;
-	void remove_tile() const;
-	void update_available_tiles() const;
-	void existing_tile_clicked(QAbstractButton* button) const;
-	void available_tile_clicked(const QAbstractButton* button) const;
-	void shift_left() const;
-	void shift_right() const;
+	void add_tile();
+	void remove_tile();
+	void move_tile(int delta);
+	void update_available_tiles();
+	void refresh_map_list(const std::string& select_id = {});
+	void update_buttons();
+	void update_selected_info(const std::string& id);
+	bool is_cliff_tile(const std::string& id) const;
+	QIcon tile_icon(const std::string& id) const;
+	void import_custom_tile();
 	void save_tiles();
+	bool write_pending_overrides();
 
 	Ui::TileSetter ui;
 
-	// QListWidget* widget_list = new QListWidget;
+	QComboBox* tileset_combo = nullptr;
+	QTreeWidget* available_list = nullptr;
+	QTreeWidget* map_list = nullptr;
+	QLabel* count_label = nullptr;
+	QPushButton* add_button = nullptr;
+	QPushButton* remove_button = nullptr;
+	QPushButton* up_button = nullptr;
+	QPushButton* down_button = nullptr;
+	QPushButton* import_button = nullptr;
+	QDialogButtonBox* button_box = nullptr;
 
-	QButtonGroup* selected_group = new QButtonGroup;
-	QButtonGroup* available_group = new QButtonGroup;
+	QLabel* preview_large = nullptr;
+	QLabel* preview_name = nullptr;
+	QLabel* preview_id = nullptr;
+	QLabel* preview_file = nullptr;
+	QLabel* preview_size = nullptr;
 
-	FlowLayout* selected_layout = new FlowLayout;
-	FlowLayout* available_layout = new FlowLayout;
+	mutable std::map<std::string, QIcon> icon_cache;
 
-	std::vector<int> from_to_id;
+	/// A texture picked with Import Custom Tile, not yet written to the map folder (that happens on OK).
+	struct PendingTexture {
+		std::filesystem::path source;
+		std::string extension;
+		QIcon icon;
+		int width = 0;
+		int height = 0;
+	};
+	/// By tile id: the tiles whose texture the map will override.
+	std::map<std::string, PendingTexture> pending_textures;
+	/// The tile shown in the Selected Tile group, the target of Import Custom Tile.
+	std::string selected_id;
+
+	/// The new tileset, in slot order.
+	std::vector<std::string> to_ids;
+	/// For each removed tile, the kept tile its cells are repainted with.
+	std::map<std::string, std::string> replacements;
 };

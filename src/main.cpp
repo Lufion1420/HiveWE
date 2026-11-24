@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
 				"  --qa-select-first    With --palette units or doodads: select the first unit or doodad of the map, adding a sample one in memory if the map has none (for screenshots).\n"
 				"  --qa-open-dialog <name>  Needs --qa-offscreen. Open one dialog or tool window with sample data after the map has loaded (never saved). Names:\n"
 				"                       settings, unit-properties, item-drop, map-settings, scenario, gameplay-constants, new-map, object-editor,\n"
-				"                       asset-manager, map-protector, import-object-data (empty package), item-tables, config, tile-setter, tile-pather,\n"
+				"                       asset-manager, map-protector, import-object-data (empty package), item-tables, config, tile-setter, tile-setter-changes, tile-setter-limits (prints OK/Remove button states to stdout and --qa-script-out), tile-pather,\n"
 				"                       model-editor (stock model units/human/footman/footman.mdx), browse-models (the Model Editor's model browser; with --qa-script-out <file>\n"
 				"                       it waits for the thumbnails, writes result lines to <file> and a PNG of the dialog next to it).\n"
 				"  --qa-model-editor-script \"<steps>\"  With --qa-open-dialog model-editor and --qa-script-out <file>: drive the Model Editor's widgets in-process\n"
@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
 			HiveWE::qa_select_first = true;
 		} else if (arguments[i] == "--qa-open-dialog") {
 			static const QStringList names = { "settings", "unit-properties", "item-drop", "map-settings", "scenario", "gameplay-constants", "new-map",
-				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-pather", "model-editor", "browse-models" };
+				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-setter-changes", "tile-setter-limits", "tile-pather", "model-editor", "browse-models" };
 			if (i + 1 >= arguments.size() || !names.contains(arguments[i + 1])) {
 				std::println(stderr, "--qa-open-dialog needs one of: {}. See HiveWE --help.", names.join(", ").toStdString());
 				return 2;

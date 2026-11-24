@@ -25,7 +25,7 @@ Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_threa
 - Parsing/resources: `std::expected<..., std::string>`.
 - Low-level binary: exceptions on invalid bounds / I/O failure.
 - Diagnostics: `std::println`.
-- `Map` cannot be constructed in tests (`RenderManager` calls `init_gl`). Map-level checks must be free functions over the globals.
+- `Map` cannot be constructed in tests (`RenderManager` calls `init_gl`). Map-level checks must be free functions over the globals. `Terrain` needs GL too, so Change Tileset logic that tests cover lives in the GL-free `src/base/tileset_change.ixx` (tests in `tests/tileset_change_test.cpp`). Tests never construct `QApplication` or `QWidget`.
 - Assertions are invariants in parsers — do not replace with silent fallbacks unless user-facing.
 
 ## Performance

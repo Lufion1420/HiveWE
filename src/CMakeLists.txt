@@ -117,6 +117,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"model_editor/model_catalog.ixx"
 	"model_editor/timeline_math.ixx"
 	"model_editor/tile_animation.ixx"
+	"base/tileset_change.ixx"
 	
 	"test.ixx"
 	"object_editor/ability_list_editor.ixx"

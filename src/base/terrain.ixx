@@ -18,6 +18,7 @@ import SLK;
 import Physics;
 import PathingMap;
 import Hierarchy;
+import TilesetChange;
 import ResourceManager;
 import Globals;
 import Camera;
@@ -136,6 +137,8 @@ export class Terrain: public QObject {
 
 	char tileset;
 	std::vector<std::string> tileset_ids;
+	/// Counts the forced reloads of tile textures in change_tileset.
+	int ground_texture_reloads = 0;
 	std::vector<std::string> cliffset_ids;
 
 	/// In corners, not tiles
@@ -686,16 +689,17 @@ export class Terrain: public QObject {
 		glDepthMask(true);
 	}
 
-	void change_tileset(const std::vector<std::string>& new_tileset_ids, std::vector<int> new_to_old) {
+	/// `old_to_new` has one entry per old tile (see build_tile_remap). `reloaded_tiles` are tiles whose texture file was just replaced in
+	/// the map: they load under a fresh cache identifier, because ResourceManager cannot evict one key.
+	void change_tileset(
+		const std::vector<std::string>& new_tileset_ids,
+		const std::vector<int>& old_to_new,
+		const std::vector<std::string>& reloaded_tiles = {}
+	) {
 		tileset_ids = new_tileset_ids;
 
-		// Blight
-		new_to_old.push_back(new_tileset_ids.size());
-
-		// Map old ids to the new ids
-		for (auto& ground_texture : corner_ground_texture) {
-			ground_texture = new_to_old[ground_texture];
-		}
+		// Map old ids to the new ids, blight included
+		remap_ground_textures(corner_ground_texture, old_to_new, new_tileset_ids.size());
 
 		// Reload tile textures
 		ground_textures.clear(); // ToDo Clear them after loading new ones?
@@ -703,9 +707,12 @@ export class Terrain: public QObject {
 		gpu_ground_texture_handles.clear();
 
 		for (const auto& tile_id : tileset_ids) {
+			const std::string identifier = std::ranges::contains(reloaded_tiles, tile_id)
+				? "map-override-" + std::to_string(++ground_texture_reloads)
+				: "";
 			ground_textures.push_back(resource_manager
 										  .load<GroundTexture>(
-											  terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id)
+											  terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id), identifier
 										  )
 										  .value());
 			ground_texture_to_id.emplace(tile_id, static_cast<int>(ground_textures.size() - 1));

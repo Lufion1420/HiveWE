@@ -17,7 +17,7 @@ paths:
 ## Rules
 
 - Load assets through `ResourceManager` — cache is intentional and thread-safe.
-- `ResourceManager::load<GroundTexture>` / `load<Texture>` take bare paths: no extension and no `_diffuse` suffix. The loader adds `_diffuse` for HD and probes `.tga`/`.blp`/`.dds`; passing a suffixed path doubles it.
+- `ResourceManager::load<GroundTexture>` / `load<Texture>` take bare paths: no extension and no `_diffuse` suffix. The loader adds `_diffuse` for HD and probes `.tga`/`.blp`/`.dds`; passing a suffixed path doubles it. Each probe goes through the whole `Hierarchy`, so a map file overrides a stock tile only with the stock extension (`.blp` in SD) or `.tga`; a DDS import has no effect in SD.
 - `GLThreadPool` shared contexts + explicit sync — do not remove casually.
 - `Map::update()` / `Map::render()` are hot paths.
 - Debug overlay (`glwidget.cpp`): distinguish HiveWE terrain-space vs Warcraft world-space; user readouts prefer Warcraft coordinates.

@@ -1909,7 +1909,7 @@ bool HiveWE::confirm_map_replacement(const QString& action) {
 		return true;
 	}
 
-	const bool has_unsaved_changes = map->filesystem_path.empty() || map->world_undo.has_pending_changes();
+	const bool has_unsaved_changes = map->filesystem_path.empty() || map->world_undo.has_changes_since_save();
 	if (!has_unsaved_changes) {
 		return true;
 	}
@@ -2242,6 +2242,16 @@ void HiveWE::open_qa_dialog() {
 		}
 	} else if (name == "tile-setter") {
 		shown = new TileSetter(this);
+	} else if (name == "tile-setter-changes") {
+		// Same dialog with one tile added and one removed, never accepted.
+		auto* setter = new TileSetter(this);
+		shown = setter;
+		setter->qa_apply_sample_changes();
+	} else if (name == "tile-setter-limits") {
+		// Reduces the list to one tile and to none, prints the OK and Remove button states (to stdout and to --qa-script-out), never accepted.
+		auto* setter = new TileSetter(this);
+		shown = setter;
+		setter->qa_report_limits(qa_script_out);
 	} else if (name == "tile-pather") {
 		shown = new TilePather(this);
 	} else if (name == "import-object-data") {
