@@ -138,6 +138,10 @@ export class Map: public QObject {
 
 	RenderManager render_manager;
 
+  private:
+	std::optional<MapFiles> saved_state;
+
+  public:
 	void load(const fs::path& path) {
 		Timer full_timer;
 		Timer timer;
@@ -356,6 +360,7 @@ export class Map: public QObject {
 		camera.position.z = terrain.interpolated_height(camera.position.x, camera.position.y, true);
 
 		loaded = true;
+		remember_saved_state();
 
 		connect(
 			units_table,
@@ -499,6 +504,63 @@ export class Map: public QObject {
 		message_box.setStandardButtons(QMessageBox::Ok);
 		message_box.exec();
 		return false;
+	}
+
+	/// What save() would write from memory now, for the unsaved changes check. Object data and gameplay constants are taken as
+	/// their edits, so a field that cannot be written does not make this fail. The map script is left out, as it is made from this
+	/// data. Writes and changes nothing. Empty when a writer throws, for example on a unit id over 4 bytes.
+	/// A new writer in save() must be added here, or the editor will not ask to save its edits.
+	[[nodiscard]]
+	std::optional<MapFiles> serialized_state() const {
+		MapFiles files;
+		try {
+			const MapWriteCapture capture(files);
+			pathing_map.save();
+			terrain.save();
+			shadow_map.save();
+			doodads.save(terrain);
+			units.save(terrain);
+			regions.save(terrain.offset.x, terrain.offset.y);
+			info.save(terrain.tileset);
+			trigger_strings.save();
+			triggers.save();
+			triggers.save_scripts();
+			// war3map.imp lists the map folder, which the Asset Manager and others change directly.
+			if (!filesystem_path.empty()) {
+				imports.save(filesystem_path);
+			}
+
+			const std::array<std::pair<std::string_view, const slk::SLK*>, 8> edits = { {
+				{ "war3map.w3d", &doodads_slk },
+				{ "war3map.w3b", &destructibles_slk },
+				{ "war3map.w3u", &units_slk },
+				{ "war3map.w3t", &items_slk },
+				{ "war3map.w3a", &abilities_slk },
+				{ "war3map.w3h", &buff_slk },
+				{ "war3map.w3q", &upgrade_slk },
+				{ "war3mapMisc.txt", &gameplay_constants.data },
+			} };
+			for (const auto& [file_name, table] : edits) {
+				const std::string data = table->serialized_shadow_data();
+				files[fs::path(file_name)].assign(data.begin(), data.end());
+			}
+		} catch (const std::exception& e) {
+			std::println(stderr, "Unsaved changes check: the map data cannot be written: {}", e.what());
+			return std::nullopt;
+		}
+		return files;
+	}
+
+	/// Call when the map folder and memory agree (after a load or a successful save).
+	void remember_saved_state() {
+		saved_state = serialized_state();
+	}
+
+	/// True when save() would now write something other than at the last remember_saved_state(). Also true when it cannot tell.
+	[[nodiscard]]
+	bool differs_from_saved_state() const {
+		const auto current = serialized_state();
+		return !current || !saved_state || *current != *saved_state;
 	}
 
 	bool save(const fs::path& path) {

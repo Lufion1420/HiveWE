@@ -98,6 +98,13 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **"Remove listfile" now really leaves `(listfile)` out of the protected map** — The option was ignored before and `(listfile)` was always written into the protected archive.
 - **Map Protector no longer leaves later reads and writes pointed at its temp folder when a map's terrain file (war3map.w3e) is truncated.**
 
+#### Unsaved Changes
+- **Quit, New Map and Open Map ask to save after any change that Save would write** — This now covers object data, triggers, map info, scenario and other settings, not only terrain and object placement edits, and the Exit button asks too instead of closing at once.
+- **Closing the Trigger Editor no longer rewrites tabs you did not edit** — Opening a tab could change its line endings or a variable's flags even though you changed nothing.
+- **Save includes the open tabs of a Trigger Editor opened from global search** — Text typed there was left out of the saved map while the editor stayed open.
+- **New Map closes tool windows as Open Map does** — An editor left open could show, or write, the previous map's data.
+- **Browsing the Tooltip Editor no longer changes objects** — Switching objects or levels stored the displayed tooltips as edits, which could replace `TRIGSTR_` text references and alter line breaks or colour codes.
+
 ### New Features
 - **Change Tileset shows a preview and mapping per tile and can import custom tiles** — Each tile has a preview and a mapping, and removed tiles are repainted with a replacement you choose; the blight index is remapped too. You can import a BLP or TGA texture as a custom tile, saved into the map folder as a texture override. Everything is applied only on OK, all-or-nothing. DDS is rejected because Warcraft III would find the stock BLP first.
 - **Model Editor has a toolbar, animation timeline, inspector docks and status bar, styled for Flat Dark and Flat Light** — The toolbar offers Open, Browse Models, Wireframe, Reset Camera, Edit MDL, Save to MDX and a sequence picker. The timeline has play/pause, restart, scrub, loop and 0.5x/1x/2x speed, and the Sequences, Geosets/Materials (with per-geoset Show toggles) and Info (MDX version, drawn vertex and triangle counts) docks replace the old ImGui panels.

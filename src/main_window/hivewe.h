@@ -110,6 +110,16 @@ public:
 	/// Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_region_palette_check = false;
 	void run_qa_region_palette_check();
+	/// Set by --qa-unsaved-check (needs --qa-offscreen; --qa-script-out <file> optional): works on a sandbox copy of data/test map. Opens and closes
+	/// the editor windows (no prompt may follow), edits through them (the map must count as unsaved until saved) and checks the Save/Discard/Cancel
+	/// answers. Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_unsaved_check = false;
+	void run_qa_unsaved_check();
+	/// Set by the unsaved check hook only: a QMessageBox button that answers the unsaved changes prompt instead of showing it.
+	static inline int qa_prompt_answer = 0;
+	static inline int qa_prompt_count = 0;
+	/// Set by the unsaved check hook only: the offscreen run shows the real prompt, and the hook presses its buttons.
+	static inline bool qa_prompt_real = false;
 	/// When set (by the refusal hook only), load_map records the refusal text here instead of opening a message box.
 	static inline QStringList* qa_dialog_log = nullptr;
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.
@@ -206,7 +216,11 @@ private:
 	void update_map_context(const QString& status, const QString& detail_override = {});
 	bool save_current_map();
 	bool save_current_map_as();
+	/// Moves into the map what open editor windows still hold, before a save writes it.
+	void apply_open_editors();
 	bool confirm_map_replacement(const QString& action);
+	/// True when quitting or replacing the map now would lose something Save writes.
+	bool has_unsaved_work();
 	static QString sanitized_folder_name(const QString& map_name);
 	Palette* palette_for_view(SidebarPaletteView view) const;
 	QWidget* host_for_view(SidebarPaletteView view) const;
@@ -287,6 +301,4 @@ private:
 signals:
 	void tileset_changed();
 	void palette_changed(QRibbonTab* tab);
-
-	void saving_initiated();
 };

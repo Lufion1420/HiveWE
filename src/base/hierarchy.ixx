@@ -37,8 +37,14 @@ export void remove_map_write_temp_files(const fs::path& directory) {
 	}
 }
 
+/// Map file contents keyed by file name relative to the map folder.
+export using MapFiles = std::map<fs::path, std::vector<u8>>;
+
 export class Hierarchy {
   public:
+	/// While set (see MapWriteCapture), map_file_write on this thread stores the bytes here and touches no file.
+	static inline thread_local MapFiles* map_write_capture = nullptr;
+
 	char tileset = 'L';
 	std::string locale = "enus";
 	casc::CASC game_data;
@@ -195,6 +201,11 @@ export class Hierarchy {
 	/// Writes `<path>.hivewe-tmp`, checks its size and renames it over the target, so a failed write leaves the old file intact.
 	/// Throws on any failure and removes the temporary file first.
 	void map_file_write(const fs::path& path, const std::span<const u8> data) const {
+		if (map_write_capture != nullptr) {
+			(*map_write_capture)[path].assign(data.begin(), data.end());
+			return;
+		}
+
 		const fs::path target = map_directory / path;
 		fs::path temporary = target;
 		temporary += map_write_temp_suffix;
@@ -249,3 +260,19 @@ export class Hierarchy {
 };
 
 export inline Hierarchy hierarchy;
+
+/// While one lives, what Hierarchy::map_file_write would write on this thread goes into `files` instead of the map folder. This
+/// is how the unsaved changes check runs the real writers without writing.
+export class MapWriteCapture {
+	MapFiles* previous;
+
+  public:
+	explicit MapWriteCapture(MapFiles& files) : previous(Hierarchy::map_write_capture) {
+		Hierarchy::map_write_capture = &files;
+	}
+	~MapWriteCapture() {
+		Hierarchy::map_write_capture = previous;
+	}
+	MapWriteCapture(const MapWriteCapture&) = delete;
+	MapWriteCapture& operator=(const MapWriteCapture&) = delete;
+};

@@ -41,6 +41,9 @@ class TooltipEditor : public QMainWindow {
 		QSpinBox* level_spin = nullptr;
 		QWidget* fav_container = nullptr;        // Favorite template buttons next to utip label
 		std::string current_id;
+		// The two texts as the fields last showed them or wrote them. Only a difference from these is written.
+		QString shown_tip;
+		QString shown_ubertip;
 		int current_level = 1;
 		bool leveled = false;
 		std::string tip_field_name;    // Base SLK column name (level suffix added if leveled)

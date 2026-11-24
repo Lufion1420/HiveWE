@@ -45,23 +45,30 @@ import GLThreadPool;
 namespace fs = std::filesystem;
 
 namespace {
-/// --qa-offscreen: every top-level window the app creates (dialogs, editors, message boxes) refuses activation, so an automated run never
-/// takes the foreground from the user.
+/// --qa-offscreen: every top-level window the app creates (dialogs, editors, message boxes, popups) is kept left of all screens, and windows
+/// and dialogs refuse activation, so an automated run never shows UI to the user or takes the foreground from them.
 class NoActivateFilter : public QObject {
   public:
 	using QObject::QObject;
 
 	bool eventFilter(QObject* watched, QEvent* event) override {
-		if (event->type() == QEvent::Polish) {
-			auto* widget = qobject_cast<QWidget*>(watched);
-			if (widget && (widget->windowType() == Qt::Window || widget->windowType() == Qt::Dialog) && !widget->isVisible()) {
-				widget->setAttribute(Qt::WA_ShowWithoutActivating);
-				widget->setWindowFlag(Qt::WindowDoesNotAcceptFocus, true);
-				// A window without a parent would open on the primary screen. Dialogs with a parent are centred on it, which is already off screen.
-				if (!widget->parentWidget() && !widget->testAttribute(Qt::WA_Moved)) {
-					widget->move(QGuiApplication::primaryScreen()->virtualGeometry().left() - 4000, 0);
-				}
-			}
+		const QEvent::Type type = event->type();
+		if (type != QEvent::Polish && type != QEvent::Show && type != QEvent::Move) {
+			return false;
+		}
+		auto* widget = qobject_cast<QWidget*>(watched);
+		if (!widget || !widget->isWindow()) {
+			return false;
+		}
+		if (type == QEvent::Polish && (widget->windowType() == Qt::Window || widget->windowType() == Qt::Dialog) && !widget->isVisible()) {
+			widget->setAttribute(Qt::WA_ShowWithoutActivating);
+			widget->setWindowFlag(Qt::WindowDoesNotAcceptFocus, true);
+		}
+		// Qt places an unmoved window itself, and a dialog is clamped onto a screen even when its parent is off screen. Moving it at Polish
+		// prevents that. Show and Move catch windows that are positioned later, such as menus. All three arrive before a hidden window is shown.
+		const int screens_left = QGuiApplication::primaryScreen()->virtualGeometry().left();
+		if (!widget->testAttribute(Qt::WA_Moved) || widget->frameGeometry().right() >= screens_left) {
+			widget->move(screens_left - std::max(4000, widget->width() + 200), 0);
 		}
 		return false;
 	}
@@ -169,6 +176,9 @@ int main(int argc, char* argv[]) {
 				"  --qa-region-palette-check  Needs --qa-offscreen and --palette regions (--qa-script-out <file> optional): checks that the Regions palette lists the regions\n"
 				"                       of the startup map (data/test map of the working directory; it has one region) by count and name. Never saves. Writes PASS/FAIL lines\n"
 				"                       and quits. Exit code 0 only when all pass.\n"
+				"  --qa-unsaved-check  Needs --qa-offscreen (--qa-script-out <file> optional): on a sandbox copy of data/test map, opens the editor windows, edits\n"
+				"                       object data, triggers, map info, scenario and more, and checks which states count as unsaved and what the prompt's\n"
+				"                       answers do. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory. Exit code 0 only when all pass.\n"
 				"  --qa-dialog-tab <n> With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -229,6 +239,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_object_new_check = true;
+		} else if (arguments[i] == "--qa-unsaved-check") {
+			// The hook edits the loaded map and opens editor windows, so it must never run in a window the user works in.
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-unsaved-check needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_unsaved_check = true;
 		} else if (arguments[i] == "--qa-region-palette-check") {
 			if (!arguments.contains("--qa-offscreen") || arguments.indexOf("--palette") < 0 || arguments.value(arguments.indexOf("--palette") + 1) != "regions") {
 				std::println(stderr, "--qa-region-palette-check needs --qa-offscreen and --palette regions. See HiveWE --help.");
@@ -424,6 +441,7 @@ int main(int argc, char* argv[]) {
 	w.run_qa_refusal_checks();
 	w.run_qa_object_new_check();
 	w.run_qa_region_palette_check();
+	w.run_qa_unsaved_check();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

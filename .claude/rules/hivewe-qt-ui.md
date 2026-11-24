@@ -57,7 +57,7 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 - Data: `data/themes/Flat.tokens` plus `Flat.qss.in`. `src/utilities/theme_tokens.ixx`: an unknown token is an error; `apply_with_fallback` goes Flat -> Dark -> unstyled.
 - `src/main_window/theme.cpp`: palette, Inter from `data/fonts`, generated arrow PNGs in the cache dir, and `theme::icon` recolours the SVGs in `data/icons/flat`.
 - `src/main_window/flat_chrome.cpp`: menu bar, toolbar forwarding to the ribbon buttons, columns, status bar. The old themes keep the ribbon.
-- `save_map_reporting_errors` is the one place that marks the map saved (`WorldUndoManager::mark_saved`). Any "unsaved?" check must use `has_changes_since_save()` (revision based), not `has_pending_changes()` (stacks non-empty): they differ after `clear_all_undo`. Each map load creates a fresh `WorldUndoManager`.
+- `save_map_reporting_errors` is the one place that marks the map saved (`WorldUndoManager::mark_saved`). For undo state, an "unsaved?" check uses `has_changes_since_save()` (revision based), not `WorldUndoManager::has_pending_changes()` (stacks non-empty): they differ after `clear_all_undo`. Edits without an undo step: see "Unsaved-changes check" in `hivewe-core.md`. Each map load creates a fresh `WorldUndoManager`.
 
 ## Verification
 

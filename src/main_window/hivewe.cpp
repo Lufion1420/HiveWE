@@ -20,6 +20,8 @@ import Imports;
 import <soil2/SOIL2.h>;
 import MapGlobal;
 import WorldUndoManager;
+import Triggers;
+import TableModel;
 import UnitsUndo;
 import SkinnedMeshGlobals;
 import ResourceManager;
@@ -72,6 +74,15 @@ import "trigger_editor.h";
 #include <QTextDocument>
 #include <QTabWidget>
 #include <QTimer>
+#include <QCheckBox>
+#include <QLineEdit>
+#include <QListView>
+#include <QPlainTextEdit>
+#include <QSpinBox>
+#include <QTableView>
+#include <QTableWidget>
+#include <QTextBrowser>
+#include <QTextEdit>
 import "menus/gameplay_constants_editor.h";
 import "menus/item_tables_editor.h";
 import "menus/scenario_properties_editor.h";
@@ -106,6 +117,7 @@ bool save_map_reporting_errors(const fs::path& path) {
 		const bool saved = map->save(path);
 		if (saved) {
 			map->world_undo.mark_saved();
+			map->remember_saved_state();
 		}
 		return saved;
 	} catch (const std::exception& e) {
@@ -273,7 +285,12 @@ HiveWE::HiveWE(QWidget* parent)
 	ui->ribbon->import_objects->setPopupMode(QToolButton::InstantPopup);
 
 	connect(ui->ribbon->switch_warcraft, &QToolButton::clicked, this, &HiveWE::switch_warcraft);
-	connect(ui->ribbon->exit, &QToolButton::clicked, [&]() { QApplication::exit(); });
+	// close() first, so closeEvent can ask about unsaved changes.
+	connect(ui->ribbon->exit, &QToolButton::clicked, this, [this]() {
+		if (close()) {
+			QApplication::exit();
+		}
+	});
 
 	connect(ui->ribbon->change_tileset, &QRibbonButton::clicked, [this]() { new TileSetter(this); });
 	connect(ui->ribbon->change_tile_pathing, &QRibbonButton::clicked, [this]() { new TilePather(this); });
@@ -305,8 +322,7 @@ HiveWE::HiveWE(QWidget* parent)
 
 	connect(ui->ribbon->trigger_editor, &QRibbonButton::clicked, [this]() {
 		bool created = false;
-		const auto editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
-		connect(this, &HiveWE::saving_initiated, editor, &TriggerEditor::save_changes, Qt::UniqueConnection);
+		window_handler.create_or_raise<TriggerEditor>(nullptr, created);
 	});
 
 	connect(ui->ribbon->object_editor, &QRibbonButton::clicked, [this]() {
@@ -944,7 +960,7 @@ bool HiveWE::save_current_map() {
 		return save_current_map_as();
 	}
 
-	emit saving_initiated();
+	apply_open_editors();
 	if (!save_map_reporting_errors(map->filesystem_path)) {
 		return false;
 	}
@@ -958,6 +974,13 @@ bool HiveWE::save_current_map() {
 		update_map_context("Saved");
 	}
 	return true;
+}
+
+void HiveWE::apply_open_editors() {
+	// The Trigger Editor keeps typed text in its tabs until they close.
+	if (const auto editor = window_handler.get_open<TriggerEditor>()) {
+		(*editor)->save_changes();
+	}
 }
 
 bool HiveWE::save_current_map_as() {
@@ -982,7 +1005,7 @@ bool HiveWE::save_current_map_as() {
 
 	settings.setValue("openDirectory", display_path(file_name));
 
-	emit saving_initiated();
+	apply_open_editors();
 	if (!map->filesystem_path.empty() && fs::exists(file_name) && fs::equivalent(file_name, map->filesystem_path)) {
 		if (!save_map_reporting_errors(map->filesystem_path)) {
 			return false;
@@ -1094,6 +1117,8 @@ void HiveWE::create_new_map() {
 		return;
 	}
 
+	// As in load_map: an editor left open would show, and could write, the old map's data.
+	window_handler.close_all();
 	reset_map_session();
 	map->load(template_directory);
 
@@ -2003,13 +2028,36 @@ void HiveWE::update_map_context(const QString& status, const QString& detail_ove
 	ui->ribbon->set_map_context(map_title, detail, status);
 }
 
+bool HiveWE::has_unsaved_work() {
+	// The cheap checks first. The last one serializes the whole map.
+	if (map->filesystem_path.empty() || map->world_undo.has_changes_since_save()) {
+		return true;
+	}
+	if (const auto editor = window_handler.get_open<TriggerEditor>(); editor && (*editor)->has_pending_changes()) {
+		return true;
+	}
+	return map->differs_from_saved_state();
+}
+
 bool HiveWE::confirm_map_replacement(const QString& action) {
 	if (!map || !map->loaded) {
 		return true;
 	}
 
-	const bool has_unsaved_changes = map->filesystem_path.empty() || map->world_undo.has_changes_since_save();
-	if (!has_unsaved_changes) {
+	// A field that applies when it loses focus (a region name, an Object Editor cell) takes its typed text now, as a click
+	// elsewhere would. Ctrl+Q style paths and the title bar's close button leave the focus where it is.
+	QWidget* focus = QApplication::focusWidget();
+	if (qobject_cast<QLineEdit*>(focus) || qobject_cast<QAbstractSpinBox*>(focus)) {
+		focus->clearFocus();
+	}
+
+	if (!has_unsaved_work()) {
+		return true;
+	}
+
+	// An automated offscreen run has nobody to answer, so it is never asked.
+	if (qa_offscreen && qa_prompt_answer == 0 && !qa_prompt_real) {
+		std::println("Offscreen run: unsaved changes were not asked about ({})", action.toStdString());
 		return true;
 	}
 
@@ -2021,7 +2069,14 @@ bool HiveWE::confirm_map_replacement(const QString& action) {
 	message_box.setStandardButtons(QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
 	message_box.setDefaultButton(QMessageBox::Save);
 
-	switch (message_box.exec()) {
+	int answer = qa_prompt_answer;
+	if (answer != 0) {
+		++qa_prompt_count;
+	} else {
+		answer = message_box.exec();
+	}
+
+	switch (answer) {
 		case QMessageBox::Save:
 			return save_current_map();
 		case QMessageBox::Discard:
@@ -2260,8 +2315,8 @@ void HiveWE::open_qa_dialog() {
 		return;
 	}
 
-	// Dialogs get the main window as parent so Qt centres them on it, which is outside every monitor. Parentless windows are moved there
-	// by the --qa-offscreen filter in main.cpp. Nothing below accepts a dialog, so nothing is written to the map or the settings.
+	// The --qa-offscreen filter in main.cpp keeps every window outside all monitors. Nothing below accepts a dialog, so nothing is written
+	// to the map or the settings.
 	QWidget* shown = nullptr;
 	const QString& name = qa_open_dialog;
 	if (name == "settings") {
@@ -3044,6 +3099,665 @@ void HiveWE::run_qa_change_tileset() {
 			lines << QString("INFO tile %1 %2 file=%3 bytes=%4").arg(i).arg(QString::fromStdString(id)).arg(QString::fromStdString(extension)).arg(size);
 			check(good, QString("tile %1 (%2) loads %3").arg(i).arg(QString::fromStdString(id)).arg(custom ? "the map's custom texture" : "a real texture, not the placeholder"));
 		}
+		finish();
+	});
+}
+
+void HiveWE::run_qa_unsaved_check() {
+	if (!qa_offscreen || !qa_unsaved_check) {
+		return;
+	}
+
+	// Everything below works on copies in a temporary folder: the startup map folder is never written.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(180000, this, [temp]() {
+		std::println("FAIL the unsaved check did not finish within 180 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		// Written after every line, so a crash keeps the results so far.
+		const auto write_lines = [&](const bool done) {
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + (done ? "\nDONE\n" : "\n"));
+			}
+		};
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			std::println("{}", lines.back().toStdString());
+			std::fflush(stdout);
+			write_lines(false);
+			return passed;
+		};
+		const auto finish = [&]() {
+			qa_prompt_answer = 0;
+			write_lines(true);
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+
+		if (!check(temp->isValid(), "a temporary folder was created")) {
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = temp->path().toStdWString();
+		const fs::path folder = root / "map";
+		fs::copy(fs::path("data") / "test map", folder, fs::copy_options::recursive, ec);
+		if (!check(!ec, "data/test map was copied into the temporary folder")) {
+			return finish();
+		}
+
+		const auto process_events = []() {
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+			QApplication::processEvents();
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		};
+		const auto close_window = [&](QWidget* window) {
+			window->close();
+			process_events();
+		};
+		// Open Map without the recent-maps registry write.
+		const auto open_map = [&](const fs::path& path) {
+			window_handler.close_all();
+			process_events();
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(path);
+			map->headless = true; // save refusals print instead of opening a dialog
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		};
+		const auto read_file = [](const fs::path& path) {
+			std::ifstream in(path, std::ios::binary);
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+
+		open_map(folder);
+
+		// Trigger data the editor widgets cannot show unchanged (CRLF, an uninitialised variable with a value), saved into the copy.
+		const std::string crlf_header = "// header one\r\n// header two";
+		const std::string crlf_script = "// script one\r\n// script two";
+		const std::string crlf_comment = "comment one\r\ncomment two";
+		const int category_id = map->triggers.new_element_id();
+		map->triggers.categories.push_back(make_new_trigger_category("QaCategory", category_id, 0));
+		const int script_id = map->triggers.new_element_id();
+		map->triggers.triggers.push_back(make_new_trigger(Classifier::script, "QaScript", script_id, category_id));
+		map->triggers.triggers.back().custom_text = crlf_script;
+		const int comment_id = map->triggers.new_element_id();
+		map->triggers.triggers.push_back(make_new_trigger(Classifier::comment, "QaComment", comment_id, category_id));
+		map->triggers.triggers.back().description = crlf_comment;
+		const int variable_id = map->triggers.new_element_id();
+		TriggerVariable variable = make_new_trigger_variable("QaVariable", variable_id, category_id);
+		variable.initial_value = "5";
+		map->triggers.variables.push_back(variable);
+		map->triggers.global_jass = crlf_header;
+		map->triggers.global_jass_comment = crlf_comment;
+		if (!check(save_current_map(), "sample trigger data saved into the copy")) {
+			return finish();
+		}
+		open_map(folder);
+
+		const auto script_trigger = [&]() -> Trigger* {
+			const auto found = std::ranges::find_if(map->triggers.triggers, [&](const Trigger& trigger) { return trigger.id == script_id; });
+			return found == map->triggers.triggers.end() ? nullptr : &*found;
+		};
+		const auto trigger_data_as_saved = [&]() {
+			return script_trigger() && script_trigger()->custom_text == crlf_script && map->triggers.global_jass == crlf_header
+				&& map->triggers.global_jass_comment == crlf_comment && !map->triggers.variables.empty()
+				&& !map->triggers.variables.back().is_initialized;
+		};
+		check(trigger_data_as_saved(), "control: the reloaded copy holds the sample trigger data byte for byte");
+		check(!map->regions.regions.empty() && !map->units.units.empty(), "control: the copy has a region and a unit");
+
+		const auto expect_clean = [&](const QString& what) {
+			if (!check(!has_unsaved_work(), what + ": no unsaved changes")) {
+				save_current_map(); // so one failure does not fail every later check
+			}
+		};
+		const auto expect_dirty = [&](const QString& what) {
+			check(has_unsaved_work(), what + ": counts as unsaved");
+			check(save_current_map(), what + ": saved");
+			check(!has_unsaved_work(), what + ": no unsaved changes after the save");
+		};
+
+		expect_clean("right after opening the map");
+		for (int i = 0; i < 3; ++i) {
+			ui->widget->grabFramebuffer();
+			process_events();
+		}
+		expect_clean("after rendering frames");
+
+		// --- Opening and closing the windows ---------------------------------------------------------------------------------------------
+		bool created = false;
+		const auto open_and_close = [&](QWidget* window, const QString& name) {
+			process_events();
+			expect_clean(name + " open");
+			close_window(window);
+			expect_clean(name + " closed");
+		};
+		open_and_close(window_handler.create_or_raise<ObjectEditor>(nullptr, created), "Object Editor");
+		open_and_close(new MapInfoEditor(this), "Map Info");
+		open_and_close(window_handler.create_or_raise<ScenarioPropertiesEditor>(nullptr, created), "Scenario Properties");
+		open_and_close(window_handler.create_or_raise<GameplayConstantsEditor>(nullptr, created), "Gameplay Constants");
+		open_and_close(window_handler.create_or_raise<ItemTablesEditor>(nullptr, created), "Item Tables");
+		open_and_close(window_handler.create_or_raise<AssetManager>(nullptr, created), "Asset Manager");
+		open_and_close(new TileSetter(this), "Change Tileset");
+		open_and_close(new TilePather(this), "Tile Pathing");
+
+		{
+			auto* tooltips = window_handler.create_or_raise<TooltipEditor>(nullptr, created);
+			process_events();
+			int browsed = 0;
+			for (QListView* list : tooltips->findChildren<QListView*>()) {
+				if (!list->model() || !list->selectionModel() || list->model()->rowCount() < 3) {
+					continue;
+				}
+				for (int row = 0; row < 3; ++row) {
+					list->setCurrentIndex(list->model()->index(row, 0));
+					++browsed;
+				}
+			}
+			for (QSpinBox* level : tooltips->findChildren<QSpinBox*>()) {
+				level->setValue(2);
+				level->setValue(1);
+			}
+			check(browsed >= 9, QString("control: browsed %1 Tooltip Editor entries").arg(browsed));
+			open_and_close(tooltips, "Tooltip Editor after browsing");
+		}
+
+		toggle_terrain_sidebar();
+		toggle_doodad_palette();
+		toggle_unit_palette();
+		toggle_pathing_sidebar();
+		toggle_region_palette();
+		process_events();
+		hide_palette_sidebar();
+		expect_clean("opening every palette");
+
+		// --- Trigger Editor --------------------------------------------------------------------------------------------------------------
+		TriggerEditor* editor = nullptr;
+		TriggerExplorer* explorer = nullptr;
+		const auto open_trigger_editor = [&]() {
+			editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
+			explorer = editor->findChild<TriggerExplorer*>();
+			process_events();
+		};
+		const std::function<QModelIndex(const QModelIndex&, int)> find_index = [&](const QModelIndex& parent, const int id) -> QModelIndex {
+			for (int row = 0; row < explorer->model()->rowCount(parent); ++row) {
+				const QModelIndex index = explorer->model()->index(row, 0, parent);
+				if (static_cast<TreeItem*>(index.internalPointer())->id == id) {
+					return index;
+				}
+				if (const QModelIndex found = find_index(index, id); found.isValid()) {
+					return found;
+				}
+			}
+			return {};
+		};
+		const auto open_tab = [&](const int id) -> QWidget* {
+			emit explorer->doubleClicked(find_index({}, id));
+			process_events();
+			return editor->findChild<QWidget*>(QString::number(id));
+		};
+		const auto set_code = [](QWidget* tab, const QString& text) {
+			QWidget* code = tab ? tab->findChild<QWidget*>("jass_editor") : nullptr;
+			return code && QMetaObject::invokeMethod(code, "setText", Q_ARG(QString, text));
+		};
+
+		open_trigger_editor();
+		QWidget* header_tab = open_tab(0);
+		QWidget* script_tab = open_tab(script_id);
+		QWidget* comment_tab = open_tab(comment_id);
+		QWidget* variable_tab = open_tab(variable_id);
+		if (!check(header_tab && script_tab && comment_tab && variable_tab, "control: four Trigger Editor tabs opened")) {
+			return finish();
+		}
+		expect_clean("Trigger Editor with four tabs open");
+		close_window(editor);
+		expect_clean("Trigger Editor closed with four tabs");
+		check(trigger_data_as_saved(), "opening and closing the Trigger Editor left the trigger data byte for byte");
+
+		open_trigger_editor();
+		header_tab = open_tab(0);
+		check(set_code(header_tab, "// QA typed header"), "control: text typed into the Map Header tab");
+		check(has_unsaved_work(), "text only in the open Map Header tab counts as unsaved");
+		check(map->triggers.global_jass == crlf_header, "the check itself did not write the typed text into the map");
+		expect_dirty("typed Map Header text");
+		check(map->triggers.global_jass == "// QA typed header", "Save took the typed header text from the open tab");
+
+		check(set_code(header_tab, "// QA other") && set_code(header_tab, "// QA typed header"), "control: header text changed and put back");
+		expect_clean("header text typed and put back before any check");
+
+		script_tab = open_tab(script_id);
+		check(set_code(script_tab, "// QA_SAVE_FLUSH"), "control: text typed into a script tab");
+		check(save_current_map(), "Save with an open script tab");
+		check(read_file(folder / "war3map.wct").find("QA_SAVE_FLUSH") != std::string::npos, "Save wrote the text of the open script tab");
+		expect_clean("after saving the open script tab");
+
+		comment_tab = open_tab(comment_id);
+		if (auto* comments = comment_tab ? comment_tab->findChild<QPlainTextEdit*>("comments") : nullptr) {
+			comments->setPlainText("QA new comment");
+		}
+		expect_dirty("a comment edited in its tab");
+
+		variable_tab = open_tab(variable_id);
+		if (auto* name = variable_tab ? variable_tab->findChild<QLineEdit*>("name") : nullptr) {
+			name->setText("QaRenamedVariable");
+		}
+		expect_dirty("a variable renamed in its tab");
+
+		explorer->createCategory();
+		const int new_category_id = map->triggers.categories.back().id;
+		expect_dirty("new trigger category");
+		explorer->createGuiTrigger();
+		expect_dirty("new GUI trigger");
+		explorer->createJassTrigger();
+		expect_dirty("new script trigger");
+		explorer->createComment();
+		expect_dirty("new trigger comment");
+		explorer->createVariable();
+		const int new_variable_id = map->triggers.variables.back().id;
+		expect_dirty("new variable");
+		check(explorer->model()->setData(find_index({}, script_id), "QaScriptRenamed", Qt::EditRole), "control: trigger renamed in the explorer");
+		expect_dirty("trigger renamed");
+		close_window(editor);
+
+		script_trigger()->is_enabled = false; // what the Enabled menu action does
+		expect_dirty("trigger disabled");
+		map->triggers.set_element_parent(Classifier::script, script_id, new_category_id);
+		expect_dirty("trigger moved to another category");
+		map->triggers.remove_element(Classifier::variable, new_variable_id);
+		expect_dirty("variable deleted");
+
+		// --- Object data -----------------------------------------------------------------------------------------------------------------
+		auto* object_editor = window_handler.create_or_raise<ObjectEditor>(nullptr, created);
+		process_events();
+		units_table->copyRow("hfoo", "h0qa");
+		expect_dirty("new custom unit");
+		const QModelIndex name_index = units_table->index(units_slk.row_headers.at("h0qa"), units_slk.column_headers.at("name"));
+		units_table->setData(name_index, "QA unit name", Qt::EditRole);
+		expect_dirty("custom unit field edited");
+		units_table->setData(name_index, "QA unit name", Qt::EditRole);
+		expect_clean("committing the same field value again");
+		units_table->deleteRow("h0qa");
+		expect_dirty("custom unit deleted");
+		abilities_table->copyRow("AHbz", "A0qa");
+		expect_dirty("new custom ability");
+		close_window(object_editor);
+
+		{
+			auto* tooltips = window_handler.create_or_raise<TooltipEditor>(nullptr, created);
+			process_events();
+			for (QListView* list : tooltips->findChildren<QListView*>()) {
+				if (list->model() && list->selectionModel() && list->model()->rowCount() > 0) {
+					list->setCurrentIndex(list->model()->index(0, 0));
+				}
+			}
+			bool typed = false;
+			for (QTextEdit* edit : tooltips->findChildren<QTextEdit*>()) {
+				if (!typed && !qobject_cast<QTextBrowser*>(edit) && edit->isEnabled()) {
+					edit->insertPlainText("QA ");
+					typed = true;
+				}
+			}
+			check(typed, "control: text typed into the Tooltip Editor");
+			expect_dirty("tooltip edited");
+			close_window(tooltips);
+		}
+
+		{
+			auto* constants = window_handler.create_or_raise<GameplayConstantsEditor>(nullptr, created);
+			process_events();
+			auto* view = constants->findChild<QTableView*>();
+			check(view && view->model()->setData(view->model()->index(0, 0), "7", Qt::EditRole), "control: first gameplay constant set");
+			expect_dirty("gameplay constant edited");
+			close_window(constants);
+		}
+
+		// --- Map Info and Scenario -------------------------------------------------------------------------------------------------------
+		const auto map_info = [&](const bool accept, const std::function<void(MapInfoEditor&)>& edit) {
+			auto* info = new MapInfoEditor(this);
+			process_events();
+			edit(*info);
+			info->ui.buttonBox->button(accept ? QDialogButtonBox::Ok : QDialogButtonBox::Cancel)->click();
+			process_events();
+		};
+		map_info(true, [](MapInfoEditor&) {});
+		expect_clean("Map Info OK with nothing changed");
+		map_info(false, [](MapInfoEditor& info) { info.ui.name->setText("QA cancelled name"); });
+		expect_clean("Map Info Cancel after typing");
+		map_info(true, [](MapInfoEditor& info) { info.ui.name->setText("QA map name"); });
+		expect_dirty("map name changed");
+		map_info(true, [](MapInfoEditor& info) { info.ui.meleeMap->toggle(); });
+		expect_dirty("map option changed");
+
+		{
+			auto* scenario = window_handler.create_or_raise<ScenarioPropertiesEditor>(nullptr, created);
+			process_events();
+			bool renamed = false;
+			for (QTableWidget* table : scenario->findChildren<QTableWidget*>()) {
+				if (table->horizontalHeaderItem(1) && table->horizontalHeaderItem(1)->text() == "Player Name" && table->item(0, 1)) {
+					table->item(0, 1)->setText("QA player");
+					renamed = true;
+				}
+			}
+			check(renamed, "control: first player renamed in Scenario Properties");
+			expect_dirty("player renamed");
+			bool toggled = false;
+			for (QCheckBox* box : scenario->findChildren<QCheckBox*>()) {
+				if (box->text() == "Use Custom Forces") {
+					box->toggle();
+					toggled = true;
+				}
+			}
+			check(toggled, "control: Use Custom Forces toggled");
+			expect_dirty("force setting changed");
+			close_window(scenario);
+		}
+
+		// --- World data changed without an undo step -------------------------------------------------------------------------------------
+		map->regions.regions.front().name = "QaRegion";
+		expect_dirty("region renamed");
+		// The only unit is a start location, so its angle: a new owner would leave a player without one and refuse the save.
+		map->units.units.front().angle += 1.f;
+		expect_dirty("unit turned");
+		{
+			std::ofstream imported(folder / "qa_import.txt", std::ios::binary);
+			imported << "qa";
+		}
+		expect_dirty("file added to the map folder (war3map.imp lists it)");
+
+		// --- Big maps (optional, read only: each folder is copied first) -----------------------------------------------------------------
+		int big_index = 0;
+		for (const QString& source : qEnvironmentVariable("HIVEWE_QA_BIG_MAPS").split(';', Qt::SkipEmptyParts)) {
+			const fs::path big = root / ("big" + std::to_string(big_index++));
+			fs::copy(fs::path(source.toStdWString()), big, fs::copy_options::recursive, ec);
+			if (!check(!ec, "big map copied: " + source)) {
+				continue;
+			}
+			open_map(big);
+			for (int i = 0; i < 3; ++i) {
+				const auto start = std::chrono::steady_clock::now();
+				const bool unsaved = has_unsaved_work();
+				const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+				check(!unsaved, QString("big map %1: no unsaved changes, check took %2 ms (%3 doodads, %4 units, %5 x %6 terrain)")
+								  .arg(source)
+								  .arg(ms, 0, 'f', 1)
+								  .arg(map->doodads.doodads.size())
+								  .arg(map->units.units.size() + map->units.items.size())
+								  .arg(map->terrain.width)
+								  .arg(map->terrain.height));
+			}
+			for (int i = 0; i < 3; ++i) {
+				ui->widget->grabFramebuffer();
+				process_events();
+			}
+			open_and_close(window_handler.create_or_raise<ObjectEditor>(nullptr, created), "big map Object Editor");
+			open_and_close(window_handler.create_or_raise<ScenarioPropertiesEditor>(nullptr, created), "big map Scenario Properties");
+			open_and_close(window_handler.create_or_raise<GameplayConstantsEditor>(nullptr, created), "big map Gameplay Constants");
+			open_and_close(window_handler.create_or_raise<ItemTablesEditor>(nullptr, created), "big map Item Tables");
+			open_and_close(new MapInfoEditor(this), "big map Map Info");
+			open_trigger_editor();
+			open_tab(0);
+			int tabs = 0;
+			for (const Trigger& trigger : map->triggers.triggers) {
+				if (tabs++ < 15) {
+					open_tab(trigger.id);
+				}
+			}
+			for (std::size_t i = 0; i < map->triggers.variables.size() && i < 15; ++i) {
+				open_tab(map->triggers.variables[i].id);
+			}
+			expect_clean("big map Trigger Editor with tabs open");
+			close_window(editor);
+			expect_clean("big map Trigger Editor closed");
+		}
+		open_map(folder);
+		save_current_map();
+
+		// --- The prompt ------------------------------------------------------------------------------------------------------------------
+		units_table->copyRow("hfoo", "h0qb");
+		open_trigger_editor();
+		qa_prompt_answer = QMessageBox::Cancel;
+		qa_prompt_count = 0;
+		const bool refused = !confirm_map_replacement("quit");
+		check(refused && qa_prompt_count == 1, "quit with an unsaved custom unit asks, and Cancel refuses");
+		if (refused) {
+			const bool closed = close();
+			const auto open_editor = window_handler.get_open<TriggerEditor>();
+			check(!closed && isVisible() && open_editor && (*open_editor)->isVisible(), "Cancel keeps the main window and the Trigger Editor open");
+			const Map* before = map;
+			create_new_map();
+			check(map == before && units_slk.row_headers.contains("h0qb"), "Cancel keeps the map for New Map");
+			qa_prompt_count = 0;
+			ui->ribbon->exit->click();
+			process_events();
+			check(qa_prompt_count == 1 && isVisible(), "the Exit button asks too, and Cancel keeps the window");
+		}
+		close_window(editor);
+
+		{
+			const std::string id = map->units.units.front().id;
+			map->units.units.front().id = "h0zzz"; // a save is refused for an id over 4 bytes
+			qa_prompt_answer = QMessageBox::Save;
+			check(!confirm_map_replacement("quit"), "Save that fails does not let the quit continue");
+			map->units.units.front().id = id;
+		}
+		check(confirm_map_replacement("open another map") && !has_unsaved_work(), "Save saves and lets the action continue");
+		qa_prompt_count = 0;
+		check(confirm_map_replacement("quit") && qa_prompt_count == 0, "a saved map is not asked about");
+		units_table->copyRow("hfoo", "h0qc");
+		qa_prompt_answer = QMessageBox::Discard;
+		check(confirm_map_replacement("quit") && qa_prompt_count == 1 && has_unsaved_work(), "Discard continues without saving");
+		qa_prompt_answer = 0;
+		check(save_current_map(), "saved before the map switch checks");
+
+		// --- Open editors and another map ------------------------------------------------------------------------------------------------
+		const fs::path second = root / "second";
+		fs::copy(folder, second, fs::copy_options::recursive, ec);
+		open_trigger_editor();
+		set_code(open_tab(0), "// QA_STALE_HEADER");
+		window_handler.close_all();
+		ui->widget->makeCurrent();
+		reset_map_session();
+		map->load(second);
+		map->headless = true;
+		map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		process_events();
+		check(map->triggers.global_jass.find("QA_STALE_HEADER") == std::string::npos, "a closed Trigger Editor does not write into the next map");
+		expect_clean("the next map after closing the editors");
+
+		open_trigger_editor();
+		set_code(open_tab(script_id), "// QA deleted while open");
+		map->triggers.remove_element(Classifier::script, script_id);
+		check(has_unsaved_work(), "a deleted trigger with an open tab counts as unsaved and does not crash the check");
+		close_window(editor);
+
+		// --- The real dialogs ------------------------------------------------------------------------------------------------------------
+		struct ModalAnswer {
+			bool answered = false;
+			bool off_screen = false;
+			QString text;
+		};
+		// Answers the next dialog with this title from inside its event loop, by clicking a button of its button box. After 10 s it
+		// closes whatever is modal instead, so a missed dialog cannot hang the run.
+		const auto answer_next_dialog = [this](const QString& title, const std::function<QAbstractButton*(QWidget*)>& button_of) {
+			auto result = std::make_shared<ModalAnswer>();
+			auto* timer = new QTimer(this);
+			auto waited = std::make_shared<QElapsedTimer>();
+			waited->start();
+			connect(timer, &QTimer::timeout, this, [timer, waited, result, title, button_of]() {
+				QWidget* modal = QApplication::activeModalWidget();
+				if (modal && modal->isVisible() && modal->windowTitle() == title) {
+					timer->stop();
+					timer->deleteLater();
+					result->off_screen = std::ranges::none_of(QGuiApplication::screens(), [&](const QScreen* screen) {
+						return screen->geometry().intersects(modal->frameGeometry());
+					});
+					if (const auto* box = qobject_cast<QMessageBox*>(modal)) {
+						result->text = box->informativeText();
+					}
+					if (QAbstractButton* button = button_of(modal)) {
+						result->answered = true;
+						button->click();
+					} else {
+						modal->close();
+					}
+				} else if (waited->elapsed() > 10000) {
+					timer->stop();
+					timer->deleteLater();
+					if (modal) {
+						modal->close();
+					}
+				}
+			});
+			timer->start(20);
+			return result;
+		};
+		const auto message_box_button = [](const QMessageBox::StandardButton which) {
+			return [which](QWidget* modal) -> QAbstractButton* {
+				auto* box = qobject_cast<QMessageBox*>(modal);
+				return box ? box->button(which) : nullptr;
+			};
+		};
+		const auto check_answered = [&](const std::shared_ptr<ModalAnswer>& answer, const QString& what) {
+			check(answer->answered, what + ": the dialog appeared and its button was clicked");
+			check(answer->off_screen, what + ": the dialog was outside every screen");
+		};
+
+		open_map(folder);
+		save_current_map();
+		qa_prompt_answer = 0;
+		qa_prompt_real = true;
+		const fs::path object_file = folder / "war3map.w3u";
+		{
+			units_table->copyRow("hfoo", "h0qd");
+			const std::string on_disk = read_file(object_file);
+
+			auto answer = answer_next_dialog("Unsaved changes", message_box_button(QMessageBox::Cancel));
+			const bool closed = close();
+			check_answered(answer, "real prompt, Cancel");
+			check(answer->text.contains("before you quit"), "real prompt: the text names the action");
+			check(!closed && isVisible() && has_unsaved_work() && read_file(object_file) == on_disk,
+				  "real prompt, Cancel: the window stays, nothing is written, the change is still unsaved");
+
+			answer = answer_next_dialog("Unsaved changes", message_box_button(QMessageBox::Discard));
+			const bool discarded = confirm_map_replacement("open another map");
+			check_answered(answer, "real prompt, Discard");
+			check(discarded && has_unsaved_work() && read_file(object_file) == on_disk, "real prompt, Discard: continues without writing");
+
+			answer = answer_next_dialog("Unsaved changes", message_box_button(QMessageBox::Save));
+			const bool saved = confirm_map_replacement("open another map");
+			check_answered(answer, "real prompt, Save");
+			check(saved && !has_unsaved_work() && read_file(object_file) != on_disk && read_file(object_file).find("h0qd") != std::string::npos,
+				  "real prompt, Save: writes the change and continues");
+		}
+
+		// --- A half typed region name --------------------------------------------------------------------------------------------------
+		{
+			toggle_region_palette();
+			process_events();
+			auto* list = region_palette ? region_palette->findChild<QListWidget*>("regionList") : nullptr;
+			auto* name = region_palette ? region_palette->findChild<QLineEdit*>("regionNameField") : nullptr;
+			if (check(list && name && list->count() > 0, "control: the Regions palette lists a region and has a name field")) {
+				list->setCurrentRow(0);
+				process_events();
+				// Offscreen windows never become active, so Qt is told which window is. This changes Qt's own state only: no window is
+				// raised and the user's focus stays where it is.
+				QT_WARNING_PUSH
+				QT_WARNING_DISABLE_DEPRECATED
+				QApplication::setActiveWindow(this);
+				QT_WARNING_POP
+				name->setFocus();
+				process_events();
+				check(QApplication::focusWidget() == name, "control: the region name field has the focus");
+				expect_clean("region selected, name field focused");
+
+				const std::string old_name = map->regions.regions.front().name;
+				name->selectAll();
+				for (const QChar character : QString("QaTyped")) {
+					QKeyEvent press(QEvent::KeyPress, 0, Qt::NoModifier, QString(character));
+					QApplication::sendEvent(name, &press);
+				}
+				check(name->text() == "QaTyped" && map->regions.regions.front().name == old_name,
+					  "control: the typed name is only in the field");
+				check(!has_unsaved_work(), "control: without the focus commit the typed name would not count");
+
+				const auto answer = answer_next_dialog("Unsaved changes", message_box_button(QMessageBox::Cancel));
+				const bool closed = close();
+				check_answered(answer, "close with a half typed region name");
+				check(!closed && isVisible() && map->regions.regions.front().name == "QaTyped" && has_unsaved_work(),
+					  "close with a half typed region name: the name is taken, the prompt appears, Cancel keeps the window");
+			}
+		}
+
+		// --- New Map accepted ------------------------------------------------------------------------------------------------------------
+		{
+			open_map(folder);
+			save_current_map();
+			const std::string on_disk = read_file(object_file);
+			units_table->copyRow("hfoo", "h0qe");
+			window_handler.create_or_raise<ObjectEditor>(nullptr, created);
+			open_trigger_editor();
+			check(set_code(open_tab(0), "// QA_NEW_MAP_HEADER"), "control: text typed into an open tab before New Map");
+			process_events();
+			const QPointer<TriggerEditor> old_trigger_editor = editor;
+			const QPointer<ObjectEditor> old_object_editor = window_handler.get_open<ObjectEditor>().value_or(nullptr);
+			const QPointer<Map> old_map = map;
+
+			const auto prompt = answer_next_dialog("Unsaved changes", message_box_button(QMessageBox::Discard));
+			std::shared_ptr<ModalAnswer> dialog;
+			// The second watcher starts once the prompt is answered, as both poll for the dialog on top.
+			QTimer wait_for_prompt;
+			connect(&wait_for_prompt, &QTimer::timeout, this, [&]() {
+				if (prompt->answered && !dialog) {
+					wait_for_prompt.stop();
+					dialog = answer_next_dialog("Create New Map", [](QWidget* modal) -> QAbstractButton* {
+						auto* buttons = modal->findChild<QDialogButtonBox*>();
+						return buttons ? buttons->button(QDialogButtonBox::Ok) : nullptr;
+					});
+				}
+			});
+			wait_for_prompt.start(10);
+			// If the second dialog were never answered, this still ends it.
+			QTimer last_resort;
+			last_resort.setSingleShot(true);
+			connect(&last_resort, &QTimer::timeout, this, []() {
+				if (QWidget* modal = QApplication::activeModalWidget()) {
+					modal->close();
+				}
+			});
+			last_resort.start(30000);
+			create_new_map();
+			wait_for_prompt.stop();
+			last_resort.stop();
+			process_events();
+			for (int i = 0; i < 3; ++i) {
+				ui->widget->grabFramebuffer();
+				process_events();
+			}
+
+			check_answered(prompt, "New Map, prompt Discard");
+			if (check(dialog != nullptr, "New Map: the New Map dialog followed the prompt")) {
+				check_answered(dialog, "New Map, dialog accepted");
+			}
+			check(old_map.isNull() && map->filesystem_path.empty(), "New Map: a new map without a folder replaced the old one");
+			check(old_trigger_editor.isNull() && old_object_editor.isNull() && !window_handler.get_open<TriggerEditor>()
+					  && !window_handler.get_open<ObjectEditor>(),
+				  "New Map: the Trigger Editor and the Object Editor were closed");
+			check(map->triggers.global_jass.find("QA_NEW_MAP_HEADER") == std::string::npos, "New Map: nothing from the old editor is in the new map");
+			check(!units_slk.row_headers.contains("h0qe") && read_file(object_file) == on_disk, "New Map: the discarded unit is gone and was not written");
+			check(has_unsaved_work(), "New Map: the new map counts as unsaved");
+		}
+
+		qa_prompt_real = false;
 		finish();
 	});
 }

@@ -7,6 +7,7 @@
 #include <QPlainTextEdit>
 #include <QKeyEvent>
 #include <QElapsedTimer>
+#include <QPointer>
 
 #include <vector>
 #include <string>
@@ -26,9 +27,16 @@ public:
 	explicit TriggerEditor(QWidget* parent = nullptr);
 	~TriggerEditor() override;
 
+	/// Writes what the user changed in the open tabs into the map the editor was opened for.
 	void save_changes();
+	/// True when an open tab holds a change that save_changes() has not written yet.
+	[[nodiscard]]
+	bool has_pending_changes() const;
 private:
 	Ui::TriggerEditor ui;
+
+	/// The map the editor was opened for. A closed editor is deleted later, possibly after another map replaced this one.
+	QPointer<QObject> edited_map;
 
 	ads::CDockManager* dock_manager = nullptr;
 	ads::CDockAreaWidget* dock_area = nullptr;

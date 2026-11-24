@@ -440,6 +440,8 @@ void TooltipEditor::load_level(TabData& tab) {
 		parse_wc3_to_doc(read_field(tab, tf), tab.tip_edit);
 		parse_wc3_to_doc(read_field(tab, uf), tab.ubertip_edit);
 	}
+	tab.shown_tip = doc_to_wc3(tab.tip_edit);
+	tab.shown_ubertip = doc_to_wc3(tab.ubertip_edit);
 
 	tab.tip_edit->setEnabled(tab.slk->column_headers.contains(tf));
 	tab.ubertip_edit->setEnabled(tab.slk->column_headers.contains(uf));
@@ -454,11 +456,15 @@ void TooltipEditor::save_current(TabData& tab) {
 	const std::string tf = resolve_tip_field(tab);
 	const std::string uf = resolve_utip_field(tab);
 
-	if (tab.slk->column_headers.contains(tf)) {
-		tab.slk->set_shadow_data(tf, tab.current_id, doc_to_wc3(tab.tip_edit).toStdString());
+	// This also runs when the selection or level changes. Writing an unedited field would store the text as shown (TRIGSTR_
+	// keys resolved, line breaks and colour codes normalized) as a change to the object.
+	if (const QString tip = doc_to_wc3(tab.tip_edit); tip != tab.shown_tip && tab.slk->column_headers.contains(tf)) {
+		tab.slk->set_shadow_data(tf, tab.current_id, tip.toStdString());
+		tab.shown_tip = tip;
 	}
-	if (tab.slk->column_headers.contains(uf)) {
-		tab.slk->set_shadow_data(uf, tab.current_id, doc_to_wc3(tab.ubertip_edit).toStdString());
+	if (const QString ubertip = doc_to_wc3(tab.ubertip_edit); ubertip != tab.shown_ubertip && tab.slk->column_headers.contains(uf)) {
+		tab.slk->set_shadow_data(uf, tab.current_id, ubertip.toStdString());
+		tab.shown_ubertip = ubertip;
 	}
 }
 

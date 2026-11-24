@@ -23,6 +23,12 @@ HiveWE is a C++23 Warcraft III World Editor replacement (`.ixx` modules + Qt `.c
 - Verify Qt parent ownership before changing lifetimes.
 - Verify main-thread GL assumptions when touching async loading.
 
+## Unsaved-changes check
+
+- It compares `Map::serialized_state()`: the real writers captured in memory (`MapWriteCapture` in `hierarchy.ixx`), object data and gameplay constants as sorted edits.
+- A new writer in `Map::save` must be added there too. Writers stay const and write only through `Hierarchy::map_file_write`.
+- Editor windows must not write widget content back or normalise data unless the user edited it, or maps show as unsaved.
+
 ## Workflows
 
 **Bug fix:** Identify layer (UI / map / render / format) → read owner first → narrowest test → broader verification.

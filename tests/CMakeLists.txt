@@ -35,6 +35,7 @@ add_executable(HiveWE_tests
 	world_undo_unsaved_test.cpp
 	trigger_strings_literal_test.cpp
 	gl_thread_pool_test.cpp
+	saved_state_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

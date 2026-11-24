@@ -26,9 +26,58 @@ import MapGlobal;
 
 constexpr int map_header_id = 0;
 
+namespace {
+constexpr const char* shown_value_property = "hiveShownValue";
+
+/// The inputs of a tab whose content save_tab writes into the map.
+std::vector<QWidget*> tab_inputs(const ads::CDockWidget* tab) {
+	std::vector<QWidget*> inputs;
+	if (auto* comments = tab->findChild<QPlainTextEdit*>("comments")) {
+		inputs.push_back(comments);
+	}
+	if (auto* jass_editor = tab->findChild<JassEditor*>("jass_editor")) {
+		inputs.push_back(jass_editor);
+	}
+	if (auto* variable = tab->findChild<VariableEditor*>("var_editor")) {
+		inputs.insert(inputs.end(), { variable->ui.name, variable->ui.type, variable->ui.array, variable->ui.array_size, variable->ui.value });
+	}
+	return inputs;
+}
+
+QVariant input_value(const QWidget* input) {
+	if (const auto* text = qobject_cast<const QPlainTextEdit*>(input)) {
+		return text->toPlainText();
+	}
+	if (const auto* code = qobject_cast<const JassEditor*>(input)) {
+		return code->text();
+	}
+	if (const auto* line = qobject_cast<const QLineEdit*>(input)) {
+		return line->text();
+	}
+	if (const auto* box = qobject_cast<const QCheckBox*>(input)) {
+		return box->isChecked();
+	}
+	if (const auto* spin = qobject_cast<const QSpinBox*>(input)) {
+		return spin->value();
+	}
+	return {};
+}
+
+/// Remembers what an input shows. Only what differs from this is written back: writing an untouched input would change what an
+/// input cannot show as stored, such as CRLF line endings or a variable value that is not marked as initialized.
+void remember_value(QWidget* input) {
+	input->setProperty(shown_value_property, input_value(input));
+}
+
+bool was_edited(const QWidget* input) {
+	return input && input_value(input) != input->property(shown_value_property);
+}
+}
+
 TriggerEditor::TriggerEditor(QWidget* parent) : QMainWindow(parent) {
 	ui.setupUi(this);
 	setAttribute(Qt::WA_DeleteOnClose);
+	edited_map = map;
 
 	model = new TreeModel(explorer);
 	explorer->setModel(model);
@@ -237,6 +286,10 @@ void TriggerEditor::item_clicked(const QModelIndex& index) {
 		dock_tab->setWidget(comments_editor);
 	}
 
+	for (QWidget* input : tab_inputs(dock_tab)) {
+		remember_value(input);
+	}
+
 	connect(dock_tab, &ads::CDockWidget::closeRequested, [&, dock_tab]() {
 		save_tab(dock_tab);
 	});
@@ -247,55 +300,78 @@ void TriggerEditor::item_clicked(const QModelIndex& index) {
 void TriggerEditor::save_tab(ads::CDockWidget* tab) {
 	const int trigger_id = tab->objectName().toInt();
 
-	if (trigger_id < 0) {
+	if (trigger_id < 0 || edited_map != map) {
 		return;
 	}
 
+	// The element can be gone while its tab is still open.
+	const auto trigger = std::ranges::find_if(map->triggers.triggers, [trigger_id](const Trigger& trigger) {
+		return trigger.id == trigger_id;
+	});
+	const bool has_trigger = trigger != map->triggers.triggers.end();
+
 	// Comments
 	auto comments = tab->findChild<QPlainTextEdit*>("comments");
-	if (comments) {
+	if (was_edited(comments)) {
 		if (trigger_id == map_header_id) {
 			map->triggers.global_jass_comment = comments->toPlainText().toStdString();
-		} else {
-			Trigger& trigger =
-				*std::ranges::find_if(map->triggers.triggers, [trigger_id](const Trigger& trigger) {
-					return trigger.id == trigger_id;
-				});
-
-			trigger.description = comments->toPlainText().toStdString();
+		} else if (has_trigger) {
+			trigger->description = comments->toPlainText().toStdString();
 		}
 	}
 
 	// Jass editor
 	auto jass_editor = tab->findChild<JassEditor*>("jass_editor");
-	if (jass_editor) {
+	if (was_edited(jass_editor)) {
 		if (trigger_id == map_header_id) {
 			map->triggers.global_jass = jass_editor->text().toStdString();
-		} else {
-			Trigger& trigger =
-				*std::ranges::find_if(map->triggers.triggers, [trigger_id](const Trigger& trigger) {
-					return trigger.id == trigger_id;
-				});
-
-			trigger.custom_text = jass_editor->text().toStdString();
+		} else if (has_trigger) {
+			trigger->custom_text = jass_editor->text().toStdString();
 		}
 	}
 
 	// Variable editor
-	auto var_editor = tab->findChild<VariableEditor*>("var_editor");
-	if (var_editor) {
-		TriggerVariable& variable =
-			*std::ranges::find_if(map->triggers.variables, [trigger_id](const TriggerVariable& i) {
-				return i.id == trigger_id;
-			});
+	if (auto var_editor = tab->findChild<VariableEditor*>("var_editor")) {
+		const auto variable = std::ranges::find_if(map->triggers.variables, [trigger_id](const TriggerVariable& i) {
+			return i.id == trigger_id;
+		});
 
-		variable.name = var_editor->ui.name->text().toStdString();
-		variable.type = var_editor->ui.type->text().toStdString();
-		variable.is_array = var_editor->ui.array->isChecked();
-		variable.array_size = var_editor->ui.array_size->value();
-		variable.is_initialized = !var_editor->ui.value->text().isEmpty();
-		variable.initial_value = var_editor->ui.value->text().toStdString();
+		if (variable != map->triggers.variables.end()) {
+			if (was_edited(var_editor->ui.name)) {
+				variable->name = var_editor->ui.name->text().toStdString();
+			}
+			if (was_edited(var_editor->ui.type)) {
+				variable->type = var_editor->ui.type->text().toStdString();
+			}
+			if (was_edited(var_editor->ui.array)) {
+				variable->is_array = var_editor->ui.array->isChecked();
+			}
+			if (was_edited(var_editor->ui.array_size)) {
+				variable->array_size = var_editor->ui.array_size->value();
+			}
+			if (was_edited(var_editor->ui.value)) {
+				variable->is_initialized = !var_editor->ui.value->text().isEmpty();
+				variable->initial_value = var_editor->ui.value->text().toStdString();
+			}
+		}
 	}
+
+	for (QWidget* input : tab_inputs(tab)) {
+		remember_value(input);
+	}
+}
+
+bool TriggerEditor::has_pending_changes() const {
+	if (edited_map != map) {
+		return false;
+	}
+
+	for (const auto& tab : dock_manager->dockWidgetsMap()) {
+		if (tab->objectName().toInt() >= 0 && std::ranges::any_of(tab_inputs(tab), was_edited)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void TriggerEditor::show_gui_trigger(QTreeWidget* edit, const Trigger& trigger) {

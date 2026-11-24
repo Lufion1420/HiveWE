@@ -110,8 +110,13 @@ ScenarioPropertiesEditor::ScenarioPropertiesEditor(QWidget* parent) : QDialog(pa
 	setWindowTitle("Scenario Properties");
 	resize(1200, 720);
 
+	// Opening adds the missing player slots and forces. That is not an edit by the user, so a saved map stays saved.
+	const bool was_saved = !map->differs_from_saved_state();
 	ensure_all_player_slots_exist();
 	ensure_every_player_has_a_force();
+	if (was_saved) {
+		map->remember_saved_state();
+	}
 
 	auto* root = new QVBoxLayout(this);
 

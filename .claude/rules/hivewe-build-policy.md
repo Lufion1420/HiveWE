@@ -11,6 +11,7 @@ Windows-first: Visual Studio 2022 17.14+, `VCPKG_ROOT`, overlay ports in `overla
 - Agents may build and test, **only with the `Agent` preset** (`build/Agent`, no auto-launch): `cmake --preset Agent`, `cmake --build --preset Agent`, `ctest --preset Agent`. See `.claude/rules/harness-guardrails.md`.
 - **Never build `Release` as an agent:** with `HIVEWE_AUTO_RUN_AFTER_BUILD=ON` it force-kills a running `HiveWE.exe`, losing unsaved map work. `.claude/settings.json` denies it.
 - One build at a time: agents share `build/Agent`.
+- The `*cmake*--preset*Release*` deny pattern matches the whole command line, so an Agent build line that also names the `build/Agent/Release` path is denied: run build, `ctest` and log checks as separate commands. A denial still means stop and report to the user. Do not edit settings files.
 - Prefer fixing compile issues from pasted build errors first when the user pastes them.
 
 ## Presets

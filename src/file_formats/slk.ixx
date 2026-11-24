@@ -528,6 +528,44 @@ namespace slk {
 			set_shadow_data(index_to_column.at(column), index_to_row.at(row), data);
 		}
 
+		/// All shadow data (the local edits) as one string that does not depend on hash map order, so two states can be compared.
+		/// A row with an empty field list counts, as the object data writer writes it too.
+		[[nodiscard]]
+		std::string serialized_shadow_data() const {
+			std::string result;
+			// Length prefixed, so no value can look like the border between two entries.
+			const auto append = [&](const std::string_view text) {
+				result += std::to_string(text.size());
+				result += ':';
+				result += text;
+			};
+
+			std::vector<std::pair<std::string_view, std::string_view>> fields;
+			std::vector<std::string_view> ids;
+			for (const auto& [id, properties] : shadow_data) {
+				ids.push_back(id);
+			}
+			std::ranges::sort(ids);
+
+			for (const std::string_view id : ids) {
+				const auto& properties = shadow_data.at(id);
+				fields.clear();
+				for (const auto& [field, value] : properties) {
+					fields.emplace_back(field, value);
+				}
+				std::ranges::sort(fields);
+
+				append(id);
+				result += std::to_string(fields.size());
+				result += ';';
+				for (const auto& [field, value] : fields) {
+					append(field);
+					append(value);
+				}
+			}
+			return result;
+		}
+
 		size_t rows() const {
 			return row_headers.size();
 		}
