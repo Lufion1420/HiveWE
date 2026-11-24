@@ -161,13 +161,10 @@ export class Units {
 		return id.size() <= 4;
 	}
 
-	/// A new object id typed into the object editor: exactly 4 ASCII letters or digits. Quotes, backslashes and spaces would break the
-	/// unescaped FourCC("...") in the generated script. Same rule as the module-private is_valid_object_id in object_data_io and
-	/// object_data_text (not exported, so not reusable here), written with explicit ranges so it does not depend on the C locale.
+	/// A new object id typed into the object editor: exactly 4 ASCII letters or digits. Forwards to the shared is_valid_object_id
+	/// in Utilities, which object_data_io and object_data_text use too.
 	static bool is_valid_new_object_id(const std::string_view id) {
-		return id.size() == 4 && std::ranges::all_of(id, [](const char c) {
-			return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-		});
+		return is_valid_object_id(id);
 	}
 
 	struct OverlongId {

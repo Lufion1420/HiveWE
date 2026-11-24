@@ -99,6 +99,15 @@ export void trim(std::string& s) {
 	rtrim(s);
 }
 
+/// An object id: exactly 4 ASCII letters or digits (bytes, not characters). Explicit ranges so it does not depend on the C locale
+/// (std::isalnum would accept bytes >= 0x80 in some locales). Quotes, backslashes and spaces would break the unescaped
+/// FourCC("...") in a generated script.
+export bool is_valid_object_id(const std::string_view id) {
+	return id.size() == 4 && std::ranges::all_of(id, [](const char c) {
+		return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+	});
+}
+
 export bool is_number(const std::string& s) {
 	return !s.empty()
 		&& std::find_if(

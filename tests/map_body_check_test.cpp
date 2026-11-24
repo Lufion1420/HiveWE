@@ -23,6 +23,7 @@ import Regions;
 import Terrain;
 import Triggers;
 import Units;
+import Utilities;
 import types;
 import no_init_allocator;
 import BinaryReader;
@@ -3992,6 +3993,8 @@ TEST_CASE("the save check counts the bytes of an id, not its characters") {
 	CHECK_FALSE(Units::is_valid_new_object_id("hfo"));
 	CHECK_FALSE(Units::is_valid_new_object_id("hfoox"));
 	CHECK_FALSE(Units::is_valid_new_object_id(std::string("hf\x01o")));
+	CHECK_FALSE(is_valid_object_id("h\xE9oo")); // the shared rule is ASCII only, whatever the C locale says about 0xE9
+	CHECK(is_valid_object_id("A001"));
 	CHECK(Units::id_fits(""));
 	CHECK(Units::id_fits("hfoo"));
 	CHECK_FALSE(Units::id_fits("hfoox"));

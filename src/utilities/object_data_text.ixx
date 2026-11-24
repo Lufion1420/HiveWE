@@ -284,19 +284,6 @@ bool property_has_unclosed_quote(std::string_view line) {
 	return !find_quoted_string_end(value_view, 0).has_value();
 }
 
-bool is_valid_object_id(const std::string_view id) {
-	if (id.size() != 4) {
-		return false;
-	}
-
-	for (const char ch : id) {
-		if (!std::isalnum(static_cast<unsigned char>(ch))) {
-			return false;
-		}
-	}
-	return true;
-}
-
 bool is_string_like_field_type(const std::string_view type) {
 	return type == "string" || type == "stringList" || type == "hotkey";
 }

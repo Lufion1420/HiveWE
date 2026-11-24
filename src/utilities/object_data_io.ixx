@@ -277,18 +277,6 @@ void load_scenario_data_if_present(const fs::path& directory, ObjectDataImportPa
 	package.scenario = *parsed;
 }
 
-bool is_valid_object_id(const std::string_view id) {
-	if (id.size() != 4) {
-		return false;
-	}
-	for (const char ch : id) {
-		if (!std::isalnum(static_cast<unsigned char>(ch))) {
-			return false;
-		}
-	}
-	return true;
-}
-
 ObjectCategoryDescriptor make_descriptor(
 	ObjectDataCategory category,
 	std::string key,
