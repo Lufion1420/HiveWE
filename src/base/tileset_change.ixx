@@ -103,6 +103,12 @@ export bool is_inside_directory(const fs::path& root, const fs::path& path) {
 	return !relative.empty() && *relative.begin() != ".." && !relative.is_absolute();
 }
 
+/// File name of a path as UTF-8 for user-facing messages. path::string() throws for characters the system code page cannot hold.
+std::string utf8_file_name(const fs::path& path) {
+	const std::u8string name = path.filename().u8string();
+	return std::string(name.begin(), name.end());
+}
+
 /// One imported tile texture, ready to be written into the map folder.
 export struct TileOverride {
 	std::string tile_id;
@@ -130,7 +136,7 @@ export std::expected<std::vector<fs::path>, TileOverrideError> write_tile_overri
 	// Check every destination before touching the disk. Two tiles with the same dir and file (Windows ignores case) would overwrite
 	// each other's temporary file and lose the user's original override.
 	{
-		std::map<std::string, std::string> seen; // lower case canonical destination -> tile id
+		std::map<std::wstring, std::string> seen; // lower case canonical destination -> tile id
 		for (const TileOverride& item : overrides) {
 			for (const std::string& name : tile_override_names(policy, item.dir, item.file, item.extension)) {
 				if (is_archive_only_name(name)) {
@@ -141,8 +147,9 @@ export std::expected<std::vector<fs::path>, TileOverrideError> write_tile_overri
 					return std::unexpected(TileOverrideError { std::format("The texture path \"{}\" of tile {} is not inside the map folder.", name, item.tile_id), {} });
 				}
 				std::error_code canonical_error;
-				std::string key = fs::weakly_canonical(destination, canonical_error).generic_string();
-				std::ranges::transform(key, key.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+				// generic_string() throws on MSVC for characters the system code page cannot hold (CJK folder names).
+				std::wstring key = fs::weakly_canonical(destination, canonical_error).generic_wstring();
+				std::ranges::transform(key, key.begin(), [](const wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
 				if (const auto [position, inserted] = seen.emplace(key, item.tile_id); !inserted) {
 					return std::unexpected(TileOverrideError {
 						std::format("Tiles {} and {} would both replace the file \"{}\". Only one tile can use a texture path.", position->second, item.tile_id, name), {} });
@@ -211,7 +218,7 @@ export std::expected<std::vector<fs::path>, TileOverrideError> write_tile_overri
 			steps.push_back(step);
 			fs::copy_file(item.source, step.temporary, fs::copy_options::overwrite_existing, ec);
 			if (ec) {
-				return fail(std::format("Could not copy {} to {}: {}", item.source.filename().string(), name, ec.message()));
+				return fail(std::format("Could not copy {} to {}: {}", utf8_file_name(item.source), name, ec.message()));
 			}
 		}
 	}
@@ -222,12 +229,12 @@ export std::expected<std::vector<fs::path>, TileOverrideError> write_tile_overri
 			fs::rename(step.destination, step.set_aside, ec);
 			if (ec) {
 				step.had_original = false;
-				return fail(std::format("Could not replace {}: {}", step.destination.filename().string(), ec.message()));
+				return fail(std::format("Could not replace {}: {}", utf8_file_name(step.destination), ec.message()));
 			}
 		}
 		fs::rename(step.temporary, step.destination, ec);
 		if (ec) {
-			return fail(std::format("Could not write {}: {}", step.destination.filename().string(), ec.message()));
+			return fail(std::format("Could not write {}: {}", utf8_file_name(step.destination), ec.message()));
 		}
 		step.installed = true;
 	}

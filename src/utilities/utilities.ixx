@@ -158,12 +158,18 @@ export std::string read_text_file(const fs::path& path) {
 	return text;
 }
 
+// path::string() throws on MSVC for characters the system code page cannot hold; error text is UTF-8.
+std::string utf8_path_text(const fs::path& path) {
+	const std::u8string text = path.u8string();
+	return std::string(text.begin(), text.end());
+}
+
 export auto read_file(const fs::path& path) -> std::expected<BinaryReader, std::string> {
 	// Open at the end (ate) to get size in one go
 	std::ifstream stream(path, std::ios::binary | std::ios::ate);
 
 	if (!stream.is_open()) {
-		return std::unexpected("Unable to open file: " + path.string());
+		return std::unexpected("Unable to open file: " + utf8_path_text(path));
 	}
 
 	const auto size = static_cast<std::size_t>(stream.tellg());
@@ -180,7 +186,7 @@ export auto read_file(const fs::path& path) -> std::expected<BinaryReader, std::
 
 	// Use the stream buffer directly for maximum throughput
 	if (!stream.read(reinterpret_cast<char*>(buffer.data()), size)) {
-		return std::unexpected("Error during read of file: " + path.string());
+		return std::unexpected("Error during read of file: " + utf8_path_text(path));
 	}
 
 	return BinaryReader(std::move(buffer));

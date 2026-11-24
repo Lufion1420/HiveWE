@@ -493,7 +493,7 @@ void TileSetter::update_selected_info(const std::string& id) {
 	if (pending != pending_textures.end()) {
 		preview_name->setText(preview_name->text() + "  (custom texture)");
 		preview_file->setText("File  " + QString::fromStdString(path) + "." + QString::fromStdString(pending->second.extension)
-			+ "  (imported from " + QString::fromStdString(pending->second.source.filename().string()) + ")");
+			+ "  (imported from " + QString::fromStdWString(pending->second.source.filename().wstring()) + ")");
 	} else {
 		preview_file->setText("File  " + QString::fromStdString(path));
 	}
@@ -591,7 +591,7 @@ void TileSetter::import_custom_tile() {
 	const QString chosen = QFileDialog::getOpenFileName(
 		this,
 		"Import Custom Tile",
-		QString::fromStdString(hierarchy.map_directory.string()),
+		QString::fromStdWString(hierarchy.map_directory.wstring()),
 		"Textures (*.blp *.tga)"
 	);
 	if (chosen.isEmpty()) {
@@ -599,7 +599,11 @@ void TileSetter::import_custom_tile() {
 	}
 
 	const std::filesystem::path source = chosen.toStdWString();
-	std::string extension = source.extension().string();
+	// An extension with non-code-page characters makes path::string() throw; it is rejected below anyway, so lossy ASCII is enough.
+	std::string extension;
+	for (const wchar_t c : source.extension().wstring()) {
+		extension.push_back(c < 128 ? static_cast<char>(c) : '?');
+	}
 	if (!extension.empty()) {
 		extension.erase(0, 1);
 	}

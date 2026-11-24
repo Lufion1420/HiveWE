@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Change Tileset no longer crashes on map folders or imported tile textures with non-ASCII names** — Folder or file names the Windows code page cannot hold (for example Chinese or Cyrillic) now work in the Change Tileset dialog, and its import error messages show such paths correctly.
 - **HD (Reforged, v1800) models now load whole instead of being refused** — They open in the Model Editor and show thumbnails in Browse Models.
 - **Model Editor: Save to MDX keeps the model's own version** — Models are no longer downgraded to v1200 on save, and a failed save shows a message instead of crashing.
 - **Model Editor: a failed model open no longer throws, and "Open in Model Editor" opens the tab** — A model that cannot be opened now shows an error instead of an exception, and "Open in Model Editor" from the model browser now actually switches to the Model Editor tab.

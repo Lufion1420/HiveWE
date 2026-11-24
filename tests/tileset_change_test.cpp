@@ -310,6 +310,43 @@ TEST_CASE("write_tile_overrides rejects two tiles that share a destination, befo
 	CHECK(file_count(map) == 1); // no temporary or set-aside file
 }
 
+// path::generic_string()/string() throw std::system_error on MSVC for characters the system code page cannot hold (Asana 1220842369265849).
+TEST_CASE("write_tile_overrides works in a map folder with non-code-page characters") {
+	const fs::path root = make_scratch_dir("unicode_ok");
+	const fs::path map = root / fs::path(u8"地图_КАРТА");
+	write_all(root / "a.blp", "A");
+	write_all(root / "b.blp", "B");
+
+	const std::vector<TileOverride> ok = { grass(root / "a.blp") };
+	const auto result = write_tile_overrides(tileset_policy(false), map, ok);
+	REQUIRE(result.has_value());
+	CHECK(read_all(map / "TerrainArt/LordaeronSummer/Lords_Grass.blp") == "A");
+
+	// The duplicate check still works with a non-code-page map folder. Only ASCII case folding (SHARED/shared) is exercised here.
+	const std::vector<TileOverride> duplicate = {
+		{ "Lgrs", "TerrainArt\\Shared", "Tile", "blp", root / "a.blp" },
+		{ "Ldrt", "terrainart/SHARED", "TILE", "blp", root / "b.blp" },
+	};
+	const auto rejected = write_tile_overrides(tileset_policy(false), map, duplicate);
+	REQUIRE_FALSE(rejected.has_value());
+	CHECK(rejected.error().message.contains("Lgrs"));
+	CHECK(rejected.error().message.contains("Ldrt"));
+}
+
+// This pins the UTF-8 message text; it only throws before the fix on machines whose ANSI code page is not UTF-8 (the test above is the
+// one that reproduced the crash on the dev machine).
+TEST_CASE("write_tile_overrides names a non-code-page source file in its error message as UTF-8") {
+	const fs::path root = make_scratch_dir("unicode_copy_fail");
+	const fs::path map = root / fs::path(u8"地图");
+	const std::u8string expected_u8 = u8"缺失файл.blp";
+
+	const auto result = write_tile_overrides(tileset_policy(false), map, std::vector<TileOverride> { grass(root / fs::path(expected_u8)) });
+
+	REQUIRE_FALSE(result.has_value());
+	CHECK(result.error().message.contains(std::string(expected_u8.begin(), expected_u8.end())));
+	CHECK(result.error().leftovers.empty());
+}
+
 TEST_CASE("a failed write reports no leftovers when the rollback restored everything") {
 	const fs::path root = make_scratch_dir("no_leftovers");
 	const fs::path map = root / "map";
