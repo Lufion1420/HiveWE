@@ -92,7 +92,7 @@ Checks: `.claude/tools/script-check/`.
 
 ## w3i facts (strict parse of 466 stock maps, 2026-11-08)
 
-- Force flag: stock shared vision is 0x08. HiveWE treats it as 0x04 (ticket filed: "Forces: shared vision uses the wrong flag bit").
+- Force flags: 0x01 allied, 0x02 allied victory, 0x04 unknown, 0x08 shared vision, 0x10 shared unit control, 0x20 advanced unit control. `MapInfo::load` reads `share_vision = flags & 0x0C` (legacy HiveWE 0x04 migrates) and `unknown_flags = flags & ~0x3F`; save writes vision only as 0x08. Force flags are decoded only in `MapInfo::load`/`save`. History: upstream read 0x08 but wrote 0x04; fork commit 81e6432 changed the read to 0x04. So any 0x04 in a user map means HiveWE wrote vision on; stock maps never set it.
 - v39 player `hud_skin` exists only when editor_version >= 6140. Samples: 6117 and 6127 have none; 6140, 7000, 7003 have it; 6128-6139 have no samples. A wrong gate still reaches EOF on most maps with names shifted, so test by comparing names, not EOF.
 
 - `TriggerStrings::string()`/`set_string()` (`src/base/trigger_strings.ixx`) is the choke point for w3i, force and player name fields and is testable without `Map` or Qt. A w3i literal must be a `TRIGSTR_` key or go through `script_string_literal` before reaching script output. `TriggerStrings::save()` always writes padded `STRING 001`.
@@ -116,9 +116,9 @@ Checks: `.claude/tools/script-check/`.
 
 - `tests/binary_writer_test.cpp`, `tests/modification_tables_test.cpp`, `tests/mdl_reader_test.cpp`, `tests/map_format_check_test.cpp`, `tests/map_body_check_test.cpp`.
 - The stock sweeps in `tests/map_body_check_test.cpp` pass silently unless `HIVEWE_STOCK_BODY_ROOT` and `HIVEWE_BODY_CHECK_CASC` are set. Confirm the printed "stock maps checked" line.
-- The stock v39 sweep in `tests/map_format_check_test.cpp` passes silently when `HIVEWE_STOCK_W3I_ROOT` is unset. Confirm the "stock v39 files checked: N" message.
+- The stock v39 sweep in `tests/map_format_check_test.cpp` passes silently when `HIVEWE_STOCK_W3I_ROOT` is unset. Confirm the "stock v39 files checked: N" message. `HiveWE_tests.exe -tc="*stock v39*"` with the variable set runs that sweep alone.
 - `Doodads::load` and `Units::load` can be tested without GL if the `Terrain` is heap-allocated and never destroyed (its destructor calls GL). Both readers refuse unknown versions before using it. `new Terrain()` has a 0 offset because `Terrain` has no user-provided constructor, so it is value-initialized.
-- Script-generator tests: `world_edit_data.data()` throws when a section is missing, so a `generate_main` test must add the TerrainLights, SoundEnvironment, DayAmbience and NightAmbience sections. The seams `generate_main_script` and `generate_map_configuration_script` exist for script tests.
+- Script-generator tests: `world_edit_data.data()` throws when a section is missing, so a `generate_main` test must add the TerrainLights, SoundEnvironment, DayAmbience and NightAmbience sections. The seams `generate_main_script` and `generate_map_configuration_script` exist for script tests. `generate_map_configuration_script` contains no `InitCustomTeams` or alliance calls; those come from `generate_custom_teams`, tested via `generate_custom_teams_script`.
 - `ctest` runs each doctest case in its own process. Stock tests report pass with 0 assertions when their root variable is unset, so check the printed counts, not the pass status.
 - `stock_object_data::load()` needs `world_edit_strings` and `world_edit_game_strings` loaded, and reads `data/overrides` relative to the working directory, which under ctest is not the repository root.
 - A sweep check that a real file was parsed must read the checked copy, not the source folder, or a stubbed copy still passes.

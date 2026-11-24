@@ -482,10 +482,14 @@ export class MapInfo {
 			const uint32_t force_flags = reader.read<uint32_t>();
 			i.allied = force_flags & 0b00000001;
 			i.allied_victory = force_flags & 0b00000010;
-			i.share_vision = force_flags & 0b00000100;
+			// Shared vision is 0x08 (all 94 stock maps that share vision use it; 0x04 is set in none). Older HiveWE builds wrote
+			// vision as 0x04 and generated the SetPlayerAllianceStateVisionBJ calls from it, so 0x04 is read as a legacy alias for
+			// vision: existing HiveWE maps keep behaving the same, and the next save migrates the bit to 0x08 (0x37 -> 0x3B).
+			// Both bits are masked out of unknown_flags, so unticking Share Vision clears both.
+			i.share_vision = force_flags & 0b00001100;
 			i.share_unit_control = force_flags & 0b00010000;
 			i.share_advanced_unit_control = force_flags & 0b00100000;
-			i.unknown_flags = force_flags & ~0b00110111u;
+			i.unknown_flags = force_flags & ~0b00111111u;
 
 			i.player_masks = reader.read<uint32_t>();
 			i.name = reader.read_c_string();
@@ -672,7 +676,7 @@ export class MapInfo {
 
 		writer.write<uint32_t>(forces.size());
 		for (const auto& i : forces) {
-			const uint32_t force_flags = i.allied * 0b00000001 | i.allied_victory * 0b00000010 | i.share_vision * 0b00000100
+			const uint32_t force_flags = i.allied * 0b00000001 | i.allied_victory * 0b00000010 | i.share_vision * 0b00001000
 				| i.share_unit_control * 0b00010000 | i.share_advanced_unit_control * 0b00100000 | i.unknown_flags;
 			writer.write(force_flags);
 

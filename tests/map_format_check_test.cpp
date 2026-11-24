@@ -14,6 +14,7 @@ import MPQ;
 import ProtectionPipeline;
 import Regions;
 import Terrain;
+import Triggers;
 import Units;
 
 namespace fs = std::filesystem;
@@ -193,7 +194,8 @@ namespace {
 		/// Unset follows the format's rule; set writes the player hud_skin on the wrong side of it.
 		std::optional<bool> hud_skin = std::nullopt;
 		std::uint32_t flags = 0x2180ABCD; // Known bits plus 0x800000, 0x1000000 and bit 29.
-		std::uint32_t force_flags = 0x3B; // Includes 0x08, which HiveWE has no field for.
+		/// Allied, allied victory, shared vision (0x08), shared unit control and shared advanced unit control.
+		std::uint32_t force_flags = 0x3B;
 		bool random_tables = true;
 		bool null_upgrade_ids = true;
 		bool null_table_ids = true;
@@ -212,7 +214,7 @@ namespace {
 		spec.version = 33;
 		spec.editor = 6116;
 		spec.flags = 0x0000ABCD;
-		spec.force_flags = 0x37;
+		spec.force_flags = 0x3B;
 		spec.random_tables = false;
 		spec.null_upgrade_ids = false;
 		spec.null_table_ids = false;
@@ -1130,11 +1132,14 @@ TEST_CASE("MapInfo reads every new v39 field from its own place in the file") {
 	CHECK(info.players[0].hud_skin == sentinel(36));
 	CHECK(info.players[0].fixed_start_position == static_cast<int>(sentinel(37)));
 
-	// Force flags 0x3B: 0x08 is kept raw and does not turn into shared vision, which has its own ticket.
+	// Force flags 0x3B: 0x08 is shared vision (stock maps), so no bit is left over as unknown.
 	REQUIRE(info.forces.size() == 1);
-	CHECK(info.forces[0].unknown_flags == 0x08u);
-	CHECK_FALSE(info.forces[0].share_vision);
+	CHECK(info.forces[0].unknown_flags == 0u);
+	CHECK(info.forces[0].share_vision);
 	CHECK(info.forces[0].allied);
+	CHECK(info.forces[0].allied_victory);
+	CHECK(info.forces[0].share_unit_control);
+	CHECK(info.forces[0].share_advanced_unit_control);
 }
 
 TEST_CASE("a padded player slot defaults hud_skin to 64") {
@@ -1297,11 +1302,117 @@ TEST_CASE("MapInfo::save keeps map flag bits above 0x400000") {
 	check_same_bytes(w3i_round_trip(make_scratch_dir("w3i_flags"), bytes), bytes);
 }
 
-TEST_CASE("MapInfo::save keeps force flag bit 0x08") {
+TEST_CASE("MapInfo::save keeps force flags 0x3B with shared vision at 0x08") {
 	W3iSpec spec = plain_v33_spec();
 	spec.force_flags = 0x3B;
 	const std::string bytes = w3i_strict_bytes(spec);
 	check_same_bytes(w3i_round_trip(make_scratch_dir("w3i_force_flags"), bytes), bytes);
+}
+
+namespace {
+	W3iSpec v33_with_force_flags(const std::uint32_t force_flags) {
+		W3iSpec spec = plain_v33_spec();
+		spec.force_flags = force_flags;
+		return spec;
+	}
+
+	/// Loads a plain v33 w3i with the given force flags, lets edit change the force, saves, and returns the saved bytes.
+	template <typename Edit>
+	std::string w3i_force_saved(const std::string& name, const std::uint32_t force_flags, Edit&& edit) {
+		const fs::path dir = make_scratch_dir(name);
+		write_all(dir / "war3map.w3i", w3i_strict_bytes(v33_with_force_flags(force_flags)));
+		const ScopedMapDirectory open_map(dir);
+		MapInfo info;
+		info.load();
+		REQUIRE(info.forces.size() == 1);
+		edit(info.forces[0]);
+		info.save('L');
+		return read_all(dir / "war3map.w3i");
+	}
+} // namespace
+
+TEST_CASE("force flag 0x08 reads as shared vision and saves back byte-exact") {
+	const std::string saved = w3i_force_saved("w3i_force_vision", 0x3B, [](ForceData& force) {
+		CHECK(force.share_vision);
+		CHECK(force.unknown_flags == 0u);
+	});
+	check_same_bytes(saved, w3i_strict_bytes(v33_with_force_flags(0x3B)));
+
+	const std::string only_vision = w3i_force_saved("w3i_force_vision_only", 0x08, [](ForceData& force) {
+		CHECK(force.share_vision);
+		CHECK_FALSE(force.allied);
+		CHECK_FALSE(force.allied_victory);
+		CHECK_FALSE(force.share_unit_control);
+		CHECK_FALSE(force.share_advanced_unit_control);
+		CHECK(force.unknown_flags == 0u);
+	});
+	check_same_bytes(only_vision, w3i_strict_bytes(v33_with_force_flags(0x08)));
+}
+
+TEST_CASE("legacy force flag 0x04 written by older HiveWE reads as shared vision and saves as 0x08") {
+	for (const auto [input, expected] : { std::pair { 0x37u, 0x3Bu }, std::pair { 0x04u, 0x08u }, std::pair { 0x0Cu, 0x08u } }) {
+		CAPTURE(input);
+		const std::string saved = w3i_force_saved("w3i_force_legacy", input, [](ForceData& force) {
+			CHECK(force.share_vision);
+			CHECK(force.unknown_flags == 0u);
+		});
+		check_same_bytes(saved, w3i_strict_bytes(v33_with_force_flags(expected)));
+	}
+}
+
+TEST_CASE("unticking shared vision clears both 0x04 and 0x08") {
+	for (const auto [input, expected] : { std::pair { 0x37u, 0x33u }, std::pair { 0x3Bu, 0x33u }, std::pair { 0x3Fu, 0x33u } }) {
+		CAPTURE(input);
+		const std::string saved = w3i_force_saved("w3i_force_unticked", input, [](ForceData& force) {
+			CHECK(force.share_vision);
+			force.share_vision = false;
+		});
+		check_same_bytes(saved, w3i_strict_bytes(v33_with_force_flags(expected)));
+	}
+}
+
+TEST_CASE("an unknown force flag bit 0x40 is kept next to shared vision") {
+	const std::string kept = w3i_force_saved("w3i_force_unknown", 0x7B, [](ForceData& force) {
+		CHECK(force.share_vision);
+		CHECK(force.unknown_flags == 0x40u);
+	});
+	check_same_bytes(kept, w3i_strict_bytes(v33_with_force_flags(0x7B)));
+
+	const std::string legacy = w3i_force_saved("w3i_force_unknown_legacy", 0x47, [](ForceData& force) {
+		CHECK(force.share_vision);
+		CHECK(force.unknown_flags == 0x40u);
+	});
+	check_same_bytes(legacy, w3i_strict_bytes(v33_with_force_flags(0x4B)));
+
+	const std::string unticked = w3i_force_saved("w3i_force_unknown_unticked", 0x7B, [](ForceData& force) { force.share_vision = false; });
+	check_same_bytes(unticked, w3i_strict_bytes(v33_with_force_flags(0x73)));
+}
+
+TEST_CASE("InitCustomTeams shares vision for force flag 0x08 and legacy 0x04, in JASS and Lua") {
+	const fs::path dir = make_scratch_dir("w3i_force_script");
+	const ScopedMapDirectory open_map(dir);
+	for (const auto [force_flags, vision] : { std::pair { 0x08u, true }, std::pair { 0x04u, true }, std::pair { 0x31u, false } }) {
+		CAPTURE(force_flags);
+		write_all(dir / "war3map.w3i", w3i_strict_bytes(v33_with_force_flags(force_flags)));
+		MapInfo info;
+		info.load();
+		REQUIRE(info.players.size() == 2);
+		REQUIRE(info.forces.size() == 1);
+		// The strict file holds sentinel player numbers and masks; put both players into the one force.
+		info.players[0].internal_number = 0;
+		info.players[1].internal_number = 1;
+		info.forces[0].player_masks = 0b11;
+
+		for (const ScriptMode mode : { ScriptMode::jass, ScriptMode::lua }) {
+			CAPTURE(static_cast<int>(mode));
+			const std::string teams = generate_custom_teams_script(info, mode);
+			const std::string prefix = mode == ScriptMode::jass ? "call " : "";
+			CHECK(contains(teams, "InitCustomTeams"));
+			CHECK(contains(teams, prefix + "SetPlayerAllianceStateVisionBJ(Player(0), Player(1), true)\n") == vision);
+			CHECK(contains(teams, prefix + "SetPlayerAllianceStateVisionBJ(Player(1), Player(0), true)\n") == vision);
+			CHECK(contains(teams, "SetPlayerAllianceStateVisionBJ") == vision);
+		}
+	}
 }
 
 TEST_CASE("MapInfo::save writes the random unit table position count") {

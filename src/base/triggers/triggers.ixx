@@ -574,6 +574,9 @@ export std::string generate_ally_priorities_script(const MapInfo& map_info, Scri
 /// Test seam: the SetWaterBaseColor call main() writes after SetDayNightModels, or nothing when water tinting is off.
 export std::string generate_water_base_color_script(const MapInfo& map_info, ScriptMode mode);
 
+/// Test seam: InitCustomTeams as generate_map_script writes it.
+export std::string generate_custom_teams_script(const MapInfo& map_info, ScriptMode mode);
+
 /// The bit of a player number in w3i player masks, or 0 for a number outside 0 to 31 (scenario_data_io defaults it to -1).
 export uint32_t player_mask_bit(int internal_number);
 

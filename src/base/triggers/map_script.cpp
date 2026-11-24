@@ -873,6 +873,12 @@ void generate_custom_teams(MapScriptWriter& script, const MapInfo& map_info) {
 	});
 }
 
+std::string generate_custom_teams_script(const MapInfo& map_info, const ScriptMode mode) {
+	MapScriptWriter script(mode);
+	generate_custom_teams(script, map_info);
+	return script.script;
+}
+
 // World Editor rules for start location priorities (466/466 stock maps). Per player ii in w3i list order, the ally block, then the
 // enemy block. The count includes ii's own bit; ii and jj are list positions; LOW wins when both bits are set.
 uint32_t player_mask_bit(const int internal_number) {
