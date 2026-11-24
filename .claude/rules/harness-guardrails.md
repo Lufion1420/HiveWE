@@ -75,10 +75,16 @@ Decided 2026-11-22: Pencil (`.pen`) was dropped for HTML/CSS mockups plus a Qt p
   7. `Retro`: one line with the numbers and accepted proposals from the session retrospective (below).
   8. `Scratch`: absolute paths of scratchpad files the next session needs (they may vanish; say so).
 - Every suggestion includes a paste-ready prompt in the message.
-- Decided 2026-11-24: the orchestrator ends the very last message of a work stretch (a task is finished and it has nothing more to do this turn), not only when it suggests a new session, with a fixed block titled "Handoff prompt": a short paste-ready prompt naming the next-step Asana ticket, telling the next session to start by listing in chat every check or decision waiting on the user per `HANDOFF.md`, and giving scratch paths. Not on mid-task status messages, short replies or answers to questions. Reason: the user lost the prompt cache to idle twice on 2026-11-24 because the rule only fired on a "suggestion" and was forgotten.
+- Decided 2026-11-24: the orchestrator ends the last message of a real stop (see "Keep working": no eligible ticket, spawn budget reached, or the user said stop), not only when it suggests a new session, with a fixed block titled "Handoff prompt": a short paste-ready prompt naming the next-step Asana ticket, telling the next session to start by listing in chat every check or decision waiting on the user per `HANDOFF.md`, then start working immediately, pick the next ticket itself and not wait for "continue", and giving scratch paths. Not after one small task mid-session, on mid-task status messages, short replies or answers to questions. Reason: the user lost the prompt cache to idle twice on 2026-11-24 because the rule only fired on a "suggestion" and was forgotten.
 - After each committed task the orchestrator refreshes `.claude/HANDOFF.md` (a one-line update of `State` and `Next step` is enough), so the Handoff prompt matches it.
 - The user does not read the MD files, including `HANDOFF.md`. Every paste-ready prompt tells the next session to start by listing in chat every check or decision waiting on the user (from `HANDOFF.md` "Open questions"), with exact steps.
 - Anything the user must do is stated in chat, not only in a file.
+
+## Keep working (decided 2026-11-24)
+- The orchestrator never ends a turn with text alone while work remains: a status message without a tool call stops the session, and the user had to type "continue" repeatedly.
+- After a subagent notification or a pushed commit, the same turn makes the next tool call: next agent, commit, or the next eligible Asana "Next up" ticket.
+- A turn may end only when (a) a subagent is still running and nothing else can be done (one brief line), or (b) a stop condition holds: no eligible ticket, spawn budget (8 to 10 runs) reached, or the user said stop.
+- At a stop: retrospective, `HANDOFF.md` refresh, commit, Handoff prompt block. Never give a Handoff prompt after one small task mid-session.
 
 ## Session retrospective (decided 2026-11-24)
 Before every handoff the orchestrator runs a retrospective, reports it in chat (short, with numbers) and records the `Retro` line in `HANDOFF.md`. It covers:
