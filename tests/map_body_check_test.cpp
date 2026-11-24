@@ -3838,8 +3838,20 @@ TEST_CASE("the save check counts the bytes of an id, not its characters") {
 	// U+00F6 is two bytes in UTF-8, which is what QString::toStdString gives the object editor.
 	const std::string four_bytes = "hf\xC3\xB6";
 	const std::string four_characters_five_bytes = "hfo\xC3\xB6";
-	CHECK(Units::id_fits(four_bytes));
+	CHECK(Units::id_fits(four_bytes)); // length only: maps already on disk with odd bytes still save
 	CHECK_FALSE(Units::id_fits(four_characters_five_bytes));
+	CHECK(Units::is_valid_new_object_id("hfoo"));
+	CHECK(Units::is_valid_new_object_id("A001"));
+	CHECK(Units::is_valid_new_object_id("h000"));
+	CHECK_FALSE(Units::is_valid_new_object_id("ab\"c"));
+	CHECK_FALSE(Units::is_valid_new_object_id("ab'c"));
+	CHECK_FALSE(Units::is_valid_new_object_id("ab\\c"));
+	CHECK_FALSE(Units::is_valid_new_object_id("ab c"));
+	CHECK_FALSE(Units::is_valid_new_object_id(four_bytes));
+	CHECK_FALSE(Units::is_valid_new_object_id(four_characters_five_bytes));
+	CHECK_FALSE(Units::is_valid_new_object_id("hfo"));
+	CHECK_FALSE(Units::is_valid_new_object_id("hfoox"));
+	CHECK_FALSE(Units::is_valid_new_object_id(std::string("hf\x01o")));
 	CHECK(Units::id_fits(""));
 	CHECK(Units::id_fits("hfoo"));
 	CHECK_FALSE(Units::id_fits("hfoox"));
@@ -3847,8 +3859,10 @@ TEST_CASE("the save check counts the bytes of an id, not its characters") {
 	Units units;
 	Unit unit;
 	unit.id = "hfoo";
-	unit.skin_id = four_bytes;
+	unit.skin_id = "hfoo";
 	units.add_unit(unit);
+	CHECK_FALSE(units.find_id_over_4_bytes().has_value());
+	units.units[0].skin_id = four_bytes;
 	CHECK_FALSE(units.find_id_over_4_bytes().has_value());
 	units.units[0].skin_id = four_characters_five_bytes;
 	const auto found = units.find_id_over_4_bytes();

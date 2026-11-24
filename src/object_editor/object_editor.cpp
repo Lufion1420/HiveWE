@@ -45,6 +45,7 @@ import std;
 import UnitSelector;
 import MapGlobal;
 import Globals;
+import Units;
 import ResourceManager;
 import SlkConversions;
 import "single_model.h";
@@ -1210,9 +1211,9 @@ void ObjectEditor::duplicate_object_entry(
 
 	auto validate = [table, id, button_box, id_error_icon]() {
 		const std::string new_id = id->text().toStdString();
-		if (new_id.size() != 4) {
+		if (!Units::is_valid_new_object_id(new_id)) {
 			id_error_icon->setVisible(true);
-			id_error_icon->setToolTip("ID must be exactly 4 characters long.");
+			id_error_icon->setToolTip("ID must be exactly 4 letters or digits.");
 			id->setStyleSheet("QLineEdit { border: 1px solid #e74c3c; }");
 			button_box->button(QDialogButtonBox::Ok)->setEnabled(false);
 		} else if (table->slk->row_headers.contains(new_id)) {
@@ -2240,7 +2241,7 @@ QDialog* ObjectEditor::build_new_object_dialog(QTreeView* view, BaseFilter* filt
 	// validation lambda to check if input is valid
 	auto is_valid = [sub_view, sub_filter, table, id, buttonBox, idErrorIcon]() {
 		std::string new_id = id->text().toStdString();
-		bool wrong_size = new_id.size() != 4;
+		bool wrong_size = !Units::is_valid_new_object_id(new_id);
 		bool is_duplicate = table->slk->row_headers.contains(new_id);
 
 		// check if an actual object (not a folder) is selected
@@ -2254,7 +2255,7 @@ QDialog* ObjectEditor::build_new_object_dialog(QTreeView* view, BaseFilter* filt
 		// update UI based on validation
 		if (wrong_size) {
 			idErrorIcon->setVisible(true);
-			idErrorIcon->setToolTip("ID must be exactly 4 characters long.");
+			idErrorIcon->setToolTip("ID must be exactly 4 letters or digits.");
 			id->setStyleSheet("QLineEdit { border: 1px solid #e74c3c; }");
 			buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
 		} else if (is_duplicate) {
@@ -2303,7 +2304,7 @@ QDialog* ObjectEditor::build_new_object_dialog(QTreeView* view, BaseFilter* filt
 	auto select = [view, table, sub_filter, filter, selectdialog, id, treeModel](const QModelIndex& index) {
 		// Bytes, not QString characters, as the map files hold 4 bytes: a multi-byte character counts as several.
 		const std::string new_id = id->text().toStdString();
-		if (new_id.size() != 4) {
+		if (!Units::is_valid_new_object_id(new_id)) {
 			return;
 		}
 
@@ -2416,6 +2417,22 @@ bool ObjectEditor::run_qa_new_object_check(QStringList& lines) {
 	dialog->accept();
 	check(rows() == before, "hfo+o-umlaut typed, accept(): no object was created");
 	dialog->show();
+
+	// Typed non-ASCII id of 4 bytes (hf + o-umlaut): the old size check passed it.
+	id->setText(QString::fromUtf8("hf\xC3\xB6"));
+	check(id->text().toUtf8().size() == 4, "the typed id hf+o-umlaut is 4 bytes");
+	check(!ok->isEnabled(), "hf+o-umlaut (4 bytes, non-ASCII) typed: OK is disabled");
+	emit tree->activated(hfoo);
+	check(rows() == before, "hf+o-umlaut typed, double-click on hfoo: no object was created");
+	check(dialog->isVisible(), "hf+o-umlaut typed, double-click on hfoo: the dialog stays open");
+
+	// Ids that would break the unescaped FourCC("...") in the generated script.
+	for (const char* bad : { "ab\"c", "ab'c", "ab\\c", "ab c" }) {
+		id->setText(QString::fromLatin1(bad));
+		check(!ok->isEnabled(), QString("%1 typed: OK is disabled").arg(QString::fromLatin1(bad)));
+		emit tree->activated(hfoo);
+		check(rows() == before, QString("%1 typed, double-click: no object was created").arg(QString::fromLatin1(bad)));
+	}
 
 	// Too short, and an id already in use.
 	id->setText("hfo");

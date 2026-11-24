@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Object Editor New, Add and Copy dialogs only accept object ids of exactly 4 letters or digits** — Ids with non-ASCII characters, quotes, backslashes or spaces, which could break the generated map script, now keep the OK button disabled.
 - **Browse Models animated tiles that failed to start are retried when the dialog is shown again** — Tiles no longer stay a still image after hiding and reopening the dialog, and dropping tiles no longer leaks them when the GL context cannot be made current.
 - **A damaged .mdx model with a forged animation track count now fails to load with an error** — It no longer exhausts memory or crashes HiveWE.
 - **Map Description and other map text fields show plain-text values and save your edits** — Map Properties and New Map fields (name, author, description, suggested players, player and force names) used to appear empty when the map file stored them as plain text, and edits to them were silently dropped. They now show the stored text and keep your edits.
