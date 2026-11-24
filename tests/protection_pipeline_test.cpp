@@ -1,4 +1,6 @@
 #include <doctest/doctest.h>
+#define __STORMLIB_NO_STATIC_LINK__
+#include "StormLib.h"
 
 import std;
 import AssetObfuscation;
@@ -24,6 +26,100 @@ namespace {
 		std::ofstream out(path, std::ios::binary | std::ios::trunc);
 		out << content;
 	}
+
+	/// Reads one file from an open archive by name. nullopt when it is missing or unreadable.
+	std::optional<std::string> read_archive_file(HANDLE archive, const char* name) {
+		HANDLE file = nullptr;
+		if (!SFileOpenFileEx(archive, name, SFILE_OPEN_FROM_MPQ, &file)) {
+			return std::nullopt;
+		}
+		const DWORD size = SFileGetFileSize(file, nullptr);
+		std::string buffer(size, '\0');
+		DWORD bytes_read = 0;
+		const bool ok = size == 0 || SFileReadFile(file, buffer.data(), size, &bytes_read, nullptr);
+		SFileCloseFile(file);
+		if (!ok || bytes_read != size) {
+			return std::nullopt;
+		}
+		return buffer;
+	}
+
+	/// Packs a two-file map folder with only the MPQ hardening options under test switched on.
+	fs::path pack_two_file_map(const std::string& name, const bool remove_listfile, const bool remove_attributes, const bool encrypt_files) {
+		const fs::path root = make_scratch_dir(name);
+		const fs::path temp_dir = root / "input";
+		fs::create_directories(temp_dir / "war3mapImported");
+		write_all(temp_dir / "war3map.lua", "function main() end\n");
+		write_all(temp_dir / "war3mapImported" / "a.blp", std::string("BLP1\0\x01\x02\x03", 8));
+
+		ProtectionOptions options;
+		options.remove_listfile = remove_listfile;
+		options.remove_attributes = remove_attributes;
+		options.encrypt_files = encrypt_files;
+		options.inject_junk_files = false;
+		options.remove_gui_triggers = false;
+		options.strip_trigger_strings = false;
+		options.obfuscate_asset_paths = false;
+
+		const fs::path output = root / "output" / "protected.w3x";
+		const PackResult result = run_async_pack(temp_dir, output, options);
+		REQUIRE_MESSAGE(result.success, result.error);
+		return output;
+	}
+}
+
+TEST_CASE("run_async_pack honours remove_listfile and remove_attributes, with and without encryption") {
+	for (const bool remove_listfile : { true, false }) {
+		for (const bool encrypt_files : { true, false }) {
+			for (const bool remove_attributes : { true, false }) {
+				CAPTURE(remove_listfile);
+				CAPTURE(encrypt_files);
+				CAPTURE(remove_attributes);
+				const fs::path output = pack_two_file_map(
+					std::format("pack_l{}_e{}_a{}", int(remove_listfile), int(encrypt_files), int(remove_attributes)),
+					remove_listfile,
+					remove_attributes,
+					encrypt_files
+				);
+
+				HANDLE archive = nullptr;
+				REQUIRE(SFileOpenArchive(output.c_str(), 0, MPQ_OPEN_READ_ONLY, &archive));
+				CHECK(SFileHasFile(archive, "(listfile)") == !remove_listfile);
+				CHECK(SFileHasFile(archive, "(attributes)") == !remove_attributes);
+				CHECK(read_archive_file(archive, "war3map.lua") == std::optional<std::string>("function main() end\n"));
+				CHECK(read_archive_file(archive, "war3mapImported\\a.blp") == std::optional<std::string>(std::string("BLP1\0\x01\x02\x03", 8)));
+				SFileCloseArchive(archive);
+			}
+		}
+	}
+}
+
+TEST_CASE("run_async_pack does not pack stray MPQ internal files from the map folder") {
+	const fs::path root = make_scratch_dir("pack_stray_internal_files");
+	const fs::path temp_dir = root / "input";
+	fs::create_directories(temp_dir);
+	write_all(temp_dir / "war3map.lua", "function main() end\n");
+	write_all(temp_dir / "(listfile)", "war3map.lua\r\n");
+	write_all(temp_dir / "(attributes)", std::string(8, '\0'));
+	write_all(temp_dir / "(signature)", std::string(8, '\0'));
+
+	ProtectionOptions options;
+	options.remove_listfile = true;
+	options.remove_attributes = true;
+	options.encrypt_files = false;
+	options.remove_gui_triggers = false;
+
+	const fs::path output = root / "output" / "protected.w3x";
+	const PackResult result = run_async_pack(temp_dir, output, options);
+	REQUIRE_MESSAGE(result.success, result.error);
+
+	HANDLE archive = nullptr;
+	REQUIRE(SFileOpenArchive(output.c_str(), 0, MPQ_OPEN_READ_ONLY, &archive));
+	CHECK_FALSE(SFileHasFile(archive, "(listfile)"));
+	CHECK_FALSE(SFileHasFile(archive, "(attributes)"));
+	CHECK_FALSE(SFileHasFile(archive, "(signature)"));
+	CHECK(read_archive_file(archive, "war3map.lua") == std::optional<std::string>("function main() end\n"));
+	SFileCloseArchive(archive);
 }
 
 TEST_CASE("escape_script_string / unescape_script_string round-trip") {

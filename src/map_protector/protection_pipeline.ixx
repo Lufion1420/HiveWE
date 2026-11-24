@@ -767,11 +767,23 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 
 	const uint64_t file_count = std::distance(fs::recursive_directory_iterator{ temp_dir }, {});
 
-	const unsigned long create_flags = (options.remove_listfile ? 0ul : static_cast<unsigned long>(MPQ_CREATE_LISTFILE))
-		| (options.remove_attributes ? 0ul : static_cast<unsigned long>(MPQ_CREATE_ATTRIBUTES));
+	// SFileCreateArchive always writes a (listfile) whatever MPQ_CREATE_LISTFILE says (StormLib 9.30,
+	// SFileCreateArchive.cpp), so the create info is filled here with the values SFileCreateArchive uses
+	// for a version 1 archive, and dwFileFlags1 = 0 is what actually leaves the listfile out.
+	SFILE_CREATE_MPQ create_info {};
+	create_info.cbSize = sizeof(SFILE_CREATE_MPQ);
+	create_info.dwMpqVersion = MPQ_FORMAT_VERSION_1;
+	create_info.dwStreamFlags = STREAM_PROVIDER_FLAT | BASE_PROVIDER_FILE;
+	create_info.dwFileFlags1 = options.remove_listfile ? 0 : MPQ_FILE_DEFAULT_INTERNAL;
+	create_info.dwFileFlags2 = options.remove_attributes ? 0 : MPQ_FILE_DEFAULT_INTERNAL;
+	create_info.dwFileFlags3 = 0;
+	create_info.dwAttrFlags = options.remove_attributes ? 0 : (MPQ_ATTRIBUTE_CRC32 | MPQ_ATTRIBUTE_FILETIME | MPQ_ATTRIBUTE_MD5);
+	create_info.dwSectorSize = 0x1000;
+	create_info.dwRawChunkSize = 0;
+	create_info.dwMaxFileCount = static_cast<DWORD>(file_count);
 
 	HANDLE handle;
-	if (!SFileCreateArchive(output_path.c_str(), create_flags, file_count, &handle)) {
+	if (!SFileCreateArchive2(output_path.c_str(), &create_info, &handle)) {
 		return { false, std::format("There was an error creating the protected archive (error code {}).", GetLastError()) };
 	}
 
@@ -783,6 +795,12 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 			if (is_stormlib_fabricated_name(entry.path().filename().string()) || is_map_write_temp_file(entry.path())) {
 				continue;
 			}
+			// MPQ internal files left in the map folder are StormLib's to write (or to leave out), never ours.
+			std::wstring filename = entry.path().filename().wstring();
+			std::ranges::transform(filename, filename.begin(), [](const wchar_t c) { return std::towlower(c); });
+			if (filename == L"(listfile)" || filename == L"(attributes)" || filename == L"(signature)") {
+				continue;
+			}
 			if (!SFileAddFileEx(handle, entry.path().c_str(), entry.path().lexically_relative(temp_dir).string().c_str(), file_flags, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME)) {
 				const DWORD add_file_error = GetLastError();
 				SFileCloseArchive(handle);
@@ -791,8 +809,14 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 		}
 	}
 
-	SFileCompactArchive(handle, nullptr, false);
-	SFileCloseArchive(handle);
+	if (!SFileCompactArchive(handle, nullptr, false)) {
+		const DWORD compact_error = GetLastError();
+		SFileCloseArchive(handle);
+		return { false, std::format("There was an error compacting the protected archive (error code {}).", compact_error) };
+	}
+	if (!SFileCloseArchive(handle)) {
+		return { false, std::format("There was an error writing the protected archive (error code {}).", GetLastError()) };
+	}
 
 	return { true, "" };
 }

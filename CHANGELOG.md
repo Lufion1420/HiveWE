@@ -67,6 +67,9 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Placed units' team colour and gold mine amounts in the generated map script now match the World Editor** — The script now sets the team colour of placed units (taverns, mercenary camps, and units with a custom colour where the type allows it) and the gold amount of every gold mine, in both Lua and JASS. Before, both were dropped, so mines started with the default amount. Not game-tested yet.
 - **Standard-definition models saved by newer Warcraft III versions that contain a camera now load in the Model Editor and Browse Models** — Many stock units (gnoll, bristleback, harpy witch, goblin land mine) failed to open with "Trying to read out of range of buffer" and now open normally.
 
+#### Map Protector
+- **"Remove listfile" now really leaves `(listfile)` out of the protected map** — The option was ignored before and `(listfile)` was always written into the protected archive.
+
 ### New Features
 - **Change Tileset shows a preview and mapping per tile and can import custom tiles** — Each tile has a preview and a mapping, and removed tiles are repainted with a replacement you choose; the blight index is remapped too. You can import a BLP or TGA texture as a custom tile, saved into the map folder as a texture override. Everything is applied only on OK, all-or-nothing. DDS is rejected because Warcraft III would find the stock BLP first.
 - **Model Editor has a toolbar, animation timeline, inspector docks and status bar, styled for Flat Dark and Flat Light** — The toolbar offers Open, Browse Models, Wireframe, Reset Camera, Edit MDL, Save to MDX and a sequence picker. The timeline has play/pause, restart, scrub, loop and 0.5x/1x/2x speed, and the Sequences, Geosets/Materials (with per-geoset Show toggles) and Info (MDX version, drawn vertex and triangle counts) docks replace the old ImGui panels.
