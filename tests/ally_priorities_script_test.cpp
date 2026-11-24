@@ -223,3 +223,19 @@ TEST_CASE("w3i colours: stored B, G, R, A convert to R, G, B, A and back unchang
 	CHECK(w3i_color_to_rgba(translucent) == glm::u8vec4(3, 2, 1, 77));
 	CHECK(rgba_to_w3i_color(w3i_color_to_rgba(translucent)) == translucent);
 }
+
+TEST_CASE("config(): a raw literal map name and description is escaped, a TRIGSTR_ key passes through") {
+	MapInfo info {};
+	info.name = "Say \"hi\"";
+	info.description = "Line1\nC:\\dir";
+	const Units units;
+
+	for (const ScriptMode mode : { ScriptMode::jass, ScriptMode::lua }) {
+		const std::string config = generate_map_configuration_script(test_terrain(), units, info, mode);
+		CHECK(contains(config, "\"Say \\\"hi\\\"\""));
+		CHECK(contains(config, "\"Line1\\nC:\\\\dir\""));
+	}
+
+	info.name = "TRIGSTR_001";
+	CHECK(contains(generate_map_configuration_script(test_terrain(), units, info, ScriptMode::lua), "\"TRIGSTR_001\""));
+}

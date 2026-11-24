@@ -7,6 +7,8 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Map Description and other map text fields show plain-text values and save your edits** — Map Properties and New Map fields (name, author, description, suggested players, player and force names) used to appear empty when the map file stored them as plain text, and edits to them were silently dropped. They now show the stored text and keep your edits.
+- **Edited map text is stored as a trigger string** — Quotes and line breaks in these fields can no longer break the generated map script. New Map also stores its name and suggested-players text as trigger strings.
 - **Change Tileset no longer crashes on map folders or imported tile textures with non-ASCII names** — Folder or file names the Windows code page cannot hold (for example Chinese or Cyrillic) now work in the Change Tileset dialog, and its import error messages show such paths correctly.
 - **Change Tileset accepts tile textures with an upper-case extension** — Importing a tile texture such as `Tile.BLP` now works.
 - **Maps in folders with non-ANSI names open, save and export correctly** — Opening, saving, Save As, exporting, recent maps and Test Map no longer crash or garble the path when the map folder name has characters outside the Windows code page (Cyrillic, Chinese, etc.), and the window title and map name show the real name.

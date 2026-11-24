@@ -95,7 +95,13 @@ export class TriggerStrings {
 		hierarchy.map_file_write("war3map.wts", writer.buffer);
 	}
 
+	/// The text for a TRIGSTR_ key. A value that is not a TRIGSTR_ reference is a literal string (valid in w3i fields) and is
+	/// returned as is: for a literal the view points into the caller's `key` argument, so it is only valid while that string lives.
 	std::string_view string(const std::string_view key) const {
+		if (key.rfind("TRIGSTR_", 0) != 0) {
+			return key;
+		}
+
 		const auto found = strings.find(std::string(key));
 
 		if (found == strings.end()) {
@@ -105,19 +111,21 @@ export class TriggerStrings {
 		return found->second;
 	}
 
-	/// If the key exists then the correspending string in the trigger string file is set
-	/// If the key does not exist AND the key empty AND the value is not empty then a string reference is created and assigned to the key variable
+	/// If the key is a TRIGSTR_ key then the corresponding string in the trigger string file is set.
+	/// If the key is empty or a literal (not TRIGSTR_) and the value is not empty and differs from the literal, a new string
+	/// reference is created and assigned to the key variable (the text lives in the wts, so scripts never see raw text).
+	/// A literal set to the same value is left untouched. A literal set to "" is cleared.
 	void set_string(std::string& key, const std::string& value) {
 		if (key.rfind("TRIGSTR_", 0) != 0) {
-			if (key.empty() && !value.empty()) {
-				const int padsize = std::max(0, 2 - static_cast<int>(std::log10(next_id)));
-				key = "TRIGSTR_" + std::string(padsize, '0') + std::to_string(++next_id);
-				strings[key] = value;
-				std::cout << "Creating key: " << key << "  " << value << "\n";
-
+			if (key == value) {
 				return;
 			}
-			std::cout << "Invalid TRIGSTR set: " << key << " " << value << "\n";
+			if (value.empty()) {
+				key.clear();
+				return;
+			}
+			key = std::format("TRIGSTR_{:03}", ++next_id);
+			strings[key] = value;
 			return;
 		}
 

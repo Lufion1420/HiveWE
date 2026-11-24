@@ -30,6 +30,7 @@ add_executable(HiveWE_tests
 	tileset_change_test.cpp
 	imports_test.cpp
 	world_undo_unsaved_test.cpp
+	trigger_strings_literal_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

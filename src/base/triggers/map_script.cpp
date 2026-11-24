@@ -995,10 +995,26 @@ void generate_main(MapScriptWriter& script, const Terrain& terrain, const MapInf
 	});
 }
 
+/// Quoted script string for text that may be a raw literal from the w3i (a TRIGSTR_ key passes through unchanged).
+static std::string script_string_literal(const std::string& text) {
+	std::string out = "\"";
+	for (const char c : text) {
+		switch (c) {
+			case '\\': out += "\\\\"; break;
+			case '"': out += "\\\""; break;
+			case '\n': out += "\\n"; break;
+			case '\r': break;
+			default: out += c;
+		}
+	}
+	out += '"';
+	return out;
+}
+
 void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain, const Units& units, const MapInfo& map_info) {
 	script.function("config", [&]() {
-		script.call("SetMapName", "\"" + map_info.name + "\"");
-		script.call("SetMapDescription", "\"" + map_info.description + "\"");
+		script.call("SetMapName", script_string_literal(map_info.name));
+		script.call("SetMapDescription", script_string_literal(map_info.description));
 		generate_map_settings(script, map_info);
 
 		script.write("\n");
