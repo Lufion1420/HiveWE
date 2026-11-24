@@ -125,33 +125,59 @@ namespace mpq {
 		/// unnamed ones come back under fabricated names like "File00001234.blp" instead of
 		/// their real name. Callers that need specific files by name regardless of listfile
 		/// presence should use extract_file() instead.
-		bool unpack(const fs::path& path) {
+		///
+		/// Returns false when any enumerated entry could not be extracted (the other entries are still
+		/// extracted, and the temporary-file cleanup still runs). That includes entries under a
+		/// StormLib-fabricated name in a listfile-less archive: StormLib resolves those by block index,
+		/// so a failure there is a real read or write failure, not an expected miss. If failed_names is
+		/// given it receives the archive names of the entries that failed.
+		bool unpack(const fs::path& path, std::vector<std::string>* failed_names = nullptr) {
+			bool all_extracted = true;
 			SFILE_FIND_DATA file_data;
 			HANDLE find_handle = SFileFindFirstFile(handle, "*", &file_data, nullptr);
 			if (find_handle) {
 				do {
-					fs::create_directories((path / file_data.cFileName).parent_path());
-					SFileExtractFile(handle, file_data.cFileName, (path / file_data.cFileName).c_str(), SFILE_OPEN_FROM_MPQ);
+					const fs::path target = path / file_data.cFileName;
+					std::error_code ec;
+					fs::create_directories(target.parent_path(), ec);
+					if (ec || !SFileExtractFile(handle, file_data.cFileName, target.c_str(), SFILE_OPEN_FROM_MPQ)) {
+						all_extracted = false;
+						if (failed_names) {
+							failed_names->push_back(file_data.cFileName);
+						}
+					}
 				} while (SFileFindNextFile(find_handle, &file_data));
 				SFileFindClose(find_handle);
+			} else if (GetLastError() != ERROR_NO_MORE_FILES) {
+				// The search itself could not start: that is not the same as an empty archive.
+				all_extracted = false;
 			}
 
 			// Delete unneeded files
-			fs::remove(path / "(listfile)");
-			fs::remove(path / "(attributes)");
-			fs::remove(path / "(war3map.imp)");
-			return true;
+			std::error_code ignored;
+			fs::remove(path / "(listfile)", ignored);
+			fs::remove(path / "(attributes)", ignored);
+			fs::remove(path / "(war3map.imp)", ignored);
+			return all_extracted;
 		}
+
+		enum class ExtractResult { extracted, absent, failed };
 
 		/// Extracts a single file by its exact archive-internal name, bypassing wildcard
 		/// enumeration entirely. MPQ files are looked up by name hash, so this works even
-		/// when the archive has no (listfile). Returns false if the file isn't present.
-		bool extract_file(const fs::path& archived_name, const fs::path& disk_path) const {
+		/// when the archive has no (listfile). `absent` means the archive does not hold the
+		/// file; `failed` means it does but it could not be read or written to disk.
+		ExtractResult extract_file(const fs::path& archived_name, const fs::path& disk_path) const {
 			if (!file_exists(archived_name)) {
-				return false;
+				return ExtractResult::absent;
 			}
-			fs::create_directories(disk_path.parent_path());
-			return SFileExtractFile(handle, archived_name.string().c_str(), disk_path.c_str(), SFILE_OPEN_FROM_MPQ);
+			std::error_code ec;
+			fs::create_directories(disk_path.parent_path(), ec);
+			if (ec) {
+				return ExtractResult::failed;
+			}
+			return SFileExtractFile(handle, archived_name.string().c_str(), disk_path.c_str(), SFILE_OPEN_FROM_MPQ) ? ExtractResult::extracted
+																													: ExtractResult::failed;
 		}
 
 		File file_open(const fs::path& path) const {

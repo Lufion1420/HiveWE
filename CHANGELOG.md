@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Open Map (MPQ) and Map Protector no longer carry on after a file fails to extract** — If a file in a .w3x/.w3m archive cannot be extracted (damaged archive, unwritable target), HiveWE now shows which file failed and does not open the half-unpacked map; an optional file the archive simply lacks is still skipped quietly.
 - **Saving doodads with short or long ids no longer corrupts war3map.doo** — Saving a map with a doodad whose id, skin id or item-drop id is shorter than 4 characters no longer corrupts war3map.doo; ids longer than 4 characters now refuse the save instead of writing a shifted file.
 - **Startup map load failures show an error instead of crashing** — HiveWE now shows an "Opening map failed" error instead of silently crashing when the startup map can't be loaded because a data file is missing or damaged.
 - **Object Editor New, Add and Copy dialogs only accept object ids of exactly 4 letters or digits** — Ids with non-ASCII characters, quotes, backslashes or spaces, which could break the generated map script, now keep the OK button disabled.

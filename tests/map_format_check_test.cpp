@@ -769,7 +769,7 @@ TEST_CASE("a read-only archive handle can do everything load_mpq asks of it") {
 		REQUIRE(opened.open(archive, MPQ_OPEN_READ_ONLY));
 		CHECK(check_archive_format_versions(opened, make_scratch_dir("archive_read_only_scratch")).has_value());
 		REQUIRE(opened.unpack(target));
-		CHECK(opened.extract_file("war3map.w3i", target / "by_name.w3i"));
+		CHECK(opened.extract_file("war3map.w3i", target / "by_name.w3i") == mpq::MPQ::ExtractResult::extracted);
 	}
 	for (const auto& [name, content] : files) {
 		CAPTURE(name);
@@ -989,6 +989,34 @@ TEST_CASE("sanitize_metadata round-trips a v39 war3map.w3i") {
 
 	spec.author = "";
 	check_same_bytes(read_all(temp / "war3map.w3i"), w3i_strict_bytes(spec));
+}
+
+TEST_CASE("prepare_source_path unpacks a real archive into the temp folder and drops the listfile") {
+	const fs::path dir = make_scratch_dir("protector_archive_ok");
+	const auto files = valid_map_files();
+	make_archive(dir / "Foo.w3x", files);
+	const fs::path temp = make_scratch_dir("protector_archive_ok_temp");
+
+	const ProtectionOptions options; // no metadata options, so only the unpack runs
+	const SyncSaveResult result = prepare_source_path(dir / "Foo.w3x", temp, options);
+	CHECK_MESSAGE(result.success, result.error);
+	for (const auto& [name, content] : files) {
+		CAPTURE(name);
+		CHECK(read_all(temp / name) == content);
+	}
+	CHECK_FALSE(fs::exists(temp / "(listfile)"));
+}
+
+TEST_CASE("prepare_source_path fails and names the file when an archive entry cannot be extracted") {
+	const fs::path dir = make_scratch_dir("protector_archive_blocked");
+	make_archive(dir / "Foo.w3x", valid_map_files());
+	const fs::path temp = make_scratch_dir("protector_archive_blocked_temp");
+	fs::create_directories(temp / "war3map.w3e"); // a directory blocks the target file
+
+	const ProtectionOptions options;
+	const SyncSaveResult result = prepare_source_path(dir / "Foo.w3x", temp, options);
+	CHECK_FALSE(result.success);
+	CHECK(contains(result.error, "war3map.w3e"));
 }
 
 TEST_CASE("inline_map_info_trigger_strings keeps a v39 war3map.w3i at v39") {

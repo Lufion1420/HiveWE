@@ -817,10 +817,19 @@ void HiveWE::load_mpq() {
 		return;
 	}
 
-	bool unpacked = mpq.unpack(final_directory);
+	std::vector<std::string> failed_names;
+	const bool unpacked = mpq.unpack(final_directory, &failed_names);
 	if (!unpacked) {
-		QMessageBox::critical(this, "Unpacking failed", "There was an error unpacking the archive.");
-		std::println("{}", GetLastError());
+		QString message = failed_names.empty() ? "The archive could not be read. Target folder:\n" + QString::fromStdWString(final_directory.wstring())
+											   : "These files could not be extracted from the archive into\n" + QString::fromStdWString(final_directory.wstring()) + ":\n";
+		for (std::size_t i = 0; i < failed_names.size() && i < 10; ++i) {
+			message += "\n" + QString::fromStdString(failed_names[i]);
+		}
+		if (failed_names.size() > 10) {
+			message += QString("\n... and %1 more").arg(failed_names.size() - 10);
+		}
+		message += "\n\nThe map was not opened. That folder may now contain partly extracted files.";
+		QMessageBox::critical(this, "Unpacking failed", message);
 		return;
 	}
 
@@ -830,15 +839,22 @@ void HiveWE::load_mpq() {
 	// map files have a fixed, well-known set of names, so fetch them directly by name too -
 	// MPQ files are looked up by name hash, so this recovers them regardless of listfile
 	// presence.
+	// A name the archive lacks is skipped silently; one it holds but cannot extract is an error.
 	for (const std::string& name : map->imports.blacklist) {
-		mpq.extract_file(name, final_directory / name);
+		if (mpq.extract_file(name, final_directory / name) == decltype(mpq)::ExtractResult::failed) {
+			QMessageBox::critical(this, "Unpacking failed",
+								  "The file " + QString::fromStdString(name) + " could not be extracted from the archive into\n"
+									  + QString::fromStdWString(final_directory.wstring())
+									  + ".\n\nThe map was not opened. That folder may now contain partly extracted files.");
+			return;
+		}
 	}
 
-	// The archive check skips the triggers, the folder can hold files from before that the archive did not replace,
-	// and the results of the extraction above are not checked. Files were written, so this must not say otherwise.
+	// The archive check skips the triggers, and the folder can hold files from before that the archive did not replace.
+	// Files were written, so this must not say otherwise.
 	if (const auto check = check_map_for_opening(final_directory); !check) {
 		const QString message = "The map was extracted to\n" + QString::fromStdWString(final_directory.wstring())
-			+ "\nbut that folder cannot be opened. A file in the map may be damaged, or files already there or files that failed to unpack may be the cause.\n\n"
+			+ "\nbut that folder cannot be opened. A file in the map may be damaged, or files already there that the archive did not replace may be the cause.\n\n"
 			+ QString::fromStdString(check.error());
 		QMessageBox::critical(this, "Opening map failed", message);
 		return;

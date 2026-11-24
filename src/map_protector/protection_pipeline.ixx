@@ -223,13 +223,24 @@ SyncSaveResult unpack_source_archive(const fs::path& source_file, const fs::path
 		return { false, "Failed to open the archive. It might be open in another program." };
 	}
 
-	if (!mpq.unpack(temp_dir)) {
-		return { false, "Failed to unpack the archive." };
+	std::vector<std::string> failed_names;
+	if (!mpq.unpack(temp_dir, &failed_names)) {
+		std::string message = "Failed to unpack the archive. These files could not be extracted:";
+		for (std::size_t i = 0; i < failed_names.size() && i < 5; ++i) {
+			message += " " + failed_names[i];
+		}
+		if (failed_names.size() > 5) {
+			message += std::format(" and {} more", failed_names.size() - 5);
+		}
+		return { false, message };
 	}
 
+	// extract_file: an absent name is skipped, a name the archive holds but cannot extract is an error.
 	static const Imports imports;
 	for (const std::string& name : imports.blacklist) {
-		mpq.extract_file(name, temp_dir / name);
+		if (mpq.extract_file(name, temp_dir / name) == decltype(mpq)::ExtractResult::failed) {
+			return { false, std::format("Failed to unpack the archive: {} could not be extracted.", name) };
+		}
 	}
 
 	// Without a (listfile), mpq.unpack()'s wildcard enumeration above returns every custom import
@@ -244,7 +255,9 @@ SyncSaveResult unpack_source_archive(const fs::path& source_file, const fs::path
 	// regardless of whether the archive has a (listfile) at all.
 	if (const fs::path imp_path = temp_dir / "war3map.imp"; fs::exists(imp_path)) {
 		for (const std::string& name : parse_import_manifest_paths(imp_path)) {
-			mpq.extract_file(name, temp_dir / name);
+			if (mpq.extract_file(name, temp_dir / name) == decltype(mpq)::ExtractResult::failed) {
+				return { false, std::format("Failed to unpack the archive: {} could not be extracted.", name) };
+			}
 		}
 	}
 

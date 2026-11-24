@@ -12,6 +12,7 @@ add_executable(HiveWE_tests
 	asset_obfuscation_test.cpp
 	protection_pipeline_test.cpp
 	map_format_check_test.cpp
+	mpq_extract_test.cpp
 	map_body_check_test.cpp
 	start_location_index_test.cpp
 	map_settings_script_test.cpp

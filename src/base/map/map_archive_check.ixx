@@ -14,7 +14,7 @@ namespace fs = std::filesystem;
 export auto check_archive_format_versions(const mpq::MPQ& archive, const fs::path& scratch_directory)
 	-> std::expected<void, std::string> {
 	for (const std::string_view file : checked_map_files()) {
-		if (archive.file_exists(file) && !archive.extract_file(file, scratch_directory / file)) {
+		if (archive.extract_file(file, scratch_directory / file) == mpq::MPQ::ExtractResult::failed) {
 			return std::unexpected(std::format("This map cannot be opened because {} could not be read from the archive.", file));
 		}
 	}
@@ -30,7 +30,7 @@ export auto check_archive_for_opening(const mpq::MPQ& archive, const fs::path& s
 		return versions;
 	}
 	for (const std::string_view file : body_only_map_files()) {
-		if (archive.file_exists(file) && !archive.extract_file(file, scratch_directory / file)) {
+		if (archive.extract_file(file, scratch_directory / file) == mpq::MPQ::ExtractResult::failed) {
 			std::error_code error;
 			fs::remove(scratch_directory / file, error);
 		}
