@@ -84,6 +84,42 @@ export std::vector<WeatherEntry> w3i_weather_entries(const slk::SLK& weather_slk
 	return entries;
 }
 
+export struct SoundEnvironmentEntry {
+	std::string name;
+	std::string id;
+};
+
+/// The (display text, environment id) list for the custom sound combo. In EnvironmentSounds.slk the environment id (EnvironmentType) is
+/// the first column, which the SLK keeps as the row key (`index_to_row`), not as a data column. Data rows start at index 0, so the
+/// first row ("Default") is included. Rows without an id are skipped; a row without display text shows its id.
+export std::vector<SoundEnvironmentEntry> w3i_sound_environment_entries(const slk::SLK& sounds_slk) {
+	std::vector<SoundEnvironmentEntry> entries;
+	for (size_t i = 0; i < sounds_slk.rows(); i++) {
+		const auto row = sounds_slk.index_to_row.find(i);
+		if (row == sounds_slk.index_to_row.end() || row->second.empty()) {
+			continue;
+		}
+		std::string name = sounds_slk.data<std::string>("displaytext", i);
+		if (name.empty()) {
+			name = row->second;
+		}
+		entries.push_back({ std::move(name), row->second });
+	}
+	return entries;
+}
+
+/// What Map Info writes for the custom sound environment: empty when it is off, the selected id otherwise. When nothing usable is
+/// selected (empty), the stored id is kept instead of being cleared.
+export std::string w3i_sound_environment_for_save(const bool enabled, const std::string_view selected_id, const std::string_view stored_id) {
+	if (!enabled) {
+		return {};
+	}
+	if (selected_id.empty()) {
+		return std::string(stored_id);
+	}
+	return std::string(selected_id);
+}
+
 export struct PlayerData {
 	int internal_number;
 	PlayerType type;

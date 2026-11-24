@@ -110,15 +110,19 @@ MapInfoEditor::MapInfoEditor(QWidget* parent) : QDialog(parent) {
 	environment_sounds_slk.substitute(world_edit_strings, "WorldEditStrings");
 
 	ui.customSound->setChecked(!map->info.custom_sound_environment.empty());
-	for (size_t i = 1; i < environment_sounds_slk.rows(); i++) {
-		ui.customSoundCombo->addItem(
-			QString::fromUtf8(environment_sounds_slk.data<std::string_view>("displaytext", i)),
-			QString::fromUtf8(environment_sounds_slk.data<std::string_view>("environmenttype", i))
-		);
+	// The item data is the environment id (the SLK row key). Select by id; a stored id that is not in the SLK gets its own entry.
+	for (const SoundEnvironmentEntry& entry : w3i_sound_environment_entries(environment_sounds_slk)) {
+		ui.customSoundCombo->addItem(QString::fromUtf8(entry.name), QString::fromUtf8(entry.id));
 	}
-	ui.customSoundCombo->setCurrentText(
-		QString::fromUtf8(environment_sounds_slk.data<std::string_view>("displaytext", map->info.custom_sound_environment))
-	);
+	if (!map->info.custom_sound_environment.empty()) {
+		const QString stored = QString::fromUtf8(map->info.custom_sound_environment);
+		int index = ui.customSoundCombo->findData(stored);
+		if (index == -1) {
+			ui.customSoundCombo->addItem(stored, stored);
+			index = ui.customSoundCombo->count() - 1;
+		}
+		ui.customSoundCombo->setCurrentIndex(index);
+	}
 
 	// Custom Lighting
 	for (const auto& [key, value] : world_edit_data.section("TileSets")) {
@@ -248,11 +252,9 @@ bool MapInfoEditor::save() const {
 	);
 
 	// Custom Sound
-	if (ui.customSound->isChecked()) {
-		map->info.custom_sound_environment = ui.customSoundCombo->currentData().toString().toStdString();
-	} else {
-		map->info.custom_sound_environment = "";
-	}
+	map->info.custom_sound_environment = w3i_sound_environment_for_save(
+		ui.customSound->isChecked(), ui.customSoundCombo->currentData().toString().toStdString(), map->info.custom_sound_environment
+	);
 
 	// Custom Lighting
 	if (!ui.customLighting->isChecked()) {
