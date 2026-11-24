@@ -7,6 +7,8 @@ import Hierarchy;
 import MDX;
 import Utilities;
 import AssetObfuscation;
+import BinaryWriter;
+import BinaryReader;
 
 namespace fs = std::filesystem;
 
@@ -768,4 +770,102 @@ TEST_CASE("apply_renames fails without renaming anything already done if a candi
 	// so a partial rename here still leaves every *reference* consistent with what's on disk for that
 	// one file; run_asset_obfuscation() as a whole still reports failure to the caller either way.
 	CHECK(fs::exists(dir / "a3f9c1e2.mdx"));
+}
+
+// Asana 1220877868370898: a custom object on a base id the stock tables lack (humanx03's n003 on nbsh) made the whole protect run fail.
+// It is now carried over as raw bytes while every other object is still rewritten.
+namespace {
+	struct TestMapDirectoryRestore {
+		fs::path original = hierarchy.map_directory;
+		~TestMapDirectoryRestore() { hierarchy.map_directory = original; }
+	};
+
+	void write_test_object(BinaryWriter& writer, const u32 version, const bool optional_ints, const std::string& original,
+						   const std::string& modified, const std::string& meta_id, const std::string& value,
+						   const u32 data_pointer = 0) {
+		writer.write_string(original);
+		if (modified.empty()) {
+			writer.write<u32>(0);
+		} else {
+			writer.write_string(modified);
+		}
+		if (version >= 3) {
+			writer.write<u32>(1);
+			writer.write<u32>(0);
+		}
+		writer.write<u32>(1);
+		writer.write_string(meta_id);
+		writer.write<u32>(3);
+		if (optional_ints) {
+			writer.write<u32>(2); // level
+			writer.write<u32>(data_pointer);
+		}
+		writer.write_c_string(value);
+		writer.write<u32>(0);
+	}
+}
+
+TEST_CASE("rewrite_object_data_file keeps a custom object with an unknown base id as raw bytes and rewrites the rest") {
+	for (const auto [version, optional_ints] : { std::pair{ 3u, false }, { 2u, false }, { 1u, false }, { 3u, true }, { 1u, true } }) {
+		const fs::path dir = make_scratch_dir(std::format("rewrite_unknown_base_v{}_{}", version, optional_ints));
+		const TestMapDirectoryRestore restore_map_directory;
+		hierarchy.map_directory = dir;
+
+		slk::SLK meta = make_test_meta();
+		meta.set_shadow_data("repeat", "Ymdl", "0");
+		meta.set_shadow_data("repeat", "Ynam", "0");
+		const slk::SLK template_slk = make_test_template("hfoo");
+
+		BinaryWriter writer;
+		writer.write<u32>(version);
+		writer.write<u32>(1);
+		write_test_object(writer, version, optional_ints, "hfoo", "", "Ymdl", "war3mapImported/Custom.mdx");
+		writer.write<u32>(2);
+		write_test_object(writer, version, optional_ints, "nbsh", "n003", "Ynam", "Leftover", 1);
+		write_test_object(writer, version, optional_ints, "hfoo", "h001", "Ymdl", "war3mapImported/Custom.mdx");
+
+		const fs::path w3u_path = dir / "war3map.w3u";
+		{
+			std::ofstream out(w3u_path, std::ios::binary);
+			out.write(reinterpret_cast<const char*>(writer.buffer.data()), static_cast<std::streamsize>(writer.buffer.size()));
+		}
+
+		RenameCandidate candidate;
+		candidate.original_relative_path = "war3mapImported/Custom.mdx";
+		candidate.new_relative_path = "a3f9c1e2.mdx";
+		candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+		const std::unordered_map<std::string, const RenameCandidate*> candidates_by_match_key = { { candidate.match_key, &candidate } };
+
+		const FileRewriteResult result = rewrite_object_data_file(w3u_path, "war3map.w3u", template_slk, meta, optional_ints, false, candidates_by_match_key);
+		CHECK_MESSAGE(result.success, result.error);
+		CHECK(result.changed);
+
+		std::vector<RawCustomObject> preserved;
+		const auto reloaded = extract_modification_shadow_map_path(w3u_path, template_slk, meta, optional_ints, &preserved);
+		REQUIRE(reloaded.has_value());
+		CHECK(reloaded->at("hfoo").at("file") == "a3f9c1e2.mdx");
+		CHECK(reloaded->at("h001").at("file") == "a3f9c1e2.mdx");
+		CHECK_FALSE(reloaded->contains("n003"));
+		REQUIRE(preserved.size() == 1);
+		CHECK(preserved.front().id == "n003");
+		CHECK(preserved.front().base_id == "nbsh");
+
+		// The kept bytes are the object as the version 3 layout writes it.
+		BinaryWriter expected;
+		write_test_object(expected, 3, optional_ints, "nbsh", "n003", "Ynam", "Leftover", 1);
+		CHECK(std::vector<u8>(preserved.front().bytes.begin(), preserved.front().bytes.end())
+			  == std::vector<u8>(expected.buffer.begin(), expected.buffer.end()));
+
+		// The rewritten file still loads the way Map::load does it: n003 is skipped with a report, the others stay.
+		slk::SLK loaded = template_slk;
+		loaded.base_data["hfoo"]["name"] = "Footman"; // Map::load only copies a parent that has a base_data row
+		std::vector<SkippedObject> skipped;
+		const auto file = read_file(w3u_path);
+		REQUIRE(file.has_value());
+		BinaryReader reader = *file;
+		REQUIRE(load_modification_file_reader(reader, loaded, meta, optional_ints, &skipped).has_value());
+		REQUIRE(skipped.size() == 1);
+		CHECK(skipped.front().id == "n003");
+		CHECK(loaded.data("file", "h001") == "a3f9c1e2.mdx");
+	}
 }

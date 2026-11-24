@@ -493,11 +493,22 @@ export bool modification_table_has_data(const slk::SLK& slk) {
 
 export using ModificationShadowMap = hive::unordered_map<std::string, hive::unordered_map<std::string, std::string>>;
 
+/// A custom object whose base id is not in the template tables, kept as its raw bytes (normalized to the version 3 layout that
+/// build_modification_file_buffer writes) so a rewrite of the file can carry it over unchanged.
+export struct RawCustomObject {
+	std::string id;
+	std::string base_id;
+	std::vector<u8> bytes;
+};
+
+/// With `preserved` given, a custom object whose base id is unknown is not an error: it is left out of the returned map and its raw
+/// bytes are appended to `preserved` (its field changes are not interpreted at all).
 export std::expected<ModificationShadowMap, std::string> extract_modification_shadow_map(
 	BinaryReader reader,
 	const slk::SLK& template_slk,
 	const slk::SLK& meta_slk,
-	const bool optional_ints
+	const bool optional_ints,
+	std::vector<RawCustomObject>* preserved = nullptr
 ) {
 	const auto version = peek_modification_file_version(reader);
 	if (!version) {
@@ -513,16 +524,21 @@ export std::expected<ModificationShadowMap, std::string> extract_modification_sh
 		}
 
 		for (size_t i = 0; i < objects; i++) {
+			const size_t object_start = reader.position;
 			const std::string original_id = reader.read_string(4);
 			const std::string modified_id = reader.read_string(4);
 
+			size_t body_start = reader.position;
 			if (*version >= 3) {
 				[[maybe_unused]] const uint32_t set_count = reader.read<uint32_t>();
 				[[maybe_unused]] const uint32_t set_flags = reader.read<uint32_t>();
+				body_start = reader.position - 2 * sizeof(uint32_t);
 			}
 
 			const std::string& object_id = modification ? modified_id : original_id;
-			if (modification) {
+			const bool preserve_raw = modification && preserved && !template_slk.row_headers.contains(original_id)
+				&& !template_slk.base_data.contains(original_id);
+			if (modification && !preserve_raw) {
 				shadow_map[object_id]["oldid"] = original_id;
 			}
 
@@ -564,11 +580,24 @@ export std::expected<ModificationShadowMap, std::string> extract_modification_sh
 				}
 				reader.advance(4);
 
-				if (column_header.empty()) {
+				if (column_header.empty() || preserve_raw) {
 					continue;
 				}
 
 				shadow_map[object_id][column_header] = std::move(data);
+			}
+
+			if (preserve_raw) {
+				RawCustomObject raw{ modified_id, original_id, {} };
+				raw.bytes.assign(reader.buffer.begin() + object_start, reader.buffer.begin() + object_start + 2 * 4);
+				if (*version < 3) {
+					for (const uint32_t value : { 1u, 0u }) {
+						const auto* p = reinterpret_cast<const u8*>(&value);
+						raw.bytes.insert(raw.bytes.end(), p, p + sizeof(value));
+					}
+				}
+				raw.bytes.insert(raw.bytes.end(), reader.buffer.begin() + body_start,reader.buffer.begin() + reader.position);
+				preserved->push_back(std::move(raw));
 			}
 		}
 	};
@@ -599,13 +628,40 @@ export std::expected<ModificationShadowMap, std::string> extract_modification_sh
 	const fs::path& path,
 	const slk::SLK& template_slk,
 	const slk::SLK& meta_slk,
-	const bool optional_ints
+	const bool optional_ints,
+	std::vector<RawCustomObject>* preserved = nullptr
 ) {
 	const auto file = read_file(path);
 	if (!file) {
 		return std::unexpected(file.error());
 	}
-	return extract_modification_shadow_map(std::move(file.value()), template_slk, meta_slk, optional_ints);
+	return extract_modification_shadow_map(std::move(file.value()), template_slk, meta_slk, optional_ints, preserved);
+}
+
+/// Like build_modification_file_buffer, with the raw custom objects appended to the custom table unchanged.
+export std::vector<u8> build_modification_file_buffer_with_raw(
+	const slk::SLK& slk,
+	const slk::SLK& meta_slk,
+	const bool optional_ints,
+	const bool skin,
+	const std::vector<RawCustomObject>& raw_objects
+) {
+	BinaryWriter writer;
+	writer.write<uint32_t>(mod_table_write_version);
+	save_modification_table(writer, slk, meta_slk, false, optional_ints, skin);
+
+	BinaryWriter custom;
+	save_modification_table(custom, slk, meta_slk, true, optional_ints, skin);
+	uint32_t count = 0;
+	std::memcpy(&count, custom.buffer.data(), sizeof(count));
+	count += static_cast<uint32_t>(raw_objects.size());
+	std::memcpy(custom.buffer.data(), &count, sizeof(count));
+	for (const RawCustomObject& raw : raw_objects) {
+		custom.buffer.insert(custom.buffer.end(), raw.bytes.begin(), raw.bytes.end());
+	}
+	writer.buffer.insert(writer.buffer.end(), custom.buffer.begin(), custom.buffer.end());
+
+	return std::vector<u8>(writer.buffer.begin(), writer.buffer.end());
 }
 
 export slk::SLK shadow_map_to_slk(const slk::SLK& template_slk, const ModificationShadowMap& shadow_map) {

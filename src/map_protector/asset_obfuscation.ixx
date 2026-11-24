@@ -521,7 +521,9 @@ export FileRewriteResult rewrite_object_data_file(
 		return { true, "", false };
 	}
 
-	auto shadow_map_result = extract_modification_shadow_map_path(file_path, template_slk, meta_slk, optional_ints);
+	// Custom objects on a base id the stock tables lack (Map::load skips them too) are carried over as raw bytes, untouched.
+	std::vector<RawCustomObject> preserved_objects;
+	auto shadow_map_result = extract_modification_shadow_map_path(file_path, template_slk, meta_slk, optional_ints, &preserved_objects);
 	if (!shadow_map_result) {
 		return { false, shadow_map_result.error(), false };
 	}
@@ -622,7 +624,7 @@ export FileRewriteResult rewrite_object_data_file(
 			return { false, std::format("{} field(s) cannot be written. First: object {}, field {}: {}", errors.size(), first.object_id,
 										first.field, first.message), false };
 		}
-		save_modification_file(file_name, scratch, meta_slk, optional_ints, skin);
+		hierarchy.map_file_write(file_name, build_modification_file_buffer_with_raw(scratch, meta_slk, optional_ints, skin, preserved_objects));
 	}
 
 	return { true, "", changed };
