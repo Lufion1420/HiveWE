@@ -28,6 +28,14 @@ Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_threa
 - `Map` cannot be constructed in tests (`RenderManager` calls `init_gl`). Map-level checks must be free functions over the globals. `Terrain` needs GL too, so Change Tileset logic that tests cover lives in the GL-free `src/base/tileset_change.ixx` (tests in `tests/tileset_change_test.cpp`). Tests never construct `QApplication` or `QWidget`.
 - Assertions are invariants in parsers — do not replace with silent fallbacks unless user-facing.
 
+## Paths and Windows pitfalls
+
+- On MSVC, `fs::path::string()`/`generic_string()` throw for characters outside the system code page (CJK/Cyrillic folders). In `src` use `wstring()`/`generic_wstring()`/`u8string()` and `QString::fromStdWString`.
+- An exception escaping a Qt slot ends the program. When fixing one such throw, grep the whole call chain (Qt picker, labels, `utilities.ixx` error text), not only the named function.
+- `path.extension() == ".blp"` is case-sensitive: fold case first.
+- `resave_smoke` already runs inside `ctest --preset Agent`.
+- `.ixx` files are CRLF in the working copy, so `git apply` of saved diffs fails; use Edit.
+
 ## Performance
 
 - `Map::load()` has no `std::async`. The async work is in `src/base/stock_object_data.ixx`, which rethrows through `.get()` on the main thread.
