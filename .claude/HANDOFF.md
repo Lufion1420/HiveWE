@@ -22,6 +22,7 @@ The user's maps are SD only and Lua only: do not list HD checks. No per-step app
 9. Optional: in Map Protector, protect a copy of humanx03 with Asset Path Obfuscation enabled and confirm it completes. There is no headless path for this.
 
 ## State
+- Session 31: f176390 (pushed, CI green, deployed): trigger files read fully or refuse; custom text stays with its trigger. Asana 1220330457516219, 1220882188008627, parent 1220329527029506 done. Next in work: 1220329518098180 (unsaved-changes prompt for all editors), uncommitted.
 - d86b482 (pushed, CI green): Map Protector rewrites asset paths inside raw-kept unknown-base objects. Asana 1220879533958024 done.
 - d8aef5d (pushed, CI green): one shared locale-independent `is_valid_object_id` in Utilities. Asana 1220879791780435 done.
 - 9a38559 (pushed, CI not yet checked: take it from the newest run, newer pushes cancel older runs): MDX LITE v1300+/v1600+ fields and tracks read and write, DILG kept. Asana 1220829561061744 done. Tests 454/454, stock sweep 46 files / 23 lights OK.

@@ -52,7 +52,7 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - "Missing from HiveWE's loaded tables" is not "missing from the game": `Map::load` ignores the game data sets `custom_v0`/`custom_v1`/`melee_v0`. Any drop keyed on a base-id lookup needs a visible warning.
 - In `slk::SLK`, `add_row` fills `row_headers` but not `base_data`; `copy_row` needs `base_data`, so a row added that way cannot be copied.
 - Calling `MapInfo::load`/`save` with `hierarchy.map_directory` redirected needs an RAII guard that restores it on every exit: `BinaryReader` throws `out_of_range` on a short file (a w3e under 4 bytes in Map Protector, bf69845). Map Protector's asset-obfuscation and TRIGSTR steps still change the global `map_directory` from the export background thread (`map_read_override` is thread-local and covers reads only).
-- Stock sweep (2026-11-09): 466 checked, 465 accepted, 1 refused (undead02 wtg), none for version. The readable-parts pass in `tests/map_body_check_test.cpp` now has nothing to do and the test asserts it stays at 0; it matters again when a new version is refused.
+- Stock sweep (2026-11-24): the body check accepts all 466 stock maps (asserted in `tests/map_body_check_test.cpp`). The readable-parts pass there has nothing to do and the test asserts it stays at 0; it matters again when a new version is refused.
 - `Doodad::state_from_flags` still clamps flag state 3 to 2 for the `state` enum, but `Doodad::file_flags` keeps the raw byte and `flags()` writes it back, so state 3 and bit 0x08 survive saves; a changed state still takes effect. Flag values 3 and 7 occur on 146,036 stock doodads.
 - `group_id` is exactly 0xFFFFFFFF on all 546,722 stock v12/13 doodads and doodad `unk` is -1 on all 169,423 v13 doodads. One fresh 3.0.1 World Editor save (2026-11-08, editor 7003, game 3.0.1.24371) with two user-placed doodads also has group_id 0xFFFFFFFF, unk -1, roll 0, pitch 0, no lights, flag 0x02. That is one map. The meaning of group_id and unk is unknown, so non-default values are preserved.
 - doo save policy: v7 and v8 save as (8,11), v12 as (12,11), v13 as (13,11), a new map as (8,11). This keeps the w3i and doo pairings seen in stock. The new-map case relies on `data/test map/war3map.doo` being v7 or v8; a test guards that.
@@ -69,7 +69,7 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - Stock maps are in CASC under `war3.w3mod:maps\...`, for example `war3.w3mod:maps\forsakenkingdom\scenario\(1)forgottenhollow.w3x` (w3i 39, editor 7003), and can be read byte-exact through CascLib. A map is 3.0 when `war3map.w3i` starts with u32 39.
 - `Map::load` ignores the bool results of `Terrain::load` and `PathingMap::load`, so a false return is not a safe path. For w3e, `interpolated_height` then indexes empty corner vectors. For wpm, the map stays 0 by 0 and a save overwrites the real `war3map.wpm` with an empty one. `new Map()` value-initializes, so unset scalar members are 0, not garbage.
 - `Doodads::load` zeroes `Doodad::auto_increment`, `Unit()` increments `Unit::auto_increment`, and `Triggers::load` zeroes `Trigger::next_id`. The readers therefore cannot be dry-run against an open map without saving and restoring these statics.
-- From a Python replay of HiveWE's read order (not the C++ code) over the 466 stock 3.0.1 maps: 67 of the 465 wct files that parsed have trailing zeros, and units use `random_type` -1 and 641 with no payload. Neither is damage.
+- From a Python replay over the stock 3.0.1 maps: units use `random_type` -1 and 641 with no payload. That is not damage.
 - StormLib (verified 2026-11-24): `SFileCreateArchive` always forces `dwFileFlags1 = MPQ_FILE_DEFAULT_INTERNAL` (`SFileCreateArchive.cpp:102`) and so writes a `(listfile)` regardless of `MPQ_CREATE_LISTFILE`; only `SFileCreateArchive2` with `dwFileFlags1 = 0` omits it (`run_async_pack` in `src/map_protector/protection_pipeline.ixx` does this). `SFileCompactArchive` still works without a listfile because the names stay in memory in the same session. `MPQ_OPEN_READ_ONLY` does not change the read and extract paths.
 - The live game install on this machine is found through `find_warcraft_directory` at `C:/Program Files (x86)/Warcraft III`. The registry's Blizzard GamePath/Program/InstallPath values under `F:\` are stale.
 
@@ -79,7 +79,7 @@ Checks: `.claude/tools/script-check/`.
 
 - Start locations: `DefineStartLocation` index is the position in the w3i players list, not the player number.
 - TriggerData preset values keep their quotes after INI parsing. Operators must be written unquoted; Lua uses `~=` and `nil`.
-- Custom-text triggers (verified on stock 0239 and 0240, 2026-11-09): emission depends on the wtg classifier. 32 (script element) gets no `gg_trg_`, no `InitTrig_` call and no init call. 8 (GUI trigger converted to custom text) gets `gg_trg_`, the `InitTrig_` call and, if run-on-init, the init call. In Lua the World Editor writes an empty `function InitTrig_X() end` before the custom text. `Trigger::classifier` has no default value, so tests must set it. JASS `ConditionalTriggerExecute` for converted run-on-init triggers: Needs verification (no stock example).
+- Custom-text triggers (verified on stock 0239 and 0240, 2026-11-09): emission depends on the wtg classifier. 32 (script element) gets no `gg_trg_`, no `InitTrig_` call and no init call. 8 (GUI trigger converted to custom text) gets `gg_trg_`, the `InitTrig_` call and, if run-on-init, the init call. In Lua the World Editor writes an empty `function InitTrig_X() end` before the custom text. `Trigger::classifier` defaults to GUI, so script-trigger tests must set it. JASS `ConditionalTriggerExecute` for converted run-on-init triggers: Needs verification (no stock example).
 - The World Editor does not trim leading spaces in trigger names (`"  Defend"` becomes `gg_trg___Defend`).
 - `SetGamePlacement` (466/466 stock): `MAP_PLACEMENT_TEAMS_TOGETHER` when more than one player has type human (w3i type 1), else `MAP_PLACEMENT_USE_MAP_SETTINGS`. It does not follow w3i flags: the 466-map check (2026-11-20) found w3i 0x20/0x40 make no difference, with 0 counterexamples.
 - `SetTeams(n)` uses n = number of players (same as `SetPlayers`), not number of forces (466/466).
@@ -140,17 +140,27 @@ Checks: `.claude/tools/script-check/`.
 - Script-generator tests: `world_edit_data.data()` throws when a section is missing, so a `generate_main` test must add the TerrainLights, SoundEnvironment, DayAmbience and NightAmbience sections. The seams `generate_main_script` and `generate_map_configuration_script` exist for script tests. `generate_map_configuration_script` contains no `InitCustomTeams` or alliance calls; those come from `generate_custom_teams`, tested via `generate_custom_teams_script`.
 - `ctest` runs each doctest case in its own process. Stock tests report pass with 0 assertions when their root variable is unset, so check the printed counts, not the pass status.
 - `stock_object_data::load()` needs `world_edit_strings` and `world_edit_game_strings` loaded, and reads `data/overrides` relative to the working directory, which under ctest is not the repository root.
+- Trigger round-trip sweep: set `HIVEWE_TRIGGER_ROUNDTRIP_ROOT` (it also checks cut wct files). wtg/wct round-trip checks must compare custom text per trigger id on maps with non-empty text (stock 0239, 0104, 0136; human05 and undead02 have none).
+- doctest `-tc` filters split on commas.
 - A sweep check that a real file was parsed must read the checked copy, not the source folder, or a stubbed copy still passes.
 - doctest `SUBCASE` inside a `for` loop is unreliable, so looped refusal tests use plain blocks.
 
-## Sounds, script globals, wtg, writers (verified 2026-11-09)
+## Sounds, script globals, writers (verified 2026-11-09)
 
 - w3s: 2^32 (0x4F800000) for pitch and distances, and -1 for channel and volume, mean "default"; the World Editor writes no setter for them. Duration is not stored in w3s; the World Editor computes it from the audio file (Ogg: last granule * 1000 / sample rate). 3.0 dialogue audio exists only under `_locales\enus.w3mod` in CASC.
 - The script generator binds `gg_unit_`/`gg_dest_`/`gg_item_` globals from trigger text. The declared type comes from the trigger text and the assigned type from the placed object; they must match (enforced for items and units).
-- 1.31+ wtg: the first int after the seven deleted-id lists is a count followed by that many ints (1 in human05 and undead02, 0 elsewhere). `Triggers::load_version_31` reads a fixed three ints. Needs verification in C++.
-- Both wtg variable readers in `src/base/triggers/triggers.ixx` assign every `TriggerVariable` field, so default member values on that struct affect only editor-created variables. New ones use `make_new_trigger_variable` (type "integer", unknown=1; unknown=1 Needs verification against a World Editor-written wtg).
 - HiveWE's object-data writer puts 0 in the end token where the World Editor writes the object id. The wts writer drops `//` comments (found by fdiff on Forgotten Hollow).
 - StormLib: never enumerate with `SFileFindFirstFile` on these maps (hang, 20 GB RAM); see `harness-guardrails.md`.
+
+## Triggers: wtg and wct (verified 2026-11-24)
+
+- 1.31+ wtg starts with eight lists `{count, deleted_n, ids}` (element types 1..128), then u32 `game_version` (2). All 466 stock maps write (1, 0) in list 1. HiveWE writes counts back as read, so they go stale after edits; whether the World Editor minds: Needs verification.
+- `Triggers::load` is strict: bad magic, unknown version, 1.31 subformat other than 7, trailing bytes or an unknown element classifier refuse the map, as does a wct with unmatched entries or non-zero trailing bytes. An unknown function name alone does not.
+- 1.31+ wct: one entry per trigger element whose classifier is not 16 (commented-out GUI triggers included), in wtg element order. All 466 stock files end exactly there (the trailing zeros 66 of them show in older HiveWE's order are those entries).
+- Files older HiveWE saved have lists 1-7 all empty and a category-grouped wct without `is_comment` triggers; only they get that layout (with the normal one as fallback). `save()` therefore never writes lists 1-7 all empty. A layout fallback that expects fewer entries also accepts truncated files, so trigger sweeps must include cut-file checks.
+- World Editor 1.31-1.33 maps that omit wct entries would now be refused: Needs verification that any exist.
+- New element ids come from `Triggers::new_element_id` (skips deleted ids). Editor code creates through `make_new_trigger_category` / `make_new_trigger` / `make_new_trigger_variable` and deletes or moves through `Triggers::remove_element` / `set_element_parent`.
+- Both wtg variable readers assign every `TriggerVariable` field, so default member values on that struct affect only editor-created variables. `make_new_trigger_variable` sets type "integer", unknown=1 (unknown=1 Needs verification against a World Editor-written wtg).
 
 ## MPQ extraction (2026-11-24)
 

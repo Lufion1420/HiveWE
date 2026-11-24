@@ -83,10 +83,9 @@ a w3i the reader tries both layouts and keeps the one that ends exactly at EOF.
 - wtg parameter counts come from TriggerData.txt by position (E/C/A: fields after the first;
   calls: fields after the third; `nothing` excluded). A map that needs a different TriggerData
   gives a parse_failure that names the function.
-- wtg header: after the seven deleted-id lists, 464 stock files have `0, 0, 2`. human05 and
-  undead02 (reforged roc) have `1, 1, 0, 2`. Both are read as a counted int list
-  (`unknown_list`), an unknown int, and the variable format version, and then parse exactly to EOF.
-  What the list means is unknown (Needs verification).
+- wtg header: the eighth element list and `game_version` follow the seven named lists (layout in
+  `../../../rules/hivewe-file-formats.md`). The tool reports them as `unknown_list`, `unknown2` and
+  `trigger_definition_version`, which splits the eighth list differently but reaches the same end.
 - Floats compare bit-exact, so 0.0 and -0.0 differ, and x/y precision lost through the terrain
   offset shows up (expected in HiveWE output and not allow-listed).
 - Object-data `end` tokens (the WE writes the object id, HiveWE writes 0) are reported as diffs.
