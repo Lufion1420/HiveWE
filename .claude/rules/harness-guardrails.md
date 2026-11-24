@@ -22,6 +22,7 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 - No force-push and no history rewrite unless the user okays that specific rewrite in chat. Then only `git push --force-with-lease=<branch>:<sha> origin`, after a backup bundle. `settings.json` denies plain `--force`/`-f`, `--mirror`, `+refspec` and `:`-delete pushes and puts `--force-with-lease` on "ask".
 - Never change repo visibility. Never delete `main` on origin (`git push --delete`/`-d`, `gh api` on `refs/heads/main`); other branches stay deletable.
 - Commit and push as separate commands: deny patterns match the whole command line, so a commit message quoting a blocked push is itself blocked.
+- Deploy (user's standing order, 2026-11-24): after every QA-PASS commit, redeploy `build/Agent/Release` to `D:\Stuff\Warcraft_3_All_Assets\Tools\Warcraft 3 - Tools\HiveWE` with `.claude/tools/deploy-local/deploy.ps1` (via `release-manager`), without asking. Skip only when `Get-Process HiveWE` shows it running, and say so in chat. Never ask the user to close HiveWE and never kill it.
 - Publishing a release (version tag) happens only when the user asks for it; `release-manager` prepares it.
 
 ## Designs
