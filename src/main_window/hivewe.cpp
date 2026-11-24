@@ -2437,6 +2437,54 @@ void HiveWE::run_qa_object_new_check() {
 	});
 }
 
+void HiveWE::run_qa_region_palette_check() {
+	if (!qa_offscreen || !qa_region_palette_check) {
+		return;
+	}
+
+	// From the event loop, like the other hooks, so QApplication::exit works. Opens no dialog and writes nothing.
+	QTimer::singleShot(0, this, [this]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			return passed;
+		};
+		const auto finish = [&]() {
+			for (const QString& line : lines) {
+				std::println("{}", line.toStdString());
+			}
+			if (!qa_script_out.isEmpty()) {
+				QFile file(qa_script_out);
+				if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+					file.write(lines.join(QChar('\n')).toUtf8() + "\nDONE\n");
+				}
+			}
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+
+		// Each step runs only when the one before it passed.
+		if (!check(region_palette != nullptr, "the Regions palette is open (use --palette regions)")) {
+			return finish();
+		}
+		const auto& regions = map->regions.regions;
+		// A map without regions would pass the comparison below without proving anything.
+		if (!check(!regions.empty(), QString("the loaded map has regions (%1)").arg(regions.size()))) {
+			return finish();
+		}
+		const QStringList listed = region_palette->listed_region_names();
+		if (!check(listed.size() == static_cast<int>(regions.size()), QString("the palette lists %1 rows, the map has %2 regions").arg(listed.size()).arg(regions.size()))) {
+			return finish();
+		}
+		for (int i = 0; i < listed.size(); ++i) {
+			const QString expected = QString::fromStdString(regions[i].name);
+			check(listed[i] == expected, QString("row %1 shows \"%2\", the map's region is \"%3\"").arg(i).arg(listed[i], expected));
+		}
+		finish();
+	});
+}
+
 void HiveWE::run_qa_refusal_checks() {
 	if (!qa_offscreen || !qa_refusal_checks) {
 		return;

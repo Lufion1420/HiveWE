@@ -162,6 +162,9 @@ int main(int argc, char* argv[]) {
 				"  --qa-object-new-check  Needs --qa-offscreen (--qa-script-out <file> optional): drives the Object Editor's Add dialog for units without clicks: a typed\n"
 				"                       non-ASCII id (hfo+o-umlaut) must keep OK disabled and a double-click on a base unit must create nothing; a valid id is the control.\n"
 				"                       Adds one custom unit in memory, never saves. Writes PASS/FAIL lines and quits. Exit code 0 only when all pass.\n"
+				"  --qa-region-palette-check  Needs --qa-offscreen and --palette regions (--qa-script-out <file> optional): checks that the Regions palette lists the regions\n"
+				"                       of the startup map (data/test map of the working directory; it has one region) by count and name. Never saves. Writes PASS/FAIL lines\n"
+				"                       and quits. Exit code 0 only when all pass.\n"
 				"  --qa-dialog-tab <n> With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -212,6 +215,12 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_object_new_check = true;
+		} else if (arguments[i] == "--qa-region-palette-check") {
+			if (!arguments.contains("--qa-offscreen") || arguments.indexOf("--palette") < 0 || arguments.value(arguments.indexOf("--palette") + 1) != "regions") {
+				std::println(stderr, "--qa-region-palette-check needs --qa-offscreen and --palette regions. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_region_palette_check = true;
 		} else if (arguments[i] == "--qa-open-dialog") {
 			static const QStringList names = { "settings", "unit-properties", "item-drop", "map-settings", "scenario", "gameplay-constants", "new-map",
 				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-setter-changes", "tile-setter-limits", "tile-pather", "model-editor", "browse-models" };
@@ -386,6 +395,7 @@ int main(int argc, char* argv[]) {
 	w.run_qa_doodad_undo_check();
 	w.run_qa_refusal_checks();
 	w.run_qa_object_new_check();
+	w.run_qa_region_palette_check();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

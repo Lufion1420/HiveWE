@@ -99,6 +99,11 @@ public:
 	/// controls. Adds one custom unit in memory, never saves. Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_object_new_check = false;
 	void run_qa_object_new_check();
+	/// Set by --qa-region-palette-check (needs --qa-offscreen and --palette regions; --qa-script-out <file> optional): checks that the open Regions
+	/// palette lists exactly the regions of the loaded startup map (data/test map in the working directory), by count and name. Never saves.
+	/// Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_region_palette_check = false;
+	void run_qa_region_palette_check();
 	/// When set (by the refusal hook only), load_map records the refusal text here instead of opening a message box.
 	static inline QStringList* qa_dialog_log = nullptr;
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.

@@ -19,6 +19,14 @@ class RegionPalette : public Palette {
 	void activate_palette();
 	void deactivate(QRibbonTab* tab) override;
 	RegionBrush& current_brush() { return brush; }
+	/// For --qa-region-palette-check: the texts of the rows the list shows, top to bottom.
+	QStringList listed_region_names() const {
+		QStringList names;
+		for (int i = 0; i < region_list->count(); ++i) {
+			names << region_list->item(i)->text();
+		}
+		return names;
+	}
 
   private:
 	RegionBrush brush;
