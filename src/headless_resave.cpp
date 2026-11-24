@@ -114,5 +114,14 @@ int run_headless_resave(const QString& input_folder, const QString& output_folde
 
 	glFinish();
 	std::println("Resave done: {}ms", timer.elapsed_ms());
-	return map->script_compile_failed ? 3 : 0;
+	if (!map->skipped_objects.empty()) {
+		std::println(stderr, "Resave saved, but {} custom object(s) with an unknown base id were skipped and are missing from the output", map->skipped_objects.size());
+	}
+	if (map->script_compile_failed) {
+		return 3;
+	}
+	if (!map->skipped_objects.empty()) {
+		return 5;
+	}
+	return 0;
 }

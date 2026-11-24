@@ -173,6 +173,8 @@ int main(int argc, char* argv[]) {
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
 				"  --resave <in> <out>  Load one map folder and save it to another folder without opening the editor window.\n"
+				"                       Exit codes: 0 saved, 1 refused or failed, 2 wrong arguments, 3 saved but the script did not compile, 4 no CASC or OpenGL,\n"
+				"                       5 saved but custom objects with an unknown base id were skipped (missing from the output). (3 wins over 5)\n"
 				"  --help               Show this text."
 			);
 			return 0;

@@ -35,7 +35,7 @@ Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_threa
 - On MSVC, `fs::path::string()`/`generic_string()` throw for characters outside the system code page (CJK/Cyrillic folders). In `src` use `wstring()`/`generic_wstring()`/`u8string()` and `QString::fromStdWString`. `toStdString()` into an `fs::path` garbles the same way: use `toStdWString()`. A fix must cover the whole chain (every caller and dialog on the path, and file names inside the map folder, for example the `Imports::save` listing). A Unicode-path test only goes RED on a non-UTF-8 code page.
 - An exception escaping a Qt slot ends the program. When fixing one such throw, grep the whole call chain (Qt picker, labels, `utilities.ixx` error text), not only the named function.
 - `path.extension() == ".blp"` is case-sensitive: fold case first.
-- `resave_smoke` already runs inside `ctest --preset Agent`.
+- `resave_smoke` already runs inside `ctest --preset Agent`. Its cases in `tests/resave_smoke.cmake` share one sandbox: a case that plants a fixture must restore the original file before the next case.
 - `.ixx` files are CRLF in the working copy, so `git apply` of saved diffs fails; use Edit.
 
 ## Performance

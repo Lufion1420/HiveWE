@@ -5,7 +5,8 @@ python -I resave.py <hivewe_exe> <stock_root> <scripts_root> <work_root> <id> [<
 For each id: copies <stock_root>/<id> to <work_root>/sandbox/<id>, adds the World Editor script from <scripts_root>/<id>
 (so the save overwrites it), then runs `HiveWE.exe --resave <sandbox> <work_root>/out/<id>` with the exe folder as the
 working directory (it needs data/). Exit 3 (saved, but the generated script did not compile, so
-the old war3map.j is kept) is recorded as script_compile_error. The stock folders are never written. A process over the timeout or the memory cap is
+the old war3map.j is kept) is recorded as script_compile_error. Exit 5 (saved, but custom objects
+with an unknown base id were skipped and dropped) is recorded as skipped_objects. The stock folders are never written. A process over the timeout or the memory cap is
 killed (only the process this script started). Results go to stdout and <work_root>/results.tsv.
 """
 
@@ -73,7 +74,7 @@ def resave(exe, stock_root, scripts_root, work_root, map_id, timeout, max_mb):
             time.sleep(0.5)
     wall = time.monotonic() - start
     if status is None:
-        status = {0: "ok", 3: "script_compile_error", 4: "no_casc_or_gl"}.get(proc.returncode, f"exit {proc.returncode}")
+        status = {0: "ok", 3: "script_compile_error", 4: "no_casc_or_gl", 5: "skipped_objects"}.get(proc.returncode, f"exit {proc.returncode}")
     with open(os.path.join(logs, f"{map_id}.err.txt")) as f:
         err = " | ".join(line.strip() for line in f if line.strip())[:300]
     return status, wall, peak, err
