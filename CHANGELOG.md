@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Saving doodads with short or long ids no longer corrupts war3map.doo** — Saving a map with a doodad whose id, skin id or item-drop id is shorter than 4 characters no longer corrupts war3map.doo; ids longer than 4 characters now refuse the save instead of writing a shifted file.
 - **Startup map load failures show an error instead of crashing** — HiveWE now shows an "Opening map failed" error instead of silently crashing when the startup map can't be loaded because a data file is missing or damaged.
 - **Object Editor New, Add and Copy dialogs only accept object ids of exactly 4 letters or digits** — Ids with non-ASCII characters, quotes, backslashes or spaces, which could break the generated map script, now keep the OK button disabled.
 - **Browse Models animated tiles that failed to start are retried when the dialog is shown again** — Tiles no longer stay a still image after hiding and reopening the dialog, and dropping tiles no longer leaks them when the GL context cannot be made current.

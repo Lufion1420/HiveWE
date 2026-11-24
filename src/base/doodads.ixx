@@ -51,6 +51,17 @@ export class Doodads {
 	static constexpr int write_subversion = 11;
 	static constexpr int write_special_version = 0;
 
+	/// Every id in this file takes up 4 bytes, so a shorter one is padded, as the reader cuts it at the first NUL. A longer one is
+	/// refused, as writing it whole would shift the rest of the file and cutting it would name another object. Same as Units::write_id.
+	static void write_id(BinaryWriter& writer, const std::string_view id) {
+		if (id.size() > 4) {
+			throw std::runtime_error(std::format("war3map.doo cannot hold the id {}, which is longer than 4 bytes", id));
+		}
+		std::array<char, 4> bytes {};
+		id.copy(bytes.data(), bytes.size());
+		writer.write_string(std::string_view(bytes.data(), bytes.size()));
+	}
+
   public:
 	std::vector<SpecialDoodad> special_doodads;
 	std::vector<Doodad> doodads;
@@ -222,13 +233,13 @@ export class Doodads {
 
 		writer.write<uint32_t>(doodads.size());
 		for (auto&& i : doodads) {
-			writer.write_string(i.id);
+			write_id(writer, i.id);
 			writer.write<uint32_t>(i.variation);
 			writer.write<glm::vec3>(i.final_position(terrain) * 128.f + glm::vec3(terrain.offset, 0));
 			writer.write<float>(i.angle);
 			writer.write<glm::vec3>(i.scale);
 
-			writer.write_string(i.skin_id);
+			write_id(writer, i.skin_id);
 
 			if (has_v12_fields) {
 				writer.write<uint32_t>(i.group_id);
@@ -242,7 +253,7 @@ export class Doodads {
 			for (auto&& j : i.item_sets) {
 				writer.write<uint32_t>(j.items.size());
 				for (const auto& [chance, id] : j.items) {
-					writer.write_string(id);
+					write_id(writer, id);
 					writer.write<uint32_t>(chance);
 				}
 			}
@@ -275,7 +286,7 @@ export class Doodads {
 
 		writer.write<uint32_t>(special_doodads.size());
 		for (auto&& i : special_doodads) {
-			writer.write_string(i.id);
+			write_id(writer, i.id);
 			writer.write<uint32_t>(i.variation);
 			writer.write<glm::ivec2>(glm::ivec2(i.old_position.x, i.old_position.y));
 		}

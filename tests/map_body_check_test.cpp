@@ -1961,6 +1961,129 @@ TEST_CASE("a doodad the brush placed saves as doo v8 and reopens") {
 	CHECK(int { reloaded.doodads[0].flags() } == 1);
 }
 
+TEST_CASE("short or empty doodad, skin and item ids save as 4 bytes, so the records after them do not shift") {
+	const fs::path dir = make_scratch_dir("doo_short_ids");
+	const ScopedMapDirectory open_map(dir);
+	Doodads doodads;
+
+	const std::vector<std::string> ids = { "", "a", "ab", "abc", "LTbx" };
+	for (std::size_t n = 0; n < ids.size(); n++) {
+		Doodad doodad;
+		doodad.id = ids[n];
+		doodad.skin_id = ids[ids.size() - 1 - n];
+		doodad.variation = static_cast<std::uint32_t>(n + 1);
+		doodad.creation_number = static_cast<std::uint32_t>(100 + n);
+		doodad.position = { static_cast<float>(n), 8.f, 0.f };
+		doodad.scale = glm::vec3(1.f);
+		doodad.life = 100;
+		ItemSet set;
+		set.items.emplace_back(10, ids[n]);
+		set.items.emplace_back(20, "hfoo");
+		doodad.item_sets.push_back(set);
+		doodads.doodads.push_back(doodad);
+	}
+	SpecialDoodad special_short;
+	special_short.id = "zz";
+	special_short.variation = 7;
+	special_short.old_position = { 3, 4, 0 };
+	special_short.position = special_short.old_position;
+	doodads.special_doodads.push_back(special_short);
+	SpecialDoodad special_empty;
+	special_empty.id = "";
+	special_empty.variation = 9;
+	special_empty.old_position = { 5, 6, 0 };
+	special_empty.position = special_empty.old_position;
+	doodads.special_doodads.push_back(special_empty);
+
+	doodads.save(terrain_without_gl());
+	const std::string first = read_all(dir / "war3map.doo");
+
+	Doodads reloaded;
+	REQUIRE(reloaded.load(terrain_without_gl(), game_version(3, 0)));
+	REQUIRE(reloaded.doodads.size() == ids.size());
+	for (std::size_t n = 0; n < ids.size(); n++) {
+		CAPTURE(n);
+		const Doodad& d = reloaded.doodads[n];
+		CHECK(d.id == ids[n]);
+		CHECK(d.skin_id == ids[ids.size() - 1 - n]);
+		CHECK(d.variation == n + 1);
+		CHECK(d.creation_number == 100 + n);
+		CHECK(d.position.x == static_cast<float>(n));
+		CHECK(d.life == 100);
+		REQUIRE(d.item_sets.size() == 1);
+		REQUIRE(d.item_sets[0].items.size() == 2);
+		CHECK(d.item_sets[0].items[0].first == 10);
+		CHECK(d.item_sets[0].items[0].second == ids[n]);
+		CHECK(d.item_sets[0].items[1].first == 20);
+		CHECK(d.item_sets[0].items[1].second == "hfoo");
+	}
+	REQUIRE(reloaded.special_doodads.size() == 2);
+	CHECK(reloaded.special_doodads[0].id == "zz");
+	CHECK(reloaded.special_doodads[0].variation == 7);
+	CHECK(reloaded.special_doodads[0].old_position.x == 3);
+	CHECK(reloaded.special_doodads[1].id.empty());
+	CHECK(reloaded.special_doodads[1].variation == 9);
+	CHECK(reloaded.special_doodads[1].old_position.y == 6);
+
+	// Saving what was read gives the same bytes, and every id takes exactly 4 bytes.
+	reloaded.save(terrain_without_gl());
+	CHECK(read_all(dir / "war3map.doo") == first);
+	// 12 header + 4 count + 5 doodads of 74 (40 up to the skin, flags and life 2, item table 8, one set of 2 items 20, creation 4)
+	// + 4 special version + 4 count + 2 special doodads of 16
+	CHECK(first.size() == 12 + 4 + 5 * 74 + 4 + 4 + 2 * 16);
+}
+
+TEST_CASE("a doodad id longer than 4 bytes refuses the doo save instead of shifting the file") {
+	// Plain blocks, not SUBCASEs in a loop. Each uses its own scratch folder.
+	{
+		const fs::path dir = make_scratch_dir("doo_long_id");
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		Doodad doodad;
+		doodad.id = "LTbx5";
+		doodad.skin_id = "LTbx";
+		doodads.doodads.push_back(doodad);
+		CHECK_THROWS_AS(doodads.save(terrain_without_gl()), std::runtime_error);
+		CHECK_FALSE(fs::exists(dir / "war3map.doo"));
+	}
+	{
+		const fs::path dir = make_scratch_dir("doo_long_skin_id");
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		Doodad doodad;
+		doodad.id = "LTbx";
+		doodad.skin_id = "LTbx5";
+		doodads.doodads.push_back(doodad);
+		CHECK_THROWS_AS(doodads.save(terrain_without_gl()), std::runtime_error);
+		CHECK_FALSE(fs::exists(dir / "war3map.doo"));
+	}
+	{
+		const fs::path dir = make_scratch_dir("doo_long_item_id");
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		Doodad doodad;
+		doodad.id = "LTbx";
+		doodad.skin_id = "LTbx";
+		ItemSet set;
+		set.items.emplace_back(10, "hfoo5");
+		doodad.item_sets.push_back(set);
+		doodads.doodads.push_back(doodad);
+		CHECK_THROWS_AS(doodads.save(terrain_without_gl()), std::runtime_error);
+		CHECK_FALSE(fs::exists(dir / "war3map.doo"));
+	}
+	{
+		const fs::path dir = make_scratch_dir("doo_long_special_id");
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		SpecialDoodad special;
+		special.id = "zzzzz";
+		special.variation = 7;
+		doodads.special_doodads.push_back(special);
+		CHECK_THROWS_AS(doodads.save(terrain_without_gl()), std::runtime_error);
+		CHECK_FALSE(fs::exists(dir / "war3map.doo"));
+	}
+}
+
 TEST_CASE("flags keeps the file's byte unless the doodad changed") {
 	const auto loaded_with = [](const std::uint8_t flags) {
 		Doodad doodad;
