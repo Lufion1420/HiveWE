@@ -5,13 +5,13 @@ Written 2026-11-24 (session 14 of the project). Overwritten at each handoff. For
 
 ## Checks waiting on the user
 The user's maps are SD only and Lua only: do not list HD checks. No per-step approvals needed.
-1. Optional: the session-8 feedback checks. They now apply to a build deployed from 8fc8747. The deployed Tools build (`D:\Stuff\Warcraft_3_All_Assets\Tools\Warcraft 3 - Tools\HiveWE`) predates cfa723a, 78c44b3, adae324 and f5aacf5 and needs a redeploy with HiveWE closed: ask the user to close HiveWE so the orchestrator runs `.claude/tools/deploy-local/`.
+1. Optional: the session-8 feedback checks. The deployed Tools build (`D:\Stuff\Warcraft_3_All_Assets\Tools\Warcraft 3 - Tools\HiveWE`) is current with f5aacf5 (deployed 2026-11-24 10:56, resave smoke passed), so they apply directly.
    - Select a unit, left-drag its Selection Properties preview: it starts from the front and orbits.
    - Browse Models: Models and VFX/SFX sidebar rows work, file sizes show in MB.
    - Object Editor: double-click a unit's "model file". Browse Models opens with a Path line (current model preseeded, typed path OK, empty clears, Cancel changes nothing). After OK the Model File cell updates at once.
    - Tiles in view play Stand (up to 12). Hovering a tile beyond 12 moves the animation, scrolling freezes it, another window in front pauses it.
    - Watch CPU/GPU cost and whether opening Browse Models many times makes the app sluggish (about 6 MB growth per open).
-   - New (after redeploy): open a map whose w3i has a literal (non-TRIGSTR) name. Map Description shows it. Edit it and Save: the new text persists after reopening. Automation covered this only through unit tests.
+   - New: open a map whose w3i has a literal (non-TRIGSTR) name. Map Description shows it. Edit it and Save: the new text persists after reopening. Automation covered this only through unit tests.
    - Blocked by rule, not for the user: grid-pick Open commit path, on-screen cell repaint.
 2. Decision: confirm the WarMash direct-exe game launch (`-launch -loadfile` with the saved Battle.net login, method in `.claude/tools/ui-capture/README.md`) as the standing method, replacing the guardrail "via Battle.net, never the exe directly". The orchestrator treats it as standing unless the user says no.
 
@@ -28,6 +28,7 @@ Asana 1220329469370593 (Map Protector: Remove listfile option probably keeps the
 1220826761382041 (ModelView switch; old ModelView is unused dead code), 1220824126875159, 1220826774009614, 1220826773700213, 1220828873067911, 1220818407294566, 1220824083919839, 1220768408128534, 1220767914607357, 1220768028401968, 1220767861345597, 1220767791486098, 1220767516485546, 1220746915086260, 1220746806783937, 1220749450812492, 1220749450805131, weather literal SLK quotes, ColorButton alpha, 1220829561061744 (LITE v1300+/DILG, Risky), 1220829428496325 (3.0.1 load of resaved v1800), 1220827826702332 (Save MDX hook), 1220842919702486, 1220844868518223, 1220844868394880, 1220844756126723, 1220845243296342.
 
 ## Decisions
+User (2026-11-24): never ask the user to close HiveWE or assume it is open; the orchestrator checks `Get-Process HiveWE` and deploys after each shipped fix when it is not running.
 User (2026-11-24): game test yes; allowed the SendInput-free game launch per the WarMash method (pointed to the WarMash repo); "no, open it yourself" = agents do the game testing.
 
 Orchestrator calls the user may overrule (2026-11-24):
