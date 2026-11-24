@@ -95,6 +95,7 @@ Checks: `.claude/tools/script-check/`.
 - Force flag: stock shared vision is 0x08. HiveWE treats it as 0x04 (ticket filed: "Forces: shared vision uses the wrong flag bit").
 - v39 player `hud_skin` exists only when editor_version >= 6140. Samples: 6117 and 6127 have none; 6140, 7000, 7003 have it; 6128-6139 have no samples. A wrong gate still reaches EOF on most maps with names shifted, so test by comparing names, not EOF.
 
+- `TriggerStrings::string()`/`set_string()` (`src/base/trigger_strings.ixx`) is the choke point for w3i, force and player name fields and is testable without `Map` or Qt. A w3i literal must be a `TRIGSTR_` key or go through `script_string_literal` before reaching script output. `TriggerStrings::save()` always writes padded `STRING 001`.
 - Map Info water and fog colours are stored B,G,R,A. Fog confirmed by `SetTerrainFogEx` on stock map 0415 (2026-11-20).
 
 - A w3i combo filled from an SLK must not assume the id column is the first SLK column (EnvironmentType in Weather.slk and EnvironmentSounds.slk is column 1 only); read ids from row keys and include the Default row. String combos need a byte-identity test for non-UTF-8 stored ids, or an unchanged OK rewrites them.
