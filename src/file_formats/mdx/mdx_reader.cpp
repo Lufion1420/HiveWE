@@ -683,7 +683,7 @@ namespace mdx {
 				uint32_t next;
 				std::memcpy(&next, reader.buffer.data() + end, 4);
 				const auto next_tag = static_cast<TrackTag>(next);
-				if (next_tag == TrackTag::KCTR || next_tag == TrackTag::KCRL || next_tag == TrackTag::KTTR) {
+				if (next_tag == TrackTag::KCTR || next_tag == TrackTag::IDUF || next_tag == TrackTag::ELAF || next_tag == TrackTag::PTSF ||next_tag == TrackTag::KCRL || next_tag == TrackTag::KTTR) {
 					reader.position = end;
 					return true;
 				}
@@ -716,25 +716,30 @@ namespace mdx {
 			camera.near_clip = reader.read<float>();
 			reader.advance(word.extra);
 			camera.target_position = reader.read<glm::vec3>();
-			if (word.variant != 0) {
-				std::print("MDX camera {}: variant byte {} is not preserved on save (written as 0)\n", camera.name, word.variant);
-			}
+			camera.variant = static_cast<uint8_t>(word.variant);
 
 			while (reader.position < entry_end) {
+				const size_t tag_start = reader.position;
 				const TrackTag tag = static_cast<TrackTag>(reader.read<int32_t>());
-				if (tag == TrackTag::KCTR) {
+				if (tag == TrackTag::IDUF) {
+					camera.IDUF = TrackHeader<float>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::ELAF) {
+					camera.ELAF = TrackHeader<float>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::PTSF) {
+					camera.PTSF = TrackHeader<float>(reader, mdx.unique_tracks++);
+				} else if (tag == TrackTag::KCTR) {
 					camera.KCTR = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
 				} else if (tag == TrackTag::KCRL) {
 					camera.KCRL = TrackHeader<float>(reader, mdx.unique_tracks++);
 				} else if (tag == TrackTag::KTTR) {
 					camera.KTTR = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
 				} else if (skip_unknown_camera_track(reader, entry_end)) {
-					std::print("MDX camera {}: unknown track tag {} skipped, not preserved on save\n", camera.name, static_cast<uint32_t>(tag));
+					// Kept verbatim so it is written back
+					camera.raw_tracks.emplace_back(reader.buffer.begin() + tag_start, reader.buffer.begin() + reader.position);
 				} else {
-					// Unknown data with no recognisable track layout: skip the rest of the entry
-					std::print("MDX camera {}: unknown track tag {}, rest of the camera skipped, not preserved on save\n", camera.name,
-						static_cast<uint32_t>(tag));
+					// Unknown data with no recognisable track layout: keep the rest of the entry verbatim
 					reader.position = entry_end;
+					camera.raw_tracks.emplace_back(reader.buffer.begin() + tag_start, reader.buffer.begin() + entry_end);
 				}
 			}
 			if (reader.position != entry_end) {

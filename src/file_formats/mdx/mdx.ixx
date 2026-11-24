@@ -67,6 +67,9 @@ namespace mdx {
 		KCTR = 'RTCK',
 		KTTR = 'RTTK',
 		KCRL = 'LRCK',
+		IDUF = 'FUDI', // camera depth of field: focus distance
+		ELAF = 'FALE', // camera depth of field: focal length
+		PTSF = 'FSTP', // camera depth of field: f-stop
 		KGTR = 'RTGK',
 		KGRT = 'TRGK',
 		KGSC = 'CSGK',
@@ -653,6 +656,13 @@ namespace mdx {
 		float near_clip;
 		glm::vec3 target_position;
 
+		uint8_t variant = 0; // top byte of the entry's first dword (3 in 3.0 files)
+		TrackHeader<float> IDUF; // Depth of field: focus distance
+		TrackHeader<float> ELAF; // Depth of field: focal length
+		TrackHeader<float> PTSF; // Depth of field: f-stop
+		/// Unknown tracks (tag to track end, e.g. KCVS) kept verbatim and written before KCTR
+		std::vector<std::vector<uint8_t>> raw_tracks;
+
 		TrackHeader<glm::vec3> KCTR; // Translation
 		TrackHeader<float> KCRL;     // Roll
 		TrackHeader<glm::vec3> KTTR; // Target translation
@@ -889,6 +899,9 @@ namespace mdx {
 			}
 
 			for (auto& i : cameras) {
+				F(i.IDUF);
+				F(i.ELAF);
+				F(i.PTSF);
 				F(i.KCTR);
 				F(i.KTTR);
 				F(i.KCRL);

@@ -675,11 +675,21 @@ namespace mdx {
 			writer.write<float>(camera.near_clip);
 			writer.write<glm::vec3>(camera.target_position);
 
+			camera.IDUF.save(TrackTag::IDUF, writer);
+			camera.ELAF.save(TrackTag::ELAF, writer);
+			camera.PTSF.save(TrackTag::PTSF, writer);
+			for (const auto& raw : camera.raw_tracks) {
+				writer.write_vector(raw);
+			}
 			camera.KCTR.save(TrackTag::KCTR, writer);
 			camera.KCRL.save(TrackTag::KCRL, writer);
 			camera.KTTR.save(TrackTag::KTTR, writer);
 
-			const uint32_t temporary = static_cast<uint32_t>(writer.buffer.size() - camera_index);
+			const size_t camera_size = writer.buffer.size() - camera_index;
+			if (camera_size > 0xFFFFFF && camera.variant != 0) {
+				throw std::runtime_error(std::format("MDX camera {} is too large ({} bytes) to keep its variant byte", camera.name, camera_size));
+			}
+			const uint32_t temporary = static_cast<uint32_t>(camera_size) | (static_cast<uint32_t>(camera.variant) << 24);
 			std::memcpy(writer.buffer.data() + camera_index, &temporary, 4);
 		}
 		const uint32_t temporary = static_cast<uint32_t>(writer.buffer.size() - inclusive_index - 4);

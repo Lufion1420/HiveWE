@@ -109,6 +109,30 @@ namespace {
 		CHECK_EQ(model.event_objects[0].times[0], 10);
 	}
 
+	/// Offset of the top-level CAMS chunk tag (walks chunk tags and sizes after MDLX), or 0 if there is none.
+	size_t find_cams_chunk(const Bytes& bytes) {
+		size_t pos = 4;
+		while (pos + 8 <= bytes.size()) {
+			uint32_t size;
+			std::memcpy(&size, bytes.data() + pos + 4, 4);
+			if (std::memcmp(bytes.data() + pos, "CAMS", 4) == 0) {
+				REQUIRE(pos + 8 + static_cast<size_t>(size) <= bytes.size());
+				return pos;
+			}
+			pos += 8 + static_cast<size_t>(size);
+		}
+		return 0;
+	}
+
+	/// The whole CAMS chunk (tag, size and entries).
+	std::vector<uint8_t> cams_bytes(const Bytes& bytes) {
+		const size_t pos = find_cams_chunk(bytes);
+		REQUIRE(pos != 0);
+		uint32_t size;
+		std::memcpy(&size, bytes.data() + pos + 4, 4);
+		return std::vector<uint8_t>(bytes.begin() + pos, bytes.begin() + pos + 8 + size);
+	}
+
 	/// Returns the first dword after the CAMS chunk size, i.e. the first camera entry word.
 	uint32_t first_camera_word(const Bytes& bytes) {
 		for (size_t i = 0; i + 12 <= bytes.size(); i++) {
@@ -135,14 +159,14 @@ TEST_CASE("MDX CAMS: variant 3 camera word (0x03000078) parses and the next chun
 	check_event_object(model);
 }
 
-TEST_CASE("MDX CAMS: variant 3 round-trips through to_mdx as a plain size word") {
+TEST_CASE("MDX CAMS: variant 3 round-trips through to_mdx keeping the variant byte") {
 	CameraEntryOptions options;
 	options.word = 0x03000078;
 	mdx::MDX model = parse(build_model(options));
 
 	const BinaryWriter out = model.to_mdx(model.version);
 	const Bytes out_bytes = out.buffer;
-	CHECK_EQ(first_camera_word(out_bytes), 0x00000078);
+	CHECK_EQ(first_camera_word(out_bytes), 0x03000078);
 
 	mdx::MDX reread;
 	REQUIRE_NOTHROW(reread = parse(out_bytes));
@@ -159,7 +183,7 @@ TEST_CASE("MDX CAMS: variant 0 camera word parses") {
 	check_event_object(model);
 }
 
-TEST_CASE("MDX CAMS: unknown track data is skipped to the entry end") {
+TEST_CASE("MDX CAMS: unknown track data is kept and written back unchanged") {
 	CameraEntryOptions options;
 	options.tail = {'K', 'C', 'V', 'S', 1, 2, 3, 4, 5, 6, 7, 8};
 	options.word = 0x03000000 | (camera_fixed_size + static_cast<uint32_t>(options.tail.size()));
@@ -167,6 +191,14 @@ TEST_CASE("MDX CAMS: unknown track data is skipped to the entry end") {
 	REQUIRE_NOTHROW(model = parse(build_model(options)));
 	check_camera_fields(model);
 	check_event_object(model);
+	REQUIRE_EQ(model.cameras[0].raw_tracks.size(), 1);
+	CHECK(model.cameras[0].raw_tracks[0] == options.tail);
+
+	const Bytes out = model.to_mdx(model.version).buffer;
+	const size_t cams = find_cams_chunk(out);
+	REQUIRE(cams != 0);
+	const Bytes in = build_model(options);
+	CHECK(cams_bytes(out) == cams_bytes(in));
 }
 
 TEST_CASE("MDX CAMS: variants 1 and 2 are refused (layout unverified)") {
@@ -282,21 +314,6 @@ TEST_CASE("MDX CAMS: a CAMS chunk size past the end of the file is refused") {
 }
 
 namespace {
-	/// Offset of the top-level CAMS chunk tag (walks chunk tags and sizes after MDLX), or 0 if there is none.
-	size_t find_cams_chunk(const Bytes& bytes) {
-		size_t pos = 4;
-		while (pos + 8 <= bytes.size()) {
-			uint32_t size;
-			std::memcpy(&size, bytes.data() + pos + 4, 4);
-			if (std::memcmp(bytes.data() + pos, "CAMS", 4) == 0) {
-				REQUIRE(pos + 8 + static_cast<size_t>(size) <= bytes.size());
-				return pos;
-			}
-			pos += 8 + static_cast<size_t>(size);
-		}
-		return 0;
-	}
-
 	template <typename T>
 	void check_track_equal(const T& a, const T& b, const char* label) {
 		INFO(label);
@@ -429,6 +446,7 @@ TEST_CASE("MDX CAMS: stock models in HIVEWE_MDX_DIR parse and round-trip their c
 		}
 
 		const BinaryWriter out = model.to_mdx(model.version);
+		CHECK_MESSAGE(cams_bytes(out.buffer) == cams_bytes(cams_only), "CAMS chunk of ", file, " is not byte-identical after a resave");
 		mdx::MDX reread;
 		REQUIRE_NOTHROW(reread = parse(out.buffer));
 		check_cameras_equal(model, reread);
@@ -438,4 +456,153 @@ TEST_CASE("MDX CAMS: stock models in HIVEWE_MDX_DIR parse and round-trip their c
 		files_checked, cameras_checked, whole_model_failures, skinned_models);
 	CHECK(files_checked > 0);
 	CHECK_EQ(whole_model_failures, 0);
+}
+
+namespace {
+	/// Linear float track with the given (frame, value) keys.
+	void push_float_track(std::vector<uint8_t>& out, const char* tag, const std::vector<std::pair<uint32_t, float>>& keys) {
+		push_track_header(out, tag, static_cast<uint32_t>(keys.size()));
+		for (const auto& [frame, value] : keys) {
+			push_u32(out, frame);
+			push_f32(out, value);
+		}
+	}
+
+	/// Hermite float track (interpolation 2): value, inTan, outTan per key.
+	void push_hermite_float_track(std::vector<uint8_t>& out, const char* tag, const uint32_t frame, const float value) {
+		out.insert(out.end(), tag, tag + 4);
+		push_u32(out, 1);
+		push_u32(out, 2);
+		push_u32(out, 0xFFFFFFFF);
+		push_u32(out, frame);
+		push_f32(out, value);
+		push_f32(out, value + 1.f);
+		push_f32(out, value + 2.f);
+	}
+
+	void push_vec3_track(std::vector<uint8_t>& out, const char* tag, const uint32_t frame) {
+		push_track_header(out, tag, 1);
+		push_u32(out, frame);
+		push_f32(out, 1.f);
+		push_f32(out, 2.f);
+		push_f32(out, 3.f);
+	}
+
+	/// Parses, resaves and checks the CAMS chunk is byte-identical, then returns the parsed model.
+	mdx::MDX check_cams_roundtrip(const CameraEntryOptions& options) {
+		const Bytes in = build_model(options);
+		mdx::MDX model;
+		REQUIRE_NOTHROW(model = parse(in));
+		const Bytes out = model.to_mdx(model.version).buffer;
+		CHECK(cams_bytes(out) == cams_bytes(in));
+		mdx::MDX reread;
+		REQUIRE_NOTHROW(reread = parse(out));
+		check_camera_fields(reread);
+		return model;
+	}
+
+	CameraEntryOptions with_tail(const uint32_t variant) {
+		CameraEntryOptions options;
+		options.word = variant << 24; // size is filled in by the caller after the tail is built
+		return options;
+	}
+
+	void finish(CameraEntryOptions& options, const uint32_t variant) {
+		options.word = (variant << 24) | (camera_fixed_size + static_cast<uint32_t>(options.tail.size()));
+	}
+} // namespace
+
+TEST_CASE("MDX CAMS: an IDUF-only camera is byte-identical after a resave") {
+	CameraEntryOptions options = with_tail(3);
+	push_float_track(options.tail, "IDUF", {{0, 100.f}, {500, 250.f}});
+	finish(options, 3);
+	const mdx::MDX model = check_cams_roundtrip(options);
+	const auto& camera = model.cameras[0];
+	CHECK_EQ(camera.variant, 3);
+	REQUIRE_EQ(camera.IDUF.tracks.size(), 2);
+	CHECK_EQ(camera.IDUF.tracks[1].frame, 500);
+	CHECK_EQ(camera.IDUF.tracks[1].value, 250.f);
+	CHECK(camera.ELAF.tracks.empty());
+	CHECK(camera.PTSF.tracks.empty());
+	CHECK(camera.raw_tracks.empty());
+}
+
+TEST_CASE("MDX CAMS: ELAF and PTSF round-trip with linear and hermite interpolation") {
+	{
+		CameraEntryOptions options = with_tail(3);
+		push_float_track(options.tail, "ELAF", {{0, 50.f}});
+		push_float_track(options.tail, "PTSF", {{0, 2.8f}, {10, 5.6f}});
+		finish(options, 3);
+		const mdx::MDX model = check_cams_roundtrip(options);
+		CHECK_EQ(model.cameras[0].ELAF.tracks.size(), 1);
+		CHECK_EQ(model.cameras[0].PTSF.tracks.size(), 2);
+	}
+	{
+		CameraEntryOptions options = with_tail(3);
+		push_hermite_float_track(options.tail, "ELAF", 5, 50.f);
+		push_hermite_float_track(options.tail, "PTSF", 7, 2.f);
+		finish(options, 3);
+		const mdx::MDX model = check_cams_roundtrip(options);
+		const auto& elaf = model.cameras[0].ELAF;
+		REQUIRE_EQ(elaf.tracks.size(), 1);
+		CHECK_EQ(elaf.interpolation_type, mdx::InterpolationType::hermite);
+		CHECK_EQ(elaf.tracks[0].value, 50.f);
+		CHECK_EQ(elaf.tracks[0].inTan, 51.f);
+		CHECK_EQ(elaf.tracks[0].outTan, 52.f);
+	}
+}
+
+TEST_CASE("MDX CAMS: the full stock track order IDUF ELAF PTSF KCTR KCRL KTTR is byte-identical, variants 0 and 3") {
+	for (const uint32_t variant : {0u, 3u}) {
+		CameraEntryOptions options = with_tail(variant);
+		push_float_track(options.tail, "IDUF", {{0, 100.f}});
+		push_float_track(options.tail, "ELAF", {{0, 50.f}});
+		push_float_track(options.tail, "PTSF", {{0, 2.8f}});
+		push_vec3_track(options.tail, "KCTR", 1);
+		push_float_track(options.tail, "KCRL", {{2, 0.5f}});
+		push_vec3_track(options.tail, "KTTR", 3);
+		finish(options, variant);
+		const mdx::MDX model = check_cams_roundtrip(options);
+		const auto& camera = model.cameras[0];
+		CHECK_EQ(camera.variant, variant);
+		CHECK_EQ(camera.IDUF.tracks.size(), 1);
+		CHECK_EQ(camera.ELAF.tracks.size(), 1);
+		CHECK_EQ(camera.PTSF.tracks.size(), 1);
+		CHECK_EQ(camera.KCTR.tracks.size(), 1);
+		CHECK_EQ(camera.KCRL.tracks.size(), 1);
+		CHECK_EQ(camera.KTTR.tracks.size(), 1);
+	}
+}
+
+TEST_CASE("MDX CAMS: a raw KCVS track before KTTR is kept byte-exact and KTTR still parses") {
+	CameraEntryOptions options = with_tail(3);
+	push_float_track(options.tail, "IDUF", {{0, 100.f}});
+	push_float_track(options.tail, "KCVS", {{0, 0.5f}, {100, 1.5f}});
+	push_vec3_track(options.tail, "KTTR", 33);
+	finish(options, 3);
+	const mdx::MDX model = check_cams_roundtrip(options);
+	const auto& camera = model.cameras[0];
+	REQUIRE_EQ(camera.raw_tracks.size(), 1);
+	CHECK_EQ(camera.raw_tracks[0].size(), 4 + 12 + 2 * 8);
+	CHECK(std::memcmp(camera.raw_tracks[0].data(), "KCVS", 4) == 0);
+	CHECK_EQ(camera.KTTR.tracks.size(), 1);
+	CHECK_EQ(camera.IDUF.tracks.size(), 1);
+}
+
+TEST_CASE("MDX CAMS: a camera too large for the 24-bit size is refused on write when it has a variant") {
+	mdx::MDX model;
+	auto& camera = model.cameras.emplace_back();
+	camera.name = "Big";
+	camera.variant = 3;
+	camera.raw_tracks.emplace_back(0x1000000, uint8_t{0});
+	CHECK_THROWS_WITH_AS((void)model.to_mdx(1800), doctest::Contains("is too large"), std::runtime_error);
+}
+
+TEST_CASE("MDX CAMS: an oversized camera with variant 0 is not refused on write") {
+	mdx::MDX model;
+	auto& camera = model.cameras.emplace_back();
+	camera.name = "Big";
+	camera.variant = 0;
+	camera.raw_tracks.emplace_back(0x1000000, uint8_t{0});
+	CHECK_NOTHROW((void)model.to_mdx(1800));
 }
