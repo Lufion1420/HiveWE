@@ -36,7 +36,8 @@ Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_threa
 - An exception escaping a Qt slot ends the program. When fixing one such throw, grep the whole call chain (Qt picker, labels, `utilities.ixx` error text), not only the named function.
 - `path.extension() == ".blp"` is case-sensitive: fold case first.
 - `resave_smoke` already runs inside `ctest --preset Agent`. Its cases in `tests/resave_smoke.cmake` share one sandbox: a case that plants a fixture must restore the original file before the next case.
-- `.ixx` files are CRLF in the working copy, so `git apply` of saved diffs fails; use Edit.
+- `.ixx` line endings are not uniform: most are CRLF in the working copy (so `git apply` of saved diffs fails; use Edit), but some, such as `units.ixx`, are LF. Check with `git ls-files --eol` before a scripted rewrite.
+- `asset_obfuscation.ixx` has no `u8`/`u32` aliases: write `uint8_t`/`uint32_t`.
 
 ## Performance
 
