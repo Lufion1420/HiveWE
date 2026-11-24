@@ -1,68 +1,54 @@
 # Session handoff
 
-Written 2026-11-24 (session 30 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
-- Models: main session Sonnet 5.5 as orchestrator. Subagents: cpp-dev x3 (one opus), reviewer x3, qa-verifier x3, release-manager x6, wc3-format-specialist x1.
-- Spawn count this session: ~16, past the 8-10 budget because the user asked (2026-11-24, mid-session) to focus on Asana board tickets instead of only small bugs/edge cases.
+Written 2026-11-24 (session 31 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
+- Models: main session Sonnet 5.5 as orchestrator. Subagents: wc3-format-specialist x1, cpp-dev x2 (one opus, one stopped for this handoff), reviewer x1, qa-verifier x1, release-manager x1, docs-keeper x1.
+- Spawn count this session: 7 (resumes not counted).
 
 ## Checks waiting on the user
 The user's maps are SD only and Lua only: do not list HD checks. No per-step approvals needed.
-1. Optional: the session-8 feedback checks.
-   - Select a unit, left-drag its Selection Properties preview: starts from the front and orbits.
-   - Browse Models: Models and VFX/SFX sidebar rows work, file sizes show in MB.
-   - Object Editor: double-click a unit's "model file": Browse Models opens with a Path line; OK updates the cell at once.
-   - Tiles in view play Stand (up to 12).
-   - Map with a literal (non-TRIGSTR) w3i name: Map Description shows it; edit and Save persists.
+1. Recommended (new): open any script-heavy map saved with an older HiveWE and spot-check that each custom script trigger holds its own code. A map saved that way twice may still be mixed up: compare with a backup. QA found three local copies the old build had mispaired and the new build reads correctly: `Documents\Warcraft III\Maps\HiveWE test\2 hivewe\mapA_dest_fixed_build.w3x`, `...\3 rings fix\mapA_rings_fixed.w3x`, `...\4 sound and rings fix\mapA_sound_rings_fixed.w3x`.
 2. Decision (WarMash direct-exe game launch as the standing method): ask again when the user says the WarMash game tests are finished.
-3. Optional sanity look: in HiveWE select 2 doodads, press Delete, then Ctrl+Z: they come back (automation covered this via `--qa-doodad-undo-check`).
-4. Optional: in Object Editor > Add Units, right-click a unit, open and cancel the Add dialog once (the dialog was refactored into `ObjectEditor::build_new_object_dialog`).
-5. Optional: in the Object Editor New dialog type `hfö`, `ab'c` and `h000` as the new id: OK stays disabled for the first two and is enabled for `h000`.
-6. Optional: open one normal `.w3x` via File > Open Map (MPQ), and one via Map Protector (sandbox copies), to confirm the success path still works after the MPQ failure and path-safety changes.
-7. Optional, low priority: in HiveWE copy a terrain selection, run Change Tileset removing a tile: Ctrl+V pastes nothing and Ctrl+Z does nothing; a texture-only change keeps undo and closing prompts to save (automation covers this via `--qa-tileset-clipboard-check`).
-8. Optional: File > Open Map on a normal `.w3x` still works after the `Map::load` failure handling change (462d751).
-9. Optional: in Map Protector, protect a copy of humanx03 with Asset Path Obfuscation enabled and confirm it completes. There is no headless path for this.
+3. Optional: select a unit, left-drag its Selection Properties preview: starts from the front and orbits.
+4. Optional: select 2 doodads, press Delete, then Ctrl+Z: they come back.
+5. Optional, low priority: copy a terrain selection, run Change Tileset removing a tile: Ctrl+V pastes nothing and Ctrl+Z does nothing; a texture-only change keeps undo and closing prompts to save.
+6. Optional: File > Open Map on a normal `.w3x`, and a sandbox copy through Map Protector, both succeed.
+7. Optional: Map Protector, protect a copy of humanx03 with Asset Path Obfuscation enabled: it completes.
+8. Optional: Browse Models: Models and VFX/SFX sidebar rows work, sizes in MB, tiles in view play Stand (up to 12).
+9. Optional: Object Editor, double-click a unit's "model file": Browse Models opens with a Path line; OK updates the cell.
+10. Optional: Object Editor > Add Units, right-click a unit, open and cancel the Add dialog.
+11. Optional: New object dialog, type `hfö`, `ab'c`, `h000`: OK disabled for the first two, enabled for `h000`.
+12. Optional: a map with a literal (non-TRIGSTR) w3i name: Map Description shows it; edit and Save persists.
 
 ## State
-- Session 31: f176390 (pushed, CI green, deployed): trigger files read fully or refuse; custom text stays with its trigger. Asana 1220330457516219, 1220882188008627, parent 1220329527029506 done. Next in work: 1220329518098180 (unsaved-changes prompt for all editors), uncommitted.
-- d86b482 (pushed, CI green): Map Protector rewrites asset paths inside raw-kept unknown-base objects. Asana 1220879533958024 done.
-- d8aef5d (pushed, CI green): one shared locale-independent `is_valid_object_id` in Utilities. Asana 1220879791780435 done.
-- 9a38559 (pushed, CI not yet checked: take it from the newest run, newer pushes cancel older runs): MDX LITE v1300+/v1600+ fields and tracks read and write, DILG kept. Asana 1220829561061744 done. Tests 454/454, stock sweep 46 files / 23 lights OK.
-- All three tickets are in "Done — shipped". Tools folder deployed (sha256 0B90BC357F13...).
-- New filed: 1220881411020438 (MDL keywords for the new light fields and DILG; `deduplicate_geosets` does not remap DILG ids).
-- Earlier shipped (details in `git log` and CHANGELOG): a5ec551, 9efd3e8, 3841d46, bf69845, 462d751, cb173dc.
-- Asana 1220832845348582 (~6 MB growth per reopen) stays filed. 1220329469370593 (listfile) waits for WarMash.
-- Filed, not chased (rule details in `hivewe-file-formats.md`, `hivewe-qt-ui.md`):
-  - Map Protector: the raw-object path rewrite does not trim comma segments (`a.mdx, b.mdx` with a space); `set_count>1` in skin files is unparsed (unverified); float fields round-trip via `std::to_string` (6 decimals) in the shadow-map rewrite.
-  - Skipped-object follow-ups: placed items of a skipped .w3t kept; w3u-skip + Skin-valid-base corner case; JASS `gg_unit` global dropped for a skipped placed unit; no raw-record preservation on save (only Map Protector carries raw bytes); humanx03 resave logs script compile errors (`ReturnAction`, `gg_rct_Lieutenant_Pass_0`), not checked if new.
-  - `create_new_map` calls `map->load(template)` without try; blank fallback map keeps `hierarchy.map_directory` on `data/test map` until Save As; Map Protector asset-obfuscation/TRIGSTR steps change global `map_directory` from the export QThread; error text uses `fromLocal8Bit` on raw map bytes; no unit test for `load_modification_file`'s file name; `inline_map_info_trigger_strings` has no direct test (not exported); Loading Map box stays behind the error dialog; Ctrl+V twice leaves `TerrainBrush` pasting after `clear_clipboard`; QA hook does not restore `hierarchy.map_directory`; OK with no change in Change Tileset marks the map unsaved; narrow-string `.string()` paths in MPQ extract on CJK code pages; `war3map.imp` parser edge cases; no test for the new-map cliff path.
-- Reviewer notes still filed: no `Doodads::find_id_over_4_bytes` pre-check in `Map::save`; startup error text says only "Bad expected access" (`slk.ixx` `.value()`); region hook compares the palette to the same in-memory vector; several `--qa-*-check` flags can be combined (first exit wins); Copy dialog has no hook step for bad ids; `next_sequential_custom_id` prefill for a stock source whose first char is non-alphanumeric; refusal-hook minors; new-dialog hook has no RED run; item-4 hook covers `load_map` only; `save_map_reporting_errors` ignores `map->headless`.
+- f176390 (pushed, CI green, deployed to the Tools folder, exe sha256 4EF00BC1A28407C0): wtg reads all eight deleted-item lists (human05, undead02 open); unreadable wtg/wct refuses the map; wct written in trigger order (old writer moved custom text between triggers on resave); older-HiveWE files keep their pairing; Trigger Editor category/variable fixes. ctest 467/467, 466-map sweep 0 text differences, review APPROVE, QA PASS.
+- 0453f69 (pushed): format notes and ninth sweep report. CI was running at handoff.
+- Asana 1220330457516219, 1220882188008627 and parent 1220329527029506 done and in "Done — shipped".
+- UNCOMMITTED, UNFINISHED: partial work for 1220329518098180 in `src/main.cpp`, `src/main_window/hivewe.cpp`, `src/main_window/hivewe.h` (+462 lines). The cpp-dev was stopped for this handoff while adding the RED-step offscreen hook against the current prompt logic (extracted into `has_unsaved_work()`). Not built, not tested, may not compile. Give the diff to a fresh cpp-dev to finish, or discard it if it is worse than starting over.
 - Untracked `qa-*.png` in `designs/current/` and stray `512684032` stay uncommitted on purpose.
+- Filed this session: 1220882874361280 (map without wtg loses its script on save, Next up), 1220884498398806 (category dragged into own subcategory), 1220884688687045 (trigger save leftovers).
 
 ## Next step
-User's standing preference (2026-11-24): work real Asana "Next up" tickets, not only small follow-ups. Read "Next up" at the start and pick a non-parity feature or bug ticket first. Eligible candidates:
-- 1220824083919839 / 1220818407294566 / 1220828873067911: flat UI leftovers batches (at most one leftover batch per session).
-- 1220328401966062: decide the UI modernization approach (needs a user decision).
-- 1220329527029506: map load robustness.
-- 1220719384135918 / 1220329290824218: idea/wishlist tickets, need scoping.
-Still not eligible: 1220330457516219 (needs doo/units/w3r/w3c parsers), 1220362579055972 (only when the user says WarMash testing is done), 1220841054745630 (HD only).
+Finish 1220329518098180: quit, New Map and Open Map must ask to save after Object Editor, trigger, Map Info/Scenario and other map-data edits, with no false prompt after open or save. Standard track (cpp-dev, then reviewer and QA). Acceptance: (1) every edit Save would write marks the map unsaved; (2) no prompt after open or save; (3) text still only in an open editor widget counts; (4) Cancel changes nothing, a failed save does not quit; (5) offscreen/`--resave` runs gain no dialogs. No layout changes. Then 1220882874361280 (risky).
 
 ## Backlog only, not next steps
-1220826761382041, 1220824126875159, 1220768408128534, 1220767914607357, 1220768028401968, 1220767861345597, 1220767791486098, 1220767516485546, 1220746915086260, 1220746806783937, 1220749450812492, 1220749450805131, 1220829428496325, 1220842919702486, 1220844868518223, 1220844868394880, 1220844756126723, 1220845243296342, 1220881411020438, plus the filed items above.
+1220824083919839 / 1220818407294566 / 1220828873067911 (flat UI batches, at most one per session), 1220328401966062 (UI modernization, needs a user decision), 1220719384135918 / 1220329290824218 (idea and wishlist parents; open wishlist items are real candidates, e.g. 1220329518098116 backups, 1220329469211176 non-map files in imports, 1220329290981221 used files flagged unused), 1220832845348582 (memory growth), 1220329469370593 (listfile, waits for WarMash), 1220362579055972 (waits for WarMash), 1220841054745630 (HD only), "Harness and quality follow-ups" section.
 
 ## Decisions
 User (2026-11-24): no Warcraft III launches until the user says the WarMash game tests are done.
 User (2026-11-24): never ask the user to close HiveWE or assume it is open; check `Get-Process HiveWE`.
 User (2026-11-24): keep working across tickets without waiting for "continue".
-User (2026-11-24): standing order, redeploy to the Tools folder after every QA-PASS commit without asking; skip only if HiveWE is running and say so in chat (in guardrails).
-User (2026-11-24): always move done tickets to the Done column ("Done — shipped"); done for all finished ones (in `HARNESS.md` "Choosing work").
-User (2026-11-24, mid-session): focus on Asana board tickets instead of only small bugs and edge cases; this is why the session went past the spawn budget.
-Orchestrator (2026-11-24): new object ids are exactly 4 ASCII letters or digits in the dialogs, because `MapScriptWriter::four_cc` writes ids unescaped; `id_fits` stays length-only so existing maps still save.
-Orchestrator (2026-11-24): Open Map (MPQ) and Map Protector refuse archives with unsafe entry names (in CHANGELOG).
-Orchestrator (2026-11-24): a `Map::load` failure after the body check opens a blank template map instead of leaving a half-torn-down map (except unknown base ids, which are skipped with a warning).
+User (2026-11-24): redeploy to the Tools folder after every QA-PASS commit without asking; skip only if HiveWE runs and say so.
+User (2026-11-24): move done tickets to "Done — shipped"; focus on Asana board tickets over small edge cases.
+User (2026-11-24): hand off when context is high (they raised it at ~250k tokens).
+Orchestrator (2026-11-24): a trigger or script file HiveWE cannot read fully (bad header included) refuses the map.
+Orchestrator (2026-11-24): wtg deleted-item lists are written back as read (counts may lag after edits; World Editor behaviour unverified); new ids skip deleted ids.
+Orchestrator (2026-11-24): new object ids are exactly 4 ASCII letters or digits in the dialogs.
+Orchestrator (2026-11-24): Open Map (MPQ) and Map Protector refuse archives with unsafe entry names.
+Orchestrator (2026-11-24): a `Map::load` failure after the body check opens a blank template map.
 Orchestrator (2026-11-24): `--resave` exit 5 means objects were skipped and dropped; exit 3 wins when both apply.
-Orchestrator (2026-11-24, 1220829561061744): MDX light tracks that overrun warn and keep raw bytes; entries with a damaged size refuse the load. MDL prints negative attenuation as -5.
 
 ## Retro
-Session 30: ~16 spawns, ~3 tickets. The MDX ticket took 1 specialist + 2 cpp-dev rounds + 2 reviews (~35 min) because the first brief did not mention the MDL int-to-float semantics (the reviewer caught negative attenuation). Proposal: for any type-change brief, name every reader and writer of the field. Early in the session small follow-ups were chosen over board tickets; the user corrected this, so choose from "Next up" first. No quality reduction: review and QA stay.
+Session 31: 7 spawns, 1 ticket plus 2 related shipped in about 100 minutes; longest runs QA full sweep 32 min and cpp-dev round 1 24 min; 3 fix rounds. Cause: the first brief did not require a per-trigger text comparison, so the wct mispairing surfaced only in review/QA. Proposal (apply): save-format briefs require per-record content comparison against originals on stock maps with non-empty data, plus truncated-file cases. Handoff was offered late (the user had to ask): offer it right after a large ticket ships, before starting the next. No quality reduction; review and QA caught real data-loss bugs, keep them.
 
 ## Scratch
-`C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\8d6ca561-83b3-4926-8f74-e9ab9274b24b\scratchpad` (may vanish; nothing in it is required).
+`C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\e02cd7c9-cdb6-4d5b-a6b0-34d47178df21\scratchpad` (may vanish; `qa\code`, `qa2\code` and `scripts\wtgw.py` are optional). Stock map extraction: `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\c2da2c4f-fdbc-4824-8512-571bf1879b9b\scratchpad\stock` (may vanish).
