@@ -35,6 +35,39 @@ TEST_CASE("save_modification_table data repeat") {
 	CHECK(loaded.data("dataa1", "Test") == "67");
 }
 
+// Asana 1220330336212700: the body check reads only the layout, so Map::load met this after the open map was closed, with
+// "map::at(): key not found" as the only text. The message now names both ids, which the Open Map dialog shows.
+TEST_CASE("a custom object based on an id the table lacks throws a message naming both ids") {
+	slk::SLK meta;
+	meta.build_meta_map();
+
+	BinaryWriter writer;
+	writer.write<u32>(2); // version
+	writer.write<u32>(0); // original table: no objects
+	writer.write<u32>(1); // custom table: one object
+	writer.write_string("Zzzz");
+	writer.write_string("h0zz");
+	writer.write<u32>(0); // no modifications
+
+	slk::SLK units;
+	units.add_row("hfoo");
+	units.base_data["hfoo"]["name"] = "Footman";
+
+	BinaryReader reader(writer.buffer);
+	try {
+		(void)load_modification_file_reader(reader, units, meta, false);
+		FAIL("loading did not throw");
+	} catch (const std::runtime_error& error) {
+		const std::string message = error.what();
+		CHECK_MESSAGE(message.contains("h0zz"), message);
+		CHECK_MESSAGE(message.contains("Zzzz"), message);
+	} catch (const std::exception& error) {
+		FAIL("threw something other than std::runtime_error: " << std::string(error.what()));
+	}
+	CHECK_FALSE(units.base_data.contains("h0zz"));
+	CHECK_FALSE(units.row_headers.contains("h0zz"));
+}
+
 TEST_CASE("shadow_map_to_slk does not throw when a custom object's oldid parent has no base_data entry") {
 	// add_row() only populates row_headers/index_to_row, never base_data - a row can legitimately
 	// exist in one without the other (e.g. a header declared with no cell data ever recorded for

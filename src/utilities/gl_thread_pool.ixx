@@ -140,3 +140,21 @@ export class GLThreadPool {
 };
 
 export inline GLThreadPool gl_thread_pool;
+
+/// Waits for every future before rethrowing the first exception. Leaving at the first throwing get() would let the
+/// tasks still queued or running keep using what they captured (a Map that the caller then deletes).
+export void wait_for_all(std::vector<std::future<void>>& futures) {
+	std::exception_ptr first_error;
+	for (auto& future : futures) {
+		try {
+			future.get();
+		} catch (...) {
+			if (!first_error) {
+				first_error = std::current_exception();
+			}
+		}
+	}
+	if (first_error) {
+		std::rethrow_exception(first_error);
+	}
+}

@@ -95,6 +95,14 @@ export void load_modification_table(BinaryReader& reader, const uint32_t version
 		optional_ints,
 		[&](const std::string& original_id, const std::string& modified_id) {
 			if (modification && !slk.base_data.contains(modified_id)) {
+				// copy_row would fail inside at() with no ids in the message.
+				if (!slk.base_data.contains(original_id)) {
+					throw std::runtime_error(std::format(
+						"The custom object {} is based on {}, which is not in the object data HiveWE loaded",
+						modified_id,
+						original_id
+					));
+				}
 				slk.copy_row(original_id, modified_id, false);
 			}
 		},
@@ -187,8 +195,13 @@ export void load_modification_file(const std::string_view file_name, slk::SLK& b
 		std::cout << "Unknown modification table version of " << version << " detected. Attempting to load, but may crash.\n";
 	}
 
-	load_modification_table(reader, version, base_data, meta_slk, false, optional_ints);
-	load_modification_table(reader, version, base_data, meta_slk, true, optional_ints);
+	// Map::load's caller shows this text, so it names the file.
+	try {
+		load_modification_table(reader, version, base_data, meta_slk, false, optional_ints);
+		load_modification_table(reader, version, base_data, meta_slk, true, optional_ints);
+	} catch (const std::exception& error) {
+		throw std::runtime_error(std::format("{}: {}", file_name, error.what()));
+	}
 }
 
 namespace {

@@ -324,9 +324,7 @@ export class Doodads {
 				}
 			}
 
-			for (auto& f : mesh_futures) {
-				f.get();
-			}
+			wait_for_all(mesh_futures);
 		}
 
 		// Phase 2: Init doodads. All meshes are now cached in id_to_mesh,
@@ -345,9 +343,7 @@ export class Doodads {
 			}));
 		}
 
-		for (auto& f : futures) {
-			f.get();
-		}
+		wait_for_all(futures);
 
 		// Blit doodad pathing
 		for (const auto& i : doodads) {

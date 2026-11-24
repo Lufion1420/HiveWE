@@ -96,7 +96,8 @@ public:
 	void run_qa_doodad_undo_check();
 	/// Set by --qa-refusal-checks (needs --qa-offscreen; --qa-script-out <file> optional): works on sandbox copies of data/test map. Checks that a placed
 	/// unit with a 5-byte id is refused by Save, Save As, Test Map and Export MPQ without writing a file, and that undo still works after Open refused
-	/// a damaged map. Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	/// a damaged map, and that a map whose Map::load throws (a custom unit on an unknown base id) gives one message and leaves a blank map open.
+	/// Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_refusal_checks = false;
 	void run_qa_refusal_checks();
 	/// Set by --qa-object-new-check (needs --qa-offscreen; --qa-script-out <file> optional): opens the Object Editor's real Add dialog for units without

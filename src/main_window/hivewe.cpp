@@ -628,7 +628,49 @@ void HiveWE::load_map(const fs::path& directory) {
 	ui->widget->makeCurrent();
 	reset_map_session();
 
-	map->load(directory);
+	// Map::load can still throw after the check passed: a custom object on an unknown base id, a missing texture, a map
+	// override SLK, a file changed since the check. The open map is gone by then, so the half-loaded one is replaced
+	// by the blank template that New Map uses. Doodads/Units::create wait for all their GL tasks before an error leaves.
+	QString load_error;
+	try {
+		map->load(directory);
+	} catch (const std::exception& e) {
+		load_error = QString::fromLocal8Bit(e.what());
+	} catch (...) {
+		load_error = "Unknown error.";
+	}
+	if (!load_error.isEmpty()) {
+		const auto report = [this](const QString& text) {
+			if (qa_dialog_log) {
+				*qa_dialog_log << text;
+			} else {
+				QMessageBox::critical(this, "Opening map failed", text);
+			}
+		};
+		QString text = display_path(directory.filename()) + " could not be loaded:\n" + load_error
+			+ "\n\nThe map that was open before had already been closed.";
+
+		reset_map_session();
+		const fs::path blank_template = fs::path("data") / "test map";
+		try {
+			map->load(blank_template);
+		} catch (const std::exception& e) {
+			report(text + " The blank map could not be opened either, so HiveWE will close:\n" + QString::fromLocal8Bit(e.what()));
+			QApplication::exit(1);
+			return;
+		} catch (...) {
+			report(text + " The blank map could not be opened either, so HiveWE will close.");
+			QApplication::exit(1);
+			return;
+		}
+		// As in create_new_map: Save asks for a folder instead of writing into the template.
+		map->filesystem_path.clear();
+		map->name = "Untitled";
+		map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		update_map_context("Draft", "Unsaved map");
+		report(text + " HiveWE opened a blank map instead.");
+		return;
+	}
 	add_recent_map(directory);
 
 	map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
@@ -2680,6 +2722,37 @@ void HiveWE::run_qa_refusal_checks() {
 		check(map->units.units.size() == units_before + 1 && has_edit(), "redo after the refusal brings the edit back");
 		map->world_undo.undo(context);
 		check(map->units.units.size() == units_before && !has_edit(), "a second undo removes the edit again");
+
+		// Item 5 (Asana 1220330336212700): Map::load throws after the opening check passed. war3map.w3u holds a custom unit h0zz
+		// based on Zzzz, which no table has; the check reads only the file's layout.
+		const fs::path baseless = root / "baseless map";
+		fs::copy(good, baseless, fs::copy_options::recursive, ec);
+		check(!ec, "the sandbox copy copied again as the map with an unknown base id");
+		{
+			std::ofstream file(baseless / "war3map.w3u", std::ios::binary | std::ios::trunc);
+			const auto u32 = [&file](const std::uint32_t value) {
+				file.write(reinterpret_cast<const char*>(&value), sizeof(value));
+			};
+			u32(2); // version
+			u32(0); // original table: no objects
+			u32(1); // custom table: one object
+			file.write("Zzzz", 4);
+			file.write("h0zz", 4);
+			u32(0); // no modifications
+		}
+		check(check_map_for_opening(baseless).has_value(), "control: the opening check accepts the map with the unknown base id");
+		dialogs.clear();
+		qa_dialog_log = &dialogs;
+		load_map(baseless);
+		qa_dialog_log = nullptr;
+		check(dialogs.size() == 1, QString("Open of the map with the unknown base id gave one message (%1)").arg(dialogs.size()));
+		if (!dialogs.isEmpty()) {
+			check(dialogs.front().contains("h0zz") && dialogs.front().contains("Zzzz"), "the message names the custom unit and its base: " + dialogs.front());
+		}
+		check(map->loaded, "a blank map is loaded after the failed open");
+		check(map->filesystem_path.empty(), "the blank map has no folder, so Save asks for one");
+		check(fs::equivalent(hierarchy.map_directory, fs::path("data") / "test map", ec), "the hierarchy points at the blank template, not the failed map");
+		check(!units_slk.row_headers.contains("h0zz"), "the failed map's custom unit is not in the unit table");
 
 		finish();
 	});

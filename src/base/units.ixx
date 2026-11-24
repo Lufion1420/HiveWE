@@ -531,9 +531,7 @@ export class Units {
 				}
 			}
 
-			for (auto& f : mesh_futures) {
-				f.get();
-			}
+			wait_for_all(mesh_futures);
 		}
 
 		// Phase 2: Init units. All meshes are now cached in id_to_mesh,
@@ -560,9 +558,7 @@ export class Units {
 			}));
 		}
 
-		for (auto& f : futures) {
-			f.get();
-		}
+		wait_for_all(futures);
 	}
 
 	// Will assign a unique creation number
