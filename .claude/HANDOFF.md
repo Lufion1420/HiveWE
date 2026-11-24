@@ -1,8 +1,8 @@
 # Session handoff
 
-Written 2026-11-24 (session 17 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
+Written 2026-11-24 (session 18 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
 - Models: main session Sonnet 5.5 as orchestrator. Subagents: cpp-dev (399/399), reviewer (APPROVE), qa-verifier (PASS), release-manager, docs-keeper.
-- Spawn count this session: 5 (resume not counted).
+- Spawn count this session: 5 (resume not counted). Session 18: cpp-dev x2, reviewer, qa-verifier, release-manager.
 
 ## Checks waiting on the user
 The user's maps are SD only and Lua only: do not list HD checks. No per-step approvals needed.
@@ -17,6 +17,8 @@ The user's maps are SD only and Lua only: do not list HD checks. No per-step app
 2. Decision (WarMash direct-exe game launch as the standing method): now moot until WarMash is done, see Decisions. Keep it open; ask again when the user says the WarMash game tests are finished.
 
 ## State
+- Animated tiles minors (Asana 1220832845356081) DONE: temporarily_failed set cleared by stop_animation; drop_tiles_except leak-mesh fallback. Tests 399/399, reviewer APPROVE, QA PASS (20 offscreen reopen cycles). No test for the two failure paths (Renderer has no GL test seam; filed). Committed with this handoff.
+- CI of cbdc793 (run 45393323293) was in progress at push time and is cancelled by the next push: take its result from the newest run.
 - MDX TrackHeader `read_count` guard (Asana 1220826773700213) DONE: cpp-dev, tests 399/399, reviewer APPROVE, QA PASS. Being committed by the orchestrator. Facts are in `hivewe-file-formats.md` "MDX reader".
 - Tools-folder deploy of 7b833b5 done 2026-11-24, before the MDX guard task: the Tools copy lacks the guard. Low value, no redeploy unless the user asks.
 - CI of 7b833b5 was cancelled by the 94c9b9d push (`cancel-in-progress`): take its result from run 45392155542.
@@ -28,7 +30,7 @@ The user's maps are SD only and Lua only: do not list HD checks. No per-step app
 - Untracked `qa-*.png` captures in `designs/current/` stay uncommitted on purpose.
 
 ## Next step
-Pick another "Next up" ticket. Skip 1220841054745630 (GroundTexture hd): HD only while maps are SD.
+Pick another "Next up" ticket (candidates: 1220832845348582 ~6 MB growth per reopen, 1220832862236571 ui-capture README, 1220826774009614 MDX camera tracks). Skip 1220841054745630 (GroundTexture hd): HD only while maps are SD.
 
 ## Backlog only, not next steps
 1220826761382041 (ModelView switch; old ModelView is unused dead code), 1220824126875159, 1220826774009614, 1220828873067911, 1220818407294566, 1220824083919839, 1220768408128534, 1220767914607357, 1220768028401968, 1220767861345597, 1220767791486098, 1220767516485546, 1220746915086260, 1220746806783937, 1220749450812492, 1220749450805131, weather literal SLK quotes, ColorButton alpha, 1220829561061744 (LITE v1300+/DILG, Risky), 1220829428496325 (3.0.1 load of resaved v1800), 1220827826702332 (Save MDX hook), 1220842919702486, 1220844868518223, 1220844868394880, 1220844756126723, 1220845243296342, plus the filed items above.

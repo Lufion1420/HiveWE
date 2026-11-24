@@ -331,6 +331,17 @@ class ModelThumbnailCache::Renderer {
 		}
 		std::string error;
 		if (!make_current(error)) {
+			// ~EditableMesh needs a current context: leak this owner's meshes rather than keep them (same fallback as ~Renderer).
+			// tile_keys is not cleared here, consistent with ~Renderer: the textures stay cached until a later clear_tiles.
+			for (auto it = tiles.begin(); it != tiles.end();) {
+				if (!goes(*it)) {
+					++it;
+					continue;
+				}
+				dropped.push_back(it->path);
+				(void)new std::shared_ptr<EditableMesh>(std::move(it->mesh));
+				it = tiles.erase(it);
+			}
 			return dropped;
 		}
 		for (auto it = tiles.begin(); it != tiles.end();) {
@@ -421,7 +432,7 @@ class ModelThumbnailCache::Renderer {
 			atlas->release();
 		} catch (...) {
 			atlas_image = QImage();
-			std::fill(failed.begin(), failed.end(), true); // no atlas: every tile goes back to its still thumbnail for good
+			std::fill(failed.begin(), failed.end(), true); // no atlas: every tile goes back to its still thumbnail until the next stop_animation()
 			atlas.reset();
 			atlas_small.reset();
 		}
@@ -436,7 +447,7 @@ class ModelThumbnailCache::Renderer {
 			}
 			frames.push_back(std::move(frame));
 		}
-		// A tile that threw is not drawn again.
+		// A tile that threw is skipped until the next stop_animation().
 		if (!broken.empty()) {
 			std::erase_if(tiles, [&](const Tile& tile) { return broken.contains(&tile); });
 			if (tiles.empty()) {
@@ -820,7 +831,7 @@ void ModelThumbnailCache::animate(const QStringList& paths) {
 	std::unordered_set<std::string> keep;
 	for (const QString& path : paths) {
 		std::string norm = model_catalog_key(path.toStdString());
-		if (failed_paths.contains(norm) || still_only.contains(norm) || keep.contains(norm)) {
+		if (failed_paths.contains(norm) || still_only.contains(norm) || temporarily_failed.contains(norm) || keep.contains(norm)) {
 			continue;
 		}
 		keep.insert(norm);
@@ -853,6 +864,7 @@ void ModelThumbnailCache::pause_animation() {
 void ModelThumbnailCache::stop_animation() {
 	animation_timer->stop();
 	animation_wanted.clear();
+	temporarily_failed.clear();
 	if (Renderer* gl = live_renderer()) {
 		std::size_t evicted = 0;
 		for (const QString& path : gl->drop_tiles_except(this, {}, evicted)) {
@@ -895,8 +907,11 @@ void ModelThumbnailCache::animation_tick() {
 		}
 		auto [mdx, error] = job.result.get();
 		if (mdx && wanted(job.norm) && !gl.has_tile(this, job.norm)) {
-			if (gl.add_tile(this, job.path, job.norm, mdx, evicted) != Renderer::TileResult::Added) {
+			const Renderer::TileResult result = gl.add_tile(this, job.path, job.norm, mdx, evicted);
+			if (result == Renderer::TileResult::StillOnly) {
 				still_only.insert(job.norm);
+			} else if (result == Renderer::TileResult::Failed) {
+				temporarily_failed.insert(job.norm); // retried after the next stop_animation
 			}
 			++added;
 		} else if (!mdx) {
@@ -908,7 +923,7 @@ void ModelThumbnailCache::animation_tick() {
 	// New parses only once the still thumbnails are done, so the tiles first get their picture.
 	bool waiting = !animation_jobs.empty();
 	for (const Queued& item : animation_wanted) {
-		if (gl.has_tile(this, item.norm) || still_only.contains(item.norm) || failed_paths.contains(item.norm)) {
+		if (gl.has_tile(this, item.norm) || still_only.contains(item.norm) || temporarily_failed.contains(item.norm) || failed_paths.contains(item.norm)) {
 			continue;
 		}
 		waiting = true;
@@ -926,7 +941,7 @@ void ModelThumbnailCache::animation_tick() {
 
 	for (Renderer::TileFrame& frame : gl.render_tiles(this, delta, evicted)) {
 		if (frame.image.isNull()) {
-			still_only.insert(frame.norm);
+			temporarily_failed.insert(frame.norm);
 			animation_frames_by_norm.erase(frame.norm);
 		} else {
 			animation_frames_by_norm[frame.norm] = QPixmap::fromImage(frame.image);

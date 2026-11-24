@@ -21,7 +21,7 @@
 /// on the main thread in a private offscreen context that shares with the global share context, a couple of models per tick. The mesh is
 /// destroyed while that context is current. EditableMesh loads its textures through ResourceManager, which keeps them until clear(), so
 /// after each draw the textures that this model added and nothing else uses are evicted again (`resources_evicted()` counts them); a
-/// thumbnail therefore leaves no mesh and no new texture resident. A model that fails to load or draw gets a placeholder and is not retried.
+/// thumbnail therefore leaves no mesh and no new texture resident. A model that fails to load or draw gets a placeholder and is not retried (parse failures and StillOnly are permanent; an animated tile or atlas that fails is only skipped until the next stop_animation()).
 ///
 /// The offscreen context is one per process (see ensure_renderer), shared by every cache. On top of that a few tiles can play their animation (animate()): their models stay loaded in the same private context, all of them are
 /// drawn into one atlas framebuffer per tick (animated_tile_fps), read back once and handed out as pixmaps. They are never written to the
@@ -128,6 +128,7 @@ class ModelThumbnailCache : public QObject {
 	std::vector<std::unique_ptr<Job>> animation_jobs;
 	std::unordered_map<std::string, QPixmap> animation_frames_by_norm;
 	std::unordered_set<std::string> still_only; // normalised paths that have nothing to play
+	std::unordered_set<std::string> temporarily_failed; // tile or atlas failures; cleared by stop_animation so a later start retries
 	int animation_frame_count = 0;
 
 	int generation = 0;
