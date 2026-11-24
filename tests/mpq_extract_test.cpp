@@ -28,6 +28,23 @@ namespace {
 		return archive;
 	}
 
+	/// True if something exists at the path. Windows rejects reserved device names (CON, NUL) with
+	/// ERROR_INVALID_PARAMETER (87) on some runners: that means nothing could have been written there.
+	/// Any other error counts as "exists" so the check stays strict.
+	bool written(const fs::path& path) {
+		std::error_code ec;
+		const bool found = fs::exists(path, ec);
+		if (!ec) {
+			return found;
+		}
+#ifdef _WIN32
+		if (ec.category() == std::system_category() && ec.value() == 87) {
+			return false;
+		}
+#endif
+		return true;
+	}
+
 	std::string read_text(const fs::path& path) {
 		std::ifstream in(path, std::ios::binary);
 		return { std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>() };
@@ -168,9 +185,9 @@ TEST_CASE("extract_file refuses a stored hostile name, skips an unstored one as 
 		CAPTURE(name);
 		CHECK(opened.extract_file(name, target / "out.txt") == mpq::MPQ::ExtractResult::absent);
 	}
-	CHECK_FALSE(fs::exists(parent / "evil.txt"));
-	CHECK_FALSE(fs::exists(parent / "abs_evil.txt"));
-	CHECK_FALSE(fs::exists(parent.parent_path() / "evil.txt"));
+	CHECK_FALSE(written(parent / "evil.txt"));
+	CHECK_FALSE(written(parent / "abs_evil.txt"));
+	CHECK_FALSE(written(parent.parent_path() / "evil.txt"));
 	CHECK(fs::is_empty(target));
 }
 
@@ -218,9 +235,9 @@ TEST_CASE("unpack refuses hostile entries, writes nothing outside the target and
 	std::ranges::sort(failed);
 	CHECK(failed == stored);
 
-	CHECK_FALSE(fs::exists(parent / "evil.txt"));
-	CHECK_FALSE(fs::exists(parent / "abs_evil.txt"));
-	CHECK_FALSE(fs::exists(parent.parent_path() / "evil.txt"));
-	CHECK_FALSE(fs::exists(target / "CON"));
+	CHECK_FALSE(written(parent / "evil.txt"));
+	CHECK_FALSE(written(parent / "abs_evil.txt"));
+	CHECK_FALSE(written(parent.parent_path() / "evil.txt"));
+	CHECK_FALSE(written(target / "CON"));
 	CHECK(read_text(target / "a" / "b" / "c.txt") == "x");
 }
