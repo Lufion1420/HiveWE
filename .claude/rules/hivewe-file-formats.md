@@ -93,6 +93,7 @@ Checks: `.claude/tools/script-check/`.
 ## w3i facts (strict parse of 466 stock maps, 2026-11-08)
 
 - Force flags: 0x01 allied, 0x02 allied victory, 0x04 unknown, 0x08 shared vision, 0x10 shared unit control, 0x20 advanced unit control. `MapInfo::load` reads `share_vision = flags & 0x0C` (legacy HiveWE 0x04 migrates) and `unknown_flags = flags & ~0x3F`; save writes vision only as 0x08. Force flags are decoded only in `MapInfo::load`/`save`. History: upstream read 0x08 but wrote 0x04; fork commit 81e6432 changed the read to 0x04. So any 0x04 in a user map means HiveWE wrote vision on; stock maps never set it.
+- Builds from 81e6432 (2026-08-09) to before 3a5c6ed (2026-11-08) dropped force bit 0x08 on save (no `unknown_flags` yet); not recoverable.
 - v39 player `hud_skin` exists only when editor_version >= 6140. Samples: 6117 and 6127 have none; 6140, 7000, 7003 have it; 6128-6139 have no samples. A wrong gate still reaches EOF on most maps with names shifted, so test by comparing names, not EOF.
 
 - `TriggerStrings::string()`/`set_string()` (`src/base/trigger_strings.ixx`) is the choke point for w3i, force and player name fields and is testable without `Map` or Qt. A w3i literal must be a `TRIGSTR_` key or go through `script_string_literal` before reaching script output. `TriggerStrings::save()` always writes padded `STRING 001`.

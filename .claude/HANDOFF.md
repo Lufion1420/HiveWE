@@ -1,8 +1,8 @@
 # Session handoff
 
-Written 2026-11-24 (session 15 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
-- Models: main session Sonnet 5.5 as orchestrator. Subagents: cpp-dev Opus, reviewer Opus (APPROVE), qa-verifier (PASS, 395/395), wc3-format-specialist, release-manager, docs-keeper.
-- Spawn count this session: 6.
+Written 2026-11-24 (session 16 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
+- Models: main session Sonnet 5.5 as orchestrator. Subagents: wc3-format-specialist, cpp-dev Opus (395/395), reviewer Opus (APPROVE, 2 minors), qa-verifier (PASS), docs-keeper.
+- Spawn count this session: 5.
 
 ## Checks waiting on the user
 The user's maps are SD only and Lua only: do not list HD checks. No per-step approvals needed.
@@ -17,9 +17,11 @@ The user's maps are SD only and Lua only: do not list HD checks. No per-step app
 2. Decision (WarMash direct-exe game launch as the standing method): now moot until WarMash is done, see Decisions. Keep it open; ask again when the user says the WarMash game tests are finished.
 
 ## State
-- Forces shared-vision bit fix (Asana 1220329472016779) done and committed in the commit after 85abef9. Reviewer APPROVE, qa-verifier PASS (395/395), stock v39 sweep 194 files. Facts are in `hivewe-file-formats.md`.
-- CI for 85abef9 was run 45388026553 (in progress at last check): re-check with `GH_TOKEN=$(gh auth token -u Lufion1420) gh run list -R Lufion1420/HiveWE` and name the run (a newer push cancels the older run).
-- Filed, not chased: `scenario_data_io.ixx` JSON import builds a fresh `ForceData` and drops `unknown_flags`; the test "MapInfo::save keeps force flags 0x3B..." duplicates a new one (redundant).
+- Forces Share Vision bit fix (Asana 1220329472016779) DONE, commit 7b833b5 (committed by another process during the task). Specialist note, cpp-dev Opus 395/395, reviewer APPROVE with 2 minors, qa-verifier PASS including a headless `--resave` check on patched force flags: 0x37->0x3B, 0x3B, 0x33, 0x2F->0x2B, 0x77->0x7B. Facts are in `hivewe-file-formats.md`; CHANGELOG wording corrected (builds 2026-08-09 to 2026-11-08 dropped stock vision on save).
+- CI for 85abef9: run 45388026553 success.
+- Orchestrator decision (user may overrule): keep 0x04 as a permanent legacy alias for vision. Reviewer notes about 50% risk only for non-HiveWE tools that use 0x04.
+- Filed, not chased: test "MapInfo::save keeps force flags 0x3B with shared vision at 0x08" duplicates the first half of the 0x08 round-trip test; scenario JSON import (`scenario_data_io.ixx`) drops `unknown_flags`; checkbox-to-field wiring in `scenario_properties_editor.cpp` is not exercised (needs NEEDS_HOOK); ctest flakes #115 and `resave_smoke` failed once under load, passed on rerun and in the QA run.
+- Another session has uncommitted edits in `src/file_formats/mdx/mdx.ixx`, `tests/CMakeLists.txt`, `tests/mdx_track_header_test.cpp`: not ours, do not touch.
 - Real-game vision check waits for WarMash testing (see Decisions).
 - Earlier filed items: on pack failure the half-written `output_path` stays and the previous protected file is already deleted (pack to a temp path, then rename); the Map Protector test should also pin the OFF-path header (version 0, sector 0x1000).
 - Untracked `qa-*.png` captures in `designs/current/` stay uncommitted on purpose.
@@ -44,7 +46,7 @@ Orchestrator calls the user may overrule (2026-11-24):
 - Filed the `scenario_data_io.ixx` unknown_flags loss and the redundant test instead of chasing them in the vision task.
 
 ## Retro
-Not measured except subagent durations: wc3-format-specialist 126 s, cpp-dev 493 s, reviewer 60 s, qa-verifier 108 s; no fix rounds.
+Not measured except subagent durations: wc3-format-specialist 35 s, cpp-dev 299 s, reviewer 90 s, qa-verifier 151 s; no fix rounds.
 
 ## Scratch
 `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\784951d1-0674-42fd-9b1a-6021b2daaa8a\scratchpad` (may vanish).
