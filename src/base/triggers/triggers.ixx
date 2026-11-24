@@ -450,13 +450,23 @@ export enum class Classifier {
 };
 
 export struct TriggerCategory {
-	Classifier classifier;
-	int id;
+	Classifier classifier = Classifier::category;
+	int id = 0;
 	std::string name;
 	bool open_state = true;
 	bool is_comment = false;
-	int parent_id;
+	int parent_id = 0;
 };
+
+/// A category as the Trigger Editor creates it.
+export TriggerCategory make_new_trigger_category(std::string name, const int id, const int parent_id) {
+	TriggerCategory category;
+	category.classifier = Classifier::category;
+	category.name = std::move(name);
+	category.id = id;
+	category.parent_id = parent_id;
+	return category;
+}
 
 export struct TriggerParameter;
 
@@ -499,8 +509,8 @@ export struct TriggerParameter {
 };
 
 export struct Trigger {
-	Classifier classifier;
-	int id;
+	Classifier classifier = Classifier::gui;
+	int id = 0;
 	int parent_id = 0;
 	std::string name;
 	std::string description;
@@ -514,6 +524,19 @@ export struct Trigger {
 
 	static inline int next_id = 0;
 };
+
+/// A GUI trigger, custom-text script or comment as the Trigger Editor creates it. A comment gets is_comment set, as the
+/// World Editor writes for classifier 16 (139 of 139 stock comments).
+export Trigger make_new_trigger(const Classifier classifier, std::string name, const int id, const int parent_id) {
+	Trigger trigger;
+	trigger.classifier = classifier;
+	trigger.name = std::move(name);
+	trigger.id = id;
+	trigger.parent_id = parent_id;
+	trigger.is_script = classifier == Classifier::script;
+	trigger.is_comment = classifier == Classifier::comment;
+	return trigger;
+}
 
 /// Whether a trigger gets a `gg_trg_` global and an `InitTrig_` call. Disabled triggers and comments never do. In Lua the
 /// World Editor emits neither for script elements (wtg classifier 32, plain library code), whatever their text, but does for
@@ -644,9 +667,23 @@ export class Triggers {
 	static constexpr int write_sub_version = 7;
 	static constexpr int write_string_version = 1;
 
-	int unknown1 = 0;
-	int unknown2 = 0;
-	int trig_def_ver = 2;
+	/// One of the eight lists at the start of a 1.31+ wtg: a count of elements of one kind, then the ids of deleted ones.
+	/// The kinds are map, library, category, trigger, comment, script, variable and an eighth (1, 1, [0] in human05 and
+	/// undead02; 0, 0 in every other stock map). Kept as read so a save writes them back; an import or a new map has zeros.
+	/// The counts are not updated on edits, so they lag the live elements after one; older HiveWE wrote zeros, which the
+	/// World Editor loads. Whether it minds a stale count: Needs verification. save() is the one place that writes them.
+	/// new_element_id() never hands out an id that a deleted list holds.
+	struct ElementList {
+		uint32_t count = 0;
+		std::vector<uint32_t> deleted_ids;
+	};
+	std::array<ElementList, 8> element_lists;
+	/// The u32 after the lists: 2 in all stock maps.
+	uint32_t game_version = 2;
+
+	/// Function names a load found no TriggerData entry for. Parsed with no arguments, which is right only if they have none,
+	/// so they are named when the load fails.
+	std::set<std::string> unknown_function_names;
 
   public:
 	/// Deeper nesting refuses the map, since overflowing the stack cannot be caught. The deepest of the 466
@@ -662,6 +699,106 @@ export class Triggers {
 	std::vector<TriggerCategory> categories;
 	std::vector<TriggerVariable> variables;
 	std::vector<Trigger> triggers;
+
+	/// Whether any of the wtg's deleted-id lists holds this id.
+	bool is_deleted_id(const int id) const {
+		const uint32_t stored = static_cast<uint32_t>(id);
+		return std::ranges::any_of(element_lists, [&](const ElementList& list) { return std::ranges::contains(list.deleted_ids, stored); });
+	}
+
+	/// The id for a new category, trigger, comment, script or variable: the next one after Trigger::next_id that no deleted
+	/// list holds. Skipping at allocation rather than raising next_id past every deleted id on load keeps a huge deleted id
+	/// (0xFFFFFFFF, or one with high type bits) from pushing next_id toward overflow.
+	int new_element_id() const {
+		do {
+			++Trigger::next_id;
+		} while (is_deleted_id(Trigger::next_id));
+		return Trigger::next_id;
+	}
+
+	/// Removes the first trigger (comment, gui, script), category or variable with this id, as the Trigger Explorer deletes a
+	/// tree item. Other kinds are left alone.
+	void remove_element(const Classifier kind, const int id) {
+		const auto erase_first = [&](auto& elements) {
+			if (const auto found = std::ranges::find_if(elements, [&](const auto& element) { return element.id == id; }); found != elements.end()) {
+				elements.erase(found);
+			}
+		};
+		switch (kind) {
+			case Classifier::comment:
+			case Classifier::gui:
+			case Classifier::script:
+				erase_first(triggers);
+				break;
+			case Classifier::category:
+				erase_first(categories);
+				break;
+			case Classifier::variable:
+				erase_first(variables);
+				break;
+			default:
+				break;
+		}
+	}
+
+	/// Gives the first trigger (comment, gui, script), category or variable with this id a new parent, as the Trigger Explorer
+	/// moves a tree item. Other kinds are left alone.
+	void set_element_parent(const Classifier kind, const int id, const int parent_id) {
+		const auto reparent_first = [&](auto& elements) {
+			if (const auto found = std::ranges::find_if(elements, [&](const auto& element) { return element.id == id; }); found != elements.end()) {
+				found->parent_id = parent_id;
+			}
+		};
+		switch (kind) {
+			case Classifier::comment:
+			case Classifier::gui:
+			case Classifier::script:
+				reparent_first(triggers);
+				break;
+			case Classifier::category:
+				reparent_first(categories);
+				break;
+			case Classifier::variable:
+				reparent_first(variables);
+				break;
+			default:
+				break;
+		}
+	}
+
+	/// Lists 1 to 7 all empty: a wtg HiveWE wrote before 2026-11-24 (or a pre-1.31 import or new map not yet saved). The World
+	/// Editor writes (1, 0) in the first list in all 466 stock maps, and save() does too when it would otherwise write zeros, so
+	/// this tells which war3map.wct layout goes with the file. See load_scripts.
+	bool has_legacy_zero_element_lists() const {
+		return std::ranges::all_of(element_lists | std::views::take(7), [](const ElementList& list) {
+			return list.count == 0 && list.deleted_ids.empty();
+		});
+	}
+
+	/// Which trigger each war3map.wct entry belongs to, by index into `triggers`. The World Editor writes one entry for every
+	/// trigger that is not a comment element (classifier 16), commented-out GUI triggers included, in the order of the trigger
+	/// elements in war3map.wtg; save_scripts does the same. HiveWE before 2026-11-24 (legacy) wrote one for each trigger
+	/// without is_comment, grouped by category in the order of `categories`: a trigger whose parent is missing got none, and
+	/// one under a duplicated category id got one per copy.
+	std::vector<std::size_t> custom_text_order(const bool legacy_layout) const {
+		std::vector<std::size_t> order;
+		if (!legacy_layout) {
+			for (std::size_t i = 0; i < triggers.size(); i++) {
+				if (triggers[i].classifier != Classifier::comment) {
+					order.push_back(i);
+				}
+			}
+			return order;
+		}
+		for (const TriggerCategory& category : categories) {
+			for (std::size_t i = 0; i < triggers.size(); i++) {
+				if (triggers[i].parent_id == category.id && !triggers[i].is_comment) {
+					order.push_back(i);
+				}
+			}
+		}
+		return order;
+	}
 
   private:
 	std::string get_type(const std::string_view function_name, size_t parameter) const;
@@ -692,6 +829,15 @@ export class Triggers {
 		}
 	}
 
+	int argument_count(const std::string& function_name) {
+		const auto found = argument_counts.find(function_name);
+		if (found == argument_counts.end()) {
+			unknown_function_names.insert(function_name);
+			return 0;
+		}
+		return found->second;
+	}
+
 	void parse_parameter_structure(BinaryReader& reader, TriggerParameter& parameter, uint32_t version, int depth) {
 		check_parse_depth(depth);
 		parameter.type = static_cast<TriggerParameter::Type>(reader.read<uint32_t>());
@@ -704,7 +850,7 @@ export class Triggers {
 			parameter.sub_parameter.enabled = true;
 			const bool has_parameters = reader.read<uint32_t>();
 			if (has_parameters) {
-				parameter.sub_parameter.parameters.resize(argument_counts[parameter.sub_parameter.name]);
+				parameter.sub_parameter.parameters.resize(argument_count(parameter.sub_parameter.name));
 				for (auto&& i : parameter.sub_parameter.parameters) {
 					parse_parameter_structure(reader, i, version, depth + 1);
 				}
@@ -736,7 +882,7 @@ export class Triggers {
 		}
 		eca.name = reader.read_c_string();
 		eca.enabled = reader.read<uint32_t>();
-		eca.parameters.resize(argument_counts[eca.name]);
+		eca.parameters.resize(argument_count(eca.name));
 		for (auto&& i : eca.parameters) {
 			parse_parameter_structure(reader, i, version, depth + 1);
 		}
@@ -818,56 +964,60 @@ export class Triggers {
 		}
 
 		Trigger::next_id = 0;
+		unknown_function_names.clear();
+		element_lists = {};
+		game_version = 2;
 
-		const std::string magic_number = reader.read_string(4);
-		if (magic_number != "WTG!") {
-			std::println("Unknown magic number for war3map.wtg {}", magic_number);
-			return;
-		}
+		// Whatever is not understood refuses the map: a map loaded with fewer triggers than it has would lose them on save.
+		try {
+			const std::string magic_number = reader.read_string(4);
+			if (magic_number != "WTG!") {
+				throw std::runtime_error("Its magic number is not WTG!");
+			}
 
-		const uint32_t version = reader.read<uint32_t>();
-		if (version == 0x80000004)
-			load_version_31(reader, version);
-		else if (version == 4 || version == 7)
-			load_version_pre31(reader, version);
-		else {
-			std::println("Unknown WTG format! Trying 1.31 loader");
-			load_version_31(reader, version);
+			const uint32_t version = reader.read<uint32_t>();
+			if (version == 0x80000004) {
+				load_version_31(reader);
+			} else if (version == 4 || version == 7) {
+				load_version_pre31(reader, version);
+			} else {
+				throw std::runtime_error(std::format("Trigger format version {:#x} is not supported", version));
+			}
+
+			if (reader.remaining() != 0) {
+				throw std::runtime_error(std::format("{} bytes are left after the last trigger element", reader.remaining()));
+			}
+		} catch (const std::exception& error) {
+			if (unknown_function_names.empty()) {
+				throw;
+			}
+			std::string names;
+			for (const std::string& name : unknown_function_names) {
+				names += (names.empty() ? "" : ", ") + name;
+			}
+			throw std::runtime_error(std::format("{}. TriggerData has no entry for these trigger functions: {}", error.what(), names));
 		}
 	}
 
-	void load_version_31(BinaryReader& reader, uint32_t version) {
-		uint32_t sub_version = reader.read<uint32_t>();
-		if (sub_version != 7 && sub_version != 4) {
-			std::print("Unknown 1.31 WTG subformat! Trying anyway.\n");
+	void load_version_31(BinaryReader& reader) {
+		const uint32_t sub_version = reader.read<uint32_t>();
+		// 4 has no sample in any stock map, and HiveWE has always written 7. So the `sub_version == 7` checks below are always
+		// true; the format 4 branches they guard are dead and kept only as layout notes.
+		if (sub_version != 7) {
+			throw std::runtime_error(std::format("Trigger format {} is not supported", sub_version));
 		}
 
-		reader.advance(4); // map_count
-		reader.advance(std::size_t { reader.read_count(4) } * 4); // map ids of deleted maps
+		for (ElementList& list : element_lists) {
+			list.count = reader.read<uint32_t>();
+			list.deleted_ids.resize(reader.read_count(4));
+			for (uint32_t& id : list.deleted_ids) {
+				id = reader.read<uint32_t>();
+			}
+		}
+		game_version = reader.read<uint32_t>();
 
-		reader.advance(4); // library_count
-		reader.advance(std::size_t { reader.read_count(4) } * 4); // library ids of deleted libraries
-
-		reader.advance(4); // category_count
-		reader.advance(std::size_t { reader.read_count(4) } * 4); // category ids of deleted categories
-
-		reader.advance(4); // trigger_count
-		reader.advance(std::size_t { reader.read_count(4) } * 4); // trigger ids of deleted triggers
-
-		reader.advance(4); // comment_count
-		reader.advance(std::size_t { reader.read_count(4) } * 4); // comment ids of deleted comments
-
-		reader.advance(4); // script_count
-		reader.advance(std::size_t { reader.read_count(4) } * 4); // script ids of deleted scripts
-
-		reader.advance(4); // variable_count
-		reader.advance(std::size_t { reader.read_count(4) } * 4); // variable ids of deleted variables
-
-		unknown1 = reader.read<uint32_t>();
-		unknown2 = reader.read<uint32_t>();
-		trig_def_ver = reader.read<uint32_t>();
-
-		uint32_t variable_count = reader.read<uint32_t>();
+		// The smallest variable: two empty names, six ints and an empty initial value.
+		const uint32_t variable_count = reader.read_count(27);
 		for (uint32_t i = 0; i < variable_count; i++) {
 			TriggerVariable variable;
 			variable.name = reader.read_c_string();
@@ -886,7 +1036,8 @@ export class Triggers {
 			Trigger::next_id = std::max(Trigger::next_id, variable.id + 1);
 		}
 
-		uint32_t element_count = reader.read<uint32_t>();
+		// The smallest element: a variable element with an empty name.
+		const uint32_t element_count = reader.read_count(13);
 
 		for (uint32_t i = 0; i < element_count; i++) {
 			Classifier classifier = static_cast<Classifier>(reader.read<uint32_t>());
@@ -940,6 +1091,8 @@ export class Triggers {
 					reader.advance(4); // parentid
 					break;
 				}
+				default:
+					throw std::runtime_error(std::format("Trigger element {} has unknown kind {}", i, static_cast<uint32_t>(classifier)));
 			}
 		}
 	}
@@ -1038,6 +1191,7 @@ export class Triggers {
 						i.custom_text = reader.read_string(size);
 					}
 				}
+				check_wct_rest_is_zero(reader);
 				return;
 			} else {
 				std::print("Probably invalid WCT format\n");
@@ -1057,12 +1211,47 @@ export class Triggers {
 			}
 		}
 
-		for (auto& i : triggers) {
-			if (!i.is_comment) {
+		// Which trigger each entry belongs to depends on the writer (custom_text_order). The wtg's element lists say which wrote
+		// it. Only a file marked as older HiveWE's may fall back to the World Editor layout. An unmarked file gets no fallback:
+		// any layout with fewer entries would accept a World Editor wct cut short and silently drop or shift its text.
+		const bool legacy_layout = has_legacy_zero_element_lists();
+		std::optional<std::vector<std::string>> texts = read_custom_texts(reader, legacy_layout);
+		if (!texts && legacy_layout) {
+			texts = read_custom_texts(reader, false);
+		}
+		if (!texts) {
+			throw std::runtime_error("Its custom text entries do not match the triggers in war3map.wtg");
+		}
+		for (std::size_t i = 0; i < triggers.size(); i++) {
+			triggers[i].custom_text = std::move((*texts)[i]);
+		}
+	}
+
+	/// The custom text of every trigger, by index, if the entries of this layout read to the end of the file with only zeros
+	/// after them. On failure the reader is back where it started.
+	std::optional<std::vector<std::string>> read_custom_texts(BinaryReader& reader, const bool legacy_layout) const {
+		const auto start = reader.position;
+		std::vector<std::string> texts(triggers.size());
+		try {
+			for (const std::size_t i : custom_text_order(legacy_layout)) {
 				const uint32_t size = reader.read<uint32_t>();
-				if (size > 0) {
-					i.custom_text = reader.read_string(size);
-				}
+				// A trigger listed twice (duplicate category id) got the same text both times.
+				texts[i] = size > 0 ? reader.read_string(size) : std::string();
+			}
+			check_wct_rest_is_zero(reader);
+		} catch (const std::exception&) {
+			reader.position = start;
+			return std::nullopt;
+		}
+		return texts;
+	}
+
+	/// Trailing zeros are common in stock wct files and harmless. Anything else is custom text no trigger took.
+	static void check_wct_rest_is_zero(BinaryReader& reader) {
+		const long long remaining = reader.remaining();
+		for (long long i = 0; i < remaining; i++) {
+			if (reader.read<uint8_t>() != 0) {
+				throw std::runtime_error(std::format("{} bytes are left after the last custom text, and they are not all zero", remaining));
 			}
 		}
 	}
@@ -1073,30 +1262,21 @@ export class Triggers {
 		writer.write<uint32_t>(write_version);
 		writer.write<uint32_t>(write_sub_version);
 
-		writer.write<uint32_t>(0);
-		writer.write<uint32_t>(0);
-
-		writer.write<uint32_t>(0);
-		writer.write<uint32_t>(0);
-
-		writer.write<uint32_t>(0);
-		writer.write<uint32_t>(0);
-
-		writer.write<uint32_t>(0);
-		writer.write<uint32_t>(0);
-
-		writer.write<uint32_t>(0);
-		writer.write<uint32_t>(0);
-
-		writer.write<uint32_t>(0);
-		writer.write<uint32_t>(0);
-
-		writer.write<uint32_t>(0);
-		writer.write<uint32_t>(0);
-
-		writer.write<uint32_t>(unknown1);
-		writer.write<uint32_t>(unknown2);
-		writer.write<uint32_t>(trig_def_ver);
+		// Written as read (see ElementList), except that lists 1 to 7 are never all empty: that marks a wct in the layout HiveWE
+		// wrote before 2026-11-24, and save_scripts writes the World Editor's. (1, 0) in the first list is what the World Editor
+		// writes in all 466 stock maps.
+		std::array<ElementList, 8> lists = element_lists;
+		if (has_legacy_zero_element_lists()) {
+			lists[0].count = 1;
+		}
+		for (const ElementList& list : lists) {
+			writer.write<uint32_t>(list.count);
+			writer.write<uint32_t>(list.deleted_ids.size());
+			for (const uint32_t id : list.deleted_ids) {
+				writer.write<uint32_t>(id);
+			}
+		}
+		writer.write<uint32_t>(game_version);
 		writer.write<uint32_t>(variables.size());
 
 		for (const auto& i : variables) {
@@ -1165,19 +1345,15 @@ export class Triggers {
 			writer.write_c_string(global_jass);
 		}
 
-		// Custom text (jass/lua) needs to be saved in the order they appear in the hierarchy
-		for (const auto& j : categories) {
-			for (const auto& i : triggers) {
-				if (i.parent_id == j.id) {
-					if (!i.is_comment) {
-						if (i.custom_text.size() == 0) {
-							writer.write<uint32_t>(0);
-						} else {
-							writer.write<uint32_t>(i.custom_text.size() + (i.custom_text.back() == '\0' ? 0 : 1));
-							writer.write_c_string(i.custom_text);
-						}
-					}
-				}
+		// One entry per trigger in the order save() writes the trigger elements, which is the order load_scripts reads them in.
+		// Grouping by category here once moved text between triggers and wrote triggers of duplicate category ids twice.
+		for (const std::size_t index : custom_text_order(false)) {
+			const Trigger& i = triggers[index];
+			if (i.custom_text.empty()) {
+				writer.write<uint32_t>(0);
+			} else {
+				writer.write<uint32_t>(i.custom_text.size() + (i.custom_text.back() == '\0' ? 0 : 1));
+				writer.write_c_string(i.custom_text);
 			}
 		}
 

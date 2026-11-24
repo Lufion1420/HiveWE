@@ -199,37 +199,7 @@ bool TreeModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int r
 	destinationParentItem->appendChild(childItem);
 	childItem->parent = destinationParentItem;
 
-	switch (childItem->type) {
-		case Classifier::comment:
-		case Classifier::gui:
-		case Classifier::script:
-			for (int i = 0; i < map->triggers.triggers.size(); i++) {
-				Trigger& trigger = map->triggers.triggers[i];
-				if (trigger.id == childItem->id) {
-					trigger.parent_id = destinationParentItem->id;
-					break;
-				}
-			}
-			break;
-		case Classifier::category:
-			for (int i = 0; i < map->triggers.categories.size(); i++) {
-				TriggerCategory& category = map->triggers.categories[i];
-				if (category.id == childItem->id) {
-					category.parent_id = destinationParentItem->id;
-					break;
-				}
-			}
-			break;
-		case Classifier::variable:
-			for (int i = 0; i < map->triggers.categories.size(); i++) {
-				TriggerVariable& variable = map->triggers.variables[i];
-				if (variable.id == childItem->id) {
-					variable.parent_id = destinationParentItem->id;
-					break;
-				}
-			}
-			break;
-	}
+	map->triggers.set_element_parent(childItem->type, childItem->id, destinationParentItem->id);
 	endMoveRows();
 
 	return true;

@@ -161,10 +161,7 @@ void TriggerExplorer::createCategory() {
 		index = index.parent();
 	}
 
-	TriggerCategory category;
-	category.name = "New Category";
-	category.id = ++Trigger::next_id;
-	category.parent_id = parent_item->id;
+	const TriggerCategory category = make_new_trigger_category("New Category", map->triggers.new_element_id(), parent_item->id);
 	map->triggers.categories.push_back(category);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, Classifier::category, category.id);
@@ -196,12 +193,7 @@ void TriggerExplorer::createJassTrigger() {
 		index = index.parent();
 	}
 
-	Trigger trigger;
-	trigger.classifier = Classifier::script;
-	trigger.name = "New Trigger";
-	trigger.id = ++Trigger::next_id;
-	trigger.is_script = true;
-	trigger.parent_id = parent_item->id;
+	const Trigger trigger = make_new_trigger(Classifier::script, "New Trigger", map->triggers.new_element_id(), parent_item->id);
 	map->triggers.triggers.push_back(trigger);
 	
 	dynamic_cast<TreeModel*>(model())->insertItem(index, trigger.classifier, trigger.id);
@@ -230,11 +222,7 @@ void TriggerExplorer::createGuiTrigger() {
 		index = index.parent();
 	}
 
-	Trigger trigger;
-	trigger.classifier = Classifier::gui;
-	trigger.name = "New Trigger";
-	trigger.id = ++Trigger::next_id;
-	trigger.parent_id = parent_item->id;
+	const Trigger trigger = make_new_trigger(Classifier::gui, "New Trigger", map->triggers.new_element_id(), parent_item->id);
 	map->triggers.triggers.push_back(trigger);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, trigger.classifier, trigger.id);
@@ -269,7 +257,7 @@ void TriggerExplorer::createVariable() {
 		name = "NewVariable" + std::to_string(suffix);
 	}
 
-	const TriggerVariable variable = make_new_trigger_variable(name, ++Trigger::next_id, parent_item->id);
+	const TriggerVariable variable = make_new_trigger_variable(name, map->triggers.new_element_id(), parent_item->id);
 	map->triggers.variables.push_back(variable);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, Classifier::variable, variable.id);
@@ -298,11 +286,7 @@ void TriggerExplorer::createComment() {
 		index = index.parent();
 	}
 
-	Trigger trigger;
-	trigger.classifier = Classifier::comment;
-	trigger.name = "New Comment";
-	trigger.id = ++Trigger::next_id;
-	trigger.parent_id = parent_item->id;
+	const Trigger trigger = make_new_trigger(Classifier::comment, "New Comment", map->triggers.new_element_id(), parent_item->id);
 	map->triggers.triggers.push_back(trigger);
 
 	dynamic_cast<TreeModel*>(model())->insertItem(index, trigger.classifier, trigger.id);
@@ -315,37 +299,7 @@ void recursively_delete(TreeItem* parent) {
 		recursively_delete(child);
 	}
 
-	switch (parent->type) {
-		case Classifier::comment:
-		case Classifier::gui:
-		case Classifier::script:
-			for (int i = 0; i < map->triggers.triggers.size(); i++) {
-				const Trigger& trigger = map->triggers.triggers[i];
-				if (trigger.id == parent->id) {
-					map->triggers.triggers.erase(map->triggers.triggers.begin() + i);
-					break;
-				}
-			}
-			break;
-		case Classifier::category:
-			for (int i = 0; i < map->triggers.categories.size(); i++) {
-				const TriggerCategory& category = map->triggers.categories[i];
-				if (category.id == parent->id) {
-					map->triggers.categories.erase(map->triggers.categories.begin() + i);
-					break;
-				}
-			}
-			break;
-		case Classifier::variable:
-			for (int i = 0; i < map->triggers.categories.size(); i++) {
-				const TriggerVariable& variable = map->triggers.variables[i] ;
-				if (variable.id == parent->id) {
-					map->triggers.variables.erase(map->triggers.variables.begin() + i);
-					break;
-				}
-			}
-			break;
-	}
+	map->triggers.remove_element(parent->type, parent->id);
 };
 
 void TriggerExplorer::deleteSelection() {

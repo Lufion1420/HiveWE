@@ -404,8 +404,10 @@ namespace {
 			b.count(1); // deleted ids
 			b.u32();
 		}
-		b.u32s(2);
-		b.u32(2); // trig_def_ver
+		b.u32(); // the eighth list, as in human05
+		b.count(1);
+		b.u32();
+		b.u32(2); // game version
 		b.count(1); // variables
 		b.str("variable");
 		b.str("integer");
@@ -431,6 +433,81 @@ namespace {
 		b.str("variable");
 		b.u32();
 		return b;
+	}
+
+	struct Wtg131 {
+		Bytes bytes;
+		std::size_t variable_element_offset = 0;
+	};
+
+	/// A 1.31+ wtg laid out in the order Triggers::save writes, so a load and save gives the same bytes. The eighth element
+	/// list is (1, 1, [0]) in human05 and undead02 and (0, 0) in every other stock map.
+	Wtg131 wtg_131_shaped(
+		const std::uint32_t eighth_count,
+		const std::vector<std::uint32_t>& eighth_deleted,
+		const std::string& action = "TestAction",
+		const bool action_has_argument = true,
+		const bool zero_lists = false
+	) {
+		Wtg131 file;
+		Bytes& b = file.bytes;
+		b.raw("WTG!");
+		b.u32(0x80000004);
+		b.u32(7);
+		for (int i = 0; i < 7; i++) {
+			if (zero_lists) {
+				b.u32s(2); // as HiveWE wrote every list before it kept them
+				continue;
+			}
+			b.u32(static_cast<std::uint32_t>(i + 1)); // element count of this kind, kept as it was
+			b.count(1); // deleted ids
+			b.u32(static_cast<std::uint32_t>(100 + i));
+		}
+		b.u32(eighth_count);
+		b.count(static_cast<std::uint32_t>(eighth_deleted.size()));
+		for (const std::uint32_t id : eighth_deleted) {
+			b.u32(id);
+		}
+		b.u32(2); // game version
+		b.count(1); // variables
+		b.str("variable");
+		b.str("integer");
+		b.u32(1); // unknown
+		b.u32s(3); // not an array, array size, not initialized
+		b.str("");
+		b.u32(5); // id
+		b.u32(); // parent
+		b.count(3); // elements
+		b.u32(1); // map header
+		b.u32(0);
+		b.str("human05");
+		b.u32s(2); // not a comment, closed
+		b.u32(0xFFFFFFFF); // parent
+		b.u32(8); // trigger
+		b.str("Trigger");
+		b.str("");
+		b.u32(); // not a comment
+		b.u32(2); // id
+		b.u32(1); // enabled
+		b.u32s(3); // not a script, initially on, not run on initialization
+		b.u32(); // parent
+		b.count(1); // ECAs
+		b.u32(2); // type
+		b.str(action);
+		b.u32(1); // enabled
+		if (action_has_argument) {
+			b.u32(3);
+			b.str("value");
+			b.u32(); // no sub parameter
+			b.u32(); // not an array
+		}
+		b.u32(); // no child ECAs
+		file.variable_element_offset = b.data.size();
+		b.u32(64); // variable element
+		b.u32(5);
+		b.str("variable");
+		b.u32();
+		return file;
 	}
 
 	Bytes wtg_old_file(const std::uint32_t version) {
@@ -801,6 +878,8 @@ TestCall=0,0,integer,integer
 		std::size_t refusals_naming_units = 0;
 		int deepest = 0;
 		std::string deepest_map;
+		std::size_t human05_triggers = 0;
+		std::size_t human05_variables = 0;
 		const int trigger_next_id = Trigger::next_id;
 
 		for (const auto& [key, name] : index) {
@@ -811,12 +890,11 @@ TestCall=0,0,integer,integer
 				refused++;
 				refusals_naming_units += contains(result.error(), "war3mapUnits.doo") ? 1 : 0;
 				const bool version_refusal = contains(result.error(), "does not support") || contains(result.error(), "newer version of HiveWE");
-				const bool known_trigger_refusal = contains(name, "reforged/roc/undead02") && contains(result.error(), "war3map.wtg");
-				refusals_by_kind[version_refusal ? "version" : known_trigger_refusal ? "undead02 wtg" : "other"]++;
+				refusals_by_kind[version_refusal ? "version" : "other"]++;
 				std::string one_line = result.error();
 				std::ranges::replace(one_line, '\n', ' ');
 				std::println("{} refused {} ({}): {}", label, key, name, one_line);
-				if (!version_refusal && !known_trigger_refusal) {
+				if (!version_refusal) {
 					unexpected.push_back(name);
 				}
 
@@ -842,11 +920,8 @@ TestCall=0,0,integer,integer
 						std::string readable_line = readable.error();
 						std::ranges::replace(readable_line, '\n', ' ');
 						std::println("{} readable parts of {} ({}) refused: {}", label, key, name, readable_line);
-						const bool known = contains(name, "reforged/roc/undead02") && contains(readable.error(), "war3map.wtg");
-						refusals_by_kind[known ? "undead02 wtg, behind a version refusal" : "other, behind a version refusal"]++;
-						if (!known) {
-							unexpected.push_back(name);
-						}
+						refusals_by_kind["other, behind a version refusal"]++;
+						unexpected.push_back(name);
 					}
 				}
 			}
@@ -861,6 +936,11 @@ TestCall=0,0,integer,integer
 				}
 				Hierarchy::map_read_override = nullptr;
 				Trigger::next_id = trigger_next_id;
+				// Its wtg has an eighth element list holding one deleted id, which HiveWE once read as three fixed ints.
+				if (name.ends_with("reforged/roc/human05.w3x")) {
+					human05_triggers = triggers.triggers.size();
+					human05_variables = triggers.variables.size();
+				}
 				for (const Trigger& trigger : triggers.triggers) {
 					for (const ECA& eca : trigger.ecas) {
 						if (const int depth = deepest_nesting(eca, 0); depth > deepest) {
@@ -887,16 +967,18 @@ TestCall=0,0,integer,integer
 		// The stock maps of 3.0.1, so that an extraction that lost maps or a stubbed doo cannot pass unnoticed.
 		CHECK(index.size() == 466);
 		// With doo, units, w3r v7 and w3c v3 read, no stock map is refused for a version any more, so the
-		// readable-parts pass has nothing to do and undead02's trigger refusal is reached directly.
-		CHECK(accepted == 465);
-		CHECK(refused == 1);
+		// readable-parts pass has nothing to do. With the eighth wtg element list read, undead02 is accepted too.
+		CHECK(accepted == 466);
+		CHECK(refused == 0);
 		CHECK(refusals_by_kind["version"] == 0);
-		CHECK(refusals_by_kind["undead02 wtg"] == 1);
 		CHECK(readable_parts_passed == 0);
 		CHECK(readable_parts_with_real_doo == 0);
 		CHECK(readable_parts_with_real_units == 0);
 		CHECK(refusals_naming_units == 0);
-		CHECK(refusals_by_kind["undead02 wtg, behind a version refusal"] == 0);
+		std::println("{}: reforged human05 triggers {}, variables {}", label, human05_triggers, human05_variables);
+		CHECK(human05_triggers == 219);
+		// 149 variable definitions; its element list also holds 150 variable elements, one without a definition.
+		CHECK(human05_variables == 149);
 	}
 }
 
@@ -2436,6 +2518,480 @@ TEST_CASE("wtg and wct failures refuse the map in full scope and are skipped wit
 	check_accepted(dir);
 }
 
+namespace {
+	/// Loads the war3map.wtg in `dir` into `triggers`, as check_map_bodies does. This changes Trigger::next_id, so callers
+	/// hold a SentinelOpenMap, which puts it back.
+	void load_triggers(const fs::path& dir, Triggers& triggers) {
+		Hierarchy::map_read_override = &dir;
+		try {
+			triggers.load();
+		} catch (...) {
+			Hierarchy::map_read_override = nullptr;
+			throw;
+		}
+		Hierarchy::map_read_override = nullptr;
+	}
+
+	/// Saves `triggers` into a fresh folder and returns the war3map.wtg written there.
+	std::string saved_wtg(const Triggers& triggers, const std::string& name) {
+		const fs::path out = make_scratch_dir(name);
+		const fs::path previous = hierarchy.map_directory;
+		hierarchy.map_directory = out;
+		triggers.save();
+		hierarchy.map_directory = previous;
+		return read_all(out / "war3map.wtg");
+	}
+}
+
+TEST_CASE("a wtg with an eighth element list as in human05 loads all of its triggers and saves the same bytes") {
+	const SentinelOpenMap open_map;
+	const std::array<std::pair<std::uint32_t, std::vector<std::uint32_t>>, 3> eighth_lists = { {
+		{ 1, { 0 } }, // human05 and undead02
+		{ 2, { 5 } },
+		{ 0, {} }, // every other stock map
+	} };
+	for (const auto& [count, deleted] : eighth_lists) {
+		CAPTURE(count);
+		CAPTURE(deleted.size());
+		const fs::path dir = make_crafted_map("wtg_eighth_list");
+		const std::string bytes = wtg_131_shaped(count, deleted).bytes.data;
+		write_all(dir / "war3map.wtg", bytes);
+		check_accepted(dir);
+
+		Triggers triggers;
+		load_triggers(dir, triggers);
+		REQUIRE(triggers.variables.size() == 1);
+		REQUIRE(triggers.triggers.size() == 1);
+		CHECK(triggers.variables[0].name == "variable");
+		CHECK(triggers.triggers[0].name == "Trigger");
+		REQUIRE(triggers.triggers[0].ecas.size() == 1);
+		CHECK(triggers.triggers[0].ecas[0].name == "TestAction");
+		CHECK(saved_wtg(triggers, "wtg_eighth_list_saved") == bytes);
+	}
+}
+
+TEST_CASE("a new trigger element never gets an id that a deleted list holds") {
+	const SentinelOpenMap open_map;
+	const fs::path dir = make_crafted_map("wtg_deleted_ids");
+	// Live ids are 0, 2 and 5; the first seven lists hold 100 to 106.
+	write_all(dir / "war3map.wtg", wtg_131_shaped(4, { 7, 8, 0x7FFFFFFF, 0xFFFFFFFF }).bytes.data);
+	Triggers triggers;
+	load_triggers(dir, triggers);
+	// Huge deleted ids do not move next_id, so they cannot push it toward overflow.
+	CHECK(Trigger::next_id == 6);
+	// The Trigger Editor has always pre-incremented, so 6 itself is never handed out; 7 and 8 are deleted ids.
+	CHECK(triggers.new_element_id() == 9);
+	CHECK(triggers.new_element_id() == 10);
+	CHECK(triggers.new_element_id() == 11);
+	CHECK(triggers.is_deleted_id(-1)); // 0xFFFFFFFF as an int
+	CHECK(triggers.is_deleted_id(103));
+	CHECK_FALSE(triggers.is_deleted_id(6));
+
+	Trigger::next_id = 99;
+	CHECK(triggers.new_element_id() == 107); // past 100 to 106 from the first seven lists
+}
+
+TEST_CASE("the damaged count of the eighth element list is refused") {
+	const fs::path dir = make_crafted_map("wtg_eighth_list_counts");
+	check_every_count_refused(dir, "war3map.wtg", wtg_131_shaped(1, { 0 }).bytes);
+}
+
+TEST_CASE("a wtg that does not parse to its end is refused and never loaded short") {
+	const SentinelOpenMap open_map;
+	const Wtg131 valid = wtg_131_shaped(1, { 0 });
+	const std::string& bytes = valid.bytes.data;
+
+	const auto refused = [&](const std::string& label, const std::string& wtg, const std::string& expected_text = "") {
+		CAPTURE(label);
+		const fs::path dir = make_crafted_map("wtg_refusals");
+		write_all(dir / "war3map.wtg", wtg);
+		const auto result = check_map_bodies(dir);
+		REQUIRE_FALSE(result.has_value());
+		CHECK_MESSAGE(contains(result.error(), "war3map.wtg"), result.error());
+		if (!expected_text.empty()) {
+			CHECK_MESSAGE(contains(result.error(), expected_text), result.error());
+		}
+		Triggers triggers;
+		CHECK_THROWS_AS(load_triggers(dir, triggers), std::runtime_error);
+	};
+
+	refused("bad magic", "WTF!" + bytes.substr(4));
+	refused("version 0x80000005", with_u32_at(bytes, 4, 0x80000005));
+	refused("version 5", with_u32_at(bytes, 4, 5));
+	refused("format 6", with_u32_at(bytes, 8, 6));
+	refused("format 4", with_u32_at(bytes, 8, 4));
+	refused("one trailing byte", bytes + std::string(1, '\0'));
+	refused("four trailing zero bytes", bytes + std::string(4, '\0'));
+	refused("classifier 128", with_u32_at(bytes, valid.variable_element_offset, 128));
+	refused("unknown action with an argument", wtg_131_shaped(1, { 0 }, "UnknownAction", true).bytes.data, "UnknownAction");
+
+	{
+		const fs::path dir = make_crafted_map("wtg_refusals_old");
+		fs::remove(dir / "war3map.wct"); // Written for the 1.31 trigger, and not what is under test.
+		for (const std::uint32_t version : { 4u, 7u }) {
+			CAPTURE(version);
+			write_all(dir / "war3map.wtg", wtg_old_file(version).data);
+			check_accepted(dir);
+			write_all(dir / "war3map.wtg", wtg_old_file(version).data + le32(1));
+			check_refused(dir, "war3map.wtg");
+			Triggers triggers;
+			CHECK_THROWS_AS(load_triggers(dir, triggers), std::runtime_error);
+		}
+	}
+}
+
+TEST_CASE("an unknown trigger function without arguments still loads") {
+	const fs::path dir = make_crafted_map("wtg_unknown_no_arguments");
+	write_all(dir / "war3map.wtg", wtg_131_shaped(1, { 0 }, "UnknownAction", false).bytes.data);
+	check_accepted(dir);
+}
+
+TEST_CASE("a wct with trailing bytes that are not zero is refused") {
+	const fs::path dir = make_crafted_map("wct_trailing");
+	write_all(dir / "war3map.wct", wct_file().data + std::string(1, '\x01'));
+	check_refused(dir, "war3map.wct");
+	write_all(dir / "war3map.wct", wct_file().data + std::string(3, '\0') + '\x01');
+	check_refused(dir, "war3map.wct");
+}
+
+TEST_CASE("triggers HiveWE creates and saves load again unchanged") {
+	const SentinelOpenMap open_map;
+
+	SUBCASE("the test map, which New Map starts from") {
+		const fs::path dir = copy_test_map("roundtrip_test_map");
+		Triggers triggers;
+		load_triggers(dir, triggers);
+		const std::string saved = saved_wtg(triggers, "roundtrip_test_map_saved");
+		// Its lists are all empty, as HiveWE wrote them; save marks the new wct layout with (1, 0) in the first list.
+		CHECK(saved == with_u32_at(read_all(dir / "war3map.wtg"), 12, 1));
+		write_all(dir / "war3map.wtg", saved);
+		Triggers reloaded;
+		load_triggers(dir, reloaded);
+		CHECK(saved_wtg(reloaded, "roundtrip_test_map_resaved") == saved);
+	}
+	SUBCASE("editor-made variables, categories, comments, scripts and deleted items") {
+		const fs::path dir = make_crafted_map("roundtrip_edited");
+		write_all(dir / "war3map.wtg", wtg_131_shaped(1, { 0 }).bytes.data);
+		fs::remove(dir / "war3map.wct");
+		Triggers triggers;
+		load_triggers(dir, triggers);
+
+		// The helpers TriggerExplorer creates elements with.
+		const int category_id = triggers.new_element_id();
+		triggers.categories.push_back(make_new_trigger_category("New Category", category_id, 0));
+		TriggerCategory comment_category = make_new_trigger_category("Comment Category", triggers.new_element_id(), category_id);
+		comment_category.is_comment = true;
+		triggers.categories.push_back(comment_category);
+		triggers.variables.push_back(make_new_trigger_variable("new_variable", triggers.new_element_id(), category_id));
+		triggers.triggers.push_back(make_new_trigger(Classifier::comment, "A comment", triggers.new_element_id(), category_id));
+		triggers.triggers.push_back(make_new_trigger(Classifier::script, "A script", triggers.new_element_id(), category_id));
+		triggers.remove_element(Classifier::gui, triggers.triggers.front().id); // a deleted trigger
+
+		const std::string saved = saved_wtg(triggers, "roundtrip_edited_saved");
+		write_all(dir / "war3map.wtg", saved);
+		check_accepted(dir);
+		Triggers reloaded;
+		load_triggers(dir, reloaded);
+		CHECK(reloaded.categories.size() == 3);
+		CHECK(reloaded.variables.size() == 2);
+		REQUIRE(reloaded.categories.size() == 3);
+		CHECK(reloaded.categories[1].classifier == Classifier::category);
+		CHECK(reloaded.categories[2].classifier == Classifier::category);
+		CHECK(reloaded.categories[2].is_comment);
+		REQUIRE(reloaded.triggers.size() == 2);
+		CHECK(reloaded.triggers[0].classifier == Classifier::comment);
+		CHECK(reloaded.triggers[0].is_comment);
+		CHECK(reloaded.triggers[1].classifier == Classifier::script);
+		CHECK(reloaded.triggers[1].is_script);
+		CHECK(saved_wtg(reloaded, "roundtrip_edited_resaved") == saved);
+	}
+	SUBCASE("a pre-1.31 import, saved as 1.31") {
+		const fs::path dir = make_crafted_map("roundtrip_old");
+		fs::remove(dir / "war3map.wct");
+		for (const std::uint32_t version : { 4u, 7u }) {
+			CAPTURE(version);
+			write_all(dir / "war3map.wtg", wtg_old_file(version).data);
+			Triggers triggers;
+			load_triggers(dir, triggers);
+			const std::string saved = saved_wtg(triggers, "roundtrip_old_saved");
+			// An import has every list empty except the (1, 0) that marks the wct layout, then game version 2.
+			REQUIRE(saved.size() > 12 + 64 + 4);
+			CHECK(saved.substr(12, 64) == le32(1) + std::string(60, '\0'));
+			CHECK(saved.substr(76, 4) == le32(2));
+			write_all(dir / "war3map.wtg", saved);
+			check_accepted(dir);
+			Triggers reloaded;
+			load_triggers(dir, reloaded);
+			CHECK(reloaded.triggers.size() == triggers.triggers.size());
+			CHECK(reloaded.variables.size() == triggers.variables.size());
+			CHECK(reloaded.categories.size() == triggers.categories.size());
+			CHECK(saved_wtg(reloaded, "roundtrip_old_resaved") == saved);
+		}
+	}
+	SUBCASE("what older HiveWE wrote: zeros in the first seven lists") {
+		// The bundled test map was written so too (see the first subcase).
+		const fs::path dir = make_crafted_map("roundtrip_zero_lists");
+		const std::string bytes = wtg_131_shaped(0, {}, "TestAction", true, true).bytes.data;
+		write_all(dir / "war3map.wtg", bytes);
+		check_accepted(dir);
+		Triggers triggers;
+		load_triggers(dir, triggers);
+		CHECK(triggers.triggers.size() == 1);
+		CHECK(triggers.variables.size() == 1);
+		CHECK(saved_wtg(triggers, "roundtrip_zero_lists_saved") == with_u32_at(bytes, 12, 1));
+	}
+}
+
+namespace {
+	struct TestTrigger {
+		std::uint32_t classifier = 8;
+		bool is_comment = false;
+		std::uint32_t id = 0;
+		std::uint32_t parent_id = 0;
+	};
+
+	/// A 1.31+ wtg with these categories (classifier, id, parent) and triggers and no variables, in Triggers::save order.
+	/// zero_lists: as HiveWE wrote it before 2026-11-24; otherwise lists as the World Editor writes them.
+	std::string wtg_with_triggers(
+		const bool zero_lists,
+		const std::vector<std::array<std::uint32_t, 3>>& categories,
+		const std::vector<TestTrigger>& triggers
+	) {
+		Bytes b;
+		b.raw("WTG!");
+		b.u32(0x80000004);
+		b.u32(7);
+		b.u32(zero_lists ? 0 : 1); // map count
+		b.u32s(15); // the rest of the eight lists
+		b.u32(2); // game version
+		b.u32(); // variables
+		b.u32(static_cast<std::uint32_t>(categories.size() + triggers.size()));
+		for (const auto& [classifier, id, parent] : categories) {
+			b.u32(classifier);
+			b.u32(id);
+			b.str(std::format("Category {}", id));
+			b.u32s(2); // not a comment, closed
+			b.u32(parent);
+		}
+		for (const TestTrigger& trigger : triggers) {
+			b.u32(trigger.classifier);
+			b.str(std::format("Trigger {}", trigger.id));
+			b.str("");
+			b.u32(trigger.is_comment ? 1 : 0);
+			b.u32(trigger.id);
+			b.u32(1); // enabled
+			b.u32(trigger.classifier == 32 ? 1 : 0); // script
+			b.u32s(2); // initially on, not run on initialization
+			b.u32(trigger.parent_id);
+			b.u32(); // no ECAs
+		}
+		return b.data;
+	}
+
+	/// A 1.31+ wct with an empty global script and these entries.
+	std::string wct_with(const std::vector<std::string>& entries) {
+		Bytes b;
+		b.u32(0x80000004);
+		b.u32(1);
+		b.str(""); // global comment
+		b.u32(); // no global script
+		for (const std::string& entry : entries) {
+			if (entry.empty()) {
+				b.u32();
+			} else {
+				b.u32(static_cast<std::uint32_t>(entry.size() + 1));
+				b.str(entry);
+			}
+		}
+		return b.data;
+	}
+
+	/// Loads the wtg and wct in `dir` into `triggers`, as Map::load does.
+	void load_triggers_and_scripts(const fs::path& dir, Triggers& triggers) {
+		Hierarchy::map_read_override = &dir;
+		try {
+			triggers.load();
+			if (fs::exists(dir / "war3map.wct")) {
+				triggers.load_scripts();
+			}
+		} catch (...) {
+			Hierarchy::map_read_override = nullptr;
+			throw;
+		}
+		Hierarchy::map_read_override = nullptr;
+	}
+
+	/// Saves the wtg and wct of `triggers` over those of a fresh crafted map, so the folder can be checked and loaded again.
+	fs::path save_triggers_and_scripts(const Triggers& triggers, const std::string& name) {
+		const fs::path out = make_crafted_map(name);
+		const fs::path previous = hierarchy.map_directory;
+		hierarchy.map_directory = out;
+		triggers.save();
+		triggers.save_scripts();
+		hierarchy.map_directory = previous;
+		return out;
+	}
+
+	std::map<int, std::string> texts_by_id(const Triggers& triggers) {
+		std::map<int, std::string> texts;
+		for (const Trigger& trigger : triggers.triggers) {
+			texts[trigger.id] = trigger.custom_text;
+		}
+		return texts;
+	}
+}
+
+TEST_CASE("custom text stays with its trigger through edits and saves") {
+	const SentinelOpenMap open_map;
+	const fs::path dir = make_crafted_map("wct_order");
+	// Map header 0, category A 1, category B 3, a second category with id 1 (79 stock maps have duplicate ids).
+	write_all(dir / "war3map.wtg", wtg_with_triggers(false, { { 1, 0, 0xFFFFFFFF }, { 4, 1, 0 }, { 4, 3, 0 }, { 4, 1, 0 } }, {
+		{ 32, false, 2, 1 },
+		{ 32, false, 4, 3 },
+		{ 32, false, 6, 99 }, // its parent is missing
+	}));
+	write_all(dir / "war3map.wct", wct_with({ "textA", "textB", "orphan" }));
+	check_accepted(dir);
+
+	Triggers triggers;
+	load_triggers_and_scripts(dir, triggers);
+	CHECK(texts_by_id(triggers) == std::map<int, std::string> { { 2, "textA" }, { 4, "textB" }, { 6, "orphan" } });
+
+	// Edited in HiveWE: a new script trigger in the earlier category A, and trigger 2 moved to B.
+	Trigger added = make_new_trigger(Classifier::script, "New", triggers.new_element_id(), 1);
+	added.custom_text = "textNew";
+	triggers.triggers.push_back(added);
+	triggers.triggers[0].parent_id = 3;
+	const std::map<int, std::string> expected = texts_by_id(triggers);
+
+	const fs::path saved = save_triggers_and_scripts(triggers, "wct_order_saved");
+	check_accepted(saved);
+	Triggers reloaded;
+	load_triggers_and_scripts(saved, reloaded);
+	CHECK(texts_by_id(reloaded) == expected);
+	REQUIRE(reloaded.triggers.size() == 4);
+	CHECK(reloaded.triggers[0].parent_id == 3);
+
+	const fs::path resaved = save_triggers_and_scripts(reloaded, "wct_order_resaved");
+	CHECK(read_all(resaved / "war3map.wtg") == read_all(saved / "war3map.wtg"));
+	CHECK(read_all(resaved / "war3map.wct") == read_all(saved / "war3map.wct"));
+}
+
+TEST_CASE("commented-out GUI triggers have a wct entry and files of older HiveWE without one still pair") {
+	const SentinelOpenMap open_map;
+	const std::vector<std::array<std::uint32_t, 3>> categories = { { 1, 0, 0xFFFFFFFF }, { 4, 1, 0 } };
+	// A GUI trigger converted to text, a commented-out GUI trigger, a comment element and a script element.
+	const std::vector<TestTrigger> elements = {
+		{ 8, false, 2, 1 },
+		{ 8, true, 3, 1 },
+		{ 16, true, 4, 1 },
+		{ 32, false, 5, 1 },
+	};
+	const std::map<int, std::string> expected = { { 2, "two" }, { 3, "three" }, { 4, "" }, { 5, "five" } };
+
+	const auto loads_as = [&](const std::string& label, const bool zero_lists, const std::vector<std::string>& entries,
+							  const std::map<int, std::string>& texts) {
+		CAPTURE(label);
+		const fs::path dir = make_crafted_map("wct_layouts");
+		write_all(dir / "war3map.wtg", wtg_with_triggers(zero_lists, categories, elements));
+		write_all(dir / "war3map.wct", wct_with(entries));
+		check_accepted(dir);
+		Triggers triggers;
+		load_triggers_and_scripts(dir, triggers);
+		CHECK(texts_by_id(triggers) == texts);
+
+		// Saved in the World Editor's layout, which loads back the same.
+		const fs::path saved = save_triggers_and_scripts(triggers, "wct_layouts_saved");
+		CHECK(read_all(saved / "war3map.wct") == wct_with({ texts.at(2), texts.at(3), texts.at(5) }));
+		Triggers reloaded;
+		load_triggers_and_scripts(saved, reloaded);
+		CHECK(texts_by_id(reloaded) == texts);
+	};
+
+	loads_as("World Editor: an entry for every trigger but the comment", false, { "two", "three", "five" }, expected);
+	loads_as("World Editor, empty entries", false, { "two", "", "five" }, { { 2, "two" }, { 3, "" }, { 4, "" }, { 5, "five" } });
+	// HiveWE before 2026-11-24 skipped is_comment triggers, the commented-out GUI trigger included.
+	loads_as("older HiveWE", true, { "two", "five" }, { { 2, "two" }, { 3, "" }, { 4, "" }, { 5, "five" } });
+	// Lists all zero but written in the World Editor's layout: the older layout leaves "five" unread, so the other is taken.
+	loads_as("zero lists, World Editor layout", true, { "two", "three", "five" }, expected);
+
+	// Fits neither layout: refused, not read shifted.
+	for (const bool zero_lists : { false, true }) {
+		CAPTURE(zero_lists);
+		const fs::path dir = make_crafted_map("wct_layouts_neither");
+		write_all(dir / "war3map.wtg", wtg_with_triggers(zero_lists, categories, elements));
+		write_all(dir / "war3map.wct", wct_with({ "two", "three", "five", "extra" }));
+		check_refused(dir, "war3map.wct");
+		write_all(dir / "war3map.wct", wct_with({ "two" }));
+		check_refused(dir, "war3map.wct");
+	}
+
+	// A World Editor wct cut short, whose last entries are empty: the older layouts read fewer entries and would accept it
+	// with the text of trigger 5 lost, so an unmarked file is refused.
+	{
+		const fs::path dir = make_crafted_map("wct_layouts_cut");
+		write_all(dir / "war3map.wtg", wtg_with_triggers(false, categories, elements));
+		const std::string whole = wct_with({ "two", "", "" });
+		for (const std::size_t cut : { 1u, 4u }) {
+			CAPTURE(cut);
+			write_all(dir / "war3map.wct", whole.substr(0, whole.size() - cut));
+			check_refused(dir, "war3map.wct");
+		}
+		write_all(dir / "war3map.wct", whole);
+		check_accepted(dir);
+	}
+}
+
+TEST_CASE("moving a tree item gives that element its new parent whatever the number of categories") {
+	Triggers triggers;
+	triggers.categories.push_back(make_new_trigger_category("Only", 1, 0));
+	for (const int id : { 10, 11, 12 }) {
+		triggers.variables.push_back(make_new_trigger_variable(std::format("v{}", id), id, 1));
+	}
+	triggers.triggers.push_back(make_new_trigger(Classifier::gui, "t", 20, 1));
+	triggers.set_element_parent(Classifier::variable, 12, 7);
+	CHECK(triggers.variables[2].parent_id == 7);
+	CHECK(triggers.variables[0].parent_id == 1);
+	triggers.set_element_parent(Classifier::gui, 20, 7);
+	CHECK(triggers.triggers[0].parent_id == 7);
+	triggers.set_element_parent(Classifier::category, 1, 5);
+	CHECK(triggers.categories[0].parent_id == 5);
+	triggers.set_element_parent(Classifier::variable, 99, 7); // no such variable
+	CHECK(triggers.variables[1].parent_id == 1);
+}
+
+TEST_CASE("files older HiveWE saved grouped by category load with each text on its trigger") {
+	const SentinelOpenMap open_map;
+	const fs::path dir = make_crafted_map("wct_legacy_grouped");
+	// Trigger 5 was added in HiveWE to the earlier category 1, so the old writer put its text before trigger 4's.
+	write_all(dir / "war3map.wtg", wtg_with_triggers(true, { { 1, 0, 0xFFFFFFFF }, { 4, 1, 0 }, { 4, 3, 0 } }, {
+		{ 32, false, 2, 1 },
+		{ 32, false, 4, 3 },
+		{ 32, false, 5, 1 },
+	}));
+	write_all(dir / "war3map.wct", wct_with({ "two", "five", "four" }));
+	check_accepted(dir);
+	Triggers triggers;
+	load_triggers_and_scripts(dir, triggers);
+	CHECK(texts_by_id(triggers) == std::map<int, std::string> { { 2, "two" }, { 4, "four" }, { 5, "five" } });
+}
+
+TEST_CASE("deleting a variable removes that variable whatever the number of categories") {
+	Triggers triggers;
+	triggers.categories.push_back(make_new_trigger_category("Only", 1, 0));
+	for (const int id : { 10, 11, 12 }) {
+		triggers.variables.push_back(make_new_trigger_variable(std::format("v{}", id), id, 1));
+	}
+	triggers.remove_element(Classifier::variable, 12);
+	REQUIRE(triggers.variables.size() == 2);
+	CHECK(triggers.variables[0].id == 10);
+	CHECK(triggers.variables[1].id == 11);
+	triggers.remove_element(Classifier::category, 1);
+	CHECK(triggers.categories.empty());
+	triggers.remove_element(Classifier::variable, 99);
+	CHECK(triggers.variables.size() == 2);
+}
+
 TEST_CASE("data that is odd but not damage stays accepted") {
 	const fs::path dir = make_crafted_map("not_damage");
 
@@ -2555,6 +3111,158 @@ TEST_CASE("every extracted stock map below HIVEWE_STOCK_BODY_ROOT is accepted ex
 	const LocalTriggerDefinitions local(definitions);
 	sweep_stock_maps(root, "extracted TriggerData");
 	open_map.check_unchanged();
+}
+
+namespace {
+	/// What a save must keep of each trigger, in vector order, plus the element counts.
+	std::string trigger_summary(const Triggers& triggers) {
+		std::string summary = std::format("{} categories, {} variables, {} triggers\n", triggers.categories.size(),
+			triggers.variables.size(), triggers.triggers.size());
+		for (const Trigger& trigger : triggers.triggers) {
+			summary += std::format("{} {} {} {} {} [{}]\n", trigger.id, static_cast<int>(trigger.classifier), trigger.parent_id,
+				trigger.is_comment, trigger.name, trigger.custom_text);
+		}
+		return summary;
+	}
+
+	/// For a wtg in the layout HiveWE wrote before 2026-11-24: whether its wct was written grouped by category in an order that
+	/// differs from the trigger elements (the old loader then gave texts to the wrong triggers).
+	bool legacy_grouped_order_differs(const Triggers& triggers) {
+		std::vector<int> grouped;
+		for (const TriggerCategory& category : triggers.categories) {
+			for (const Trigger& trigger : triggers.triggers) {
+				if (trigger.parent_id == category.id && !trigger.is_comment) {
+					grouped.push_back(trigger.id);
+				}
+			}
+		}
+		std::vector<int> elements;
+		for (const Trigger& trigger : triggers.triggers) {
+			if (!trigger.is_comment) {
+				elements.push_back(trigger.id);
+			}
+		}
+		return grouped != elements;
+	}
+}
+
+TEST_CASE("every map below HIVEWE_TRIGGER_ROUNDTRIP_ROOT keeps its triggers and custom text through two saves") {
+	const std::string root_text = env("HIVEWE_TRIGGER_ROUNDTRIP_ROOT");
+	if (root_text.empty()) {
+		MESSAGE("skipped: HIVEWE_TRIGGER_ROUNDTRIP_ROOT is not set");
+		return;
+	}
+	const fs::path root = root_text;
+	const std::map<std::string, std::string> index = read_sweep_index(root / "index.json");
+	REQUIRE_FALSE(index.empty());
+	const fs::path definitions = make_scratch_dir("roundtrip_definitions");
+	fs::create_directories(definitions / "UI");
+	fs::copy_file(root / "TriggerData.txt", definitions / "UI" / "TriggerData.txt");
+	write_all(definitions / "UI" / "TriggerStrings.txt", "[TriggerActionStrings]\n");
+	world_edit_strings.ini_data["WorldEditStrings"];
+	const SentinelOpenMap open_map;
+	const LocalTriggerDefinitions local(definitions);
+
+	std::size_t checked = 0;
+	std::size_t legacy = 0;
+	std::size_t wct_identical = 0;
+	std::size_t cuts_accepted = 0;
+	std::size_t legacy_cuts_accepted = 0;
+	std::vector<std::string> failures;
+	const fs::path out1 = make_scratch_dir("roundtrip_sweep_1");
+	const fs::path out2 = make_scratch_dir("roundtrip_sweep_2");
+	const auto save_into = [](const Triggers& triggers, const fs::path& out) {
+		const fs::path previous = hierarchy.map_directory;
+		hierarchy.map_directory = out;
+		triggers.save();
+		triggers.save_scripts();
+		hierarchy.map_directory = previous;
+	};
+	const auto load_from = [](const fs::path& directory, Triggers& triggers) {
+		Hierarchy::map_read_override = &directory;
+		try {
+			triggers.load();
+			if (fs::exists(directory / "war3map.wct")) {
+				triggers.load_scripts();
+			}
+		} catch (...) {
+			Hierarchy::map_read_override = nullptr;
+			throw;
+		}
+		Hierarchy::map_read_override = nullptr;
+	};
+
+	for (const auto& [key, name] : index) {
+		const fs::path directory = root / key;
+		if (!fs::exists(directory / "war3map.wtg")) {
+			continue;
+		}
+		checked++;
+		try {
+			Triggers original;
+			load_from(directory, original);
+			if (original.has_legacy_zero_element_lists()) {
+				legacy++;
+				if (legacy_grouped_order_differs(original)) {
+					std::println("older HiveWE wct grouped out of element order (texts were mispaired before this fix): {} ({})", key, name);
+				}
+			}
+			save_into(original, out1);
+			Triggers reloaded;
+			load_from(out1, reloaded);
+			if (trigger_summary(reloaded) != trigger_summary(original)) {
+				failures.push_back(std::format("{} ({}): triggers differ after a save", key, name));
+				continue;
+			}
+			if (fs::exists(directory / "war3map.wct")) {
+				const std::string before = read_all(directory / "war3map.wct");
+				const std::string after = read_all(out1 / "war3map.wct");
+				if (before == after) {
+					wct_identical++;
+				} else {
+					std::println("saved wct differs from the original: {} ({}), {} bytes became {}", key, name, before.size(), after.size());
+				}
+			}
+			// The original wct cut by 1 or 4 bytes must be refused, never loaded with text missing.
+			if (fs::exists(directory / "war3map.wct")) {
+				const fs::path cut_dir = make_scratch_dir("roundtrip_sweep_cut");
+				fs::copy_file(directory / "war3map.wtg", cut_dir / "war3map.wtg");
+				const std::string wct = read_all(directory / "war3map.wct");
+				for (const std::size_t cut : { 1u, 4u }) {
+					if (wct.size() < cut) {
+						continue;
+					}
+					write_all(cut_dir / "war3map.wct", wct.substr(0, wct.size() - cut));
+					Triggers cut_triggers;
+					bool accepted_cut = true;
+					try {
+						load_from(cut_dir, cut_triggers);
+					} catch (const std::exception&) {
+						accepted_cut = false;
+					}
+					if (accepted_cut) {
+						(original.has_legacy_zero_element_lists() ? legacy_cuts_accepted : cuts_accepted)++;
+						std::println("a wct cut by {} bytes loads: {} ({})", cut, key, name);
+					}
+				}
+			}
+			save_into(reloaded, out2);
+			if (read_all(out1 / "war3map.wtg") != read_all(out2 / "war3map.wtg") || read_all(out1 / "war3map.wct") != read_all(out2 / "war3map.wct")) {
+				failures.push_back(std::format("{} ({}): the second save differs from the first", key, name));
+			}
+		} catch (const std::exception& error) {
+			failures.push_back(std::format("{} ({}): {}", key, name, error.what()));
+		}
+	}
+	for (const std::string& failure : failures) {
+		std::println("trigger round trip failed: {}", failure);
+	}
+	std::println("trigger round trip: {} maps with a wtg checked, {} in older HiveWE's layout, {} saved a wct identical to the original, {} failed",
+		checked, legacy, wct_identical, failures.size());
+	std::println("trigger round trip: cut wct files accepted: {}, of older HiveWE's layout: {}", cuts_accepted, legacy_cuts_accepted);
+	CHECK(failures.empty());
+	CHECK(cuts_accepted == 0);
+	CHECK(checked > 0);
 }
 
 namespace {

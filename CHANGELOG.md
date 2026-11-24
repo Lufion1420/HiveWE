@@ -85,6 +85,12 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **MDL text: negative static light attenuation round-trips correctly** — A value such as -5 is no longer exported as 4294967291.
 - **Ctrl+Z after deleting or cutting doodads restores them again** — Undo restored nothing before, a regression from an earlier refactor.
 
+#### Triggers
+- **Saving a map no longer moves custom script text from one trigger to another** — This hit maps with script triggers in several categories, including some World Editor maps resaved without any edit, and commented-out GUI triggers now keep their text too. Maps already saved by an older HiveWE load with each text on the trigger it was saved with, but a map saved that way twice may stay mixed up, so compare it with a backup.
+- **Maps no longer open with triggers or script text missing** — Campaign maps human05 and undead02, whose trigger file HiveWE misread, now open with all their triggers. A trigger file or script text file that HiveWE cannot read completely now refuses the map with a message naming the file, because a save would have made the loss permanent.
+- **Trigger Editor categories and variables are saved correctly** — A newly created category no longer risks producing a map that cannot be reopened, and deleting or moving variables now updates the saved data.
+- **Maps with duplicated category ids no longer get script text written twice** — Saving now writes each trigger's custom script text only once.
+
 #### Map Protector
 - **Asset Path Obfuscation no longer wipes the object fields stored in a map's war3mapSkin.* files when it renames a path in them.**
 - **Asset Path Obfuscation no longer fails on maps with a custom object whose base object is unknown** (for example humanx03's leftover unit on `nbsh`) — such an object is copied into the protected map's object data unchanged, and all other objects are still rewritten.
