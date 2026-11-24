@@ -89,6 +89,13 @@ public:
 	/// checks delete, undo, redo, undo and cut with undo through DoodadBrush and writes PASS/FAIL lines. Never saves. Exit code 0 only when all pass.
 	static inline bool qa_doodad_undo_check = false;
 	void run_qa_doodad_undo_check();
+	/// Set by --qa-refusal-checks (needs --qa-offscreen; --qa-script-out <file> optional): works on sandbox copies of data/test map. Checks that a placed
+	/// unit with a 5-byte id is refused by Save, Save As, Test Map and Export MPQ without writing a file, and that undo still works after Open refused
+	/// a damaged map. Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_refusal_checks = false;
+	void run_qa_refusal_checks();
+	/// When set (by the refusal hook only), load_map records the refusal text here instead of opening a message box.
+	static inline QStringList* qa_dialog_log = nullptr;
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.
 	static inline QString qa_dump_layout_file;
 	/// Writes the widget tree of the open palette (class, objectName, size hints, size policy, geometry) to qa_dump_layout_file, so a too wide

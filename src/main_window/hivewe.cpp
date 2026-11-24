@@ -19,6 +19,7 @@ import Imports;
 import <soil2/SOIL2.h>;
 import MapGlobal;
 import WorldUndoManager;
+import UnitsUndo;
 import SkinnedMeshGlobals;
 import ResourceManager;
 import WindowHandler;
@@ -614,7 +615,12 @@ void HiveWE::setup_palette_sidebar() {
 void HiveWE::load_map(const fs::path& directory) {
 	// Before any teardown: a refused map must leave the open map and its unsaved edits intact.
 	if (const auto check = check_map_for_opening(directory); !check) {
-		QMessageBox::critical(this, "Opening map failed", QString::fromStdString(check.error()) + "\n\nThe map was not changed.");
+		const QString text =QString::fromStdString(check.error()) + "\n\nThe map was not changed.";
+		if (qa_dialog_log) {
+			*qa_dialog_log << text;
+		} else {
+			QMessageBox::critical(this, "Opening map failed", text);
+		}
 		return;
 	}
 
@@ -2397,6 +2403,189 @@ void HiveWE::run_qa_doodad_undo_check() {
 		check(doodads.size() == before && none_present(added) && brush.selections.empty(), "cut: the doodads are gone and the selection is empty");
 		undo_or_redo(true);
 		check(doodads.size() == before + 3 && all_present(added), "cut, undo: the three doodads are back with the same ids, positions and creation numbers");
+
+		finish();
+	});
+}
+
+void HiveWE::run_qa_refusal_checks() {
+	if (!qa_offscreen || !qa_refusal_checks) {
+		return;
+	}
+
+	// A refusal that stops working would open a folder picker or a message box that nobody can close offscreen: end the run instead of hanging.
+	// Everything below works on copies in a temporary folder: the startup map folder is never written.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(120000, this, [temp]() {
+		std::println("FAIL the refusal checks did not finish within 120 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+		};
+		const auto finish = [&]() {
+			for (const QString& line : lines) {
+				std::println("{}", line.toStdString());
+			}
+			if (!qa_script_out.isEmpty()) {
+				QFile file(qa_script_out);
+				if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+					file.write(lines.join(QChar('\n')).toUtf8() + "\nDONE\n");
+				}
+			}
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+
+		if (!temp->isValid()) {
+			check(false, "could not create a temporary folder");
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = temp->path().toStdWString();
+		const fs::path good = root / "good map";
+		const fs::path damaged = root / "damaged map";
+		fs::copy(fs::path("data") / "test map", good, fs::copy_options::recursive, ec);
+		check(!ec, "data/test map copied to the sandbox");
+		fs::copy(good, damaged, fs::copy_options::recursive, ec);
+		check(!ec, "the sandbox copy copied again as the damaged map");
+		if (!all_passed) {
+			return finish();
+		}
+		{
+			// The terrain file's magic is wrong, which the opening check refuses.
+			std::fstream file(damaged / "war3map.w3e", std::ios::in | std::ios::out | std::ios::binary);
+			file.write("XXXX", 4);
+		}
+		check(!check_map_for_opening(damaged), "the damaged map is refused by the opening check");
+
+		// Load the good copy like Open does, without the recent-maps registry write.
+		if (const auto opening = check_map_for_opening(good); !opening) {
+			check(false, "the sandbox map is refused at open: " + QString::fromStdString(opening.error()));
+			return finish();
+		}
+		window_handler.close_all();
+		ui->widget->makeCurrent();
+		reset_map_session();
+		map->load(good);
+		map->headless = true; // refusals print to stderr instead of opening a message box
+		map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		check(fs::equivalent(map->filesystem_path, good, ec) && fs::equivalent(hierarchy.map_directory, good, ec), "the sandbox map is the open map");
+
+		// Folder contents as (relative path, size, FNV-1a hash of the bytes).
+		using Listing = std::map<std::wstring, std::pair<std::uintmax_t, std::uint64_t>>;
+		bool snapshot_failed = false;
+		const auto snapshot = [&snapshot_failed](const fs::path& directory) {
+			Listing result;
+			std::error_code error;
+			fs::recursive_directory_iterator it(directory, error);
+			for (; !error && it != fs::recursive_directory_iterator(); it.increment(error)) {
+				const auto& entry = *it;
+				if (!entry.is_regular_file()) {
+					continue;
+				}
+				std::ifstream stream(entry.path(), std::ios::binary);
+				std::uint64_t hash = 1469598103934665603ull;
+				for (std::istreambuf_iterator<char> it(stream), end; it != end; ++it) {
+					hash = (hash ^ static_cast<unsigned char>(*it)) * 1099511628211ull;
+				}
+				result[entry.path().lexically_relative(directory).wstring()] = { entry.file_size(), hash };
+			}
+			if (error) {
+				snapshot_failed = true;
+			}
+			return result;
+		};
+
+		// Item 1: a placed unit with a 5-byte id.
+		Unit& bad_unit = map->units.add_unit("hfoo", glm::vec3(64.f, 64.f, 0.f));
+		bad_unit.id = "hfoo5";
+		check(map->units.find_id_over_4_bytes().has_value(), "a unit with the 5-byte id hfoo5 is placed");
+
+		const Listing before = snapshot(good);
+		check(!snapshot_failed && before.contains(L"war3map.w3i"), "the folder listing before the refusals is complete (contains war3map.w3i)");
+		if (!all_passed) {
+			return finish();
+		}
+		const fs::path path_before = map->filesystem_path;
+		const fs::path hierarchy_before = hierarchy.map_directory;
+		const auto unchanged = [&](const QString& what) {
+			const Listing after = snapshot(good);
+			check(!snapshot_failed && after == before, what + ": no file in the map folder was written, changed or added");
+			check(map->filesystem_path == path_before && hierarchy.map_directory == hierarchy_before, what + ": the map's paths are unchanged");
+		};
+
+		// A broken refusal must never reach a picker or a launch: stop at the first call that was not refused. Save As would open a
+		// folder picker, Test Map would start Warcraft III.exe and Export MPQ would open a file picker.
+		const bool save_refused = !save_current_map();
+		check(save_refused, "Save is refused");
+		unchanged("Save");
+		if (!save_refused) {
+			return finish();
+		}
+		const bool save_as_refused = !save_current_map_as();
+		check(save_as_refused, "Save As is refused before the folder picker");
+		unchanged("Save As");
+		if (!save_as_refused) {
+			return finish();
+		}
+		// Both save entry points refuse, and play_test and export_mpq begin with save_current_map(), so they return before any launch or picker.
+		try {
+			play_test();
+		} catch (const std::exception& e) {
+			check(false, QString("Test Map threw: ") + e.what());
+		}
+		unchanged("Test Map");
+		export_mpq();
+		unchanged("Export MPQ");
+
+		// Control: without the bad unit the same Save works, so the refusals above came from the id.
+		std::erase_if(map->units.units, [](const Unit& unit) { return unit.id == "hfoo5"; });
+		check(!map->units.find_id_over_4_bytes().has_value(), "the 5-byte unit is removed again");
+		check(save_current_map(), "control: Save succeeds without the 5-byte unit");
+
+		// Item 4: undo survives a refused Open.
+		const std::size_t units_before = map->units.units.size();
+		map->world_undo.new_undo_group();
+		auto action = std::make_unique<UnitAddAction>();
+		const Unit& edit = map->units.add_unit("hfoo", glm::vec3(96.f, 96.f, 0.f));
+		const int edit_number = edit.creation_number;
+		action->units.push_back(edit);
+		map->world_undo.add_undo_action(std::move(action));
+		const auto has_edit = [&]() {
+			return std::ranges::any_of(map->units.units, [&](const Unit& unit) { return unit.creation_number == edit_number; });
+		};
+		check(map->units.units.size() == units_before + 1 && has_edit(), "an edit is made: a unit is added with an undo entry");
+
+		const Map* const map_before = map;
+		QStringList dialogs;
+		qa_dialog_log = &dialogs;
+		load_map(damaged);
+		qa_dialog_log = nullptr;
+		check(dialogs.size() == 1, "Open of the damaged map was refused with one message");
+		check(map == map_before && fs::equivalent(map->filesystem_path, good, ec), "the open map is the same Map object after the refusal");
+		check(map->units.units.size() == units_before + 1 && has_edit(), "the edit is still in the map after the refusal");
+
+		auto context = WorldEditContext {
+			.terrain = map->terrain,
+			.units = map->units,
+			.doodads = map->doodads,
+			.regions = map->regions,
+			.brush = nullptr,
+			.pathing_map = map->pathing_map,
+		};
+		map->world_undo.undo(context);
+		check(map->units.units.size() == units_before && !has_edit(), "undo after the refusal removes the edit");
+		map->world_undo.redo(context);
+		check(map->units.units.size() == units_before + 1 && has_edit(), "redo after the refusal brings the edit back");
+		map->world_undo.undo(context);
+		check(map->units.units.size() == units_before && !has_edit(), "a second undo removes the edit again");
 
 		finish();
 	});
