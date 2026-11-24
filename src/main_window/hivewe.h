@@ -94,6 +94,11 @@ public:
 	/// a damaged map. Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_refusal_checks = false;
 	void run_qa_refusal_checks();
+	/// Set by --qa-object-new-check (needs --qa-offscreen; --qa-script-out <file> optional): opens the Object Editor's real Add dialog for units without
+	/// clicks and checks that a typed non-ASCII id (hfo+o-umlaut) keeps OK disabled and that a double-click on a base unit then creates nothing, with positive
+	/// controls. Adds one custom unit in memory, never saves. Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_object_new_check = false;
+	void run_qa_object_new_check();
 	/// When set (by the refusal hook only), load_map records the refusal text here instead of opening a message box.
 	static inline QStringList* qa_dialog_log = nullptr;
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.

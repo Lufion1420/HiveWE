@@ -2408,6 +2408,35 @@ void HiveWE::run_qa_doodad_undo_check() {
 	});
 }
 
+void HiveWE::run_qa_object_new_check() {
+	if (!qa_offscreen || !qa_object_new_check) {
+		return;
+	}
+
+	// A dialog that blocks (exec, message box) would hang the run: end it instead.
+	QTimer::singleShot(60000, this, []() {
+		std::println("FAIL the object new check did not finish within 60 s: a dialog is probably blocking");
+		std::fflush(stdout);
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this]() {
+		QStringList lines;
+		auto* editor = new ObjectEditor(nullptr); // the constructor calls show(); safe only because --qa-offscreen is required
+		const bool passed = editor->run_qa_new_object_check(lines);
+		for (const QString& line : lines) {
+			std::println("{}", line.toStdString());
+		}
+		if (!qa_script_out.isEmpty()) {
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + "\nDONE\n");
+			}
+		}
+		QApplication::exit(passed ? 0 : 1);
+	});
+}
+
 void HiveWE::run_qa_refusal_checks() {
 	if (!qa_offscreen || !qa_refusal_checks) {
 		return;

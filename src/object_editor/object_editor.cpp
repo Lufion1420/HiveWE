@@ -2186,6 +2186,256 @@ void ObjectEditor::open_by_id(TableModel* table, const std::string& id, const QS
 	}
 }
 
+// Builds the Add dialog for one object type and returns it hidden. The caller shows it. objectNames are looked up by the --qa-object-new-check hook.
+QDialog* ObjectEditor::build_new_object_dialog(QTreeView* view, BaseFilter* filter, BaseTreeModel* treeModel, TableModel* table, const QString& name) {
+	QDialog* selectdialog = new QDialog(this, Qt::WindowTitleHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+	selectdialog->resize(300, 560);
+	selectdialog->setWindowModality(Qt::WindowModality::WindowModal);
+
+	QLineEdit* nameEdit = new QLineEdit;
+	nameEdit->setPlaceholderText("New name");
+	nameEdit->setReadOnly(true);
+
+	QLineEdit* id = new QLineEdit;
+	id->setPlaceholderText("Free ID");
+	id->setText(QString::fromStdString(next_sequential_custom_id(table)));
+	id->setFont(QFont("consolas"));
+
+	// error icon inside the id field, hidden by default
+	QAction* idErrorIcon =
+		id->addAction(selectdialog->style()->standardIcon(QStyle::SP_MessageBoxCritical), QLineEdit::TrailingPosition);
+	idErrorIcon->setVisible(false);
+	idErrorIcon->setToolTip("");
+
+	QHBoxLayout* nameLayout = new QHBoxLayout;
+	nameLayout->addWidget(nameEdit, 3);
+	nameLayout->addWidget(id, 1);
+
+	BaseFilter* sub_filter = new BaseFilter;
+	sub_filter->slk = table->slk;
+	sub_filter->setRecursiveFilteringEnabled(true);
+	sub_filter->setFilterCaseSensitivity(Qt::CaseSensitivity::CaseInsensitive);
+	sub_filter->setSourceModel(treeModel);
+
+	QLineEdit* search = new QLineEdit;
+	search->setPlaceholderText("Search " + name);
+
+	QTreeView* sub_view = new QTreeView;
+	sub_view->setModel(sub_filter);
+	sub_view->setUniformRowHeights(true);
+	sub_view->header()->hide();
+	sub_view->expandAll();
+
+	QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+	connect(buttonBox, &QDialogButtonBox::accepted, selectdialog, &QDialog::accept);
+	connect(buttonBox, &QDialogButtonBox::rejected, selectdialog, &QDialog::reject);
+	buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
+
+	QVBoxLayout* selectlayout = new QVBoxLayout(selectdialog);
+	selectlayout->addLayout(nameLayout);
+	selectlayout->addWidget(search);
+	selectlayout->addWidget(sub_view);
+	selectlayout->addWidget(buttonBox);
+
+	// validation lambda to check if input is valid
+	auto is_valid = [sub_view, sub_filter, table, id, buttonBox, idErrorIcon]() {
+		std::string new_id = id->text().toStdString();
+		bool wrong_size = new_id.size() != 4;
+		bool is_duplicate = table->slk->row_headers.contains(new_id);
+
+		// check if an actual object (not a folder) is selected
+		bool object_selected = false;
+		QModelIndex current = sub_view->selectionModel()->currentIndex();
+		if (current.isValid()) {
+			const BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(sub_filter->mapToSource(current).internalPointer());
+			object_selected = !treeItem->baseCategory && !treeItem->subCategory;
+		}
+
+		// update UI based on validation
+		if (wrong_size) {
+			idErrorIcon->setVisible(true);
+			idErrorIcon->setToolTip("ID must be exactly 4 characters long.");
+			id->setStyleSheet("QLineEdit { border: 1px solid #e74c3c; }");
+			buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
+		} else if (is_duplicate) {
+			idErrorIcon->setVisible(true);
+			idErrorIcon->setToolTip(QString::fromStdString(std::format("ID '{}' is already in use.", new_id)));
+			id->setStyleSheet("QLineEdit { border: 1px solid #e74c3c; }");
+			buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
+		} else if (!object_selected) {
+			idErrorIcon->setVisible(false);
+			id->setStyleSheet("");
+			buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
+		} else {
+			// all valid
+			idErrorIcon->setVisible(false);
+			id->setStyleSheet("");
+			buttonBox->button(QDialogButtonBox::Ok)->setEnabled(true);
+		}
+	};
+
+	connect(search, &QLineEdit::textChanged, [=](const QString& string) {
+		sub_filter->setFilterFixedString(string);
+		sub_view->expandAll();
+	});
+
+	connect(
+		sub_view->selectionModel(),
+		&QItemSelectionModel::currentChanged,
+		[table, sub_filter, filter, id, nameEdit, is_valid](const QModelIndex& current, const QModelIndex& previous) {
+			if (!current.isValid()) {
+				return;
+			}
+			nameEdit->setText(sub_filter->data(current).toString());
+			const BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(sub_filter->mapToSource(current).internalPointer());
+			if (!(treeItem->baseCategory || treeItem->subCategory)) {
+				id->setText(QString::fromStdString(next_sequential_custom_id(table, treeItem->id)));
+			}
+			is_valid();
+		}
+	);
+
+	// id input field
+	connect(id, &QLineEdit::textChanged, [is_valid](const QString& text) {
+		is_valid();
+	});
+
+	auto select = [view, table, sub_filter, filter, selectdialog, id, treeModel](const QModelIndex& index) {
+		// Bytes, not QString characters, as the map files hold 4 bytes: a multi-byte character counts as several.
+		const std::string new_id = id->text().toStdString();
+		if (new_id.size() != 4) {
+			return;
+		}
+
+		// check if another object with selected ID already exists
+		if (table->slk->row_headers.contains(new_id)) {
+			return;
+		}
+
+		const BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(sub_filter->mapToSource(index).internalPointer());
+		if (treeItem->baseCategory || treeItem->subCategory) {
+			return;
+		}
+
+		selectdialog->close();
+		table->copyRow(treeItem->id, new_id);
+
+		QModelIndex new_index = filter->mapFromSource(treeModel->mapFromSource(table->index(table->rowCount() - 1, 0)));
+		view->setCurrentIndex(new_index);
+		view->scrollTo(new_index, QAbstractItemView::ScrollHint::PositionAtCenter);
+	};
+
+	connect(sub_view, &QTreeView::activated, [select](const QModelIndex& index) {
+		select(index);
+	});
+
+	connect(selectdialog, &QDialog::accepted, [sub_view, select]() {
+		auto indices = sub_view->selectionModel()->selectedIndexes();
+		if (indices.empty()) {
+			return;
+		}
+
+		select(indices.front());
+	});
+
+	connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), selectdialog), &QShortcut::activated, [=]() {
+		search->setFocus();
+		search->selectAll();
+	});
+
+	selectdialog->setObjectName("newObjectDialog");
+	id->setObjectName("newObjectId");
+	sub_view->setObjectName("newObjectTree");
+	buttonBox->setObjectName("newObjectButtons");
+	search->setObjectName("newObjectSearch");
+	return selectdialog;
+}
+
+// Drives the real Add dialog for units without clicks (setText on the id field, activated signal on the tree), for --qa-object-new-check.
+// Creates one custom unit in memory (the positive control); nothing is saved.
+bool ObjectEditor::run_qa_new_object_check(QStringList& lines) {
+	bool all_passed = true;
+	const auto check = [&](const bool passed, const QString& text) {
+		lines << (passed ? "PASS " : "FAIL ") + text;
+		all_passed = all_passed && passed;
+	};
+
+	TableModel* table = units_table;
+	QDialog* dialog = build_new_object_dialog(unit_explorer, unitTreeFilter, unitTreeModel, table, "Units");
+	dialog->show();
+	auto* id = dialog->findChild<QLineEdit*>("newObjectId");
+	auto* tree = dialog->findChild<QTreeView*>("newObjectTree");
+	auto* buttons = dialog->findChild<QDialogButtonBox*>("newObjectButtons");
+	if (!id || !tree || !buttons || !buttons->button(QDialogButtonBox::Ok)) {
+		check(false, "the New dialog has its id field, tree and OK button");
+		delete dialog;
+		return false;
+	}
+	QPushButton* ok = buttons->button(QDialogButtonBox::Ok);
+
+	// The base unit "hfoo" in the dialog's own filtered tree.
+	QModelIndex hfoo;
+	const auto find_item = [&](this const auto& self, const QModelIndex& parent) -> void {
+		for (int row = 0; row < tree->model()->rowCount(parent) && !hfoo.isValid(); row++) {
+			const QModelIndex index = tree->model()->index(row, 0, parent);
+			const auto* filter = static_cast<const QSortFilterProxyModel*>(tree->model());
+			const auto* item = static_cast<const BaseTreeItem*>(filter->mapToSource(index).internalPointer());
+			if (item && !item->baseCategory && !item->subCategory && item->id == "hfoo") {
+				hfoo = index;
+				return;
+			}
+			self(index);
+		}
+	};
+	find_item(QModelIndex());
+	check(hfoo.isValid(), "the base unit hfoo is in the New dialog's tree");
+	if (!hfoo.isValid()) {
+		delete dialog;
+		return false;
+	}
+
+	const auto rows = [&]() { return std::pair { table->rowCount(), table->slk->row_headers.size() }; };
+	const auto before = rows();
+
+	// Selecting the base unit fills a free id and enables OK: the positive control for the checks below.
+	tree->setCurrentIndex(hfoo);
+	const std::string free_id = id->text().toStdString();
+	check(free_id.size() == 4 && !table->slk->row_headers.contains(free_id), "selecting hfoo fills a free 4-byte id: " + QString::fromStdString(free_id));
+	check(ok->isEnabled(), "control: a valid free id with hfoo selected enables OK");
+
+	// Typed non-ASCII id: 5 bytes.
+	const QString non_ascii = QString::fromUtf8("hfo\xC3\xB6");
+	id->setText(non_ascii);
+	check(id->text().toUtf8().size() == 5, "the typed id hfo+o-umlaut is 5 bytes");
+	check(!ok->isEnabled(), "hfo+o-umlaut typed: OK is disabled");
+	emit tree->activated(hfoo);
+	check(rows() == before, "hfo+o-umlaut typed, double-click on hfoo: no object was created");
+	check(dialog->isVisible(), "hfo+o-umlaut typed, double-click on hfoo: the dialog stays open");
+	// Pressing Enter in the field or accept() goes through the same guard.
+	check(!tree->selectionModel()->selectedIndexes().isEmpty(), "hfoo is selected before accept()");
+	dialog->accept();
+	check(rows() == before, "hfo+o-umlaut typed, accept(): no object was created");
+	dialog->show();
+
+	// Too short, and an id already in use.
+	id->setText("hfo");
+	check(!ok->isEnabled(), "hfo (3 bytes) typed: OK is disabled");
+	id->setText("hfoo");
+	check(!ok->isEnabled(), "hfoo (already in use) typed: OK is disabled");
+	emit tree->activated(hfoo);
+	check(rows() == before, "hfoo typed, double-click: no object was created");
+
+	// Valid typed ASCII id: OK enabled and the double-click creates the object.
+	id->setText(QString::fromStdString(free_id));
+	check(ok->isEnabled(), "control: the free ASCII id typed again enables OK");
+	emit tree->activated(hfoo);
+	const auto after = rows();
+	check(after.second == before.second + 1 && table->slk->row_headers.contains(free_id), "control: double-click with a valid id creates " + QString::fromStdString(free_id));
+
+	delete dialog;
+	return all_passed;
+}
+
 void ObjectEditor::addTypeTreeView(
 	BaseTreeModel* treeModel,
 	BaseFilter*& filter,
@@ -2390,163 +2640,9 @@ void ObjectEditor::addTypeTreeView(
 
 		// add new object
 		connect(addAction, &QAction::triggered, [=, this]() {
-			QDialog* selectdialog = new QDialog(this, Qt::WindowTitleHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
-			selectdialog->resize(300, 560);
-			selectdialog->setWindowModality(Qt::WindowModality::WindowModal);
-
-			QLineEdit* nameEdit = new QLineEdit;
-			nameEdit->setPlaceholderText("New name");
-			nameEdit->setReadOnly(true);
-
-			QLineEdit* id = new QLineEdit;
-			id->setPlaceholderText("Free ID");
-			id->setText(QString::fromStdString(next_sequential_custom_id(table)));
-			id->setFont(QFont("consolas"));
-
-			// error icon inside the id field, hidden by default
-			QAction* idErrorIcon =
-				id->addAction(selectdialog->style()->standardIcon(QStyle::SP_MessageBoxCritical), QLineEdit::TrailingPosition);
-			idErrorIcon->setVisible(false);
-			idErrorIcon->setToolTip("");
-
-			QHBoxLayout* nameLayout = new QHBoxLayout;
-			nameLayout->addWidget(nameEdit, 3);
-			nameLayout->addWidget(id, 1);
-
-			BaseFilter* sub_filter = new BaseFilter;
-			sub_filter->slk = table->slk;
-			sub_filter->setRecursiveFilteringEnabled(true);
-			sub_filter->setFilterCaseSensitivity(Qt::CaseSensitivity::CaseInsensitive);
-			sub_filter->setSourceModel(treeModel);
-
-			QLineEdit* search = new QLineEdit;
-			search->setPlaceholderText("Search " + name);
-
-			QTreeView* sub_view = new QTreeView;
-			sub_view->setModel(sub_filter);
-			sub_view->setUniformRowHeights(true);
-			sub_view->header()->hide();
-			sub_view->expandAll();
-
-			QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-			connect(buttonBox, &QDialogButtonBox::accepted, selectdialog, &QDialog::accept);
-			connect(buttonBox, &QDialogButtonBox::rejected, selectdialog, &QDialog::reject);
-			buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-
-			QVBoxLayout* selectlayout = new QVBoxLayout(selectdialog);
-			selectlayout->addLayout(nameLayout);
-			selectlayout->addWidget(search);
-			selectlayout->addWidget(sub_view);
-			selectlayout->addWidget(buttonBox);
-
-			// validation lambda to check if input is valid
-			auto is_valid = [sub_view, sub_filter, table, id, buttonBox, idErrorIcon]() {
-				std::string new_id = id->text().toStdString();
-				bool wrong_size = new_id.size() != 4;
-				bool is_duplicate = table->slk->row_headers.contains(new_id);
-
-				// check if an actual object (not a folder) is selected
-				bool object_selected = false;
-				QModelIndex current = sub_view->selectionModel()->currentIndex();
-				if (current.isValid()) {
-					const BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(sub_filter->mapToSource(current).internalPointer());
-					object_selected = !treeItem->baseCategory && !treeItem->subCategory;
-				}
-
-				// update UI based on validation
-				if (wrong_size) {
-					idErrorIcon->setVisible(true);
-					idErrorIcon->setToolTip("ID must be exactly 4 characters long.");
-					id->setStyleSheet("QLineEdit { border: 1px solid #e74c3c; }");
-					buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-				} else if (is_duplicate) {
-					idErrorIcon->setVisible(true);
-					idErrorIcon->setToolTip(QString::fromStdString(std::format("ID '{}' is already in use.", new_id)));
-					id->setStyleSheet("QLineEdit { border: 1px solid #e74c3c; }");
-					buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-				} else if (!object_selected) {
-					idErrorIcon->setVisible(false);
-					id->setStyleSheet("");
-					buttonBox->button(QDialogButtonBox::Ok)->setEnabled(false);
-				} else {
-					// all valid
-					idErrorIcon->setVisible(false);
-					id->setStyleSheet("");
-					buttonBox->button(QDialogButtonBox::Ok)->setEnabled(true);
-				}
-			};
-
-			connect(search, &QLineEdit::textChanged, [=](const QString& string) {
-				sub_filter->setFilterFixedString(string);
-				sub_view->expandAll();
-			});
-
-			connect(
-				sub_view->selectionModel(),
-				&QItemSelectionModel::currentChanged,
-				[table, sub_filter, filter, id, nameEdit, is_valid](const QModelIndex& current, const QModelIndex& previous) {
-					if (!current.isValid()) {
-						return;
-					}
-					nameEdit->setText(sub_filter->data(current).toString());
-					const BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(sub_filter->mapToSource(current).internalPointer());
-					if (!(treeItem->baseCategory || treeItem->subCategory)) {
-						id->setText(QString::fromStdString(next_sequential_custom_id(table, treeItem->id)));
-					}
-					is_valid();
-				}
-			);
-
-			// id input field
-			connect(id, &QLineEdit::textChanged, [is_valid](const QString& text) {
-				is_valid();
-			});
-
-			auto select = [view, table, sub_filter, filter, selectdialog, id, treeModel](const QModelIndex& index) {
-				// Bytes, not QString characters, as the map files hold 4 bytes: a multi-byte character counts as several.
-				const std::string new_id = id->text().toStdString();
-				if (new_id.size() != 4) {
-					return;
-				}
-
-				// check if another object with selected ID already exists
-				if (table->slk->row_headers.contains(new_id)) {
-					return;
-				}
-
-				const BaseTreeItem* treeItem = static_cast<BaseTreeItem*>(sub_filter->mapToSource(index).internalPointer());
-				if (treeItem->baseCategory || treeItem->subCategory) {
-					return;
-				}
-
-				selectdialog->close();
-				table->copyRow(treeItem->id, new_id);
-
-				QModelIndex new_index = filter->mapFromSource(treeModel->mapFromSource(table->index(table->rowCount() - 1, 0)));
-				view->setCurrentIndex(new_index);
-				view->scrollTo(new_index, QAbstractItemView::ScrollHint::PositionAtCenter);
-			};
-
-			connect(sub_view, &QTreeView::activated, [select](const QModelIndex& index) {
-				select(index);
-			});
-
-			connect(selectdialog, &QDialog::accepted, [sub_view, select]() {
-				auto indices = sub_view->selectionModel()->selectedIndexes();
-				if (indices.empty()) {
-					return;
-				}
-
-				select(indices.front());
-			});
-
-			connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), selectdialog), &QShortcut::activated, [=]() {
-				search->setFocus();
-				search->selectAll();
-			});
-
-			selectdialog->show();
-			search->setFocus();
+			QDialog* dialog = build_new_object_dialog(view, filter, treeModel, table, name);
+			dialog->show();
+			dialog->findChild<QLineEdit*>("newObjectSearch")->setFocus();
 		});
 
 		connect(removeAction, &QAction::triggered, [=, this]() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QDialog>
 
 #include "ui_object_editor.h"
 
@@ -50,8 +51,11 @@ public:
 
 	void select_id(Category category, const std::string& id);
 	void open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon);
+	/// For --qa-object-new-check: drives the real Add dialog for units (typed ids, activated signal) and appends PASS/FAIL lines. Adds one custom unit in memory.
+	bool run_qa_new_object_check(QStringList& lines);
 
 private:
+	QDialog* build_new_object_dialog(QTreeView* view, BaseFilter* filter, BaseTreeModel* tree_model, TableModel* table, const QString& name);
 	Ui::ObjectEditor ui;
 
 	ads::CDockManager* dock_manager;

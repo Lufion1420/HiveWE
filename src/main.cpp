@@ -159,6 +159,9 @@ int main(int argc, char* argv[]) {
 				"                       Export MPQ refuse a unit with a 5-byte id without writing a file, and that undo works after Open refused a damaged map.\n"
 				"                       Writes PASS/FAIL lines and quits. Run it from a sandbox working directory (the control Save writes data/tools/war3map.j).\n"
 				"                       Exit code 0 only when all pass.\n"
+				"  --qa-object-new-check  Needs --qa-offscreen (--qa-script-out <file> optional): drives the Object Editor's Add dialog for units without clicks: a typed\n"
+				"                       non-ASCII id (hfo+o-umlaut) must keep OK disabled and a double-click on a base unit must create nothing; a valid id is the control.\n"
+				"                       Adds one custom unit in memory, never saves. Writes PASS/FAIL lines and quits. Exit code 0 only when all pass.\n"
 				"  --qa-dialog-tab <n> With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -202,6 +205,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_refusal_checks = true;
+		} else if (arguments[i] == "--qa-object-new-check") {
+			// The hook adds an object to the loaded map's tables, so it must never run in a window the user works in.
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-object-new-check needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_object_new_check = true;
 		} else if (arguments[i] == "--qa-open-dialog") {
 			static const QStringList names = { "settings", "unit-properties", "item-drop", "map-settings", "scenario", "gameplay-constants", "new-map",
 				"object-editor", "asset-manager", "map-protector", "import-object-data", "item-tables", "config", "tile-setter", "tile-setter-changes", "tile-setter-limits", "tile-pather", "model-editor", "browse-models" };
@@ -375,6 +385,7 @@ int main(int argc, char* argv[]) {
 	w.run_qa_change_tileset();
 	w.run_qa_doodad_undo_check();
 	w.run_qa_refusal_checks();
+	w.run_qa_object_new_check();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}
