@@ -1846,6 +1846,121 @@ TEST_CASE("a v12 or v13 war3map.doo saves as the same bytes") {
 	}
 }
 
+TEST_CASE("a doodad copied the way DoodadBrush::place_clipboard does keeps lights, group id and flag bits through a save") {
+	for (const std::uint32_t version : { 12u, 13u }) {
+		CAPTURE(version);
+		const fs::path dir = make_scratch_dir("doo_paste");
+		write_all(dir / "war3map.doo", doo_every_field(version));
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		REQUIRE(doodads.load(terrain_without_gl(), game_version(3, 0)));
+		REQUIRE(doodads.doodads.size() == 2);
+
+		// copy_selection copies the Doodad, place_clipboard adds the copy, then sets only creation_number and position.
+		for (const std::size_t source : { std::size_t { 0 }, std::size_t { 1 } }) {
+			const Doodad original = doodads.doodads[source];
+			Doodad& pasted = doodads.add_doodad(original);
+			pasted.creation_number = 100 + static_cast<int>(source);
+			pasted.position.x += 4.f;
+		}
+		doodads.save(terrain_without_gl());
+
+		Doodads reloaded;
+		REQUIRE(reloaded.load(terrain_without_gl(), game_version(3, 0)));
+		REQUIRE(reloaded.doodads.size() == 4);
+		CHECK(reloaded.format_version == static_cast<int>(version));
+		for (std::size_t source = 0; source < 2; source++) {
+			CAPTURE(source);
+			const Doodad& original = reloaded.doodads[source];
+			const Doodad& pasted = reloaded.doodads[source + 2];
+			CHECK(pasted.id == original.id);
+			CHECK(pasted.group_id == original.group_id);
+			CHECK(pasted.unknown_v13 == original.unknown_v13);
+			CHECK(pasted.stored_roll == original.stored_roll);
+			CHECK(pasted.stored_pitch == original.stored_pitch);
+			CHECK(int { pasted.flags() } == int { original.flags() });
+			REQUIRE(pasted.lights.size() == original.lights.size());
+			for (std::size_t i = 0; i < pasted.lights.size(); i++) {
+				CHECK(pasted.lights[i].index == original.lights[i].index);
+				CHECK(pasted.lights[i].color == original.lights[i].color);
+				CHECK(pasted.lights[i].damping == original.lights[i].damping);
+			}
+		}
+		CHECK(int { reloaded.doodads[2].flags() } == 14);
+		CHECK(int { reloaded.doodads[3].flags() } == 0xF7);
+		CHECK(reloaded.doodads[2].lights.size() == 2);
+		CHECK(reloaded.doodads[2].group_id == 0x12345678u);
+	}
+}
+
+TEST_CASE("a doodad deleted from the front and re-inserted at the end, as DoodadDeleteAction::undo does, saves with the same content in a new order") {
+	const std::string bytes = doo_every_field(13);
+	const auto reloaded_after = [&](const bool delete_and_reinsert) {
+		const std::string saved = load_and_save("doo_delete_undo", bytes, game_version(3, 0), [&](Doodads& doodads) {
+			REQUIRE(doodads.doodads.size() == 2);
+			if (!delete_and_reinsert) {
+				return;
+			}
+			// DoodadBrush::delete_selection copies the selection into the action, removes it, and undo inserts the copies at the end.
+			const std::vector<Doodad> copies = { doodads.doodads[0] };
+			doodads.remove_doodads({ &doodads.doodads[0] });
+			REQUIRE(doodads.doodads.size() == 1);
+			doodads.doodads.insert(doodads.doodads.end(), copies.begin(), copies.end());
+		});
+		const fs::path dir = make_scratch_dir("doo_delete_undo_reload");
+		write_all(dir / "war3map.doo", saved);
+		const ScopedMapDirectory open_map(dir);
+		Doodads doodads;
+		REQUIRE(doodads.load(terrain_without_gl(), game_version(3, 0)));
+		return doodads.doodads;
+	};
+	const std::vector<Doodad> original = reloaded_after(false);
+	const std::vector<Doodad> moved = reloaded_after(true);
+	REQUIRE(original.size() == 2);
+	REQUIRE(moved.size() == 2);
+	// The first doodad moved to the end, the second to the front: compare content, not the order of the file.
+	const auto same_content = [](const Doodad& a, const Doodad& b) {
+		return a.id == b.id && a.creation_number == b.creation_number && a.position == b.position && a.group_id == b.group_id
+			&& a.lights.size() == b.lights.size() && int { a.flags() } == int { b.flags() };
+	};
+	CHECK(same_content(original[0], moved[1]));
+	CHECK(same_content(original[1], moved[0]));
+}
+
+TEST_CASE("a doodad the brush placed saves as doo v8 and reopens") {
+	const fs::path dir = make_scratch_dir("doo_brush_placed");
+	const ScopedMapDirectory open_map(dir);
+	Doodads doodads;
+	REQUIRE(doodads.format_version == 8);
+
+	// What DoodadBrush::apply adds: a default Doodad with the palette's id, variation and state.
+	Doodad doodad;
+	doodad.id = "LTbx";
+	doodad.skin_id = "LTbx";
+	doodad.variation = 1;
+	doodad.creation_number = ++Doodad::auto_increment;
+	doodad.position = { 4.f, 8.f, 0.f };
+	doodad.scale = glm::vec3(1.f);
+	doodad.life = 100;
+	doodad.state = Doodad::State::visible_non_solid;
+	doodads.add_doodad(doodad);
+	doodads.save(terrain_without_gl());
+
+	const std::string bytes = read_all(dir / "war3map.doo");
+	CHECK(read_u32_at(bytes, 4) == 8u);
+	CHECK(read_u32_at(bytes, 8) == 11u);
+
+	Doodads reloaded;
+	REQUIRE(reloaded.load(terrain_without_gl(), game_version(2, 0)));
+	CHECK(reloaded.format_version == 8);
+	REQUIRE(reloaded.doodads.size() == 1);
+	CHECK(reloaded.doodads[0].id == "LTbx");
+	CHECK(reloaded.doodads[0].variation == 1);
+	CHECK(reloaded.doodads[0].position.x == 4.f);
+	CHECK(reloaded.doodads[0].state == Doodad::State::visible_non_solid);
+	CHECK(int { reloaded.doodads[0].flags() } == 1);
+}
+
 TEST_CASE("flags keeps the file's byte unless the doodad changed") {
 	const auto loaded_with = [](const std::uint8_t flags) {
 		Doodad doodad;

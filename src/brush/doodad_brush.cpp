@@ -403,6 +403,10 @@ void DoodadBrush::delete_selection() {
 
 	// Undo/redo
 	auto action = std::make_unique<DoodadDeleteAction>();
+	// Undo re-inserts these copies and redo removes as many from the end, so they must be filled before the doodads are removed.
+	for (const Doodad* i : selections) {
+		action->doodads.push_back(*i);
+	}
 	map->world_undo.new_undo_group();
 	map->world_undo.add_undo_action(std::move(action));
 

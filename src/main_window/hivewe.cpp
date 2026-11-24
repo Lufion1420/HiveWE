@@ -2282,6 +2282,126 @@ void HiveWE::open_qa_dialog() {
 	}
 }
 
+void HiveWE::run_qa_doodad_undo_check() {
+	if (!qa_offscreen || !qa_doodad_undo_check) {
+		return;
+	}
+
+	// From the event loop, like the other hooks, so QApplication::exit works.
+	QTimer::singleShot(0, this, [this]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+		};
+		const auto finish = [&]() {
+			for (const QString& line : lines) {
+				std::println("{}", line.toStdString());
+			}
+			if (!qa_script_out.isEmpty()) {
+				QFile file(qa_script_out);
+				if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+					file.write(lines.join(QChar('\n')).toUtf8() + "\nDONE\n");
+				}
+			}
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+
+		if (!doodad_palette) {
+			check(false, "the doodad palette is not open (use --palette doodads)");
+			return finish();
+		}
+		DoodadBrush& brush = doodad_palette->current_brush();
+		auto& doodads = map->doodads.doodads;
+
+		struct Snapshot {
+			std::string id;
+			int creation_number;
+			glm::vec3 position;
+		};
+		const auto undo_or_redo = [&](const bool undo) {
+			auto context = WorldEditContext {
+				.terrain = map->terrain,
+				.units = map->units,
+				.doodads = map->doodads,
+				.regions = map->regions,
+				.brush = &brush,
+				.pathing_map = map->pathing_map,
+			};
+			if (undo) {
+				map->world_undo.undo(context);
+			} else {
+				map->world_undo.redo(context);
+			}
+		};
+		// True when every remembered doodad is in the map exactly once with the same id and position, found by creation number.
+		const auto all_present = [&](const std::vector<Snapshot>& expected) {
+			for (const Snapshot& want : expected) {
+				const auto found = std::ranges::count_if(doodads, [&](const Doodad& d) { return d.creation_number == want.creation_number; });
+				const auto it = std::ranges::find_if(doodads, [&](const Doodad& d) { return d.creation_number == want.creation_number; });
+				if (found != 1 || it->id != want.id || it->position != want.position) {
+					return false;
+				}
+			}
+			return true;
+		};
+		const auto none_present = [&](const std::vector<Snapshot>& expected) {
+			return std::ranges::none_of(expected, [&](const Snapshot& want) {
+				return std::ranges::any_of(doodads, [&](const Doodad& d) { return d.creation_number == want.creation_number; });
+			});
+		};
+		// Re-selects the remembered doodads: removing and re-inserting moves them, so earlier pointers are stale.
+		const auto select_all = [&](const std::vector<Snapshot>& expected) {
+			brush.selections.clear();
+			for (const Snapshot& want : expected) {
+				for (Doodad& d : doodads) {
+					if (d.creation_number == want.creation_number) {
+						brush.selections.insert(&d);
+					}
+				}
+			}
+		};
+
+		// Three doodads with distinct creation numbers and positions, added after the map has loaded. Never saved.
+		const std::size_t before = doodads.size();
+		std::vector<Snapshot> added;
+		for (int i = 0; i < 3; i++) {
+			const Doodad& d = map->doodads.add_doodad("LTlt", 0, glm::vec3(30.f + 10.f * i, 40.f + 6.f * i, 0.f), map->terrain);
+			added.push_back({ d.id, d.creation_number, d.position });
+		}
+		check(
+			added[0].creation_number != added[1].creation_number && added[1].creation_number != added[2].creation_number
+				&& added[0].creation_number != added[2].creation_number,
+			"the three added doodads have distinct creation numbers"
+		);
+		check(doodads.size() == before + 3 && all_present(added), "the doodads were added");
+
+		// Delete selection.
+		select_all(added);
+		check(brush.selections.size() == 3, "three doodads are selected");
+		brush.delete_selection();
+		check(doodads.size() == before && none_present(added), "delete: the count is back to the pre-add count and the doodads are gone");
+		check(brush.selections.empty(), "delete: the selection is empty");
+
+		undo_or_redo(true);
+		check(doodads.size() == before + 3 && all_present(added), "delete, undo: the three doodads are back with the same ids, positions and creation numbers");
+		undo_or_redo(false);
+		check(doodads.size() == before && none_present(added), "delete, redo: the doodads are gone again");
+		undo_or_redo(true);
+		check(doodads.size() == before + 3 && all_present(added), "delete, second undo: the three doodads are back again");
+
+		// Cut selection: copies to the clipboard, then deletes through delete_selection.
+		select_all(added);
+		brush.cut_selection();
+		check(doodads.size() == before && none_present(added) && brush.selections.empty(), "cut: the doodads are gone and the selection is empty");
+		undo_or_redo(true);
+		check(doodads.size() == before + 3 && all_present(added), "cut, undo: the three doodads are back with the same ids, positions and creation numbers");
+
+		finish();
+	});
+}
+
 void HiveWE::run_qa_change_tileset() {
 	if (!qa_offscreen || qa_change_tileset.isEmpty()) {
 		return;

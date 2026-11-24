@@ -85,6 +85,10 @@ public:
 	/// Set by --qa-tile-texture: the BLP or TGA imported as a custom tile texture by that hook.
 	static inline QString qa_tile_texture;
 	void run_qa_change_tileset();
+	/// Set by --qa-doodad-undo-check (needs --qa-offscreen and --palette doodads; --qa-script-out <file> optional): adds three doodads in memory, then
+	/// checks delete, undo, redo, undo and cut with undo through DoodadBrush and writes PASS/FAIL lines. Never saves. Exit code 0 only when all pass.
+	static inline bool qa_doodad_undo_check = false;
+	void run_qa_doodad_undo_check();
 	/// Set by --qa-dump-layout (needs --qa-offscreen): file that dump_qa_layout() writes.
 	static inline QString qa_dump_layout_file;
 	/// Writes the widget tree of the open palette (class, objectName, size hints, size policy, geometry) to qa_dump_layout_file, so a too wide

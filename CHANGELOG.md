@@ -70,6 +70,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Standard-definition models saved by newer Warcraft III versions that contain a camera now load in the Model Editor and Browse Models** — Many stock units (gnoll, bristleback, harpy witch, goblin land mine) failed to open with "Trying to read out of range of buffer" and now open normally.
 - **Force "Share Vision" is read from and saved to the bit Warcraft III itself uses** — Stock and World Editor maps now show it ticked, and generated scripts include the vision calls. Vision ticked in earlier HiveWE builds is kept (the old 0x04 bit is read as vision and saved as 0x08). Maps saved by builds from 2026-08-09 until 2026-11-08 dropped stock vision (0x08) on save and may need Share Vision ticked again.
 - **Model camera depth-of-field tracks are kept when a model is saved** — Saving a model in the Model Editor or rewriting it with the Map Protector used to drop the camera's depth-of-field tracks (IDUF, ELAF, PTSF), any unknown camera tracks and the camera variant byte. They are now preserved in .mdx output; converting a model to MDL still drops them.
+- **Ctrl+Z after deleting or cutting doodads restores them again** — Undo restored nothing before, a regression from an earlier refactor.
 
 #### Map Protector
 - **"Remove listfile" now really leaves `(listfile)` out of the protected map** — The option was ignored before and `(listfile)` was always written into the protected archive.
