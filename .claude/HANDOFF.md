@@ -1,8 +1,8 @@
 # Session handoff
 
-Written 2026-11-24 (session 25 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
-- Models: main session Sonnet 5.5 as orchestrator. Subagents: cpp-dev x2 (second on opus), qa-verifier x2, reviewer x2, release-manager x4.
-- Spawn count this session: about 10 (spawn budget reached).
+Written 2026-11-24 (session 26 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
+- Models: main session Sonnet 5.5 as orchestrator. Subagents: qa-verifier x1.
+- Spawn count this session: 1. Stopped because no eligible ticket is left.
 
 ## Checks waiting on the user
 The user's maps are SD only and Lua only: do not list HD checks. No per-step approvals needed.
@@ -30,7 +30,7 @@ The user's maps are SD only and Lua only: do not list HD checks. No per-step app
 - Untracked `qa-*.png` in `designs/current/` and stray `512684032` stay uncommitted on purpose.
 
 ## Next step
-Asana 1220369536243160 (humanx03 `map::at`): the new dialog names the missing base id; read the dialog text on a sandbox copy of humanx03 (both stock maps are refused for other reasons per the comment on 1220330336212700: check first), else file. Then 1220330457516219 (wtg: first int after the seven deleted-id lists is a COUNT; needs doo/units/w3r/w3c parsers first, probably not reachable). 1220362579055972 only if the user says WarMash testing is done. Skip 1220841054745630 (HD only); 1220832845348582 stays filed; 1220329469370593 waits for WarMash.
+No eligible ticket. 1220369536243160 (humanx03 map::at) reproduced 2026-11-24: both stock copies now show 'war3map.w3u: custom object n003 is based on nbsh, which is not in the object data HiveWE loaded' (comment on the ticket). Open: is nbsh absent from CASC unitdata (legacy stock, nothing to fix) or missed by HiveWE's loader? Check CASC units/unitdata.slk for nbsh; the ticket stays open until then. 1220330457516219 needs doo/units/w3r/w3c parsers first (unreachable). 1220362579055972 only if the user says WarMash testing is done. Skip 1220841054745630 (HD only); 1220832845348582 stays filed; 1220329469370593 waits for WarMash.
 
 ## Backlog only, not next steps
 1220826761382041, 1220824126875159, 1220828873067911, 1220818407294566, 1220824083919839, 1220768408128534, 1220767914607357, 1220768028401968, 1220767861345597, 1220767791486098, 1220767516485546, 1220746915086260, 1220746806783937, 1220749450812492, 1220749450805131, 1220829561061744, 1220829428496325, 1220842919702486, 1220844868518223, 1220844868394880, 1220844756126723, 1220845243296342, plus the filed items above.
@@ -46,7 +46,7 @@ Orchestrator (2026-11-24): Open Map (MPQ) and Map Protector refuse archives with
 Orchestrator (2026-11-24): a `Map::load` failure after the body check opens a blank template map instead of leaving a half-torn-down map.
 
 ## Retro
-cpp-dev 308 s (w3e) and 835 s on opus (map load, 5 cases with RED evidence); QA 84 s and 112 s; review 51 s and 180 s; no REJECT, no stale locks; about 10 spawns. Proposals: none.
+One qa-verifier run, 274 s: both stock maps load to the w3u read and fail with the named nbsh dialog; no builds, no rework. Proposals: none.
 
 ## Scratch
 `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\966e4294-ef6d-4700-b247-874c09307116\scratchpad` (may vanish; nothing in it is required).
