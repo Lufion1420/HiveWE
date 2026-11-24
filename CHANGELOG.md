@@ -35,6 +35,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Map Protector writes clean values for fields older maps do not store** — These fields are now written as 0 instead of garbage.
 - **Map Protector refuses asset obfuscation on Warcraft III 3.0 maps** — It stops with a clear failure message instead of producing a damaged map.
 - **Truncated or corrupt map files no longer crash the editor** — Opening a map with a damaged file (such as `war3map.w3i`, `war3map.w3e`, the doodad and unit files, triggers, regions, cameras, sounds, pathing or object data) now shows an error naming the file instead of crashing, and your open map keeps its unsaved edits. Invalid terrain offsets, out-of-range cliff or ground texture indices, and a pathing map too small for its terrain are refused the same way, and editing a map whose ground texture index equals its texture count no longer reads out of bounds in pathing. Not game-tested.
+- **Change Tileset no longer loads placeholder ground textures in HD mode** — A doubled `_diffuse` suffix broke the lookup. SD tile textures now share the cache with the initial load instead of loading a duplicate copy.
 
 - **Saving no longer changes a doodad's flag byte** — Doodads with flag state 3 were written back as 2, and flag bit 0x08 was dropped, on every save including v8 maps. Both are now preserved.
 - **Damaged v12 or v13 doodad files are refused with a dialog** — Opening one shows an error and leaves your open map usable.

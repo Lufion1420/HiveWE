@@ -706,7 +706,6 @@ export class Terrain: public QObject {
 			ground_textures.push_back(resource_manager
 										  .load<GroundTexture>(
 											  terrain_slk.data("dir", tile_id) + "/" + terrain_slk.data("file", tile_id)
-											  + (hierarchy.hd ? "_diffuse.dds" : ".dds")
 										  )
 										  .value());
 			ground_texture_to_id.emplace(tile_id, static_cast<int>(ground_textures.size() - 1));
@@ -717,7 +716,6 @@ export class Terrain: public QObject {
 		ground_textures.push_back(resource_manager
 									  .load<GroundTexture>(
 										  world_edit_data.data("TileSets", std::string(1, tileset), 1)
-										  + (hierarchy.hd ? "_diffuse.dds" : ".dds")
 									  )
 									  .value());
 		gpu_ground_texture_handles.push_back(ground_textures.back()->bindless_handle);
