@@ -353,6 +353,9 @@ namespace mdx {
 
 			light.node.save(writer);
 			writer.write<uint32_t>(light.type);
+			if (version >= 1300) {
+				writer.write<uint32_t>(light.shadow_casting);
+			}
 			writer.write<float>(light.attenuation_start);
 			writer.write<float>(light.attenuation_end);
 			writer.write<glm::vec3>(light.color);
@@ -362,6 +365,15 @@ namespace mdx {
 			if (version >= 1200) {
 				writer.write<float>(light.shadow_intensity);
 			}
+			if (version >= 1300) {
+				writer.write<float>(light.shadow_casting_start);
+				writer.write<float>(light.shadow_casting_end);
+			}
+			if (version >= 1600) {
+				writer.write<float>(light.quadratic_falloff);
+				writer.write<float>(light.linear_falloff);
+				writer.write<float>(light.damping);
+			}
 
 			light.KLAS.save(TrackTag::KLAS, writer);
 			light.KLAE.save(TrackTag::KLAE, writer);
@@ -370,6 +382,19 @@ namespace mdx {
 			light.KLBI.save(TrackTag::KLBI, writer);
 			light.KLBC.save(TrackTag::KLBC, writer);
 			light.KLAV.save(TrackTag::KLAV, writer);
+			if (version >= 1300) {
+				light.KLSS.save(TrackTag::KLSS, writer);
+				light.KLSE.save(TrackTag::KLSE, writer);
+			}
+			if (version >= 1600) {
+				light.KLQF.save(TrackTag::KLQF, writer);
+				light.KLLF.save(TrackTag::KLLF, writer);
+				light.KLDA.save(TrackTag::KLDA, writer);
+			}
+			// Unknown tracks came from a file of mdx.version and may not exist in an older layout
+			if (!light.raw_tracks.empty() && version >= mdx.version) {
+				writer.write_vector(light.raw_tracks);
+			}
 
 			const uint32_t temporary = static_cast<uint32_t>(writer.buffer.size() - light_index);
 			std::memcpy(writer.buffer.data() + light_index, &temporary, 4);
@@ -733,6 +758,16 @@ namespace mdx {
 		std::memcpy(writer.buffer.data() + inclusive_index, &temporary, 4);
 	}
 
+	void write_DILG(BinaryWriter& writer, const MDX& mdx) {
+		if (mdx.gliders.empty()) {
+			return;
+		}
+
+		writer.write(ChunkTag::DILG);
+		writer.write<uint32_t>(static_cast<uint32_t>(mdx.gliders.size() * 4));
+		writer.write_vector(mdx.gliders);
+	}
+
 	void write_FAFX(BinaryWriter& writer, const MDX& mdx) {
 		if (mdx.facefxes.empty()) {
 			return;
@@ -781,6 +816,7 @@ namespace mdx {
 		write_FAFX(writer, *this);
 		write_BPOS(writer, *this);
 		write_TXAN(writer, *this);
+		write_DILG(writer, *this);
 
 		return writer;
 	}

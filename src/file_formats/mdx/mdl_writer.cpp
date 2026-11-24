@@ -639,8 +639,24 @@ namespace mdx {
 						mdl.write_line("Ambient,");
 						break;
 				}
-				mdl.write_track(light.KLAS, "AttenuationStart", static_cast<uint32_t>(light.attenuation_start));
-				mdl.write_track(light.KLAE, "AttenuationEnd", static_cast<uint32_t>(light.attenuation_end));
+				// The MDL syntax is an integer: truncate toward zero like the old int fields, clamped to int32 so that
+				// NaN, infinity and out-of-range values are defined. Written signed so a negative value reads back as itself.
+				const auto mdl_attenuation = [](const float value) -> int32_t {
+					if (std::isnan(value)) {
+						return 0;
+					}
+					return static_cast<int32_t>(std::clamp(value, -2147483648.f, 2147483520.f));
+				};
+				if (light.KLAS.tracks.empty()) {
+					mdl.write_line("static AttenuationStart {},", mdl_attenuation(light.attenuation_start));
+				} else {
+					mdl.write_track_body(light.KLAS, "AttenuationStart");
+				}
+				if (light.KLAE.tracks.empty()) {
+					mdl.write_line("static AttenuationEnd {},", mdl_attenuation(light.attenuation_end));
+				} else {
+					mdl.write_track_body(light.KLAE, "AttenuationEnd");
+				}
 				mdl.write_track(light.KLAI, "Intensity", light.intensity);
 				mdl.write_track(light.KLAC, "Color", light.color);
 				mdl.write_track(light.KLBI, "AmbIntensity", light.ambient_intensity);

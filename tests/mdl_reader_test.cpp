@@ -65,6 +65,28 @@ TEST_CASE("MDL round-trip: minimal_v1000.mdl") {
 	roundtrip_fixture_mdx("minimal_v1000.mdl");
 }
 
+TEST_CASE("MDL light: a negative static AttenuationStart reads as a negative float and round-trips unchanged") {
+	std::string source = read_text_file(std::filesystem::path(MDL_FIXTURES_DIR) / "minimal_v800.mdl");
+	const std::string from = "static AttenuationStart 80,";
+	const size_t at = source.find(from);
+	REQUIRE(at != std::string::npos);
+	source.replace(at, from.size(), "static AttenuationStart -5,");
+
+	auto parsed = mdx::MDX::from_mdl(source);
+	REQUIRE(parsed.has_value());
+	REQUIRE_EQ(parsed.value().lights.size(), 1);
+	CHECK_EQ(parsed.value().lights[0].attenuation_start, -5.f);
+	CHECK_EQ(parsed.value().lights[0].attenuation_end, 200.f);
+	CHECK(parsed.value().to_mdl(parsed.value().version) == source);
+
+	// Through MDX bytes as well
+	const auto binary = parsed.value().to_mdx(parsed.value().version);
+	auto reader = BinaryReader(binary.buffer);
+	auto from_mdx = mdx::MDX(reader);
+	CHECK_EQ(from_mdx.lights[0].attenuation_start, -5.f);
+	CHECK(from_mdx.to_mdl(from_mdx.version) == source);
+}
+
 // Sanity-check the version-aware MDL writer: writing a higher-version model out as
 // a lower-version target must strip fields that the lower version does not understand.
 TEST_CASE("MDL writer: cross-version downgrade strips version-specific fields") {

@@ -986,14 +986,14 @@ namespace mdx {
 			} else if (kw.text == "AttenuationStart") {
 				if (is_static) {
 					OUTCOME_TRY(auto v, r.consume_u32());
-					light.attenuation_start = static_cast<int>(v);
+					light.attenuation_start = static_cast<float>(static_cast<int32_t>(v)); // signed, as the old int field
 				} else {
 					OUTCOME_TRY(light.KLAS, r.parse_animated_track<uint32_t>(mdx.unique_tracks));
 				}
 			} else if (kw.text == "AttenuationEnd") {
 				if (is_static) {
 					OUTCOME_TRY(auto v, r.consume_u32());
-					light.attenuation_end = static_cast<int>(v);
+					light.attenuation_end = static_cast<float>(static_cast<int32_t>(v)); // signed, as the old int field
 				} else {
 					OUTCOME_TRY(light.KLAE, r.parse_animated_track<uint32_t>(mdx.unique_tracks));
 				}

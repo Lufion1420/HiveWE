@@ -42,6 +42,11 @@ namespace mdx {
 		KLBI = 'IBLK',
 		KLBC = 'CBLK',
 		KLAV = 'VALK',
+		KLSS = 'SSLK', // v1300+: shadow casting start
+		KLSE = 'ESLK', // v1300+: shadow casting end
+		KLQF = 'FQLK', // v1600+: quadratic falloff
+		KLLF = 'FLLK', // v1600+: linear falloff
+		KLDA = 'ADLK', // v1600+: damping
 		KATV = 'VTAK',
 		KPEE = 'EEPK',
 		KPEG = 'GEPK',
@@ -103,7 +108,8 @@ namespace mdx {
 		BPOS = 'SOPB',
 		FAFX = 'XFAF',
 		MODL = 'LDOM',
-		CAMS = 'SMAC'
+		CAMS = 'SMAC',
+		DILG = 'GLID'
 	};
 
 	export template<typename T>
@@ -406,13 +412,21 @@ namespace mdx {
 	struct Light {
 		Node node;
 		int type;
-		int attenuation_start;
-		int attenuation_end;
+		float attenuation_start;
+		float attenuation_end;
 		glm::vec3 color;
 		float intensity;
 		glm::vec3 ambient_color;
 		float ambient_intensity;
 		float shadow_intensity;
+		// v1300+ fields (written only at v1300+)
+		uint32_t shadow_casting = 0;
+		float shadow_casting_start = 0.f;
+		float shadow_casting_end = 0.f;
+		// v1600+ fields (written only at v1600+); defaults are the values older files imply
+		float quadratic_falloff = 0.0005f;
+		float linear_falloff = 0.f;
+		float damping = 0.00001f;
 
 		TrackHeader<uint32_t> KLAS;
 		TrackHeader<uint32_t> KLAE;
@@ -421,6 +435,15 @@ namespace mdx {
 		TrackHeader<float> KLBI;
 		TrackHeader<glm::vec3> KLBC;
 		TrackHeader<float> KLAV;
+		TrackHeader<float> KLSS; // v1300+
+		TrackHeader<float> KLSE; // v1300+
+		TrackHeader<float> KLQF; // v1600+
+		TrackHeader<float> KLLF; // v1600+
+		TrackHeader<float> KLDA; // v1600+
+		/// Bytes kept verbatim: tracks not valid at the file's version (e.g. KLSS below 1300), and from an unknown tag,
+		/// an overrunning track or a short tail to the end of the entry. Written after the known tracks, and only when
+		/// saving at the version the model was loaded at or newer.
+		std::vector<uint8_t> raw_tracks;
 	};
 
 	struct Attachment {
@@ -741,6 +764,7 @@ namespace mdx {
 		std::vector<Camera> cameras;
 		std::vector<float> bind_poses;
 		std::vector<TextureAnimation> texture_animations;
+		std::vector<uint32_t> gliders; // DILG chunk: geoset ids, kept in file order
 
 	  private:
 		void load(BinaryReader& reader);
@@ -887,6 +911,11 @@ namespace mdx {
 				F(i.KLBI);
 				F(i.KLBC);
 				F(i.KLAV);
+				F(i.KLSS);
+				F(i.KLSE);
+				F(i.KLQF);
+				F(i.KLLF);
+				F(i.KLDA);
 			}
 
 			for (auto& i : ribbons) {

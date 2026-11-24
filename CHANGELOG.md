@@ -79,6 +79,10 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Standard-definition models saved by newer Warcraft III versions that contain a camera now load in the Model Editor and Browse Models** — Many stock units (gnoll, bristleback, harpy witch, goblin land mine) failed to open with "Trying to read out of range of buffer" and now open normally.
 - **Force "Share Vision" is read from and saved to the bit Warcraft III itself uses** — Stock and World Editor maps now show it ticked, and generated scripts include the vision calls. Vision ticked in earlier HiveWE builds is kept (the old 0x04 bit is read as vision and saved as 0x08). Maps saved by builds from 2026-08-09 until 2026-11-08 dropped stock vision (0x08) on save and may need Share Vision ticked again.
 - **Model camera depth-of-field tracks are kept when a model is saved** — Saving a model in the Model Editor or rewriting it with the Map Protector used to drop the camera's depth-of-field tracks (IDUF, ELAF, PTSF), any unknown camera tracks and the camera variant byte. They are now preserved in .mdx output; converting a model to MDL still drops them.
+- **Reforged (v1300+) models with lights are saved in the correct light layout** — Saving no longer writes the older light layout under a newer header. Light shadow casting, falloff and the new light tracks are now read and kept, and a v1800 model saved at an older version drops them cleanly. MDL text export still does not carry the new light fields.
+- **The DILG chunk of 3.0 models is kept on save** — The geoset ids used for world picking were lost when a model was saved; they are now preserved.
+- **Models with damaged light data fail to load with an error** — A light entry that is too small or runs past its chunk is now refused instead of being misread.
+- **MDL text: negative static light attenuation round-trips correctly** — A value such as -5 is no longer exported as 4294967291.
 - **Ctrl+Z after deleting or cutting doodads restores them again** — Undo restored nothing before, a regression from an earlier refactor.
 
 #### Map Protector

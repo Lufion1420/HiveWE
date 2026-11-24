@@ -361,15 +361,25 @@ namespace mdx {
 	}
 
 	void read_LITE(BinaryReader& reader, MDX& mdx) {
-		const size_t reader_pos = reader.position;
 		const uint32_t size = reader.read<uint32_t>();
+		const size_t chunk_end = reader.position + size;
+		if (chunk_end > reader.buffer.size()) {
+			throw std::runtime_error("MDX LITE chunk extends past the end of the file");
+		}
 
-		while (reader.position < reader_pos + size) {
+		while (reader.position < chunk_end) {
 			Light light;
 			const size_t node_reader_pos = reader.position;
 			const uint32_t inclusive_size = reader.read<uint32_t>();
+			const size_t entry_end = node_reader_pos + inclusive_size;
+			if (entry_end > chunk_end) {
+				throw std::runtime_error("MDX light entry extends past the end of the LITE chunk");
+			}
 			light.node = Node(reader, mdx.unique_tracks);
 			light.type = reader.read<uint32_t>();
+			if (mdx.version >= 1300) {
+				light.shadow_casting = reader.read<uint32_t>();
+			}
 			light.attenuation_start = reader.read<float>();
 			light.attenuation_end = reader.read<float>();
 			light.color = reader.read<glm::vec3>();
@@ -377,30 +387,88 @@ namespace mdx {
 			light.ambient_color = reader.read<glm::vec3>();
 			light.ambient_intensity = reader.read<float>();
 			if (mdx.version >= 1200) {
-			 light.shadow_intensity = reader.read<float>();
-			}
-			else {
+				light.shadow_intensity = reader.read<float>();
+			} else {
 				light.shadow_intensity = 0.4f;
 			}
+			if (mdx.version >= 1300) {
+				light.shadow_casting_start = reader.read<float>();
+				light.shadow_casting_end = reader.read<float>();
+			}
+			if (mdx.version >= 1600) {
+				light.quadratic_falloff = reader.read<float>();
+				light.linear_falloff = reader.read<float>();
+				light.damping = reader.read<float>();
+			}
+			if (reader.position > entry_end) {
+				throw std::runtime_error("MDX light entry is too small for the fixed light fields");
+			}
 
-			while (reader.position < node_reader_pos + inclusive_size) {
+			const auto keep_raw = [&](const size_t from, const size_t to) {
+				light.raw_tracks.insert(light.raw_tracks.end(), reader.buffer.begin() + from, reader.buffer.begin() + to);
+			};
+			const auto keep_rest_raw = [&](const size_t from, const std::string_view reason) {
+				std::println("MDX light \"{}\": {}, the rest of the entry is kept as raw bytes", light.node.name, reason);
+				keep_raw(from, entry_end);
+				reader.position = entry_end;
+			};
+			// A track that is not valid at this version (e.g. KLSS below 1300) is kept raw, as the writer would drop it
+			const auto read_track = [&]<typename T>(TrackHeader<T>& target, const size_t tag_start, const bool in_version) {
+				TrackHeader<T> track;
+				try {
+					track = TrackHeader<T>(reader, mdx.unique_tracks);
+				} catch (const std::out_of_range&) {
+					keep_rest_raw(tag_start, "a track runs past the end of the file");
+					return;
+				}
+				if (reader.position > entry_end) {
+					keep_rest_raw(tag_start, "a track overruns the light entry");
+					return;
+				}
+				if (!in_version) {
+					keep_raw(tag_start, reader.position);
+					return;
+				}
+				mdx.unique_tracks++;
+				target = std::move(track);
+			};
+
+			const bool v1300 = mdx.version >= 1300;
+			const bool v1600 = mdx.version >= 1600;
+			while (reader.position < entry_end) {
+				const size_t tag_start = reader.position;
+				if (tag_start + 4 > entry_end) {
+					keep_rest_raw(tag_start, "trailing bytes shorter than a track tag");
+					break;
+				}
 				const TrackTag tag = static_cast<TrackTag>(reader.read<int32_t>());
 				if (tag == TrackTag::KLAS) {
-					light.KLAS = TrackHeader<uint32_t>(reader, mdx.unique_tracks++);
+					read_track(light.KLAS, tag_start, true);
 				} else if (tag == TrackTag::KLAE) {
-					light.KLAE = TrackHeader<uint32_t>(reader, mdx.unique_tracks++);
+					read_track(light.KLAE, tag_start, true);
 				} else if (tag == TrackTag::KLAC) {
-					light.KLAC = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
+					read_track(light.KLAC, tag_start, true);
 				} else if (tag == TrackTag::KLAI) {
-					light.KLAI = TrackHeader<float>(reader, mdx.unique_tracks++);
+					read_track(light.KLAI, tag_start, true);
 				} else if (tag == TrackTag::KLBI) {
-					light.KLBI = TrackHeader<float>(reader, mdx.unique_tracks++);
+					read_track(light.KLBI, tag_start, true);
 				} else if (tag == TrackTag::KLBC) {
-					light.KLBC = TrackHeader<glm::vec3>(reader, mdx.unique_tracks++);
+					read_track(light.KLBC, tag_start, true);
 				} else if (tag == TrackTag::KLAV) {
-					light.KLAV = TrackHeader<float>(reader, mdx.unique_tracks++);
+					read_track(light.KLAV, tag_start, true);
+				} else if (tag == TrackTag::KLSS) {
+					read_track(light.KLSS, tag_start, v1300);
+				} else if (tag == TrackTag::KLSE) {
+					read_track(light.KLSE, tag_start, v1300);
+				} else if (tag == TrackTag::KLQF) {
+					read_track(light.KLQF, tag_start, v1600);
+				} else if (tag == TrackTag::KLLF) {
+					read_track(light.KLLF, tag_start, v1600);
+				} else if (tag == TrackTag::KLDA) {
+					read_track(light.KLDA, tag_start, v1600);
 				} else {
-					std::print("Unknown track tag {}\n", static_cast<uint32_t>(tag));
+					// A track does not state its value size, so an unknown one cannot be skipped
+					keep_rest_raw(tag_start, std::format("unknown track tag {}", static_cast<uint32_t>(tag)));
 				}
 			}
 			mdx.lights.push_back(std::move(light));
@@ -781,6 +849,18 @@ namespace mdx {
 		}
 	}
 
+	void read_DILG(BinaryReader& reader, MDX& mdx) {
+		const uint32_t size = reader.read<uint32_t>();
+		if (size % 4 != 0) {
+			throw std::runtime_error(std::format("MDX DILG chunk size {} is not a multiple of 4", size));
+		}
+		if (size > reader.buffer.size() - reader.position) {
+			throw std::runtime_error("MDX DILG chunk extends past the end of the file");
+		}
+		// A second DILG chunk appends, so no entry is lost
+		mdx.gliders.append_range(reader.read_vector<uint32_t>(size / 4));
+	}
+
 	void read_FAFX(BinaryReader& reader, MDX& mdx) {
 		const uint32_t size = reader.read<uint32_t>();
 		for (size_t i = 0; i < size / 340; i++) {
@@ -875,6 +955,9 @@ namespace mdx {
 					break;
 				case ChunkTag::TXAN:
 					read_TXAN(reader, *this);
+					break;
+				case ChunkTag::DILG:
+					read_DILG(reader, *this);
 					break;
 				default:
 					reader.advance(reader.read<uint32_t>());
