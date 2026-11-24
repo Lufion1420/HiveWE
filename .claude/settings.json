@@ -61,5 +61,19 @@
       "Bash(*git push*--force-with-lease*)",
       "PowerShell(*git push*--force-with-lease*)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/.claude/tools/stop-guard.ps1\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }
