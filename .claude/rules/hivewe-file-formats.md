@@ -111,7 +111,10 @@ Checks: `.claude/tools/script-check/`.
 - Camera entry first dword = 24-bit size (low) + variant byte (top; 3 in all 3.0 files). `write_CAMS` writes variant 0 (plain size). `decode_camera_word` in `src/file_formats/mdx/mdx.ixx` is the single place to switch; variants 1 and 2 are refused (layout unverified). Unknown camera tracks (KCVS, IDUF, ELAF, PTSF) are skipped by `skip_unknown_camera_track` (heuristic) and are NOT preserved on save.
 - Tracks do not describe their value size; the tag decides it. Chunk readers bound loops at reader_pos+size taken before the size dword, 4 bytes short: harmless for well-formed files.
 - `Track::operator==` cannot compare none/linear tracks (tangents uninitialized). Refusal tests use `CHECK_THROWS_AS(..., std::runtime_error)`, not bare `CHECK_THROWS`.
-- Env-gated stock test: set `HIVEWE_MDX_DIR` for the "stock models" case in `tests/mdx_camera_test.cpp`. QA needs it for real-asset checks of MDX reader changes; without it the case passes with 0 assertions.
+- Env-gated stock test: set `HIVEWE_MDX_DIR` for the "stock models" case in `tests/mdx_camera_test.cpp` (ctest #253, the stock MDX sweep). Without it the case passes with 0 assertions, and no stock `.mdx` are extracted locally. A QA brief for an MDX parser change must supply an extraction folder if a real-model sweep is wanted.
+- `BinaryReader::read_count(smallest_record)` (`src/base/binary_reader.ixx`) is the guard for any u32 count that drives an allocation; `TrackHeader` in the MDX reader uses it. A refusal test proves early refusal only with a huge count, or by checking `reader.position` after the throw: a small forged count throws the same `out_of_range` before the fix.
+- `mdx::TrackTag` is not exported, so tests write track bytes by hand.
+- Known gap (filed): `mdx_reader.cpp` near line 750 calls `read_vector<float>(reader.read<uint32_t>() * 12)`, which multiplies in 32 bits and can wrap past the bounds check.
 
 ## Tests
 

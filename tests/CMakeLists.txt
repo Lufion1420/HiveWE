@@ -8,6 +8,7 @@ add_executable(HiveWE_tests
 	mdl_reader_test.cpp
 	mdx_camera_test.cpp
 	mdx_skin_test.cpp
+	mdx_track_header_test.cpp
 	asset_obfuscation_test.cpp
 	protection_pipeline_test.cpp
 	map_format_check_test.cpp

@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **A damaged .mdx model with a forged animation track count now fails to load with an error** — It no longer exhausts memory or crashes HiveWE.
 - **Map Description and other map text fields show plain-text values and save your edits** — Map Properties and New Map fields (name, author, description, suggested players, player and force names) used to appear empty when the map file stored them as plain text, and edits to them were silently dropped. They now show the stored text and keep your edits.
 - **Edited map text is stored as a trigger string** — Quotes and line breaks in these fields can no longer break the generated map script. New Map also stores its name and suggested-players text as trigger strings.
 - **Change Tileset no longer crashes on map folders or imported tile textures with non-ASCII names** — Folder or file names the Windows code page cannot hold (for example Chinese or Cyrillic) now work in the Change Tileset dialog, and its import error messages show such paths correctly.

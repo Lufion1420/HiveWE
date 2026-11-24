@@ -13,6 +13,7 @@ Set by the user on 2026-11-08. The roster and pipeline are in `.claude/HARNESS.m
 ## Git and releases
 - The orchestrator commits and pushes after each finished task, without asking, but only after QA PASS (and reviewer APPROVE on Standard and Risky). There is no commit-before-sweep exception. Subagents do not commit or push.
 - Stage named paths only, never `git add -A`.
+- A second Claude window on the same repo can push docs commits mid-task. Before committing, run `git fetch` and `git log HEAD..origin/main`.
 - Push only to `origin` (`Lufion1420/HiveWE`). Never push to `upstream`, and never open PRs against `stijnherfst/HiveWE`: this fork is not merged back.
 - `gh`'s active account may be the work account `Maurice-TPG`. Never use it and never run `gh auth switch`. Scope the identity per command:
   - Bash: `GH_TOKEN=$(gh auth token -u Lufion1420) git push origin main`

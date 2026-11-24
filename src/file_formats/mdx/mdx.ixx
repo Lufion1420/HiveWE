@@ -131,7 +131,7 @@ namespace mdx {
 		TrackHeader() = default;
 
 		explicit TrackHeader(BinaryReader& reader, int track_id) {
-			const uint32_t tracks_count = reader.read<uint32_t>();
+			const uint32_t tracks_count = reader.read_count(sizeof(int32_t) + sizeof(T));
 			interpolation_type = static_cast<InterpolationType>(reader.read<int32_t>());
 			global_sequence_ID = reader.read<int32_t>();
 			id = track_id;
