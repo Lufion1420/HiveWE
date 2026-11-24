@@ -936,7 +936,7 @@ void BrowseModelsDialog::qa_step() {
 	}
 }
 
-/// Closes this dialog and opens a new one three times without leaving the app: each new dialog draws its thumbnails and plays its
+/// Closes this dialog and opens a new one 5 times (HIVEWE_QA_REOPEN_CYCLES overrides, 1..100) without leaving the app: each new dialog draws its thumbnails and plays its
 /// tiles, then is closed and deleted. Memory and the resource cache are compared before and after.
 void BrowseModelsDialog::qa_reopen_step() {
 	// HIVEWE_QA_REOPEN_CYCLES=<n> for longer leak runs.

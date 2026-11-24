@@ -389,23 +389,34 @@ void ModelEditor::save_as_mdx() {
 		return;
 	}
 
+	if (const QString error = write_active_mdx(fs::path(file_name.toStdWString())); !error.isEmpty()) {
+		QMessageBox::warning(this, "Error saving MDX file", error);
+	}
+}
+
+/// Serializes the active model and writes it to `path`. Returns an empty string on success, otherwise the message to show.
+QString ModelEditor::write_active_mdx(const fs::path& path) {
+	if (!active || !active->mdx) {
+		return "No model is open.";
+	}
+
 	// Save at the loaded version: a v1800 model keeps its u16 SKIN layout instead of being downgraded to v1200,
 	// where the writer refuses bone indices above 255.
 	BinaryWriter mdx_data;
 	try {
 		mdx_data = active->mdx->to_mdx(active->mdx->version);
 	} catch (const std::exception& e) {
-		QMessageBox::warning(this, "Error saving MDX file", QString("Could not save the model: %1").arg(QString::fromStdString(e.what())));
-		return;
+		return QString("Could not save the model: %1").arg(QString::fromStdString(e.what()));
 	}
-	std::ofstream file(fs::path(file_name.toStdWString()), std::ios::binary);
+	std::ofstream file(path, std::ios::binary);
 	if (file) {
 		file.write(reinterpret_cast<const char*>(mdx_data.buffer.data()), mdx_data.buffer.size());
 		file.close();
 	}
 	if (!file.good()) {
-		QMessageBox::warning(this, "Error saving MDX file", "Could not write " + file_name + ". The file may be incomplete.");
+		return "Could not write " + QString::fromStdWString(path.wstring()) + ". The file may be incomplete.";
 	}
+	return {};
 }
 
 void ModelEditor::open_file() {
@@ -526,7 +537,8 @@ std::expected<ads::CDockWidget*, std::string> ModelEditor::open_model(const fs::
 // --- --qa-model-editor-script -------------------------------------------------------------------------------------------------------------
 // Steps ("<command>[:<argument>]", separated by ';') act on the real widgets, so the same slots run as for a click:
 //   wait:<ms>  play  pause  restart  loop:on|off  speed:<0.25|0.5|1|1.5|2>  wireframe:on|off  geoset:<n>:on|off
-//   seq-combo:<n>  seq-list:<n>  slider:<0..1000>  mark  state  shot:<png of the window>  viewshot:<png of the viewport>  quit
+//   seq-combo:<n>  seq-list:<n>  slider:<0..1000>  mark  state  shot:<png of the window>  viewshot:<png of the viewport>
+//   save-mdx:<name.mdx>  (runs the Save to MDX write path into a plain file name beside the result file, re-parses it, compares counts)  quit
 //   expect:advanced | same | time=<ms>[/tol] | timefrac=<0..1> | rate=<x> | playing=0|1 | loop=0|1 | speed=<x> | wireframe=0|1
 //          | hidden=<n>/0|1 | sequence=<n> | viewfewer | viewdifferent
 // "mark" remembers the playhead and the clock; advanced, same and rate compare against it.
@@ -693,6 +705,39 @@ void ModelEditor::qa_continue() {
 			}
 			qa_view_counts.push_back(drawn);
 			check(!image.isNull() && image.save(path), QString("viewport saved, %1 pixels differ from the background").arg(drawn));
+		} else if (command == "save-mdx") {
+			// Same write path as the Save to MDX button, into a plain .mdx name next to the result file, then re-parsed.
+			const bool plain = argument.endsWith(".mdx", Qt::CaseInsensitive) && !argument.contains("..") && !argument.contains('/')
+				&& !argument.contains('\\') && !argument.contains(':') && !QFileInfo(argument).isAbsolute();
+			if (!plain) {
+				log("FAIL", "refused: an MDX name must be a plain file name ending in .mdx");
+				continue;
+			}
+			const fs::path path = fs::path(QFileInfo(qa_out).absoluteDir().filePath(argument).toStdWString());
+			if (const QString error = write_active_mdx(path); !error.isEmpty()) {
+				log("FAIL", error);
+				continue;
+			}
+			auto reader = read_file(path);
+			if (!reader) {
+				log("FAIL", "re-read failed: " + QString::fromStdString(reader.error()));
+				continue;
+			}
+			const qsizetype bytes = static_cast<qsizetype>(reader->buffer.size());
+			try {
+				const mdx::MDX reparsed(*reader);
+				check(
+					reparsed.geosets.size() == active->mdx->geosets.size() && reparsed.sequences.size() == active->mdx->sequences.size()
+						&& reparsed.bones.size() == active->mdx->bones.size(),
+					QString("saved %1 bytes, re-parsed: geosets %2/%3, sequences %4/%5, bones %6/%7 (re-parsed/original)")
+						.arg(bytes)
+						.arg(reparsed.geosets.size()).arg(active->mdx->geosets.size())
+						.arg(reparsed.sequences.size()).arg(active->mdx->sequences.size())
+						.arg(reparsed.bones.size()).arg(active->mdx->bones.size())
+				);
+			} catch (const std::exception& e) {
+				log("FAIL", QString("re-parse failed: %1").arg(e.what()));
+			}
 		} else if (command == "expect") {
 			const QString key = argument.section('=', 0, 0);
 			const QString value = argument.section('=', 1);

@@ -83,6 +83,7 @@ private:
 	void qa_finish();
 	void edit_as_mdl();
 	void save_as_mdx();
+	QString write_active_mdx(const fs::path& path);
 
 	ads::CDockManager* dock_manager;
 	ads::CDockAreaWidget* dock_area = nullptr;
