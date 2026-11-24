@@ -131,11 +131,18 @@ export class Map: public QObject {
 	fs::path filesystem_path;
 	std::string name;
 
+	/// Set by load(): custom objects left out because their base object is not in the loaded object data (they are dropped on save),
+	/// and how many placed units of a skipped custom unit were left out of war3mapUnits.doo with them. HiveWE::load_map shows both.
+	std::vector<SkippedObject> skipped_objects;
+	size_t skipped_placed_units = 0;
+
 	RenderManager render_manager;
 
 	void load(const fs::path& path) {
 		Timer full_timer;
 		Timer timer;
+		skipped_objects.clear();
+		skipped_placed_units = 0;
 
 		hierarchy.map_directory = path;
 		filesystem_path = fs::absolute(path) / "";
@@ -219,19 +226,19 @@ export class Map: public QObject {
 
 		// Doodads
 		if (hierarchy.map_file_exists("war3map.w3d")) {
-			load_modification_file("war3map.w3d", doodads_slk, doodads_meta_slk, true);
+			load_modification_file("war3map.w3d", doodads_slk, doodads_meta_slk, true, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3mapSkin.w3d")) {
-			load_modification_file("war3mapSkin.w3d", doodads_slk, doodads_meta_slk, true);
+			load_modification_file("war3mapSkin.w3d", doodads_slk, doodads_meta_slk, true, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3map.w3b")) {
-			load_modification_file("war3map.w3b", destructibles_slk, destructibles_meta_slk, false);
+			load_modification_file("war3map.w3b", destructibles_slk, destructibles_meta_slk, false, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3mapSkin.w3b")) {
-			load_modification_file("war3mapSkin.w3b", destructibles_slk, destructibles_meta_slk, false);
+			load_modification_file("war3mapSkin.w3b", destructibles_slk, destructibles_meta_slk, false, &skipped_objects);
 		}
 
 		profile_reset();
@@ -244,25 +251,32 @@ export class Map: public QObject {
 		timer.reset();
 
 		if (hierarchy.map_file_exists("war3map.w3u")) {
-			load_modification_file("war3map.w3u", units_slk, units_meta_slk, false);
+			load_modification_file("war3map.w3u", units_slk, units_meta_slk, false, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3mapSkin.w3u")) {
-			load_modification_file("war3mapSkin.w3u", units_slk, units_meta_slk, false);
+			load_modification_file("war3mapSkin.w3u", units_slk, units_meta_slk, false, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3map.w3t")) {
-			load_modification_file("war3map.w3t", items_slk, items_meta_slk, false);
+			load_modification_file("war3map.w3t", items_slk, items_meta_slk, false, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3mapSkin.w3t")) {
-			load_modification_file("war3mapSkin.w3t", items_slk, items_meta_slk, false);
+			load_modification_file("war3mapSkin.w3t", items_slk, items_meta_slk, false, &skipped_objects);
 		}
 
 		// Units/Items
 		profile_reset();
 		if (hierarchy.map_file_exists("war3mapUnits.doo")) {
-			units.load(terrain, info);
+			// A placed unit of a skipped custom unit would be filed as an item (no row in units_slk), so it is left out instead.
+			std::set<std::string> skipped_unit_ids;
+			for (const SkippedObject& entry : skipped_objects) {
+				if (entry.file.ends_with(".w3u")) {
+					skipped_unit_ids.insert(entry.id);
+				}
+			}
+			skipped_placed_units = units.load(terrain, info, skipped_unit_ids);
 			units.create();
 			glFinish(); // Ensure all GL work submitted on worker contexts is visible to the main context
 		}
@@ -273,29 +287,38 @@ export class Map: public QObject {
 
 		// Abilities
 		if (hierarchy.map_file_exists("war3map.w3a")) {
-			load_modification_file("war3map.w3a", abilities_slk, abilities_meta_slk, true);
+			load_modification_file("war3map.w3a", abilities_slk, abilities_meta_slk, true, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3mapSkin.w3a")) {
-			load_modification_file("war3mapSkin.w3a", abilities_slk, abilities_meta_slk, true);
+			load_modification_file("war3mapSkin.w3a", abilities_slk, abilities_meta_slk, true, &skipped_objects);
 		}
 
 		// Buffs
 		if (hierarchy.map_file_exists("war3map.w3h")) {
-			load_modification_file("war3map.w3h", buff_slk, buff_meta_slk, false);
+			load_modification_file("war3map.w3h", buff_slk, buff_meta_slk, false, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3mapSkin.w3h")) {
-			load_modification_file("war3mapSkin.w3h", buff_slk, buff_meta_slk, false);
+			load_modification_file("war3mapSkin.w3h", buff_slk, buff_meta_slk, false, &skipped_objects);
 		}
 
 		// Upgrades
 		if (hierarchy.map_file_exists("war3map.w3q")) {
-			load_modification_file("war3map.w3q", upgrade_slk, upgrade_meta_slk, true);
+			load_modification_file("war3map.w3q", upgrade_slk, upgrade_meta_slk, true, &skipped_objects);
 		}
 
 		if (hierarchy.map_file_exists("war3mapSkin.w3q")) {
-			load_modification_file("war3mapSkin.w3q", upgrade_slk, upgrade_meta_slk, true);
+			load_modification_file("war3mapSkin.w3q", upgrade_slk, upgrade_meta_slk, true, &skipped_objects);
+		}
+
+		if (!skipped_objects.empty()) {
+			std::string list;
+			for (const SkippedObject& entry : skipped_objects) {
+				list += std::format("{}{}: {} (based on {})", list.empty() ? "" : ", ", entry.file, entry.id, entry.base_id);
+			}
+			std::println(stderr, "Skipped {} custom object(s) whose base object is not in the loaded object data (they are dropped on save): {}",
+						 skipped_objects.size(), list);
 		}
 
 		// Regions

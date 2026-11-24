@@ -15,6 +15,7 @@ import MPQ;
 import Camera;
 import Globals;
 import Map;
+import ModificationTables;
 import Imports;
 import <soil2/SOIL2.h>;
 import MapGlobal;
@@ -628,8 +629,8 @@ void HiveWE::load_map(const fs::path& directory) {
 	ui->widget->makeCurrent();
 	reset_map_session();
 
-	// Map::load can still throw after the check passed: a custom object on an unknown base id, a missing texture, a map
-	// override SLK, a file changed since the check. The open map is gone by then, so the half-loaded one is replaced
+	// Map::load can still throw after the check passed: a missing texture, a map override SLK, a file changed since the check
+	// (a custom object on an unknown base id no longer does: it is skipped and reported below, after the load). The open map is gone by then, so the half-loaded one is replaced
 	// by the blank template that New Map uses. Doodads/Units::create wait for all their GL tasks before an error leaves.
 	QString load_error;
 	try {
@@ -675,6 +676,27 @@ void HiveWE::load_map(const fs::path& directory) {
 
 	map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
 	update_map_context("Loaded");
+
+	// Custom objects whose base object is missing were left out of the load, and a save drops them for good.
+	if (!map->skipped_objects.empty()) {
+		QString text = "The map was opened, but some custom objects could not be loaded because the object they are based on "
+					   "does not exist in the object data HiveWE loaded:\n\n";
+		for (const SkippedObject& entry : map->skipped_objects) {
+			text += QString("%1: %2 (based on %3)\n")
+						.arg(QString::fromStdString(entry.file), QString::fromStdString(entry.id), QString::fromStdString(entry.base_id));
+		}
+		if (map->skipped_placed_units > 0) {
+			text += QString("\n%1 placed unit(s) of those custom units were left out as well.\n").arg(map->skipped_placed_units);
+		}
+		text += "\nThese objects are dropped when you save this map.";
+		if (qa_dialog_log) {
+			*qa_dialog_log << text;
+		} else if (qa_offscreen) {
+			std::println(stderr, "{}", text.toStdString());
+		} else {
+			QMessageBox::warning(this, "Some objects were not loaded", text);
+		}
+	}
 }
 
 void HiveWE::add_recent_map(const fs::path& directory) {
@@ -2723,8 +2745,8 @@ void HiveWE::run_qa_refusal_checks() {
 		map->world_undo.undo(context);
 		check(map->units.units.size() == units_before && !has_edit(), "a second undo removes the edit again");
 
-		// Item 5 (Asana 1220330336212700): Map::load throws after the opening check passed. war3map.w3u holds a custom unit h0zz
-		// based on Zzzz, which no table has; the check reads only the file's layout.
+		// Item 5: war3map.w3u holds a custom unit h0zz based on Zzzz, which no table has; the opening check reads only the file's
+		// layout. (1220330336212700 made Map::load throw here; 1220369536243160 made it skip the unit instead.)
 		const fs::path baseless = root / "baseless map";
 		fs::copy(good, baseless, fs::copy_options::recursive, ec);
 		check(!ec, "the sandbox copy copied again as the map with an unknown base id");
@@ -2745,14 +2767,16 @@ void HiveWE::run_qa_refusal_checks() {
 		qa_dialog_log = &dialogs;
 		load_map(baseless);
 		qa_dialog_log = nullptr;
-		check(dialogs.size() == 1, QString("Open of the map with the unknown base id gave one message (%1)").arg(dialogs.size()));
+		// Asana 1220369536243160: an unknown base id no longer fails the load; the custom unit is skipped (and reported on stderr).
+		check(dialogs.size() == 1, QString("Open of the map with the unknown base id gave one warning (%1)").arg(dialogs.size()));
 		if (!dialogs.isEmpty()) {
-			check(dialogs.front().contains("h0zz") && dialogs.front().contains("Zzzz"), "the message names the custom unit and its base: " + dialogs.front());
+			check(dialogs.front().contains("war3map.w3u: h0zz (based on Zzzz)") && dialogs.front().contains("dropped"),
+				  "the warning names the file, the custom unit and its base, and says it is dropped on save: " + dialogs.front());
 		}
-		check(map->loaded, "a blank map is loaded after the failed open");
-		check(map->filesystem_path.empty(), "the blank map has no folder, so Save asks for one");
-		check(fs::equivalent(hierarchy.map_directory, fs::path("data") / "test map", ec), "the hierarchy points at the blank template, not the failed map");
-		check(!units_slk.row_headers.contains("h0zz"), "the failed map's custom unit is not in the unit table");
+		check(map->skipped_objects.size() == 1 && map->skipped_placed_units == 0, "the map records the one skipped object");
+		check(map->loaded && !map->filesystem_path.empty() && fs::equivalent(map->filesystem_path, baseless, ec), "the map with the unknown base id is open");
+		check(fs::equivalent(hierarchy.map_directory, baseless, ec), "the hierarchy points at the opened map");
+		check(!units_slk.row_headers.contains("h0zz") && !units_slk.shadow_data.contains("h0zz"), "the custom unit with the unknown base is not in the unit table");
 
 		finish();
 	});

@@ -35,37 +35,59 @@ TEST_CASE("save_modification_table data repeat") {
 	CHECK(loaded.data("dataa1", "Test") == "67");
 }
 
-// Asana 1220330336212700: the body check reads only the layout, so Map::load met this after the open map was closed, with
-// "map::at(): key not found" as the only text. The message now names both ids, which the Open Map dialog shows.
-TEST_CASE("a custom object based on an id the table lacks throws a message naming both ids") {
+// Asana 1220369536243160: stock campaign map humanx03 holds a leftover custom unit n003 on a base (nbsh) no 3.0.1 table has. The load used
+// to throw (Asana 1220330336212700 made that message name both ids); it now skips the object and reports it.
+TEST_CASE("a custom object based on an id the table lacks is skipped and reported, others stay intact") {
 	slk::SLK meta;
+	meta.add_row("unam");
+	meta.set_shadow_data("field", "unam", "Name");
+	meta.set_shadow_data("type", "unam", "string");
 	meta.build_meta_map();
 
+	const auto write_object = [](BinaryWriter& writer, const std::string& original, const std::string& modified, const std::string& name) {
+		writer.write_string(original);
+		writer.write_string(modified);
+		writer.write<u32>(1); // set count
+		writer.write<u32>(0); // set flag
+		writer.write<u32>(1); // one modification
+		writer.write_string("unam");
+		writer.write<u32>(3); // string
+		writer.write_c_string(name);
+		writer.write<u32>(0); // end token
+	};
+
 	BinaryWriter writer;
-	writer.write<u32>(2); // version
+	writer.write<u32>(3); // version
 	writer.write<u32>(0); // original table: no objects
-	writer.write<u32>(1); // custom table: one object
-	writer.write_string("Zzzz");
-	writer.write_string("h0zz");
-	writer.write<u32>(0); // no modifications
+	writer.write<u32>(3); // custom table
+	write_object(writer, "nbsh", "n003", "Leftover");
+	write_object(writer, "hfoo", "h001", "Good Footman");
+	write_object(writer, "nbsh", "n003", "Leftover again"); // the same id twice is reported once
 
 	slk::SLK units;
 	units.add_row("hfoo");
 	units.base_data["hfoo"]["name"] = "Footman";
 
+	std::vector<SkippedObject> skipped;
 	BinaryReader reader(writer.buffer);
-	try {
-		(void)load_modification_file_reader(reader, units, meta, false);
-		FAIL("loading did not throw");
-	} catch (const std::runtime_error& error) {
-		const std::string message = error.what();
-		CHECK_MESSAGE(message.contains("h0zz"), message);
-		CHECK_MESSAGE(message.contains("Zzzz"), message);
-	} catch (const std::exception& error) {
-		FAIL("threw something other than std::runtime_error: " << std::string(error.what()));
-	}
-	CHECK_FALSE(units.base_data.contains("h0zz"));
-	CHECK_FALSE(units.row_headers.contains("h0zz"));
+	REQUIRE(load_modification_file_reader(reader, units, meta, false, &skipped).has_value());
+
+	REQUIRE(skipped.size() == 1);
+	CHECK(skipped.front().id == "n003");
+	CHECK(skipped.front().base_id == "nbsh");
+	CHECK_FALSE(units.base_data.contains("n003"));
+	CHECK_FALSE(units.row_headers.contains("n003"));
+	CHECK_FALSE(units.shadow_data.contains("n003"));
+	CHECK(units.shadow_data.contains("h001"));
+	CHECK(units.data("name", "h001") == "Good Footman");
+	CHECK(units.data("name", "hfoo") == "Footman");
+	CHECK(collect_save_modification_file_errors(units, meta, false).empty());
+
+	// The skin pass meets the same object again: still skipped, still reported once, nothing left behind.
+	BinaryReader again(writer.buffer);
+	REQUIRE(load_modification_file_reader(again, units, meta, false, &skipped).has_value());
+	CHECK(skipped.size() == 1);
+	CHECK_FALSE(units.shadow_data.contains("n003"));
 }
 
 TEST_CASE("shadow_map_to_slk does not throw when a custom object's oldid parent has no base_data entry") {

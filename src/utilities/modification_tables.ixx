@@ -88,7 +88,26 @@ void walk_modification_table(
 
 } // namespace
 
-export void load_modification_table(BinaryReader& reader, const uint32_t version, slk::SLK& slk, const slk::SLK& meta_slk, const bool modification, const bool optional_ints) {
+/// A custom object that load_modification_table left out because its base object is not in the loaded object data.
+export struct SkippedObject {
+	std::string file; // empty until load_modification_file fills it in
+	std::string id;
+	std::string base_id;
+};
+
+/// A custom object whose base id is not in the loaded object data (stock campaign maps carry such leftovers, e.g. humanx03's n003 on
+/// nbsh) is skipped with all its field changes instead of failing the load; it is not kept, so a save drops it. Each skipped object is
+/// appended once to `skipped` when that is given (the file name is left empty here).
+export void load_modification_table(
+	BinaryReader& reader,
+	const uint32_t version,
+	slk::SLK& slk,
+	const slk::SLK& meta_slk,
+	const bool modification,
+	const bool optional_ints,
+	std::vector<SkippedObject>* skipped = nullptr
+) {
+	std::set<std::string> skipped_ids;
 	walk_modification_table(
 		reader,
 		version,
@@ -97,11 +116,13 @@ export void load_modification_table(BinaryReader& reader, const uint32_t version
 			if (modification && !slk.base_data.contains(modified_id)) {
 				// copy_row would fail inside at() with no ids in the message.
 				if (!slk.base_data.contains(original_id)) {
-					throw std::runtime_error(std::format(
-						"The custom object {} is based on {}, which is not in the object data HiveWE loaded",
-						modified_id,
-						original_id
-					));
+					skipped_ids.insert(modified_id);
+					// Entries of earlier files already carry their file name, so only this call's own (unnamed) ones match.
+					if (skipped
+						&& std::ranges::none_of(*skipped, [&](const SkippedObject& entry) { return entry.file.empty() && entry.id == modified_id; })) {
+						skipped->push_back({ "", modified_id, original_id });
+					}
+					return;
 				}
 				slk.copy_row(original_id, modified_id, false);
 			}
@@ -112,6 +133,9 @@ export void load_modification_table(BinaryReader& reader, const uint32_t version
 			const uint32_t level_variation,
 			const uint32_t data_pointer,
 			std::string data) {
+			if (modification && skipped_ids.contains(modified_id)) {
+				return;
+			}
 			std::string column_header = to_lowercase_copy(meta_slk.data<std::string_view>("field", modification_id));
 			if (optional_ints) {
 				if (data_pointer != 0) {
@@ -166,15 +190,21 @@ export std::expected<uint32_t, std::string> peek_modification_file_version(Binar
 	return version;
 }
 
-export std::expected<void, std::string> load_modification_file_reader(BinaryReader& reader, slk::SLK& base_data, const slk::SLK& meta_slk, const bool optional_ints) {
+export std::expected<void, std::string> load_modification_file_reader(
+	BinaryReader& reader,
+	slk::SLK& base_data,
+	const slk::SLK& meta_slk,
+	const bool optional_ints,
+	std::vector<SkippedObject>* skipped = nullptr
+) {
 	const auto version = peek_modification_file_version(reader);
 	if (!version) {
 		return std::unexpected(version.error());
 	}
 
 	[[maybe_unused]] const uint32_t consumed_version = reader.read<uint32_t>();
-	load_modification_table(reader, *version, base_data, meta_slk, false, optional_ints);
-	load_modification_table(reader, *version, base_data, meta_slk, true, optional_ints);
+	load_modification_table(reader, *version, base_data, meta_slk, false, optional_ints, skipped);
+	load_modification_table(reader, *version, base_data, meta_slk, true, optional_ints, skipped);
 	return {};
 }
 
@@ -187,8 +217,15 @@ export std::expected<void, std::string> load_modification_file_path(const fs::pa
 	return load_modification_file_reader(*file, base_data, meta_slk, optional_ints);
 }
 
-export void load_modification_file(const std::string_view file_name, slk::SLK& base_data, const slk::SLK& meta_slk, const bool optional_ints) {
+export void load_modification_file(
+	const std::string_view file_name,
+	slk::SLK& base_data,
+	const slk::SLK& meta_slk,
+	const bool optional_ints,
+	std::vector<SkippedObject>* skipped = nullptr
+) {
 	BinaryReader reader = hierarchy.map_file_read(file_name).value();
+	const size_t skipped_before = skipped ? skipped->size() : 0;
 
 	const int version = reader.read<uint32_t>();
 	if (version != 1 && version != 2 && version != 3) {
@@ -197,10 +234,16 @@ export void load_modification_file(const std::string_view file_name, slk::SLK& b
 
 	// Map::load's caller shows this text, so it names the file.
 	try {
-		load_modification_table(reader, version, base_data, meta_slk, false, optional_ints);
-		load_modification_table(reader, version, base_data, meta_slk, true, optional_ints);
+		load_modification_table(reader, version, base_data, meta_slk, false, optional_ints, skipped);
+		load_modification_table(reader, version, base_data, meta_slk, true, optional_ints, skipped);
 	} catch (const std::exception& error) {
 		throw std::runtime_error(std::format("{}: {}", file_name, error.what()));
+	}
+
+	if (skipped) {
+		for (size_t i = skipped_before; i < skipped->size(); i++) {
+			(*skipped)[i].file = std::string(file_name);
+		}
 	}
 }
 

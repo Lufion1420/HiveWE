@@ -3143,6 +3143,23 @@ TEST_CASE("a v12 or v13 war3mapUnits.doo of one record at offset 0 with every fi
 	}
 }
 
+// Asana 1220369536243160: a placed unit of a custom unit that the object data dropped has no units_slk row, so Units::load used to file it as
+// an item (a bad item creation in the script). The map load now passes those ids in, and the record is left out and counted.
+TEST_CASE("Units::load leaves out placed units of the ignored ids instead of filing them as items") {
+	const fs::path dir = make_scratch_dir("units_ignored_ids");
+	write_all(dir / "war3mapUnits.doo", unit_file(unit_spec(8, 11)));
+	const ScopedMapDirectory open_map(dir);
+
+	Units kept;
+	CHECK(kept.load(terrain_without_gl(), game_version(3, 0)) == 0);
+	CHECK(kept.items.size() == 1); // control: without the ignore list hfoo is filed as an item
+
+	Units units;
+	CHECK(units.load(terrain_without_gl(), game_version(3, 0), { "hfoo" }) == 1);
+	CHECK(units.items.empty());
+	CHECK(units.units.empty());
+}
+
 TEST_CASE("what a war3mapUnits.doo saves as depends on what it was") {
 	const auto check_load_saves_as = [](const std::uint32_t version, const std::uint32_t subversion, const int saved_version, const int saved_subversion) {
 		CAPTURE(version);

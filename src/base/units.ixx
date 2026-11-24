@@ -210,15 +210,23 @@ export class Units {
 		return std::nullopt;
 	}
 
-	void load(const Terrain& terrain, const MapInfo& info) {
+	/// Records whose id is in `ignored_ids` (custom units the object data dropped, so they have no row and would be filed as items)
+	/// are left out; their number is returned. Their creation numbers still count, so none is reused.
+	std::size_t load(const Terrain& terrain, const MapInfo& info, const std::set<std::string>& ignored_ids = {}) {
 		format_version = write_version;
 		format_subversion = write_subversion;
 
 		BinaryReader reader = hierarchy.map_file_read("war3mapUnits.doo").value();
 
+		std::size_t ignored = 0;
 		std::uint32_t version = write_version;
 		std::uint32_t subversion = write_subversion;
 		read_records(reader, terrain.offset, info, version, subversion, [&](Unit& i) {
+			if (ignored_ids.contains(i.id)) {
+				Unit::auto_increment = std::max(Unit::auto_increment, i.creation_number);
+				ignored++;
+				return;
+			}
 			i.update_terrain_height(terrain);
 
 			// Either a unit or an item
@@ -235,6 +243,7 @@ export class Units {
 			format_version = static_cast<int>(version);
 			format_subversion = static_cast<int>(subversion);
 		}
+		return ignored;
 	}
 
 	/// Parses war3mapUnits.doo, handing each record to on_record. Constructing a Unit bumps Unit::auto_increment;
