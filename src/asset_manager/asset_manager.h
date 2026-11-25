@@ -1,7 +1,9 @@
 #pragma once
 
+#include <filesystem>
 #include <vector>
 
+#include <QPointer>
 #include <QDialog>
 #include <QHeaderView>
 #include <QLabel>
@@ -48,8 +50,16 @@ class AssetManager : public QDialog {
   public:
 	explicit AssetManager(QWidget* parent = nullptr);
 
+	/// For --qa-open-dialog asset-manager: one "state, file, used by" line (tab separated) per file, sorted, then the totals.
+	QStringList qa_report() const;
+
   private:
-	void refresh() const;
+	void refresh();
+	/// True while the list belongs to the open map and its folder. Another map or Save As makes its relative paths point elsewhere.
+	[[nodiscard]]
+	bool list_is_current() const;
+	/// Before a delete: if the list is not current, scans again, says so and returns true.
+	bool rescan_if_out_of_date();
 	void update_status() const;
 	void update_selection() const;
 	void select_all_unused();
@@ -71,4 +81,8 @@ class AssetManager : public QDialog {
 	QPushButton* delete_button;
 	QStandardItemModel* model;
 	AssetFilterModel* filter_model;
+
+	/// The map and folder the list was scanned from.
+	QPointer<QObject> scanned_map;
+	std::filesystem::path scanned_folder;
 };

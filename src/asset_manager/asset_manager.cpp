@@ -13,9 +13,13 @@
 #include <QComboBox>
 #include <QFile>
 #include <QStandardItem>
+#include <QPlainTextEdit>
+#include <QTextEdit>
+#include <Qsci/qsciscintilla.h>
 
 import std;
 import SLK;
+import AssetUsage;
 import Map;
 import MapGlobal;
 import Globals;
@@ -35,10 +39,7 @@ QIcon get_file_icon(const std::string& path) {
 	static const QIcon sound_icon = QApplication::style()->standardIcon(QStyle::SP_MediaVolume);
 	static const QIcon file_icon = QFileIconProvider().icon(QFileIconProvider::File);
 
-	std::string ext = fs::path(path).extension().string();
-	for (auto& c : ext) {
-		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-	}
+	const std::string ext = asset_extension(path);
 
 	if (ext == ".mdx" || ext == ".mdl") {
 		return model_icon;
@@ -53,10 +54,7 @@ QIcon get_file_icon(const std::string& path) {
 }
 
 QString file_type_label(const std::string& path) {
-	std::string ext = fs::path(path).extension().string();
-	for (auto& c : ext) {
-		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-	}
+	const std::string ext = asset_extension(path);
 	if (ext == ".mdx" || ext == ".mdl") {
 		return "Model";
 	}
@@ -103,6 +101,41 @@ QString get_object_name(const TableModel* table, const std::string_view id, cons
 	return QString::fromStdString(std::string(id));
 }
 
+/// What is typed into the text fields of every other window: a Trigger Editor tab, Map Info or a field dialog writes its text into
+/// the map only when it is saved or closed, so a file named there must already count. Reads only.
+std::vector<AssetReference> open_editor_text(const QWidget* asset_manager) {
+	std::vector<AssetReference> references;
+	for (const QWidget* widget : QApplication::allWidgets()) {
+		if (widget->window() == asset_manager) {
+			continue;
+		}
+
+		QString text;
+		if (const auto* code = qobject_cast<const QsciScintilla*>(widget)) {
+			text = code->text();
+		} else if (const auto* plain = qobject_cast<const QPlainTextEdit*>(widget)) {
+			text = plain->toPlainText();
+		} else if (const auto* rich = qobject_cast<const QTextEdit*>(widget)) {
+			text = rich->toPlainText();
+		} else if (const auto* line = qobject_cast<const QLineEdit*>(widget)) {
+			text = line->text();
+		} else if (const auto* combo = qobject_cast<const QComboBox*>(widget); combo && combo->isEnabled()) {
+			text = combo->currentText();
+		}
+		if (text.isEmpty()) {
+			continue;
+		}
+
+		// The title of the tab or window the field is in.
+		const QWidget* titled = widget;
+		while (titled->parentWidget() && titled->windowTitle().isEmpty()) {
+			titled = titled->parentWidget();
+		}
+		add_editor_text_reference(references, titled->windowTitle().toStdString(), text.toStdString());
+	}
+	return references;
+}
+
 struct ObjectInfo {
 	QString display_name;
 	QIcon icon;
@@ -110,15 +143,20 @@ struct ObjectInfo {
 };
 
 ObjectInfo resolve_used_by_id(const std::string& id) {
-	if (id == "loadingscreen") {
+	if (id == loading_screen_source) {
 		return {"Loading Screen", QApplication::style()->standardIcon(QStyle::SP_DesktopIcon), -1};
 	}
-	if (id == "map script") {
+	if (id == map_script_source) {
 		return {"Map Script", QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView), -1};
 	}
-	// MDX transitive reference (path contains a slash)
-	if (id.contains('/')) {
-		return {QString::fromStdString(id), QFileIconProvider().icon(QFileIconProvider::File), -1};
+	if (id.starts_with(unreadable_source_prefix)) {
+		return {QString::fromStdString(id), QApplication::style()->standardIcon(QStyle::SP_MessageBoxWarning), -1};
+	}
+	static const QIcon reference_icon = QFileIconProvider().icon(QFileIconProvider::File);
+	// Trigger and variable names may hold any character, so these come before the path check. A path is a referencing map file.
+	if (id.starts_with(trigger_source_prefix) || id.starts_with(variable_source_prefix) || id.starts_with(open_editor_source_prefix)
+		|| id == map_header_source || id == trigger_strings_source || id == prologue_screen_source || id.contains('/')) {
+		return {QString::fromStdString(id), reference_icon, -1};
 	}
 	const auto display = [&](const QString& name) {
 		return name + " (" + QString::fromStdString(id) + ")";
@@ -182,6 +220,10 @@ ObjectInfo resolve_used_by_id(const std::string& id) {
 			get_object_icon(upgrade_table, id, "art1"),
 			static_cast<int>(ObjectEditor::Category::upgrade)
 		};
+	}
+	// A referencing file in the map root.
+	if (id.contains('.')) {
+		return {QString::fromStdString(id), reference_icon, -1};
 	}
 	// Fallback: likely a sound name
 	return {QString::fromStdString(id), QApplication::style()->standardIcon(QStyle::SP_MediaVolume), -1};
@@ -263,6 +305,7 @@ AssetManager::AssetManager(QWidget* parent) : QDialog(parent) {
 	refresh_button->setIcon(QIcon("data/icons/asset_manager/refresh.png"));
 	refresh_button->setIconSize(QSize(16, 16));
 	refresh_button->setText("Rescan");
+	refresh_button->setObjectName("assetRescanButton");
 	header_row->addWidget(refresh_button);
 	layout->addLayout(header_row);
 
@@ -282,7 +325,7 @@ AssetManager::AssetManager(QWidget* parent) : QDialog(parent) {
 	info_button->setPixmap(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation).pixmap(QSize(16, 16)));
 	info_button->setToolTip(
 		"Usage detection is not perfect and can show files as unused even if they're actually used.\n"
-		"It has difficulty detecting references made from the map script if they don't use forward slashes.\n"
+		"It cannot see a path the map script puts together while the game runs.\n"
 		"Deleting moves files to the recycle bin, but double-check before deleting in bulk!"
 	);
 	search_row->addWidget(info_button);
@@ -317,6 +360,7 @@ AssetManager::AssetManager(QWidget* parent) : QDialog(parent) {
 	delete_button = new QPushButton(this);
 	delete_button->setIcon(QApplication::style()->standardIcon(QStyle::SP_TrashIcon));
 	delete_button->setText("Delete");
+	delete_button->setObjectName("assetDeleteButton");
 	if (theme::current_is_flat()) {
 		delete_button->setProperty("danger", true);
 	} else {
@@ -358,14 +402,16 @@ AssetManager::AssetManager(QWidget* parent) : QDialog(parent) {
 	show();
 }
 
-void AssetManager::refresh() const {
+void AssetManager::refresh() {
+	scanned_map = map;
+	scanned_folder = map->filesystem_path;
 	model->clear();
 	model->setHorizontalHeaderLabels({"File", "Type", "Usages"});
 	tree_view->header()->setSectionResizeMode(FileColumn, QHeaderView::Stretch);
 	tree_view->header()->setSectionResizeMode(TypeColumn, QHeaderView::ResizeToContents);
 	tree_view->header()->setSectionResizeMode(UsageColumn, QHeaderView::ResizeToContents);
 
-	auto results = map->get_file_usage();
+	auto results = map->get_file_usage(open_editor_text(this));
 
 	constexpr QColor orange(200, 120, 0);
 	constexpr QColor gray(128, 128, 128);
@@ -424,6 +470,23 @@ void AssetManager::refresh() const {
 	update_selection();
 }
 
+QStringList AssetManager::qa_report() const {
+	QStringList lines;
+	for (int i = 0; i < model->rowCount(); i++) {
+		const QStandardItem* item = model->item(i, FileColumn);
+		const QString state = item->data(IsOverrideRole).toBool() ? "override" : item->data(IsUnusedRole).toBool() ? "unused" : "used";
+		QStringList sources;
+		for (int child = 0; child < item->rowCount(); child++) {
+			sources.push_back(item->child(child)->text());
+		}
+		sources.sort();
+		lines.push_back(state + "\t" + item->text() + "\t" + sources.join(" | "));
+	}
+	lines.sort();
+	lines.push_back(stats_label->text());
+	return lines;
+}
+
 void AssetManager::update_status() const {
 	const int total = model->rowCount();
 	int unused = 0;
@@ -461,13 +524,31 @@ void AssetManager::select_all_unused() {
 	}
 }
 
+bool AssetManager::list_is_current() const {
+	return scanned_map.data() == map && scanned_folder == map->filesystem_path;
+}
+
+bool AssetManager::rescan_if_out_of_date() {
+	if (list_is_current()) {
+		return false;
+	}
+	refresh();
+	QMessageBox::information(
+		this,
+		"List out of date",
+		"The open map or its folder changed since this list was made, so nothing was deleted. The list has been scanned again."
+	);
+	return true;
+}
+
 QStringList AssetManager::trash_files(const std::vector<QStandardItem*>& file_items) {
 	QStringList failures;
 	std::vector<int> rows_to_remove;
 	for (QStandardItem* item : file_items) {
 		const QString rel = item->text();
-		const fs::path full = map->filesystem_path / rel.toStdString();
-		if (QFile::moveToTrash(QString::fromStdString(full.string()))) {
+		const fs::path full = scanned_folder / rel.toStdWString();
+		// The relative path belongs to the scanned folder: in another one it may name a file that map uses.
+		if (list_is_current() && QFile::moveToTrash(QString::fromStdWString(full.wstring()))) {
 			rows_to_remove.push_back(item->row());
 		} else {
 			failures.push_back(rel);
@@ -483,6 +564,10 @@ QStringList AssetManager::trash_files(const std::vector<QStandardItem*>& file_it
 }
 
 void AssetManager::delete_selected() {
+	if (rescan_if_out_of_date()) {
+		return;
+	}
+
 	std::vector<QStandardItem*> checked;
 	for (int i = 0; i < model->rowCount(); i++) {
 		QStandardItem* item = model->item(i, FileColumn);
@@ -520,6 +605,7 @@ void AssetManager::delete_selected() {
 void AssetManager::remove_object_references(const std::string& id) {
 	const QString qid = QString::fromStdString(id);
 	constexpr QColor orange(200, 120, 0);
+	constexpr QColor gray(128, 128, 128);
 
 	for (int row = 0; row < model->rowCount(); row++) {
 		QStandardItem* const file_item = model->item(row, FileColumn);
@@ -541,21 +627,34 @@ void AssetManager::remove_object_references(const std::string& id) {
 		}
 
 		const int new_count = file_item->rowCount();
-		const bool is_override = file_item->data(IsOverrideRole).toBool();
+		bool is_override = file_item->data(IsOverrideRole).toBool();
+		// A referenced file was not asked about under the game's other extensions, so ask now that nothing refers to it.
+		if (new_count == 0 && !is_override && map->is_override_file(file_item->text().toStdString())) {
+			is_override = true;
+			file_item->setData(true, IsOverrideRole);
+			if (QStandardItem* type_item = model->item(row, TypeColumn)) {
+				type_item->setText("Override");
+			}
+			if (QStandardItem* count_item = model->item(row, UsageColumn)) {
+				count_item->setText("—");
+				count_item->setData(std::numeric_limits<int>::max(), SortKeyRole);
+			}
+		}
 		const bool is_now_unused = (new_count == 0) && !is_override;
+		const QVariant foreground = is_now_unused ? QVariant(QBrush(orange)) : is_override ? QVariant(QBrush(gray)) : QVariant();
 
 		if (QStandardItem* count_item = model->item(row, UsageColumn)) {
 			if (!is_override) {
 				count_item->setText(QString::number(new_count));
 				count_item->setData(is_now_unused ? -1 : new_count, SortKeyRole);
 			}
-			count_item->setData(is_now_unused ? QVariant(QBrush(orange)) : QVariant(), Qt::ForegroundRole);
+			count_item->setData(foreground, Qt::ForegroundRole);
 		}
 		if (QStandardItem* type_item = model->item(row, TypeColumn)) {
-			type_item->setData(is_now_unused ? QVariant(QBrush(orange)) : QVariant(), Qt::ForegroundRole);
+			type_item->setData(foreground, Qt::ForegroundRole);
 		}
 		file_item->setData(is_now_unused, IsUnusedRole);
-		file_item->setData(is_now_unused ? QVariant(QBrush(orange)) : QVariant(), Qt::ForegroundRole);
+		file_item->setData(foreground, Qt::ForegroundRole);
 	}
 
 	update_status();
@@ -602,6 +701,10 @@ void AssetManager::show_context_menu(const QPoint& pos) {
 	if (is_root) {
 		QAction* delete_action = menu.addAction(QApplication::style()->standardIcon(QStyle::SP_TrashIcon), "Delete file");
 		connect(delete_action, &QAction::triggered, [this, item]() {
+			// A rescan replaces every item, so this comes before the item is used.
+			if (rescan_if_out_of_date()) {
+				return;
+			}
 			const int answer = QMessageBox::question(
 				this,
 				"Delete file",

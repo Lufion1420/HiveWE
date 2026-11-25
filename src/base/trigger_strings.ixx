@@ -95,6 +95,11 @@ export class TriggerStrings {
 		hierarchy.map_file_write("war3map.wts", writer.buffer);
 	}
 
+	/// Every TRIGSTR_ key with its text.
+	const std::map<std::string, std::string>& entries() const {
+		return strings;
+	}
+
 	/// The text for a TRIGSTR_ key. A value that is not a TRIGSTR_ reference is a literal string (valid in w3i fields) and is
 	/// returned as is: for a literal the view points into the caller's `key` argument, so it is only valid while that string lives.
 	std::string_view string(const std::string_view key) const {

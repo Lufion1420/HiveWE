@@ -18,6 +18,7 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - MDL/MDX: `src/file_formats/mdx/`.
 - Triggers/script: `src/base/triggers/`.
 - Object SLK merges: `src/object_editor/slk_conversions.ixx`.
+- Which map files are referenced (Asset Manager): `src/base/map/asset_usage.ixx` does the matching; `Map::get_file_usage` (`unused_files.cpp`) hands it the in-memory state.
 
 ## Rules
 
@@ -176,6 +177,13 @@ Checks: `.claude/tools/script-check/`.
 - `prepare_source_path` is the exported seam for testing Map Protector's archive unpack.
 - Known gaps (filed): `.string()` narrow paths in `extract_file`/`unpack` on CJK code pages; `war3map.imp` names written to `temp_dir/name` are validated but import-parser edge cases are unreviewed.
 
+## Asset reference scan (2026-11-25)
+
+- A false "used" is harmless; a false "unused" gets the file deleted. When in doubt, count it as used (an unreadable source does).
+- File lists name every file, so they are never searched: `war3map.imp`, `(listfile)`, and the root `.git/` and `.svn/` folders.
+- New in-memory state that can name files must be passed in by `Map::get_file_usage`.
+- Audio extensions are one family (wav, mp3, flac, ogg), and a path may have no extension: the user's NCOW Lua passes sound paths that way. Reforged CASC stores stock audio as `.ogg` while maps override it with `.wav` at the same path (Needs verification against CASC).
+
 ## Save temp files and folder listings (verified 2026-11-22)
 
-- Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `export_mpq`, `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy.
+- Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `export_mpq`, `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy, `find_file_usage`.

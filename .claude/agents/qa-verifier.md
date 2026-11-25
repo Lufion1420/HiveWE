@@ -22,7 +22,7 @@ Adjust the test exe path if `ctest` shows a different location. In `reuse` mode 
 ## What to do
 After any permission denial, stop: run no further checks and return the report with the denied command (guardrails "Reporting"). A rebuild was denied on 2026-11-25, likely by the preset-plus-Release-path pattern in `rules/hivewe-build-policy.md` (Needs verification).
 
-1. Build with `cmake --build --preset Agent` (run `cmake --preset Agent` first if it is not configured, or after CMake or dependency changes). Run `ctest --preset Agent`. Report counts and each failing test's name and first error.
+1. Build with `cmake --build --preset Agent` (run `cmake --preset Agent` first if it is not configured, or after CMake or dependency changes). Run `ctest --preset Agent`. Report counts and each failing test's name and first error. Never invoke the test executable under `build/Agent` directly in a command that also runs `cmake`; for single tests prefer `ctest --preset Agent -R <filter>`.
 2. Check each acceptance criterion line by line against evidence: a test, a byte comparison, or code you read. Name which one. "Tests pass" is not a checklist item.
    - Bug fix: confirm `cpp-dev` reported RED evidence (the command and its failing output before the fix) and that the same test is green now. One passing run does not prove a regression test. With no RED evidence, judge whether the test would fail on the old code and say you could not run it. If the area has no harness, say so.
    - Look for edge cases the author did not test, especially truncated, empty or malformed map files and object data, which must produce an error instead of a crash or silent success. List untested ones under what was not checked.

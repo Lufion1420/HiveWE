@@ -107,6 +107,10 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **New Map closes tool windows as Open Map does** — An editor left open could show, or write, the previous map's data.
 - **Browsing the Tooltip Editor no longer changes objects** — Switching objects or levels stored the displayed tooltips as edits, which could replace `TRIGSTR_` text references and alter line breaks or colour codes.
 
+#### Asset Manager
+- **Asset Manager no longer lists files your map uses as unused** — It now finds references in any object field or comma list, model variations and portraits, any script or text file (including escaped backslash paths and `.mdl` spelling), text still unsaved in an open editor window, and audio, texture or model paths written with another or no extension. Game file overrides in other audio formats now show as Override.
+- **Asset Manager deletes are safer** — Files and folders starting with a dot, such as `.git`, are no longer listed, so they cannot be deleted there. If you open another map or Save As to another folder after the list was built, nothing is deleted and the list is scanned again.
+
 ### New Features
 - **Change Tileset shows a preview and mapping per tile and can import custom tiles** — Each tile has a preview and a mapping, and removed tiles are repainted with a replacement you choose; the blight index is remapped too. You can import a BLP or TGA texture as a custom tile, saved into the map folder as a texture override. Everything is applied only on OK, all-or-nothing. DDS is rejected because Warcraft III would find the stock BLP first.
 - **Model Editor has a toolbar, animation timeline, inspector docks and status bar, styled for Flat Dark and Flat Light** — The toolbar offers Open, Browse Models, Wireframe, Reset Camera, Edit MDL, Save to MDX and a sequence picker. The timeline has play/pause, restart, scrub, loop and 0.5x/1x/2x speed, and the Sequences, Geosets/Materials (with per-geoset Show toggles) and Info (MDX version, drawn vertex and triangle counts) docks replace the old ImGui panels.

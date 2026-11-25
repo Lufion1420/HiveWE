@@ -79,6 +79,7 @@ import "trigger_editor.h";
 #include <QListView>
 #include <QPlainTextEdit>
 #include <QSpinBox>
+#include <QStandardItemModel>
 #include <QTableView>
 #include <QTableWidget>
 #include <QTextBrowser>
@@ -722,8 +723,8 @@ void HiveWE::load_map(const fs::path& directory) {
 		report(text + " HiveWE opened a blank map instead.");
 		return;
 	}
-	// The kept-script hook opens sandbox archives through here and must leave the user's recent-maps list alone.
-	if (!qa_kept_script_check) {
+	// The QA hooks open sandbox maps through here and must leave the user's recent-maps list alone.
+	if (!qa_kept_script_check && !qa_asset_delete_check) {
 		add_recent_map(directory);
 	}
 
@@ -2410,7 +2411,20 @@ void HiveWE::open_qa_dialog() {
 		// Opens the details panel of a stock unit so the field table, summary and bookmarks can be captured.
 		QTimer::singleShot(2000, editor, [editor]() { editor->select_id(ObjectEditor::Category::unit, "hfoo"); });
 	} else if (name == "asset-manager") {
-		shown = new AssetManager(this);
+		auto* asset_manager = new AssetManager(this);
+		shown = asset_manager;
+		if (!qa_script_out.isEmpty()) {
+			QFile file(qa_script_out);
+			const bool written = file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate);
+			if (written) {
+				QTextStream stream(&file);
+				for (const QString& line : asset_manager->qa_report()) {
+					stream << line << "\n";
+				}
+				stream << "DONE\n";
+			}
+			QTimer::singleShot(0, this, [written]() { QApplication::exit(written ? 0 : 3); });
+		}
 	} else if (name == "map-protector") {
 		shown = new MapProtector(nullptr);
 		shown->show();
@@ -3813,6 +3827,308 @@ void HiveWE::run_qa_unsaved_check() {
 		}
 
 		qa_prompt_real = false;
+		finish();
+	});
+}
+
+void HiveWE::run_qa_asset_delete_check() {
+	if (!qa_offscreen || !qa_asset_delete_check) {
+		return;
+	}
+
+	// Everything below works on copies in a temporary folder: the startup map folder is never written.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(180000, this, [temp]() {
+		std::println("FAIL the asset delete check did not finish within 180 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto write_lines = [&](const bool done) {
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + (done ? "\nDONE\n" : "\n"));
+			}
+		};
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			std::println("{}", lines.back().toStdString());
+			std::fflush(stdout);
+			write_lines(false);
+			return passed;
+		};
+		const auto finish = [&]() {
+			write_lines(true);
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+		const auto process_events = []() {
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+			QApplication::processEvents();
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		};
+		// Replaces the map without closing any window, unlike load_map.
+		const auto replace_map = [&](const fs::path& path) {
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(path);
+			map->headless = true;
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		};
+		const auto files_on_disk = [](const fs::path& folder) {
+			std::set<std::wstring> files;
+			for (const auto& entry : fs::recursive_directory_iterator(folder)) {
+				if (entry.is_regular_file()) {
+					files.insert(entry.path().lexically_relative(folder).generic_wstring());
+				}
+			}
+			return files;
+		};
+
+		if (!check(temp->isValid(), "a temporary folder was created")) {
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = temp->path().toStdWString();
+		// Cyrillic and CJK names for the map folder, a subfolder and the files.
+		const fs::path folder = root / L"\u043A\u0430\u0440\u0442\u0430_\u5730\u56FE";
+		const fs::path other = root / L"\u0432\u0442\u043E\u0440\u0430\u044F_\u7B2C\u4E8C";
+		fs::copy(fs::path("data") / "test map", folder, fs::copy_options::recursive, ec);
+		if (!check(!ec, "data/test map was copied into the temporary folder")) {
+			return finish();
+		}
+
+		const fs::path sub = fs::path(L"war3mapImported") / L"\u041F\u0430\u043F\u043A\u0430_\u6587\u4EF6\u5939";
+		const fs::path doomed = sub / L"\u0443\u0434\u0430\u043B\u0438\u0442\u044C_\u5220\u9664.blp";
+		const fs::path kept = sub / L"\u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C_\u4FDD\u7559.blp";
+		const fs::path locked = sub / L"\u0437\u0430\u043F\u0435\u0440\u0442_\u9501\u5B9A.blp";
+		const fs::path used_file = fs::path("war3mapImported") / "qa_used.blp";
+		const fs::path typed = fs::path("war3mapImported") / "qa_typed.mdx";
+		const std::array<fs::path, 3> dot_files = { fs::path(".git") / "config", fs::path(".gitignore"), fs::path("war3mapImported") / ".hidden.blp" };
+		fs::create_directories(folder / sub);
+		fs::create_directories(folder / ".git");
+		for (const fs::path& file : { doomed, kept, locked, used_file, typed, dot_files[0], dot_files[1], dot_files[2] }) {
+			std::ofstream(folder / file, std::ios::binary) << "qa";
+		}
+		std::ofstream(folder / "war3mapSkin.txt", std::ios::binary) << "[CustomSkin]\r\nQaIcon=war3mapImported/qa_used.blp\r\n";
+
+		window_handler.close_all();
+		process_events();
+		replace_map(folder);
+
+		const auto name_of = [](const fs::path& file) { return QString::fromStdWString(file.generic_wstring()); };
+		const auto rows_of = [](const AssetManager* assets) {
+			return assets->findChild<QStandardItemModel*>(QString(), Qt::FindDirectChildrenOnly);
+		};
+		const auto row_of = [&](const AssetManager* assets, const fs::path& file) -> QStandardItem* {
+			const QStandardItemModel* rows = rows_of(assets);
+			for (int row = 0; rows && row < rows->rowCount(); ++row) {
+				if (rows->item(row, asset::FileColumn)->text() == name_of(file)) {
+					return rows->item(row, asset::FileColumn);
+				}
+			}
+			return nullptr;
+		};
+		const auto is_unused = [&](const AssetManager* assets, const fs::path& file) {
+			const QStandardItem* item = row_of(assets, file);
+			return item && item->data(asset::IsUnusedRole).toBool();
+		};
+		const auto used_by = [&](const AssetManager* assets, const fs::path& file, const QString& source) {
+			const QStandardItem* item = row_of(assets, file);
+			for (int child = 0; item && child < item->rowCount(); ++child) {
+				if (item->child(child)->text() == source) {
+					return true;
+				}
+			}
+			return false;
+		};
+		const auto click = [](const AssetManager* assets, const char* button_name) {
+			if (auto* button = assets->findChild<QPushButton*>(button_name)) {
+				button->click();
+			}
+		};
+
+		// Answers every dialog from inside its event loop: Yes to a confirm dialog (after `before_yes`), OK to a notice.
+		struct Dialogs {
+			QStringList titles;
+			QStringList texts;
+			bool off_screen = true;
+		};
+		const auto delete_checked = [&](const AssetManager* assets, const fs::path& file, const std::function<void()>& before_yes = {}) {
+			auto dialogs = std::make_shared<Dialogs>();
+			QStandardItem* item = row_of(assets, file);
+			if (!check(item != nullptr, "control: a row to check for " + name_of(file))) {
+				return dialogs;
+			}
+			item->setCheckState(Qt::Checked);
+
+			QTimer watcher;
+			connect(&watcher, &QTimer::timeout, this, [dialogs, before_yes]() {
+				QWidget* modal = QApplication::activeModalWidget();
+				if (!modal || !modal->isVisible()) {
+					return;
+				}
+				auto* box = qobject_cast<QMessageBox*>(modal);
+				dialogs->titles << modal->windowTitle();
+				dialogs->texts << (box ? box->text() : QString());
+				dialogs->off_screen = dialogs->off_screen && std::ranges::none_of(QGuiApplication::screens(), [&](const QScreen* screen) {
+					return screen->geometry().intersects(modal->frameGeometry());
+				});
+				if (box && box->button(QMessageBox::Yes) && dialogs->titles.size() == 1) {
+					if (before_yes) {
+						before_yes();
+					}
+					box->button(QMessageBox::Yes)->click();
+				} else if (box && box->button(QMessageBox::Ok)) {
+					box->button(QMessageBox::Ok)->click();
+				} else {
+					modal->close();
+				}
+			});
+			watcher.start(20);
+			click(assets, "assetDeleteButton");
+			watcher.stop();
+			process_events();
+			return dialogs;
+		};
+
+		// --- The list ----------------------------------------------------------------------------------------------------------------------
+		bool created = false;
+		auto* assets = window_handler.create_or_raise<AssetManager>(nullptr, created);
+		process_events();
+		if (!check(rows_of(assets) && rows_of(assets)->rowCount() > 0, "control: the Asset Manager lists files")) {
+			return finish();
+		}
+		bool dot_rows = false;
+		for (int row = 0; row < rows_of(assets)->rowCount(); ++row) {
+			const QString path = rows_of(assets)->item(row, asset::FileColumn)->text();
+			dot_rows = dot_rows || path.startsWith('.') || path.contains("/.");
+		}
+		check(!dot_rows && std::ranges::all_of(dot_files, [&](const fs::path& file) { return fs::exists(folder / file); }),
+			  "dot files and folders exist and are no rows");
+		check(is_unused(assets, doomed) && is_unused(assets, kept) && is_unused(assets, locked) && is_unused(assets, typed),
+			  "the unreferenced non-ASCII files and the model are listed as unused");
+		check(used_by(assets, used_file, "war3mapSkin.txt"), "the file named in war3mapSkin.txt is used by it");
+		check(!has_unsaved_work(), "opening the Asset Manager leaves the map without unsaved changes");
+
+		// --- Text only in an open Trigger Editor tab -------------------------------------------------------------------------------------
+		{
+			auto* editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
+			auto* explorer = editor->findChild<TriggerExplorer*>();
+			process_events();
+			const std::function<QModelIndex(const QModelIndex&)> find_header = [&](const QModelIndex& parent) -> QModelIndex {
+				for (int row = 0; row < explorer->model()->rowCount(parent); ++row) {
+					const QModelIndex index = explorer->model()->index(row, 0, parent);
+					if (static_cast<TreeItem*>(index.internalPointer())->id == 0) {
+						return index;
+					}
+					if (const QModelIndex found = find_header(index); found.isValid()) {
+						return found;
+					}
+				}
+				return {};
+			};
+			emit explorer->doubleClicked(find_header({}));
+			process_events();
+			QWidget* tab = editor->findChild<QWidget*>("0");
+			QWidget* code = tab ? tab->findChild<QWidget*>("jass_editor") : nullptr;
+			const std::string header = map->triggers.global_jass;
+			const bool typed_in = code
+				&& QMetaObject::invokeMethod(code, "setText", Q_ARG(QString, QString(R"(call Preload("war3mapImported\\qa_typed.mdl"))")));
+			if (check(typed_in, "control: a path typed into the Map Header tab")) {
+				click(assets, "assetRescanButton");
+				check(map->triggers.global_jass == header, "the scan did not write the typed text into the map");
+				check(!is_unused(assets, typed) && used_by(assets, typed, "Open editor: Map Header"),
+					  "the file named only in the open tab counts as used");
+				QMetaObject::invokeMethod(code, "setText", Q_ARG(QString, QString::fromStdString(header)));
+				check(!has_unsaved_work(), "with the typed text taken back the map has no unsaved changes");
+			}
+			editor->close();
+			process_events();
+			click(assets, "assetRescanButton");
+			check(is_unused(assets, typed), "control: after the tab is gone the file is unused again");
+		}
+
+		// --- Delete one file -------------------------------------------------------------------------------------------------------------
+		{
+			const auto before = files_on_disk(folder);
+			const int rows_before = rows_of(assets)->rowCount();
+			const auto dialogs = delete_checked(assets, doomed);
+			check(dialogs->titles == QStringList { "Delete files" } && dialogs->texts.value(0).contains("1 file(s)") && dialogs->off_screen,
+				  "delete: only the confirm dialog appeared, off screen, for one file, and was answered Yes (no failure reported)");
+			auto expected = before;
+			expected.erase(doomed.generic_wstring());
+			check(expected.size() + 1 == before.size() && files_on_disk(folder) == expected, "delete: exactly that file left the disk");
+			check(!row_of(assets, doomed) && rows_of(assets)->rowCount() == rows_before - 1 && row_of(assets, kept) && row_of(assets, locked),
+				  "delete: exactly that row left the list");
+		}
+
+		// --- A file another program holds open -------------------------------------------------------------------------------------------
+		{
+			const auto before = files_on_disk(folder);
+			std::ofstream lock(folder / locked, std::ios::binary | std::ios::app);
+			const auto dialogs = delete_checked(assets, locked);
+			check(dialogs->titles == QStringList { "Delete files", "Delete failed" } && dialogs->texts.value(1).contains(name_of(locked)),
+				  "locked file: the failure dialog names it");
+			check(files_on_disk(folder) == before && row_of(assets, locked), "locked file: it stays on disk and in the list");
+		}
+		click(assets, "assetRescanButton");
+
+		// --- Save As ---------------------------------------------------------------------------------------------------------------------
+		fs::create_directories(other);
+		hierarchy.map_directory = other;
+		if (!check(map->save(other) && fs::equivalent(map->filesystem_path, other), "control: the map was saved to another folder")) {
+			return finish();
+		}
+		{
+			const auto first = files_on_disk(folder);
+			const auto second = files_on_disk(other);
+			check(second.contains(kept.generic_wstring()), "control: the other folder holds the same file");
+			auto dialogs = delete_checked(assets, kept);
+			check(dialogs->titles == QStringList { "List out of date" }, "after Save As: delete refuses with a notice and no confirm dialog");
+			check(files_on_disk(folder) == first && files_on_disk(other) == second, "after Save As: nothing was deleted in either folder");
+
+			dialogs = delete_checked(assets, kept);
+			auto expected = second;
+			expected.erase(kept.generic_wstring());
+			check(dialogs->titles == QStringList { "Delete files" } && files_on_disk(other) == expected && files_on_disk(folder) == first,
+				  "after the rescan: delete removes the file from the folder the map is in now, and only there");
+		}
+
+		// --- The folder changes while the confirm dialog is open -------------------------------------------------------------------------
+		{
+			const auto first = files_on_disk(folder);
+			const auto second = files_on_disk(other);
+			const fs::path current = map->filesystem_path;
+			const auto dialogs = delete_checked(assets, locked, [&]() { map->filesystem_path = fs::absolute(folder) / ""; });
+			map->filesystem_path = current;
+			check(dialogs->titles == QStringList { "Delete files", "Delete failed" } && files_on_disk(folder) == first
+					  && files_on_disk(other) == second,
+				  "folder changed during the confirm dialog: nothing was deleted");
+		}
+
+		// --- Another map -----------------------------------------------------------------------------------------------------------------
+		{
+			click(assets, "assetRescanButton");
+			const auto first = files_on_disk(folder);
+			replace_map(folder);
+			const auto dialogs = delete_checked(assets, locked);
+			check(dialogs->titles == QStringList { "List out of date" } && files_on_disk(folder) == first,
+				  "map replaced with the window left open: delete refuses and the same named file stays");
+
+			const QPointer<AssetManager> open_assets = assets;
+			load_map(other);
+			process_events();
+			check(open_assets.isNull() && !window_handler.get_open<AssetManager>(), "Open Map closes the Asset Manager");
+		}
+
 		finish();
 	});
 }

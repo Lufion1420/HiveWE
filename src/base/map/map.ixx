@@ -36,6 +36,7 @@ import Triggers;
 import Terrain;
 import GameplayConstants;
 import ScriptPreservation;
+export import AssetUsage;
 import Utilities;
 import UnorderedMap;
 import "brush.h";
@@ -46,13 +47,6 @@ import <glm/gtc/matrix_transform.hpp>;
 
 namespace fs = std::filesystem;
 using namespace std::literals::string_literals;
-
-export struct FileUsage {
-	std::string path;
-	std::unordered_set<std::string> used_by; // empty and not an override = unused
-	bool is_override = false; // overrides a stock game asset by path; counts as used
-	std::uintmax_t size = 0; // file size in bytes
-};
 
 /// The first object data file Map::save() would fail to write, with every field in it that cannot be written.
 export struct UnwritableObjectData {
@@ -899,11 +893,14 @@ export class Map: public QObject {
 		return id;
 	}
 
-	/// Returns a list containing all the custom resources in the map folder with how many times they are referenced.
-	/// Note that this isn't exhaustive as we cannot detect confidently whether all game file overrides are used.
-	/// We also scan the map code for the file path (with forward slashed),
-	/// but map code can do arbitrary file loading in ways that are hard to detect such as composing a file path by appending two strings
-	std::vector<FileUsage> get_file_usage() const;
+	/// Returns a list containing all the custom resources in the map folder with what refers to them. `editor_text` is text typed into
+	/// open editors that the map may not hold yet. Note that this isn't exhaustive: map code can compose a path while the game runs,
+	/// for example by appending two strings.
+	std::vector<FileUsage> get_file_usage(std::vector<AssetReference> editor_text = {}) const;
+
+	/// Whether a file nothing refers to is still used because the game picks it up by its path.
+	[[nodiscard]]
+	bool is_override_file(const std::string& path) const;
 
   private:
 	/// One warning per save, which never stops it: the edits are saved, but the kept script does not create or set them up.

@@ -153,6 +153,7 @@ int main(int argc, char* argv[]) {
 				"                       asset-manager, map-protector, import-object-data (empty package), item-tables, config, tile-setter, tile-setter-changes, tile-setter-limits (prints OK/Remove button states to stdout and --qa-script-out), tile-pather,\n"
 				"                       model-editor (stock model units/human/footman/footman.mdx), browse-models (the Model Editor's model browser; with --qa-script-out <file>\n"
 				"                       it waits for the thumbnails, writes result lines to <file> and a PNG of the dialog next to it).\n"
+				"                       asset-manager with --qa-script-out <file> writes each listed file's state and users to <file> and quits.\n"
 				"  --qa-model-editor-script \"<steps>\"  With --qa-open-dialog model-editor and --qa-script-out <file>: drive the Model Editor's widgets in-process\n"
 				"                       (steps separated by ';', for example \"wait:3000;pause;slider:500;expect:timefrac=0.5\") and write PASS/FAIL/INFO lines to the file, then quit.\n"
 				"                       The steps are listed above ModelEditor::run_qa_script in src/model_editor/model_editor.cpp.\n"
@@ -179,6 +180,11 @@ int main(int argc, char* argv[]) {
 				"  --qa-unsaved-check  Needs --qa-offscreen (--qa-script-out <file> optional): on a sandbox copy of data/test map, opens the editor windows, edits\n"
 				"                       object data, triggers, map info, scenario and more, and checks which states count as unsaved and what the prompt's\n"
 				"                       answers do. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory. Exit code 0 only when all pass.\n"
+				"  --qa-asset-delete-check  Needs --qa-offscreen (--qa-script-out <file> optional): on a sandbox copy of data/test map with Cyrillic and CJK names, checks\n"
+				"                       the Asset Manager's delete button and confirm dialog (one file leaves, a locked one stays and is reported, dot files are no rows),\n"
+				"                       that text typed into a Trigger Editor tab counts, and that nothing is deleted after Save As or a map change. Moves two\n"
+				"                       small files of the sandbox to the recycle bin. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory.\n"
+				"                       Exit code 0 only when all pass.\n"
 				"  --qa-kept-script-check  Needs --qa-offscreen (--qa-script-out <file> optional): on sandbox copies of data/test map without war3map.wtg,\n"
 				"                       checks the kept-script notice and save warning (real dialogs, clicked in-process), that trigger editing is off, and\n"
 				"                       that Save, Save As, the Export MPQ archive and the Map Protector save keep the script byte for byte and write no\n"
@@ -250,6 +256,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_unsaved_check = true;
+		} else if (arguments[i] == "--qa-asset-delete-check") {
+			// The hook opens sandbox maps and moves files of them to the recycle bin, so it must never run in a window the user works in.
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-asset-delete-check needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_asset_delete_check = true;
 		} else if (arguments[i] == "--qa-kept-script-check") {
 			// The hook opens and saves sandbox maps and shows real dialogs, so it must never run in a window the user works in.
 			if (!arguments.contains("--qa-offscreen")) {
@@ -455,6 +468,7 @@ int main(int argc, char* argv[]) {
 	w.run_qa_region_palette_check();
 	w.run_qa_unsaved_check();
 	w.run_qa_kept_script_check();
+	w.run_qa_asset_delete_check();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

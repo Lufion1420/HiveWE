@@ -121,6 +121,11 @@ public:
 	/// Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_kept_script_check = false;
 	void run_qa_kept_script_check();
+	/// Set by --qa-asset-delete-check (needs --qa-offscreen; --qa-script-out <file> optional): works on a sandbox copy of data/test map with
+	/// non-ASCII names. Drives the Asset Manager's delete button and its real dialogs in-process and checks what leaves the disk. Writes
+	/// PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_asset_delete_check = false;
+	void run_qa_asset_delete_check();
 	/// After a map load: turns trigger editing off or on for map->keeps_script, and with `notify` tells the user once when it is off.
 	void apply_trigger_editing_state(bool notify);
 	/// Set by the unsaved check hook only: a QMessageBox button that answers the unsaved changes prompt instead of showing it.

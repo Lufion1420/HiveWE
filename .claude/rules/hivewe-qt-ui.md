@@ -27,7 +27,8 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 
 ## Patterns
 
-- `window_handler.create_or_raise<T>()` for singleton-like tool windows.
+- `window_handler.create_or_raise<T>()` for singleton-like tool windows. A window showing map data must be opened this way with `WA_DeleteOnClose`, so `window_handler.close_all()` on a map change drops it. Save As closes nothing: before a destructive action on map-relative paths, re-check the map and its folder.
+- Editor text (for example a Trigger Editor tab) reaches `map->triggers` only when saved or closed. A feature that needs the current state must read the open windows too, without writing into the map.
 - `Palette` subclasses for brush/context tools.
 - Sidebar palettes orchestrated from `src/main_window/hivewe.cpp` — visibility vs active brush are separate.
 - Models in `src/models/` — extend models, not duplicate widget state.

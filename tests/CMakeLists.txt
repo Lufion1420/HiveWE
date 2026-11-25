@@ -37,6 +37,7 @@ add_executable(HiveWE_tests
 	gl_thread_pool_test.cpp
 	saved_state_test.cpp
 	script_preservation_test.cpp
+	asset_usage_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
