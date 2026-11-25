@@ -193,9 +193,51 @@ export class Hierarchy {
 		return read_file((map_read_override != nullptr ? *map_read_override : map_directory) / path);
 	}
 
-	/// source somewhere on disk, destination relative to the map
+	/// source somewhere on disk, destination relative to the map. Copies to `<destination>.hivewe-tmp`, checks its size and renames it
+	/// over the target, as map_file_write does, so a failed copy or rename leaves the old file intact. A read-only attribute the copy took
+	/// from the source is cleared, or the next save could not replace the file. Throws on any failure and removes the temporary file first.
 	void map_file_add(const fs::path& source, const fs::path& destination) const {
-		fs::copy_file(source, map_directory / destination, fs::copy_options::overwrite_existing);
+		const fs::path target = map_directory / destination;
+		fs::path temporary = target;
+		temporary += map_write_temp_suffix;
+
+		const auto fail = [&](const std::string& reason) {
+			std::error_code ignored;
+			fs::permissions(temporary, fs::perms::owner_write, fs::perm_options::add, ignored);
+			fs::remove(temporary, ignored);
+			const std::u8string name = destination.u8string();
+			throw std::runtime_error("Error writing file " + std::string(name.begin(), name.end()) + ": " + reason);
+		};
+
+		std::error_code ec;
+		// A read-only leftover of a crashed save would refuse the copy.
+		fs::permissions(temporary, fs::perms::owner_write, fs::perm_options::add, ec);
+		fs::remove(temporary, ec);
+		const auto source_size = fs::file_size(source, ec);
+		if (ec) {
+			fail("the source file cannot be read (" + ec.message() + ")");
+		}
+		if (!fs::copy_file(source, temporary, fs::copy_options::overwrite_existing, ec) || ec) {
+			fail("could not copy to the temporary file (" + ec.message() + ")");
+		}
+		fs::permissions(temporary, fs::perms::owner_write, fs::perm_options::add, ec);
+		if (ec) {
+			fail("could not make the temporary file writable (" + ec.message() + ")");
+		}
+		const auto written = fs::file_size(temporary, ec);
+		if (ec || written != source_size) {
+			fail("the copied file has the wrong size");
+		}
+
+		// A virus scanner or indexer can hold the target for a moment, so retry briefly before giving up.
+		for (int attempt = 0; attempt < 5; attempt++) {
+			fs::rename(temporary, target, ec);
+			if (!ec) {
+				return;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		}
+		fail("could not replace the file (" + ec.message() + ")");
 	}
 
 	/// Writes `<path>.hivewe-tmp`, checks its size and renames it over the target, so a failed write leaves the old file intact.

@@ -5,6 +5,8 @@ import Hierarchy;
 import Imports;
 import Triggers;
 import ProtectionPipeline;
+import GameplayConstants;
+import INI;
 
 namespace fs = std::filesystem;
 
@@ -330,6 +332,120 @@ TEST_CASE("save_restoring_state restores and reports a save that throws from map
 	CHECK(contains(result.error, "war3map.w3e"));
 	CHECK(hierarchy.map_directory == original_directory);
 	CHECK(filesystem_path == original_directory);
+}
+
+// Safe writes for war3mapMisc.txt and the final map script install (Asana 1220329518098116).
+
+TEST_CASE("INI::serialize is byte for byte what INI::save writes") {
+	const fs::path dir = make_scratch_dir("ini_serialize");
+	ini::INI ini;
+	ini.ini_data["Misc"]["GoldCost"] = { "10", "20" };
+	ini.ini_data["Misc"]["Name"] = { "x" };
+	ini.ini_data["Other"]["Empty"] = {};
+	ini.ini_data["Empty Section"] = {};
+
+	ini.save(dir / "saved.txt");
+
+	CHECK(ini.serialize() == read_all(dir / "saved.txt"));
+	CHECK(ini.serialize().starts_with("\xEF\xBB\xBF"));
+	CHECK(ini.serialize().find('\r') == std::string::npos);
+}
+
+TEST_CASE("GameplayConstants::save writes the bytes INI::save wrote and leaves no temporary file") {
+	const fs::path dir = make_scratch_dir("misc_bytes");
+	const MapDirectoryScope scope(dir);
+	write_all(dir / "war3mapMisc.txt", "OLD");
+
+	GameplayConstants constants;
+	constants.data.shadow_data[constants_row_key]["gameplay"] = "1,,2";
+	constants.data.shadow_data[constants_row_key]["name"] = "a";
+	constants.save();
+
+	// The old writer: the same INI through INI::save.
+	ini::INI expected;
+	expected.ini_data["Misc"] = {};
+	expected.ini_data["Misc"]["gameplay"] = { "1", "2" };
+	expected.ini_data["Misc"]["name"] = { "a" };
+	expected.save(dir / "expected.txt");
+	CHECK(read_all(dir / "war3mapMisc.txt") == read_all(dir / "expected.txt"));
+	CHECK_FALSE(fs::exists(dir / "war3mapMisc.txt.hivewe-tmp"));
+
+	GameplayConstants empty;
+	empty.save();
+	CHECK(read_all(dir / "war3mapMisc.txt") == "\xEF\xBB\xBF[Misc]\n");
+}
+
+TEST_CASE("GameplayConstants::save under MapWriteCapture writes no file") {
+	const fs::path dir = make_scratch_dir("misc_capture");
+	const MapDirectoryScope scope(dir);
+	GameplayConstants constants;
+	constants.data.shadow_data[constants_row_key]["gameplay"] = "1";
+	MapFiles files;
+	{
+		const MapWriteCapture capture(files);
+		constants.save();
+	}
+	CHECK(files.contains("war3mapMisc.txt"));
+	CHECK_FALSE(fs::exists(dir / "war3mapMisc.txt"));
+}
+
+TEST_CASE("GameplayConstants::save to a read-only war3mapMisc.txt throws, keeps the old bytes and leaves no temporary file") {
+	const fs::path dir = make_scratch_dir("misc_read_only");
+	const MapDirectoryScope scope(dir);
+	write_all(dir / "war3mapMisc.txt", "OLD");
+	make_read_only(dir / "war3mapMisc.txt");
+
+	GameplayConstants constants;
+	constants.data.shadow_data[constants_row_key]["gameplay"] = "1";
+	CHECK_THROWS(constants.save());
+
+	make_writable(dir / "war3mapMisc.txt");
+	CHECK(read_all(dir / "war3mapMisc.txt") == "OLD");
+	CHECK_FALSE(fs::exists(dir / "war3mapMisc.txt.hivewe-tmp"));
+}
+
+TEST_CASE("map_file_add does not carry a read-only attribute of the source into the map") {
+	const ScriptSandbox sandbox("script_read_only_source");
+	const MapDirectoryScope scope(sandbox.map);
+	write_all(sandbox.map / "war3map.lua", "OLD");
+	// The copy takes the source's attributes. A read-only war3map.lua would make the next save fail to replace it.
+	write_all(sandbox.tools / "first.lua", "FIRST");
+	make_read_only(sandbox.tools / "first.lua");
+
+	CHECK_NOTHROW(hierarchy.map_file_add(sandbox.tools / "first.lua", "war3map.lua"));
+	make_writable(sandbox.tools / "first.lua");
+	CHECK(read_all(sandbox.map / "war3map.lua") == "FIRST");
+
+	const auto result = install_map_script("SECOND", ScriptMode::lua, sandbox.output);
+	CHECK(result.has_value());
+	CHECK(read_all(sandbox.map / "war3map.lua") == "SECOND");
+	CHECK_FALSE(fs::exists(sandbox.map / "war3map.lua.hivewe-tmp"));
+}
+
+TEST_CASE("map_file_add keeps the old file and leaves no temporary file when the rename fails") {
+	const ScriptSandbox sandbox("script_rename_fails");
+	const MapDirectoryScope scope(sandbox.map);
+	write_all(sandbox.map / "war3map.j", "OLD");
+	// Replacing a read-only file fails on Windows, after the copy into the temporary file succeeded.
+	make_read_only(sandbox.map / "war3map.j");
+	write_all(sandbox.tools / "war3map.j", "NEW SCRIPT");
+
+	CHECK_THROWS(hierarchy.map_file_add(sandbox.tools / "war3map.j", "war3map.j"));
+
+	make_writable(sandbox.map / "war3map.j");
+	CHECK(read_all(sandbox.map / "war3map.j") == "OLD");
+	CHECK_FALSE(fs::exists(sandbox.map / "war3map.j.hivewe-tmp"));
+}
+
+TEST_CASE("map_file_add refuses a missing source and keeps the old file") {
+	const ScriptSandbox sandbox("script_missing_source");
+	const MapDirectoryScope scope(sandbox.map);
+	write_all(sandbox.map / "war3map.j", "OLD");
+
+	CHECK_THROWS(hierarchy.map_file_add(sandbox.tools / "missing.j", "war3map.j"));
+
+	CHECK(read_all(sandbox.map / "war3map.j") == "OLD");
+	CHECK_FALSE(fs::exists(sandbox.map / "war3map.j.hivewe-tmp"));
 }
 
 TEST_CASE("save_restoring_state restores after a save that returns failure") {

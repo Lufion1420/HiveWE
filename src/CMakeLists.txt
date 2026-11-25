@@ -8,6 +8,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"base/map/map_body_check.ixx"
 	"base/map/map_archive_check.ixx"
 	"base/map/script_preservation.ixx"
+	"base/map/map_backup.ixx"
 	"base/map/asset_usage.ixx"
 	"base/map/resize.cpp"
 	"base/map/unused_files.cpp"

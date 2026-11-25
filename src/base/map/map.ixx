@@ -544,6 +544,9 @@ export class Map: public QObject {
 				imports.save(filesystem_path);
 			}
 
+			// Object data and gameplay constants are taken as their edits below, under the names their writers use. Their save()
+			// writers also go through map_file_write now (GameplayConstants::save too), so calling one under this capture would
+			// replace the edit entry with the file bytes: keep them out of the list above.
 			const std::array<std::pair<std::string_view, const slk::SLK*>, 8> edits = { {
 				{ "war3map.w3d", &doodads_slk },
 				{ "war3map.w3b", &destructibles_slk },

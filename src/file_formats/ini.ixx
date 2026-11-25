@@ -99,6 +99,23 @@ namespace ini {
 			}
 		}
 
+		/// The bytes save() writes: a UTF-8 byte order mark, then each section and key, every line ending in LF.
+		[[nodiscard]] std::string serialize() const {
+			std::string out = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF) };
+			for (auto&& [section, section_data] : ini_data) {
+				out += '[';
+				out += section;
+				out += "]\n";
+				for (auto&& [key, values] : section_data) {
+					out += key;
+					out += '=';
+					out += absl::StrJoin(values, ",");
+					out += '\n';
+				}
+			}
+			return out;
+		}
+
 		void save(const fs::path& path) {
 			std::fstream stream(path, std::ios::out | std::ios::binary);
 

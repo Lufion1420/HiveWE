@@ -84,6 +84,8 @@ import "trigger_editor.h";
 #include <QTableWidget>
 #include <QTextBrowser>
 #include <QTextEdit>
+#include <QStandardPaths>
+#include <QDateTime>
 import "menus/gameplay_constants_editor.h";
 import "menus/item_tables_editor.h";
 import "menus/scenario_properties_editor.h";
@@ -99,6 +101,7 @@ import MapFormatCheck;
 import MapArchiveCheck;
 import ScriptPreservation;
 import ProtectionPipeline;
+import MapBackup;
 
 namespace fs = std::filesystem;
 
@@ -141,8 +144,90 @@ bool write_map_archive(const fs::path& folder, const std::wstring& file_name) {
 	return true;
 }
 
-/// Map::save() with any exception shown in a dialog, so a throw while saving cannot close the editor without a message.
+/// Backups made before editor saves (see MapBackup). Headless --resave and the Map Protector call Map::save directly and make none.
+struct SaveBackupState {
+	/// The first failed backup of this editor session showed its dialog; later ones only show in the status text.
+	bool warned = false;
+	/// The backup before the latest save failed.
+	bool last_failed = false;
+};
+SaveBackupState save_backup_state;
+
+/// Identifies this editor session in the backups, so the first backup of each session is kept longer.
+const std::string& editor_session_id() {
+	static const std::string id = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss-zzz").toStdString() + "-"
+		+ std::to_string(QCoreApplication::applicationPid());
+	return id;
+}
+
+map_backup::LocalTime local_now() {
+	const QDateTime now = QDateTime::currentDateTime();
+	const QDate date = now.date();
+	const QTime time = now.time();
+	return std::chrono::local_days(std::chrono::year(date.year()) / date.month() / date.day()) + std::chrono::hours(time.hour())
+		+ std::chrono::minutes(time.minute()) + std::chrono::seconds(time.second()) + std::chrono::milliseconds(time.msec());
+}
+
+/// Where backups go. QA offscreen runs never use the user's AppData: the hook's folder, or a temporary folder removed at exit. Empty when
+/// none is available.
+fs::path backup_root() {
+	if (HiveWE::qa_offscreen) {
+		if (!HiveWE::qa_backup_root.isEmpty()) {
+			return fs::path(HiveWE::qa_backup_root.toStdWString());
+		}
+		static QTemporaryDir qa_root(QDir::tempPath() + "/HiveWE-qa-backups-XXXXXX");
+		return qa_root.isValid() ? fs::path(qa_root.path().toStdWString()) : fs::path();
+	}
+	const QString app_data = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+	return app_data.isEmpty() ? fs::path() : fs::path(app_data.toStdWString()) / "backups";
+}
+
+/// Backs up the files Save is about to replace in `map_folder`. Never throws and never stops the save: the first failure of the session
+/// shows a warning with the reason and the folder, later ones only set save_backup_state.last_failed. Returns the set that holds the
+/// files from before this save (new or identical), or empty.
+fs::path back_up_before_save(const fs::path& map_folder) {
+	save_backup_state.last_failed = false;
+	std::expected<map_backup::Result, map_backup::Error> result = std::unexpected(map_backup::Error { "No folder for backups is available.", {} });
+	try {
+		const fs::path root = backup_root();
+		if (!root.empty()) {
+			const int keep = QSettings().value("backupKeepCount", 10).toInt();
+			result = map_backup::back_up(map_folder, {
+				.root = root,
+				.now = local_now(),
+				.session_id = editor_session_id(),
+				.keep = static_cast<size_t>(keep > 0 ? keep : 10),
+			});
+		}
+	} catch (const std::exception& e) {
+		result = std::unexpected(map_backup::Error { std::string("The backup failed: ") + e.what(), {} });
+	} catch (...) {
+		result = std::unexpected(map_backup::Error { "The backup failed (unknown error).", {} });
+	}
+	if (result) {
+		return result->set;
+	}
+
+	save_backup_state.last_failed = true;
+	const QString reason = QString::fromUtf8(result.error().message.data(), static_cast<qsizetype>(result.error().message.size()));
+	const QString folder = display_path(result.error().folder);
+	std::println(stderr, "Backup before saving failed: {} (backup folder: {})", reason.toStdString(), folder.toStdString());
+	if (!save_backup_state.warned) {
+		save_backup_state.warned = true;
+		if (!map->headless) {
+			QMessageBox::warning(nullptr, "Backup Failed",
+								 "No backup of the map's files could be made before this save. Saving continues without one.\n\n" + reason
+									 + "\n\nBackup folder:\n" + (folder.isEmpty() ? QString("(none)") : folder)
+									 + "\n\nIf later saves in this session cannot make a backup either, only the status text says so.");
+		}
+	}
+	return {};
+}
+
+/// Map::save() with any exception shown in a dialog, so a throw while saving cannot close the editor without a message. Backs up the
+/// files of `path` first.
 bool save_map_reporting_errors(const fs::path& path) {
+	const fs::path backup_set = back_up_before_save(path);
 	try {
 		const bool saved = map->save(path);
 		if (saved) {
@@ -151,11 +236,35 @@ bool save_map_reporting_errors(const fs::path& path) {
 		}
 		return saved;
 	} catch (const std::exception& e) {
-		QMessageBox::critical(nullptr, "Saving failed",
-							  "The map could not be saved completely:\n" + QString::fromLocal8Bit(e.what())
-								  + "\n\nSome map files may already have been written.");
+		QString text = "The map could not be saved completely:\n" + QString::fromLocal8Bit(e.what())
+			+ "\n\nSome map files may already have been written.";
+		if (!backup_set.empty()) {
+			text += "\n\nThe map files from before this save are in:\n" + display_path(backup_set);
+		}
+		QMessageBox::critical(nullptr, "Saving failed", text);
 		return false;
 	}
+}
+
+/// True when `path` is `folder` or lies inside it, compared without letter case after resolving both.
+bool path_is_within(const fs::path& path, const fs::path& folder) {
+	const auto normalized = [](const fs::path& p) {
+		std::error_code ec;
+		fs::path result = fs::weakly_canonical(p, ec);
+		if (ec) {
+			result = fs::absolute(p, ec);
+		}
+		std::wstring text = result.make_preferred().native();
+		while (text.size() > 3 && text.back() == L'\\') {
+			text.pop_back();
+		}
+		for (wchar_t& c : text) {
+			c = static_cast<wchar_t>(std::towlower(static_cast<std::wint_t>(c)));
+		}
+		return fs::path(text);
+	};
+	const fs::path relative = normalized(path).lexically_relative(normalized(folder));
+	return !relative.empty() && *relative.begin() != "..";
 }
 
 std::shared_ptr<mdx::MDX> load_preview_mdx(const fs::path& path) {
@@ -1013,15 +1122,23 @@ bool HiveWE::save_current_map() {
 		return false;
 	}
 
+	show_saved_status();
+	return true;
+}
+
+void HiveWE::show_saved_status() {
+	const bool no_backup = save_backup_state.last_failed;
 	// The map files were written, but the script step failed and its error was shown: the old script is still in the map.
 	if (map->script_compile_failed) {
-		show_transient_notice("Saved without a new map script");
-		update_map_context("Saved, script not updated");
+		show_transient_notice(no_backup ? "Saved without a backup or a new map script" : "Saved without a new map script");
+		update_map_context(no_backup ? "Saved without a backup, script not updated" : "Saved, script not updated");
+	} else if (no_backup) {
+		show_transient_notice("Saved without a backup");
+		update_map_context("Saved without a backup");
 	} else {
 		show_transient_notice("Map saved");
 		update_map_context("Saved");
 	}
-	return true;
 }
 
 void HiveWE::apply_open_editors() {
@@ -1041,51 +1158,110 @@ bool HiveWE::save_current_map_as() {
 		return false;
 	}
 
-	QSettings settings;
-	fs::path file_name = QFileDialog::getExistingDirectory(this, "Choose Save Location",
-														   settings.value("openDirectory", QDir::current().path()).toString(),
-														   QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks)
-							 .toStdWString();
-
+	fs::path file_name;
+	if (qa_offscreen && !qa_save_as_folder.isEmpty()) {
+		// The QA hook's answer to the folder picker. Not remembered, so the run writes nothing to the registry.
+		file_name = qa_save_as_folder.toStdWString();
+	} else {
+		QSettings settings;
+		file_name = QFileDialog::getExistingDirectory(this, "Choose Save Location",
+													  settings.value("openDirectory", QDir::current().path()).toString(),
+													  QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks)
+						.toStdWString();
+		if (file_name.empty()) {
+			return false;
+		}
+		settings.setValue("openDirectory", display_path(file_name));
+	}
 	if (file_name.empty()) {
 		return false;
 	}
 
-	settings.setValue("openDirectory", display_path(file_name));
-
 	apply_open_editors();
-	if (!map->filesystem_path.empty() && fs::exists(file_name) && fs::equivalent(file_name, map->filesystem_path)) {
+	const auto is_current_folder = [&](const fs::path& folder) {
+		std::error_code ec;
+		return !map->filesystem_path.empty() && fs::exists(folder, ec) && fs::equivalent(folder, map->filesystem_path, ec);
+	};
+
+	const QString fallback_name = sanitized_folder_name(QString::fromStdString(map->name));
+	const fs::path target_directory = file_name / fallback_name.toStdWString();
+	if (is_current_folder(file_name) || is_current_folder(target_directory)) {
+		// The map's own folder: an ordinary save.
 		if (!save_map_reporting_errors(map->filesystem_path)) {
 			return false;
 		}
-	} else {
-		const QString fallback_name = sanitized_folder_name(QString::fromStdString(map->name));
-		const fs::path target_directory = file_name / fallback_name.toStdWString();
-		fs::create_directories(target_directory);
+		show_saved_status();
+		return true;
+	}
 
-		hierarchy.map_directory = target_directory;
-		if (map->filesystem_path.empty()) {
-			map->filesystem_path = fs::absolute(target_directory) / "";
-			map->name = utf8_path(*--(--map->filesystem_path.end()));
-			hierarchy.map_directory = map->filesystem_path;
-			if (!save_map_reporting_errors(map->filesystem_path)) {
-				return false;
-			}
-		} else {
-			if (!save_map_reporting_errors(target_directory)) {
-				return false;
-			}
+	// Refusals come before anything is written or redirected. Save As never writes into a folder that already holds files: a new map
+	// would silently replace that folder's war3map files, and copying an existing map into it stops at the first file already there.
+	const QString target_text = display_path(target_directory);
+	if (!map->filesystem_path.empty() && path_is_within(target_directory, map->filesystem_path)) {
+		QMessageBox::warning(this, "Save As",
+							 "The map was not saved. The folder\n" + target_text
+								 + "\nis inside the map's own folder, so the map would be copied into itself.\n\nChoose a location outside "
+								 + display_path(map->filesystem_path) + ".");
+		return false;
+	}
+	std::error_code ec;
+	const fs::file_status target_status = fs::symlink_status(target_directory, ec);
+	if (target_status.type() == fs::file_type::not_found) {
+		ec.clear(); // status reports a missing path as an error too
+	}
+	const bool target_existed = fs::exists(target_status);
+	if (ec || (target_existed && (!fs::is_directory(target_directory, ec) || !fs::is_empty(target_directory, ec) || ec))) {
+		QMessageBox::warning(this, "Save As",
+							 "The map was not saved. The folder\n" + target_text
+								 + "\nalready exists and is not empty, so saving there would replace or mix with the files in it.\n\n"
+								   "Choose another location, or empty that folder first.");
+		return false;
+	}
+	fs::create_directories(target_directory, ec);
+	if (ec) {
+		QMessageBox::critical(this, "Save As",
+							  "The map was not saved. The folder\n" + target_text + "\ncould not be created:\n"
+								  + QString::fromLocal8Bit(ec.message().c_str()));
+		return false;
+	}
+
+	// Map::save and the new-map case below point these at the new folder. A failure puts them back, so the next Save does not write
+	// the open map into a folder that holds a broken copy.
+	const fs::path previous_directory = hierarchy.map_directory;
+	const fs::path previous_path = map->filesystem_path;
+	const std::string previous_name = map->name;
+
+	bool saved = false;
+	hierarchy.map_directory = target_directory;
+	if (map->filesystem_path.empty()) {
+		map->filesystem_path = fs::absolute(target_directory) / "";
+		map->name = utf8_path(*--(--map->filesystem_path.end()));
+		hierarchy.map_directory = map->filesystem_path;
+		saved = save_map_reporting_errors(map->filesystem_path);
+	} else {
+		saved = save_map_reporting_errors(target_directory);
+	}
+
+	if (!saved) {
+		hierarchy.map_directory = previous_directory;
+		map->filesystem_path = previous_path;
+		map->name = previous_name;
+
+		std::error_code left_ec;
+		const bool left_files = fs::exists(target_directory, left_ec) && !fs::is_empty(target_directory, left_ec);
+		if (!target_existed && !left_files) {
+			fs::remove(target_directory, left_ec); // the empty folder Save As made
+		} else if (left_files) {
+			QMessageBox::warning(this, "Save As",
+								 "Save As did not finish. Some map files were already written to\n" + target_text
+									 + "\nThat folder was left as it is; it is not a complete map. Delete it, or empty it before saving there again.\n\n"
+									 + (previous_path.empty() ? QString("The open map is still unsaved.")
+															  : "Save still writes the open map to\n" + display_path(previous_path)));
 		}
+		return false;
 	}
 
-	// The map files were written, but the script step failed and its error was shown: the old script is still in the map.
-	if (map->script_compile_failed) {
-		show_transient_notice("Saved without a new map script");
-		update_map_context("Saved, script not updated");
-	} else {
-		show_transient_notice("Map saved");
-		update_map_context("Saved");
-	}
+	show_saved_status();
 	return true;
 }
 
@@ -4477,6 +4653,341 @@ void HiveWE::run_qa_kept_script_check() {
 		map->headless = true; // a script compile message would be a dialog
 		check(save_current_map() && fs::exists(normal_folder / "war3map.wtg") && fs::exists(normal_folder / "war3map.j"),
 			  "a normal map: Save writes war3map.wtg and the generated script as before");
+
+		finish();
+	});
+}
+
+void HiveWE::run_qa_save_safety_check() {
+	if (!qa_offscreen || !qa_save_safety_check) {
+		return;
+	}
+
+	// Everything below works on copies in a temporary folder, and the backups go there too: the startup map folder is never written.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(180000, this, [temp]() {
+		std::println("FAIL the save safety check did not finish within 180 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto write_lines = [&](const bool done) {
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + (done ? "\nDONE\n" : "\n"));
+			}
+		};
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			std::println("{}", lines.back().toStdString());
+			std::fflush(stdout);
+			write_lines(false);
+			return passed;
+		};
+		const auto finish = [&]() {
+			qa_backup_root.clear();
+			qa_save_as_folder.clear();
+			write_lines(true);
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+		const auto read_file = [](const fs::path& path) {
+			std::ifstream in(path, std::ios::binary);
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+		const auto process_events = []() {
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+			QApplication::processEvents();
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		};
+		// Open Map without the recent-maps registry write.
+		const auto open_map = [&](const fs::path& path) {
+			window_handler.close_all();
+			process_events();
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(path);
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		};
+
+		// Watches for modal dialogs from now on: clicks OK on every message box (recording title and text), closes anything else.
+		struct Watch {
+			QStringList titles;
+			QStringList texts;
+			bool off_screen = true;
+			QPointer<QTimer> timer;
+		};
+		const auto watch_dialogs = [this]() {
+			auto watch = std::make_shared<Watch>();
+			auto* timer = new QTimer(this);
+			watch->timer = timer;
+			connect(timer, &QTimer::timeout, this, [watch]() {
+				QWidget* modal = QApplication::activeModalWidget();
+				if (!modal || !modal->isVisible()) {
+					return;
+				}
+				watch->titles << modal->windowTitle();
+				watch->off_screen = watch->off_screen && std::ranges::none_of(QGuiApplication::screens(), [&](const QScreen* screen) {
+					return screen->geometry().intersects(modal->frameGeometry());
+				});
+				auto* box = qobject_cast<QMessageBox*>(modal);
+				if (box && box->button(QMessageBox::Ok)) {
+					watch->texts << box->text();
+					box->button(QMessageBox::Ok)->click();
+				} else {
+					watch->texts << QString();
+					modal->close();
+				}
+			});
+			timer->start(20);
+			return watch;
+		};
+		const auto stop_watch = [](const std::shared_ptr<Watch>& watch) {
+			if (watch->timer) {
+				watch->timer->stop();
+				watch->timer->deleteLater();
+			}
+		};
+		const auto dialogs = [](const std::shared_ptr<Watch>& watch) {
+			return " (dialogs: " + watch->titles.join(", ") + ")";
+		};
+		// Every file and folder under `folder` with its size, to show that a refused Save As wrote nothing.
+		const auto listing = [](const fs::path& folder) {
+			std::vector<std::pair<std::wstring, std::uintmax_t>> entries;
+			std::error_code ec;
+			for (auto it = fs::recursive_directory_iterator(folder, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+				std::error_code size_ec;
+				const auto size = it->is_regular_file(size_ec) ? it->file_size(size_ec) : 0;
+				entries.emplace_back(it->path().lexically_relative(folder).wstring(), size);
+			}
+			std::ranges::sort(entries);
+			return entries;
+		};
+		const auto state = [&]() {
+			return std::tuple { hierarchy.map_directory, map->filesystem_path, map->name };
+		};
+		const auto move_unit = [&]() {
+			map->units.units.front().position.x += 1.f;
+		};
+
+		if (!check(temp->isValid(), "a temporary folder was created")) {
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = fs::path(temp->path().toStdWString()).make_preferred();
+		const fs::path map_folder = root / "map";
+		fs::copy(fs::path("data") / "test map", map_folder, fs::copy_options::recursive, ec);
+		if (!check(!ec && fs::exists(map_folder / "war3map.w3i"), "sandbox copy made")) {
+			return finish();
+		}
+		const fs::path backups_root = root / "backups";
+		qa_backup_root = QString::fromStdWString(backups_root.wstring());
+		const fs::path map_backups = map_backup::backups_folder_for(backups_root, map_folder);
+
+		open_map(map_folder);
+		if (!check(map->loaded && !map->units.units.empty(), "the sandbox map is open and has a placed unit")) {
+			return finish();
+		}
+
+		// --- Save (Ctrl+S) backs up the files it replaces --------------------------------------------------------------------------------
+		{
+			const std::string units_before = read_file(map_folder / "war3mapUnits.doo");
+			move_unit();
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map();
+			stop_watch(watch);
+			const auto sets = map_backup::list_sets(map_backups);
+			check(saved && sets.size() == 1, "Save: saved and one backup set was made" + dialogs(watch));
+			check(!sets.empty() && read_file(sets[0].path / "war3mapUnits.doo") == units_before && read_file(map_folder / "war3mapUnits.doo") != units_before,
+				  "Save: the backup holds war3mapUnits.doo from before the save, the map folder the new one");
+			check(!sets.empty() && fs::exists(sets[0].path / "war3map.w3i") && fs::exists(sets[0].path / "source.txt")
+					  && !fs::exists(sets[0].path / "war3mapImported"),
+				  "Save: the backup has the map files and source.txt, no import folders");
+			check(!watch->titles.contains("Backup Failed") && transient_notice->text() == "Map saved", "Save: no backup warning, notice \"Map saved\"");
+
+			// The second Save backs up the first one's output (it differs from the original files); a third without changes finds the
+			// files identical to that backup and makes none.
+			const auto again = watch_dialogs();
+			save_current_map();
+			save_current_map();
+			stop_watch(again);
+			const auto later_sets = map_backup::list_sets(map_backups);
+			check(later_sets.size() == 2 && read_file(later_sets[0].path / "war3mapUnits.doo") == read_file(map_folder / "war3mapUnits.doo"),
+				  "two more Saves without changes add one backup (of the first Save's output), not two");
+		}
+
+		// --- A failed backup warns once and the map is still saved ------------------------------------------------------------------------
+		{
+			const fs::path file_root = root / "backup_root_is_a_file";
+			std::ofstream(file_root, std::ios::binary) << "not a folder";
+			qa_backup_root = QString::fromStdWString(file_root.wstring());
+			const auto map_listing = listing(map_folder);
+
+			const std::string units_before = read_file(map_folder / "war3mapUnits.doo");
+			move_unit();
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map();
+			stop_watch(watch);
+			check(saved && read_file(map_folder / "war3mapUnits.doo") != units_before, "failed backup: the map was still saved");
+			check(watch->titles.count("Backup Failed") == 1, "failed backup: one Backup Failed warning, OK clicked" + dialogs(watch));
+			const qsizetype warning = watch->titles.indexOf("Backup Failed");
+			check(warning >= 0 && watch->texts[warning].contains(QString::fromStdWString(file_root.wstring())),
+				  "failed backup: the warning names the backup folder");
+			check(watch->off_screen, "failed backup: the warning was outside every screen");
+			check(transient_notice->text() == "Saved without a backup", "failed backup: notice \"Saved without a backup\"");
+			check(fs::is_regular_file(file_root) && listing(map_folder).size() == map_listing.size(), "failed backup: nothing was added to the map folder");
+
+			move_unit();
+			const auto second = watch_dialogs();
+			const bool saved_again = save_current_map();
+			stop_watch(second);
+			check(saved_again && second->titles.isEmpty() && transient_notice->text() == "Saved without a backup",
+				  "second failed backup: saved, no dialog, only the notice" + dialogs(second));
+			qa_backup_root = QString::fromStdWString(backups_root.wstring());
+		}
+
+		const QString folder_name = sanitized_folder_name(QString::fromStdString(map->name));
+		const fs::path set_count_folder = map_backups;
+		const size_t sets_before_refusals = map_backup::list_sets(set_count_folder).size();
+
+		// --- Save As refuses a folder that already holds files (existing map) ------------------------------------------------------------
+		{
+			const fs::path pick = root / "pick_full";
+			fs::create_directories(pick / folder_name.toStdWString(), ec);
+			std::ofstream(pick / folder_name.toStdWString() / "keep.txt", std::ios::binary) << "USER FILE";
+			move_unit();
+			const auto before = state();
+			const auto pick_before = listing(pick);
+			const auto map_before = listing(map_folder);
+			qa_save_as_folder = QString::fromStdWString(pick.wstring());
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map_as();
+			stop_watch(watch);
+			check(!saved && watch->titles == QStringList { "Save As" } && watch->texts.value(0).contains("not empty")
+					  && watch->texts.value(0).contains(QString::fromStdWString((pick / folder_name.toStdWString()).wstring())),
+				  "Save As into a folder with files (existing map): refused with a message naming the folder" + dialogs(watch));
+			check(listing(pick) == pick_before && listing(map_folder) == map_before && read_file(pick / folder_name.toStdWString() / "keep.txt") == "USER FILE",
+				  "refused Save As (existing map): nothing was written");
+			check(state() == before && has_unsaved_work(), "refused Save As (existing map): paths, name and unsaved state unchanged");
+		}
+
+		// --- Save As refuses a folder inside the map's own folder -------------------------------------------------------------------------
+		{
+			const fs::path inside = map_folder / "qa_inside";
+			fs::create_directories(inside, ec);
+			const auto before = state();
+			const auto map_before = listing(map_folder);
+			qa_save_as_folder = QString::fromStdWString(inside.wstring());
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map_as();
+			stop_watch(watch);
+			check(!saved && watch->titles == QStringList { "Save As" } && watch->texts.value(0).contains("inside"),
+				  "Save As inside the map's own folder: refused" + dialogs(watch));
+			check(listing(map_folder) == map_before && state() == before, "refused Save As (inside): nothing written, state unchanged");
+			fs::remove(inside, ec);
+		}
+
+		// --- Save As of a new (never saved) map refuses a folder that already holds files, and saves into an empty one --------------------
+		{
+			const auto saved_state = state();
+			map->filesystem_path.clear();
+			map->name = "QA New Map";
+			const fs::path pick = root / "pick_new_full";
+			fs::create_directories(pick / "QA New Map", ec);
+			std::ofstream(pick / "QA New Map" / "war3map.w3e", std::ios::binary) << "SOMEONE ELSE'S TERRAIN";
+			const auto before = state();
+			const auto pick_before = listing(pick);
+			qa_save_as_folder = QString::fromStdWString(pick.wstring());
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map_as();
+			stop_watch(watch);
+			check(!saved && watch->titles == QStringList { "Save As" } && watch->texts.value(0).contains("not empty"),
+				  "Save As of a new map into a folder with files: refused" + dialogs(watch));
+			check(listing(pick) == pick_before && read_file(pick / "QA New Map" / "war3map.w3e") == "SOMEONE ELSE'S TERRAIN" && state() == before,
+				  "refused Save As (new map): the other map's war3map.w3e is untouched, the map still has no folder");
+
+			const fs::path empty_pick = root / "pick_new_empty";
+			fs::create_directories(empty_pick, ec);
+			qa_save_as_folder = QString::fromStdWString(empty_pick.wstring());
+			const auto ok_watch = watch_dialogs();
+			const bool saved_new = save_current_map_as();
+			stop_watch(ok_watch);
+			check(saved_new && fs::exists(empty_pick / "QA New Map" / "war3map.w3i") && fs::equivalent(map->filesystem_path, empty_pick / "QA New Map"),
+				  "Save As of a new map into an empty folder: saved there" + dialogs(ok_watch));
+
+			std::tie(hierarchy.map_directory, map->filesystem_path, map->name) = saved_state;
+		}
+		check(map_backup::list_sets(set_count_folder).size() == sets_before_refusals, "the refused Save As runs made no backup of the open map");
+
+		// --- Save As into an empty folder works, and Save As onto the map's own folder is an ordinary save ---------------------------------
+		{
+			const fs::path pick = root / "pick_empty";
+			fs::create_directories(pick, ec);
+			qa_save_as_folder = QString::fromStdWString(pick.wstring());
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map_as();
+			stop_watch(watch);
+			const fs::path target = pick / folder_name.toStdWString();
+			check(saved && fs::exists(target / "war3map.w3i") && fs::equivalent(map->filesystem_path, target) && fs::equivalent(hierarchy.map_directory, target),
+				  "Save As into an empty folder: saved, the map now lives there" + dialogs(watch));
+			check(!has_unsaved_work(), "Save As into an empty folder: the map counts as saved");
+
+			move_unit();
+			qa_save_as_folder = QString::fromStdWString(target.wstring());
+			const auto same = watch_dialogs();
+			const bool saved_same = save_current_map_as();
+			stop_watch(same);
+			check(saved_same && same->titles.isEmpty() && fs::equivalent(map->filesystem_path, target) && !fs::exists(target / folder_name.toStdWString()),
+				  "Save As picking the map's own folder: an ordinary save" + dialogs(same));
+
+			move_unit();
+			qa_save_as_folder = QString::fromStdWString(pick.wstring());
+			const auto parent = watch_dialogs();
+			const bool saved_parent = save_current_map_as();
+			stop_watch(parent);
+			check(saved_parent && parent->titles.isEmpty() && fs::equivalent(map->filesystem_path, target) && !has_unsaved_work(),
+				  "Save As picking the folder the map is in (same name): an ordinary save" + dialogs(parent));
+		}
+
+		// --- A Save As that fails midway puts everything back, and the next Save writes into the original folder --------------------------
+		open_map(map_folder);
+		{
+			// The copy carries the read-only attribute, so writing war3map.w3e into the new folder throws after the copy.
+			const fs::path terrain = map_folder / "war3map.w3e";
+			fs::permissions(terrain, fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write, fs::perm_options::remove, ec);
+			move_unit();
+			const auto before = state();
+			const fs::path pick = root / "pick_fails";
+			qa_save_as_folder = QString::fromStdWString(pick.wstring());
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map_as();
+			stop_watch(watch);
+			fs::permissions(terrain, fs::perms::owner_write, fs::perm_options::add, ec);
+			const fs::path target = pick / folder_name.toStdWString();
+			const qsizetype left = watch->titles.lastIndexOf("Save As");
+			check(!saved && watch->titles.contains("Saving failed") && left >= 0 && watch->texts[left].contains("did not finish"),
+				  "Save As failing midway: refused with Saving failed and a note about the folder left behind" + dialogs(watch));
+			check(state() == before, "Save As failing midway: map folder, path and name are back on the original");
+			check(has_unsaved_work(), "Save As failing midway: the map still counts as unsaved");
+
+			const std::string original_units = read_file(map_folder / "war3mapUnits.doo");
+			const std::string left_units = read_file(target / "war3mapUnits.doo");
+			const auto next = watch_dialogs();
+			const bool saved_next = save_current_map();
+			stop_watch(next);
+			check(saved_next && read_file(map_folder / "war3mapUnits.doo") != original_units && read_file(target / "war3mapUnits.doo") == left_units,
+				  "the next Save writes into the original folder, not the half-written one" + dialogs(next));
+			check(!has_unsaved_work(), "the next Save: the map counts as saved");
+			const std::string imp = read_file(map_folder / "war3map.imp");
+			check(imp.find("pick_fails") == std::string::npos, "the next Save: war3map.imp does not list the other folder");
+		}
 
 		finish();
 	});

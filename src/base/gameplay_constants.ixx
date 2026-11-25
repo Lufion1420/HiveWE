@@ -1,6 +1,7 @@
 export module GameplayConstants;
 
 import std;
+import types;
 import INI;
 import SLK;
 import Hierarchy;
@@ -60,13 +61,17 @@ export class GameplayConstants {
 		}
 	}
 
-	void save() {
+	/// Writes war3mapMisc.txt through Hierarchy::map_file_write, so a failed write throws and keeps the old file.
+	void save() const {
 		ini::INI war3mapMisc;
 
 		war3mapMisc.ini_data["Misc"] = {};
-		for (const auto& [key, value] : data.shadow_data[constants_row_key]) {
-			war3mapMisc.ini_data["Misc"][key] = absl::StrSplit(value, ',', absl::SkipEmpty());
+		if (const auto row = data.shadow_data.find(std::string(constants_row_key)); row != data.shadow_data.end()) {
+			for (const auto& [key, value] : row->second) {
+				war3mapMisc.ini_data["Misc"][key] = absl::StrSplit(value, ',', absl::SkipEmpty());
+			}
 		}
-		war3mapMisc.save(hierarchy.map_directory / "war3mapMisc.txt");
+		const std::string text = war3mapMisc.serialize();
+		hierarchy.map_file_write("war3mapMisc.txt", std::span(reinterpret_cast<const u8*>(text.data()), text.size()));
 	}
 };

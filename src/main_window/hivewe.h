@@ -126,6 +126,15 @@ public:
 	/// PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_asset_delete_check = false;
 	void run_qa_asset_delete_check();
+	/// Set by --qa-save-safety-check (needs --qa-offscreen; --qa-script-out <file> optional): on sandbox copies of data/test map, checks the
+	/// backup made before Save, a failed backup (dialog once, save still done), the Save As refusals and the state after a Save As that fails
+	/// midway, through save_current_map and save_current_map_as. Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_save_safety_check = false;
+	void run_qa_save_safety_check();
+	/// Only with --qa-offscreen: the backup root to use instead of a temporary one (QA runs never back up into the user's AppData).
+	static inline QString qa_backup_root;
+	/// Only with --qa-offscreen: the folder save_current_map_as uses instead of asking with the folder picker.
+	static inline QString qa_save_as_folder;
 	/// After a map load: turns trigger editing off or on for map->keeps_script, and with `notify` tells the user once when it is off.
 	void apply_trigger_editing_state(bool notify);
 	/// Set by the unsaved check hook only: a QMessageBox button that answers the unsaved changes prompt instead of showing it.
@@ -234,6 +243,8 @@ private:
 	void update_map_context(const QString& status, const QString& detail_override = {});
 	bool save_current_map();
 	bool save_current_map_as();
+	/// The notice and status text after a successful save: names a failed script step or backup.
+	void show_saved_status();
 	/// Moves into the map what open editor windows still hold, before a save writes it.
 	void apply_open_editors();
 	bool confirm_map_replacement(const QString& action);
