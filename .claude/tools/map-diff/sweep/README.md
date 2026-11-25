@@ -15,12 +15,14 @@ Scripts of the differential sweep (fourth sweep, 2026-11-20). Not run since bein
 2. `gettd.py <dll_dir> <out>`: extract the game's `triggerdata.txt` (fdiff `--triggerdata`, expected at `stock/TriggerData.txt`).
 3. `ext_all.py <S> <w4>` runs `ext1.py` per map (known names plus `(listfile)` entries, never `SFileFindFirstFile`) to fill `stock/` and `stock_scripts/`. `mpq_extract.py <dll_dir> <mpq> <outdir>` extracts from a single archive.
 4. `subset2.py <S> <subset.json>` (or older `subset.py <S>`): choose the maps (v39 or Lua scripts); prints counts.
-5. `drive4.py` (needs `S`): loops `one.py <id> <lang>` over the subset with a timeout and skips finished ids. `one.py` calls `sweep/resave.py` (HiveWE `--resave`), `files/fdiff.py`, `scripts/sdiff.py`, and `sim/simdiff.py` for Lua maps, and counts `SetUnitColor` and `SetResourceAmount`. Writes `w4/work/res/<id>.json`.
+5. `drive4.py` (needs `S`): loops `one.py <id> <lang>` over the subset with a timeout and skips finished ids, so a sweep can run in chunks (stop it, rerun to resume). `one.py` calls `sweep/resave.py` (HiveWE `--resave`), `files/fdiff.py`, `scripts/sdiff.py`, and `sim/simdiff.py` for Lua maps, and counts `SetUnitColor` and `SetResourceAmount`. Writes `w4/work/res/<id>.json`.
 6. `agg.py <S>`: aggregate the results (status, peak memory, colour/gold counts, fdiff histogram, sdiff lost-line heads).
 7. `cfgdiff.py <S>`: compare `config`/`main`/slot functions of a folder map before (`rel_in/`) and after (`rel_out/`) a resave (NCOW check).
 8. `teams.py <S> <repo>/.claude/tools/map-diff` (subset) or `teams_all.py` (all 466): per-map w3i flags, human count, SetTeams and placement from the WE script.
 
 The 78-kind classifier from reports 1-3 is not in the repo and was not rebuilt.
+
+When comparing two sweeps, do not compare the `err` fields: they are cut to a fixed length and hold paths, so their content depends on path length. Compare the full `w4/work/logs/<id>.err.txt` logs with paths normalised.
 
 `%TEMP%/input.lua` is shared by every HiveWE process: see `../scripts/README.md`. To check for a clash, compare the hash and size of each generated script (all distinct, none the user's map) instead of watching processes: `Win32_Process.CommandLine` can be empty for a process that has just started.
 

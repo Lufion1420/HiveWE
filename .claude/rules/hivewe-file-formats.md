@@ -184,6 +184,11 @@ Checks: `.claude/tools/script-check/`.
 - New in-memory state that can name files must be passed in by `Map::get_file_usage`.
 - Audio extensions are one family (wav, mp3, flac, ogg), and a path may have no extension: the user's NCOW Lua passes sound paths that way. Reforged CASC stores stock audio as `.ogg` while maps override it with `.wav` at the same path (Needs verification against CASC).
 
+## Backups before save (2026-11-25)
+
+- Every GUI save goes through `save_map_reporting_errors`, which first backs up the files `map_backup::is_backed_up_name` (`src/base/map/map_backup.ixx`) accepts: root `war3map*` files and `conversation.json`, plus `scripts\war3map.j`/`.lua`. A new file that Save writes must match that rule and be added to the list in the "covers every file Save writes" test in `tests/map_backup_test.cpp` (the list is hand-written).
+- `--resave` and Map Protector call `Map::save` directly and make no backup. Under `--qa-offscreen` the backup root is a temp folder or the hook's folder, never the real AppData.
+
 ## Save temp files and folder listings (verified 2026-11-22)
 
-- Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `export_mpq`, `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy, `find_file_usage`.
+- Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `export_mpq`, `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy, `find_file_usage`, `map_backup::select_files`.

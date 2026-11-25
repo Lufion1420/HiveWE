@@ -35,6 +35,8 @@ Intentional globals: `map`, `camera`, `hierarchy`, `resource_manager`, `gl_threa
 - On MSVC, `fs::path::string()`/`generic_string()` throw for characters outside the system code page (CJK/Cyrillic folders). In `src` use `wstring()`/`generic_wstring()`/`u8string()` and `QString::fromStdWString`. `toStdString()` into an `fs::path` garbles the same way: use `toStdWString()`. A fix must cover the whole chain (every caller and dialog on the path, and file names inside the map folder, for example the `Imports::save` listing). A Unicode-path test only goes RED on a non-UTF-8 code page.
 - An exception escaping a Qt slot ends the program. When fixing one such throw, grep the whole call chain (Qt picker, labels, `utilities.ixx` error text), not only the named function.
 - `path.extension() == ".blp"` is case-sensitive: fold case first.
+- On MSVC, `fs::status`/`symlink_status` with an `error_code` set it for a missing path too (`fs::exists` clears it): treat `file_type::not_found` as no error.
+- A multi-step delete of a set that code later recognises (for example a backup set) renames it first, so a partial delete cannot look complete.
 - `resave_smoke` already runs inside `ctest --preset Agent`. Its cases in `tests/resave_smoke.cmake` share one sandbox: a case that plants a fixture must restore the original file before the next case.
 - `.ixx` line endings are not uniform: most are CRLF in the working copy (so `git apply` of saved diffs fails; use Edit), but some, such as `units.ixx`, are LF. Check with `git ls-files --eol` before a scripted rewrite.
 - `asset_obfuscation.ixx` has no `u8`/`u32` aliases: write `uint8_t`/`uint32_t`.

@@ -43,7 +43,7 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 - A combo filled from an SLK must be checked for the row-key and first-row pitfalls in `hivewe-file-formats.md`.
 - Errors: Qt dialogs where surrounding code already does.
 - `ColorButton::changeColor` has no `ShowAlphaChannel`, so a picked colour gets alpha 255 (ticketed as backlog).
-- `HiveWE::save_current_map_as` creates the target folder and sets `hierarchy.map_directory` before `Map::save` runs, so a save refusal check must run before the folder picker, as `Map::ensure_unit_ids_fit` does.
+- `HiveWE::save_current_map_as` creates the target folder and sets `hierarchy.map_directory` before `Map::save` runs, so a save refusal check must run before the folder picker, as `Map::ensure_unit_ids_fit` does. It refuses a target folder that is not empty or lies inside the map's folder before writing anything, and a failed save restores `map_directory`, `filesystem_path` and the map name; keep both.
 
 - Shortcuts (074f2d1, 2026-11-22): Ctrl+T is Test Map, Ctrl+Shift+W is Wireframe, Ctrl+W is "Show or hide water". `HiveWE.ui` `actionTest_Map` had never been added to a widget, so Ctrl+T used to only toggle Wireframe.
 - Layout traps (verified 2026-11-22): a `QStackedWidget` takes the largest `minimumSizeHint` of all pages (wrap tall pages in a `QScrollArea`); a `QComboBox` defaults to its longest item width; `FlowLayout::minimumSize()` is the widest laid-out row unless `set_shrinkable()` (opt-in) is used; `Palette::fit_to_column()` runs for every theme, so a palette layout change needs a check under the old Dark and Light themes too.

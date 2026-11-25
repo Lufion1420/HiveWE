@@ -23,7 +23,7 @@ Model rule (user, 2026-11-19, adopted from WarMash 2026-11-20): main session Opu
 
 Left out of the roster: `api-chronicler` (`release-manager` owns `CHANGELOG.md`; HiveWE has no script-API docs) and a docs-site agent (HiveWE has no docs site). Add either when first needed.
 
-Built-in `Explore` and `Plan` handle scoping when ownership is unknown; launch two `Explore` agents in parallel when both the UI and format layers are unknown. Use Codegraph (`codegraph_explore`) before wide searches; it needs `projectPath` set to the repo path, and has failed project detection for agents (one saw "not initialized"), so fall back to Grep. `hivewe.cpp` line numbers drift quickly: cite symbol names in tickets and briefs. Run the `security-review` skill only when the user asks (MPQ export, external `QProcess`, file I/O on user paths). Add `security-auditor` (untrusted map parsing, `QProcess`, Map Protector) and `perf-auditor` (Tracy, render loop, load times) when first needed.
+Built-in `Explore` and `Plan` handle scoping when ownership is unknown; launch two `Explore` agents in parallel when both the UI and format layers are unknown. Codegraph reports "not initialized" for this repo (verified 2026-11-25): briefs say to use Grep until that changes. `hivewe.cpp` line numbers drift quickly: cite symbol names in tickets and briefs. Run the `security-review` skill only when the user asks (MPQ export, external `QProcess`, file I/O on user paths). Add `security-auditor` (untrusted map parsing, `QProcess`, Map Protector) and `perf-auditor` (Tracy, render loop, load times) when first needed.
 
 ## Pipeline
 
@@ -81,7 +81,7 @@ Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPRO
 - Keep the orchestrator's context small: subagents report under 25 lines and the orchestrator does not read build logs.
 
 ## Limits
-- The orchestrator-only rule lives in `CLAUDE.md` as an instruction; nothing mechanically enforces it. The orchestrator still uses read-only lookups, codegraph and git.
+- The orchestrator-only rule lives in `CLAUDE.md` as an instruction; nothing mechanically enforces it. The orchestrator still uses read-only lookups and git.
 - `.claude/settings.json` mechanically denies Read and Grep on `.pen` (archived Pencil files), configuring or building any auto-running preset (`Release`, `ReleaseTracing`, `Debug`, `RelWithDebInfo`: `HIVEWE_AUTO_RUN_AFTER_BUILD` defaults to ON, only `Agent` sets it OFF), pushing to `upstream`, force, mirror, `+refspec` and `:`-delete pushes, deleting `main` on origin, changing repo visibility, `gh auth switch`, and killing `HiveWE`, Warcraft III or `code` by image name. `--force-with-lease` is on "ask". Deny patterns match the whole command line, so a commit message containing the literal text of such a push in the same command is blocked too: commit and push in separate commands.
 - Lendrill's push-guard hook was not ported: it was disabled there for causing too many prompts.
 - Only one build and one designer can run at a time, so development runs sequentially.

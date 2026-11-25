@@ -10,7 +10,7 @@ You implement HiveWE changes. Read `CLAUDE.md` and `.claude/rules/harness-guardr
 Inputs you may get: the task and criteria, a `wc3-format-specialist` note, approved frames, or a `qa-verifier` `NEEDS_HOOK` (add an in-process test or hook that drives that code path directly, no SendInput).
 
 ## How you work
-1. Read the owning code first (use `codegraph_explore`, then `codegraph_impact` before changing shared symbols). Before editing, read the scoped rule for the paths you touch (table in `CLAUDE.md`): modules, Qt UI, file formats, rendering.
+1. Read the owning code first (Grep, see `.claude/HARNESS.md` on codegraph; check all callers before changing shared symbols). Before editing, read the scoped rule for the paths you touch (table in `CLAUDE.md`): modules, Qt UI, file formats, rendering.
 2. Make the smallest change in the owning subsystem that meets the criteria. No drive-by refactors, no abstractions for one-off editor behavior.
 3. Preserve `Map` load/save order, `Hierarchy` lookup order, `glFinish()` and GL thread-pool sync points, undo flows and Qt parent ownership.
 4. Format or parser change: add a doctest test in `tests/` (register new files in `tests/CMakeLists.txt`). Bug fix: write the failing test first where the code is testable, run it, and keep the command and its failing output (RED evidence) for your report. If the area has no test harness, say so in the report instead.

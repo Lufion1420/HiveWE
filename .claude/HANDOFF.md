@@ -1,38 +1,31 @@
 # Session handoff
 
-Written 2026-11-25 (session 34 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
-- Models: main session Sonnet 5.5 as orchestrator. Subagents: cpp-dev x1 (Sonnet), reviewer x1 (Opus), qa-verifier x1, release-manager x1, docs-keeper x1.
-- Spawn count this session: 5 (resumes not counted).
+Written 2026-11-25 (session 35 of the project). Overwritten at each handoff. Format: `.claude/rules/harness-guardrails.md` "Session handoff".
+- Models: main session Sonnet 5.5 as orchestrator. Subagents: wc3-format-specialist x1 (Opus), cpp-dev x1 (Opus), reviewer x1 (Opus), qa-verifier x1, release-manager x1, docs-keeper x1.
+- Spawn count this session: 6 (resumes not counted).
 
 ## Checks waiting on the user
-The user's maps are SD only and Lua only: do not list HD checks. No per-step approvals needed.
-1. Map defect found by QA in both NCOW maps (NCOW Arena 0.3 and Test\release): the script names `Sound/Spells/NCOW_Sound_Seinsashu.mp3`, but the file is in `Sound/Spells/Sasuke/`. Fix the path in the trigger or move the file; the Asset Manager lists that file as unused.
-2. Recommended before a bulk delete: open the Asset Manager on a copy of an NCOW map, "Select all unused", delete, then test the map. (Paths a script builds at runtime are not detected.) The game test itself waits like all game tests.
-3. Recommended: open any script-heavy map saved with an older HiveWE and spot-check that each custom script trigger holds its own code. A map saved that way twice may still be mixed up: compare with a backup. QA found three local copies the old build had mispaired and the new build reads correctly: `Documents\Warcraft III\Maps\HiveWE test\2 hivewe\mapA_dest_fixed_build.w3x`, `...\3 rings fix\mapA_rings_fixed.w3x`, `...\4 sound and rings fix\mapA_sound_rings_fixed.w3x`.
-4. Recommended: on a copy of a map, rename a unit in the Object Editor, close that window, click the main window's X: Save/Discard/Cancel appears and Cancel keeps the window. With the change still unsaved, File > Open Map Directory on another folder map: the prompt appears and Cancel keeps your map. Then Save and click X: it closes without a prompt.
-5. Decision (WarMash direct-exe game launch as the standing method): ask again when the user says the WarMash game tests are finished.
-6. Optional: select a unit, left-drag its Selection Properties preview: starts from the front and orbits.
-7. Optional: select 2 doodads, press Delete, then Ctrl+Z: they come back.
-8. Optional, low priority: copy a terrain selection, run Change Tileset removing a tile: Ctrl+V pastes nothing and Ctrl+Z does nothing; a texture-only change keeps undo and closing prompts to save.
-9. Optional: File > Open Map on a normal `.w3x`, and a sandbox copy through Map Protector, both succeed.
-10. Optional: Map Protector, protect a copy of humanx03 with Asset Path Obfuscation enabled: it completes.
-11. Optional: Browse Models: Models and VFX/SFX sidebar rows work, sizes in MB, tiles in view play Stand (up to 12).
-12. Optional: Object Editor, double-click a unit's "model file": Browse Models opens with a Path line; OK updates the cell.
-13. Optional: Object Editor > Add Units, right-click a unit, open and cancel the Add dialog.
-14. Optional: New object dialog, type `hfö`, `ab'c`, `h000`: OK disabled for the first two, enabled for `h000`.
-15. Optional: a map with a literal (non-TRIGSTR) w3i name: Map Description shows it; edit and Save persists.
+The user deferred all manual testing on 2026-11-25. Do not list the deferred checks unless the user asks. Only these are open:
+1. First thing in a new session (the orchestrator checks this itself): `product-management:*` skills, `plugin:product-management:*` sign-in entries and the `hyperframes` skills are gone. If product-management is still listed, fix its name in `.claude/settings.local.json`.
+2. Question: the WarMash game script passes `-Foreground`, which takes window focus. OK for announced game runs? Recommended: yes.
+3. Question: skip the full 237-map sweep when a writer change is meant to keep bytes identical, tests pin that, and QA's old-versus-new `--resave` comparison on 30 or more maps shows 0 differences? Recommended: yes. Until answered, the full sweep stays.
+4. Question: run `codegraph init` in the repo (creates a local `.codegraph` index so agents read fewer files)? Recommended: yes, and ignore the folder in git.
+
+Deferred by the user (do not relist): Asset Manager bulk-delete test, old-save script spot-check, former checks 6 to 15, and every Warcraft III load check until WarMash testing is done.
 
 ## State
-- 1220329290981221 shipped in this commit: the Asset Manager no longer lists used files as unused (object fields, variations, portraits, all scripts and text files, open editor text, audio/texture/model extensions), hides dot files, and refuses to delete from an outdated list. Review REJECT then APPROVE, QA FAIL then PASS, ctest 502/502, offscreen delete and unsaved hooks green, checked on copies of three real maps. Includes item 1 of 1220895284225944; item 2 (unpack folder and `scripts\`) is open.
-- Not verified: game load; right-click "Delete file" path; non-ASCII letter case.
+- 1220329518098116 shipped as 2b583f1 and deployed to the Tools folder: GUI saves back up the map files first (`%LOCALAPPDATA%\HiveWE\HiveWE\backups`), Save As refuses a non-empty folder or one inside the map, a failed Save As no longer redirects the next Save, `war3mapMisc.txt` and the script are replaced through a temp file. Review APPROVE twice, QA PASS (targeted, then smoke and full sweep with 0 differences), ctest 525/525.
+- Not verified: the real AppData backup root in a normal (non-offscreen) run, native folder picker, backups through Test Map and Export MPQ, locked file or full disk during a backup.
+- NCOW fix, uncommitted in the user's own repos on purpose: `NCOW-Arena` and `NCOW-Main` `src/Characters/Sasuke/SasukeHebi.lua` now name `Sound/Spells/Sasuke/NCOW_Sound_Seinsashu.mp3`. Takes effect after their next build. NCOW-Main's map folder has no `Sound` folder: whether Main loads the file is unverified.
+- `.claude/settings.local.json` (local, ignored) turns off 4 plugins and 14 skills for this repo; the user also turned off unused MCP servers.
 - Untracked `qa-*.png` and `map-protector-flat-*.png` in `designs/current/` and stray `512684032` stay uncommitted on purpose.
-- Filed this session: 1220898118343928 (Asset Manager leftovers). A stray "Placeholder check" comment was added by mistake on 1220844868394880.
+- Filed this session: 1220898431103598 (QA hooks write the user's recent maps), 1220899403091128 (backup leftovers), and a ticket to move the QA hooks out of `hivewe.cpp`.
 
 ## Next step
-1220329518098116 (standard or risky, data safety; "[Wish] Add safe writes and automatic versioned backups"). Read the ticket and verify its claims in code first; part of it may overlap 1220767791486098. Game checks wait.
+1220329279925658 "[Wish] Report Export MPQ results and keep the old file until the new one succeeds". Verified in code today: `write_map_archive` (`hivewe.cpp`) deletes the old archive first and ignores add, compact and close failures. Overlaps one item of 1220767791486098. Game checks wait.
 
 ## Backlog only, not next steps
-1220329469211176 (non-map files in imports), 1220898118343928, 1220895469636543, 1220895284225944 (unpack-folder item), 1220329518098244, 1220885519534133, 1220824083919839 / 1220818407294566 / 1220828873067911 (flat UI batches, at most one per session), 1220328401966062 (UI modernization, needs a user decision), 1220719384135918 / 1220329290824218 (idea and wishlist parents), 1220832845348582 (memory growth), 1220329469370593 and 1220362579055972 (wait for WarMash), 1220841054745630 (HD only), "Harness and quality follow-ups" section.
+1220329469211176 (non-map files in imports), 1220329518098244 (Map saved after script error), 1220899403091128, 1220898118343928, 1220895469636543, 1220895284225944 (unpack-folder item), 1220885519534133, 1220824083919839 / 1220818407294566 / 1220828873067911 (flat UI batches, at most one per session), 1220328401966062 (UI modernization, needs a user decision), 1220719384135918 / 1220329290824218 (idea and wishlist parents), 1220832845348582 (memory growth), 1220329469370593 and 1220362579055972 (wait for WarMash), 1220841054745630 (HD only), "Harness and quality follow-ups" section.
 
 ## Decisions
 User (2026-11-24): no Warcraft III launches until the user says the WarMash game tests are done.
@@ -42,18 +35,23 @@ User (2026-11-24): redeploy to the Tools folder after every QA-PASS commit witho
 User (2026-11-24): move done tickets to "Done — shipped"; focus on Asana board tickets over small edge cases.
 User (2026-11-24): hand off when context is high; offer it after a large ticket ships, before starting the next.
 User (2026-11-25, twice): after a denied combined build command, chose "run steps separately" (plain Agent-preset commands). Not a standing approval: ask again if it happens.
+User (2026-11-25): the WarMash script is the allowed standing method for game load checks; it may fail on Blizzard login, so no retry chains.
+User (2026-11-25): manual testing is deferred; map defects the agent can fix at the source are fixed, not handed back.
+User (2026-11-25): keep `security-guidance` and `i-have-adhd` on; unused plugins and skills off per project.
+User (2026-11-25): evaluate context size in main session and subagents in the retrospective.
+Orchestrator (2026-11-25): backups cover the files Save can change (not imports), keep newest 10 plus first per session and per day for 14 days, no restore window; a failed backup never blocks a save.
+Orchestrator (2026-11-25): Save As refuses a folder that holds files; no overwrite option.
 Orchestrator (2026-11-24): a trigger or script file HiveWE cannot read fully (bad header included) refuses the map.
-Orchestrator (2026-11-24): wtg deleted-item lists are written back as read (counts may lag after edits; World Editor behaviour unverified); new ids skip deleted ids.
+Orchestrator (2026-11-24): wtg deleted-item lists are written back as read; new ids skip deleted ids.
 Orchestrator (2026-11-24): new object ids are exactly 4 ASCII letters or digits in the dialogs.
 Orchestrator (2026-11-24): Open Map (MPQ) and Map Protector refuse archives with unsafe entry names.
 Orchestrator (2026-11-24): a `Map::load` failure after the body check opens a blank template map.
 Orchestrator (2026-11-24): `--resave` exit 5 means objects were skipped and dropped; exit 3 wins when both apply.
-Orchestrator (2026-11-25): a script compile failure still counts as saved (filed, not changed); undoing back to the saved state may still prompt.
-Orchestrator (2026-11-25): the script is kept whenever wtg or wct is missing (wider than the research note); `--resave` still exits 0 for such a map; cameras and sounds are not in the "Script Not Updated" warning because Save never writes them.
-Orchestrator (2026-11-25): in the Asset Manager an uncertain reference counts as used; dot files and folders are never listed; no map-diff sweep for the Asset Manager change (no writer or script generator changed).
+Orchestrator (2026-11-25): a script compile failure still counts as saved (filed, not changed); the script is kept whenever wtg or wct is missing.
+Orchestrator (2026-11-25): in the Asset Manager an uncertain reference counts as used.
 
 ## Retro
-Session 34: 5 spawns, 1 standard ticket, 2 rounds, about 1.5 hours; cpp-dev 21 + 5 + 11 min, reviewer 4.5 + 1.3 min, QA 9 + 9 min. Causes: the first brief missed unsaved editor text and audio extensions (found by review and real-map QA); cpp-dev chained a build with the test exe, was denied and needed a user answer; cpp-dev ended at 450k tokens, over its 350k guide. Applied: use ctest filters rather than the test exe; QA runs map-analysing features on copies of real maps. No review or test removed.
+Session 35: 6 spawns, 1 risky ticket, 2 rounds, about 1.5 hours. Specialist 4 min / 103k tokens; cpp-dev 27 + 5 min / 266k; reviewer 5 + 0.3 min / 122k; QA 11 + 28 min (25 min of it the full sweep) / 235k; release-manager 1 min / 76k; docs-keeper 2 min / 135k; main session 248k already during the first ticket. Causes: unused MCP servers, plugins and skills in every context (turned off, effect not yet measured); broad Asana tool load and source-file reads in the main session (now recorded as habits); `hivewe.cpp` 220 KB with half QA hooks (ticket filed); codegraph not initialized (question 4). Kept: specialist first (found 2 data-loss bugs), QA on real-map copies, QA code reading (found the clock-change bug). No review or test removed.
 
 ## Scratch
-`C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\b5ca324a-17bb-45c1-a5e3-e2651a687f66\scratchpad` (may vanish; `qa_am\scripts` and `qa_am\out` hold the Asset Manager QA tools and reports). Session 33 scratch with the eleventh sweep baseline: `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\c85be5c8-e658-4d4f-963a-a25e71743bd5\scratchpad` (`qav\sweep\w4\work`, `qav\sweep\code`, `qav\sweeprun.ps1`, `kshot.ps1`). Stock map extraction: `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\c2da2c4f-fdbc-4824-8512-571bf1879b9b\scratchpad\stock` (may vanish).
+`C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\fab3f1c0-aa86-4152-a57d-9bca50b6855d\scratchpad` (may vanish; `qav\sweep\w4\work` is the twelfth sweep, 0 differences to the eleventh; `qav\code` holds `prep.ps1` and `cmp_sweep.py`). Session 33 scratch with the eleventh sweep baseline: `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\c85be5c8-e658-4d4f-963a-a25e71743bd5\scratchpad`. Stock map extraction: `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\c2da2c4f-fdbc-4824-8512-571bf1879b9b\scratchpad\stock` (may vanish).
