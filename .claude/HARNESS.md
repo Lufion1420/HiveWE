@@ -39,7 +39,7 @@ QA tiers: the orchestrator names the tier in each QA brief.
 - **Smoke:** `ctest --preset Agent` plus one `data/test map` save. For small changes and every fix round.
 - **Build mode (name it in every QA brief):** `reuse` or `rebuild`. `reuse` is allowed only when `cpp-dev`'s report states the exact build and `ctest` result on the current tree and the staleness check in `agents/qa-verifier.md` prints no file; QA then skips build and `ctest` and runs only the targeted offscreen checks and hooks. Anything else is `rebuild`. The lock file, one-build-at-a-time and offscreen rules apply unchanged (user, 2026-11-24).
 - **Targeted:** map-diff on a map subset for the changed writer.
-- **Full:** the 237-map map-diff sweep, once per task on the final round, and always when a writer or the script generator changed.
+- **Full:** the 237-map map-diff sweep, once per task on the final round, and always when a writer or the script generator changed. On Standard and Risky, the first-round QA brief asks for targeted checks only; the sweep starts after `reviewer` APPROVE, on the final tree.
 
 Pipelining: read-only prep for task N+1 (`wc3-format-specialist`, `Explore`, `Plan`) may run during review and QA of task N. Never two builds at once.
 
