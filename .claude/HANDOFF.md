@@ -7,9 +7,7 @@ Written 2026-11-25 (session 35 of the project). Overwritten at each handoff. For
 ## Checks waiting on the user
 The user deferred all manual testing on 2026-11-25. Do not list the deferred checks unless the user asks. Only these are open:
 1. First thing in a new session (the orchestrator checks this itself): `product-management:*` skills, `plugin:product-management:*` sign-in entries and the `hyperframes` skills are gone. If product-management is still listed, fix its name in `.claude/settings.local.json`.
-2. Question: the WarMash game script passes `-Foreground`, which takes window focus. OK for announced game runs? Recommended: yes.
-3. Question: skip the full 237-map sweep when a writer change is meant to keep bytes identical, tests pin that, and QA's old-versus-new `--resave` comparison on 30 or more maps shows 0 differences? Recommended: yes. Until answered, the full sweep stays.
-4. Question: run `codegraph init` in the repo (creates a local `.codegraph` index so agents read fewer files)? Recommended: yes, and ignore the folder in git.
+2. Question: the new `.codegraph` index skips all `.ixx` files (most of the code), so its "who calls this" answers are incomplete. Remove it (recommended) or keep it with the warning now in the rules? Checked: both installed versions (0.9.9 and 1.0.1) lack `.ixx`; releases newer than 1.0.1 are unchecked.
 
 Deferred by the user (do not relist): Asset Manager bulk-delete test, old-save script spot-check, former checks 6 to 15, and every Warcraft III load check until WarMash testing is done.
 
@@ -38,6 +36,9 @@ User (2026-11-25, twice): after a denied combined build command, chose "run step
 User (2026-11-25): the WarMash script is the allowed standing method for game load checks; it may fail on Blizzard login, so no retry chains.
 User (2026-11-25): manual testing is deferred; map defects the agent can fix at the source are fixed, not handed back.
 User (2026-11-25): keep `security-guidance` and `i-have-adhd` on; unused plugins and skills off per project.
+User (2026-11-25): the WarMash script may take window focus (`-Foreground`) on announced game runs. General permission only.
+User (2026-11-25): the full map sweep may be skipped when a writer change keeps bytes identical, tests pin that, and an old-versus-new `--resave` comparison on 30 or more maps shows 0 differences.
+User (2026-11-25): run `codegraph init` (done; see question 2).
 User (2026-11-25): evaluate context size in main session and subagents in the retrospective.
 Orchestrator (2026-11-25): backups cover the files Save can change (not imports), keep newest 10 plus first per session and per day for 14 days, no restore window; a failed backup never blocks a save.
 Orchestrator (2026-11-25): Save As refuses a folder that holds files; no overwrite option.
@@ -51,7 +52,7 @@ Orchestrator (2026-11-25): a script compile failure still counts as saved (filed
 Orchestrator (2026-11-25): in the Asset Manager an uncertain reference counts as used.
 
 ## Retro
-Session 35: 6 spawns, 1 risky ticket, 2 rounds, about 1.5 hours. Specialist 4 min / 103k tokens; cpp-dev 27 + 5 min / 266k; reviewer 5 + 0.3 min / 122k; QA 11 + 28 min (25 min of it the full sweep) / 235k; release-manager 1 min / 76k; docs-keeper 2 min / 135k; main session 248k already during the first ticket. Causes: unused MCP servers, plugins and skills in every context (turned off, effect not yet measured); broad Asana tool load and source-file reads in the main session (now recorded as habits); `hivewe.cpp` 220 KB with half QA hooks (ticket filed); codegraph not initialized (question 4). Kept: specialist first (found 2 data-loss bugs), QA on real-map copies, QA code reading (found the clock-change bug). No review or test removed.
+Session 35: 6 spawns, 1 risky ticket, 2 rounds, about 1.5 hours. Specialist 4 min / 103k tokens; cpp-dev 27 + 5 min / 266k; reviewer 5 + 0.3 min / 122k; QA 11 + 28 min (25 min of it the full sweep) / 235k; release-manager 1 min / 76k; docs-keeper 2 min / 135k; main session 248k already during the first ticket. Causes: unused MCP servers, plugins and skills in every context (turned off, effect not yet measured); broad Asana tool load and source-file reads in the main session (now recorded as habits); `hivewe.cpp` 220 KB with half QA hooks (ticket filed); codegraph was not initialized (now run, but it skips `.ixx`: question 2). Kept: specialist first (found 2 data-loss bugs), QA on real-map copies, QA code reading (found the clock-change bug). No review or test removed.
 
 ## Scratch
 `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\fab3f1c0-aa86-4152-a57d-9bca50b6855d\scratchpad` (may vanish; `qav\sweep\w4\work` is the twelfth sweep, 0 differences to the eleventh; `qav\code` holds `prep.ps1` and `cmp_sweep.py`). Session 33 scratch with the eleventh sweep baseline: `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\c85be5c8-e658-4d4f-963a-a25e71743bd5\scratchpad`. Stock map extraction: `C:\Users\mauri\AppData\Local\Temp\claude\11cf287c6d13d22a\c2da2c4f-fdbc-4824-8512-571bf1879b9b\scratchpad\stock` (may vanish).

@@ -48,6 +48,7 @@ Decided 2026-11-22: Pencil (`.pen`) was dropped for HTML/CSS mockups plus a Qt p
 ## Real-game launches (3.0.1 load checks)
 - No game launches at all until the user says the WarMash game testing is done (user, 2026-11-24 and 2026-11-25).
 - Standing method (user, 2026-11-25): the WarMash script, which runs `Warcraft III.exe -launch -loadfile` directly (command in `.claude/tools/ui-capture/README.md` "Real game load check"). The user confirms the Battle.net login works before a launch. Blizzard login security can still make a run fail: a login screen or a silent exit (Warcraft III closing within seconds, no error text) is a failed run. Report it, do not retry in a chain, never enter credentials.
+- The script's `-Foreground` (takes window focus) is allowed for game runs announced in chat first (user, 2026-11-25), an exception to the no-focus rule above for these runs only.
 - The orchestrator's message announcing a run says "do not click or type in the window" (a user click once spoiled a run announced only in general terms).
 - `Start-Process -Wait` also waits for `BlizzardError.exe` after a crash and stalls the chain. Use a watcher that stops only a `BlizzardError.exe` whose parent is a game process this run started.
 - Screenshots can show the user's Battle.net e-mail: keep them local, never commit or paste them.

@@ -8,3 +8,4 @@ logs
 vc140.pdb
 /testmodel
 /.claude/settings.local.json
+/.codegraph/

@@ -23,7 +23,7 @@ Model rule (user, 2026-11-19, adopted from WarMash 2026-11-20): main session Opu
 
 Left out of the roster: `api-chronicler` (`release-manager` owns `CHANGELOG.md`; HiveWE has no script-API docs) and a docs-site agent (HiveWE has no docs site). Add either when first needed.
 
-Built-in `Explore` and `Plan` handle scoping when ownership is unknown; launch two `Explore` agents in parallel when both the UI and format layers are unknown. Codegraph reports "not initialized" for this repo (verified 2026-11-25): briefs say to use Grep until that changes. `hivewe.cpp` line numbers drift quickly: cite symbol names in tickets and briefs. Run the `security-review` skill only when the user asks (MPQ export, external `QProcess`, file I/O on user paths). Add `security-auditor` (untrusted map parsing, `QProcess`, Map Protector) and `perf-auditor` (Tracy, render loop, load times) when first needed.
+Built-in `Explore` and `Plan` handle scoping when ownership is unknown; launch two `Explore` agents in parallel when both the UI and format layers are unknown. Codegraph is initialized but does not index `.ixx` files (verified 2026-11-25), so it covers only part of the sources (`.cpp`/`.h` among them), its callers and impact results are incomplete and "no results" proves nothing: use Grep for anything that may live in `.ixx`, and say so in briefs. `hivewe.cpp` line numbers drift quickly: cite symbol names in tickets and briefs. Run the `security-review` skill only when the user asks (MPQ export, external `QProcess`, file I/O on user paths). Add `security-auditor` (untrusted map parsing, `QProcess`, Map Protector) and `perf-auditor` (Tracy, render loop, load times) when first needed.
 
 ## Pipeline
 
@@ -39,7 +39,7 @@ QA tiers: the orchestrator names the tier in each QA brief.
 - **Smoke:** `ctest --preset Agent` plus one `data/test map` save. For small changes and every fix round.
 - **Build mode (name it in every QA brief):** `reuse` or `rebuild`. `reuse` is allowed only when `cpp-dev`'s report states the exact build and `ctest` result on the current tree and the staleness check in `agents/qa-verifier.md` prints no file; QA then skips build and `ctest` and runs only the targeted offscreen checks and hooks. Anything else is `rebuild`. The lock file, one-build-at-a-time and offscreen rules apply unchanged (user, 2026-11-24).
 - **Targeted:** map-diff on a map subset for the changed writer.
-- **Full:** the 237-map map-diff sweep, once per task on the final round, and always when a writer or the script generator changed. On Standard and Risky, the first-round QA brief asks for targeted checks only; the sweep starts after `reviewer` APPROVE, on the final tree.
+- **Full:** the 237-map map-diff sweep, once per task on the final round, and always when a writer or the script generator changed. On Standard and Risky, the first-round QA brief asks for targeted checks only; the sweep starts after `reviewer` APPROVE, on the final tree. Exception (user, 2026-11-25): the full sweep may be skipped only when ALL hold: the writer change is meant to keep saved bytes identical, tests pin that, and QA's old-versus-new `--resave` comparison on 30 or more maps shows 0 differences. The QA brief names this exception when it applies.
 
 Pipelining: read-only prep for task N+1 (`wc3-format-specialist`, `Explore`, `Plan`) may run during review and QA of task N. Never two builds at once.
 
@@ -81,7 +81,7 @@ Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPRO
 - Keep the orchestrator's context small: subagents report under 25 lines and the orchestrator does not read build logs.
 
 ## Limits
-- The orchestrator-only rule lives in `CLAUDE.md` as an instruction; nothing mechanically enforces it. The orchestrator still uses read-only lookups and git.
+- The orchestrator-only rule lives in `CLAUDE.md` as an instruction; nothing mechanically enforces it. The orchestrator still uses read-only lookups, codegraph and git.
 - `.claude/settings.json` mechanically denies Read and Grep on `.pen` (archived Pencil files), configuring or building any auto-running preset (`Release`, `ReleaseTracing`, `Debug`, `RelWithDebInfo`: `HIVEWE_AUTO_RUN_AFTER_BUILD` defaults to ON, only `Agent` sets it OFF), pushing to `upstream`, force, mirror, `+refspec` and `:`-delete pushes, deleting `main` on origin, changing repo visibility, `gh auth switch`, and killing `HiveWE`, Warcraft III or `code` by image name. `--force-with-lease` is on "ask". Deny patterns match the whole command line, so a commit message containing the literal text of such a push in the same command is blocked too: commit and push in separate commands.
 - Lendrill's push-guard hook was not ported: it was disabled there for causing too many prompts.
 - Only one build and one designer can run at a time, so development runs sequentially.

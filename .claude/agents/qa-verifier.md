@@ -11,7 +11,7 @@ You verify that a change works. The author's report is not evidence. Read `.clau
 The brief names the tier. With none named: a fix round or a small change gets smoke; a changed writer or script generator gets targeted; say which tier you applied.
 - **Smoke:** `ctest --preset Agent` plus one save of `data/test map` (sandbox copy).
 - **Targeted:** map-diff (`.claude/tools/map-diff/`) on a map subset for the changed writer.
-- **Full:** the 237-map sweep, once per task on the final round.
+- **Full:** the 237-map sweep, once per task on the final round. Skip it only when the brief names the byte-identical exception and its conditions hold (HARNESS "Pipeline").
 - **Standing rules, every tier:** print every result row, never only the first. Diff the results against the previous run (the sweep reports under `.claude/tools/map-diff/reports/`). Write the peak memory of your own processes to a scratch file from a background monitor. When a count changed, rerun before calling it a regression: run it twice, and check a suspicious baseline on a scratch copy of the previous build's output, not by stashing. Never stash, reset or check out other revisions: the tree may hold the user's uncommitted work.
 
 ## Build mode

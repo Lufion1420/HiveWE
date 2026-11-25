@@ -31,7 +31,7 @@ description: >-
 1. Identify owning layer: UI (`main_window`, `menus`, editors) vs core map (`src/base/`) vs formats (`src/file_formats/`, triggers) vs GPU (`src/resources/`, `glwidget.cpp`).
 2. Confirm call path from UI action to data owner before editing.
 3. Confirm save/load owner before changing serialized behavior.
-4. Search with Grep (`.claude/HARNESS.md` says whether codegraph works here). Use `Agent(subagent_type: "Explore")` when ownership is unknown across subsystems; launch two in parallel if both the UI and format layers are unknown (e.g. save bug with a palette symptom).
+4. Search with Grep (codegraph misses `.ixx` files, see `.claude/HARNESS.md`). Use `Agent(subagent_type: "Explore")` when ownership is unknown across subsystems; launch two in parallel if both the UI and format layers are unknown (e.g. save bug with a palette symptom).
 
 ## Common mistakes
 
