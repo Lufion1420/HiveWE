@@ -96,6 +96,8 @@ import MapInfo;
 import MapBodyCheck;
 import MapFormatCheck;
 import MapArchiveCheck;
+import ScriptPreservation;
+import ProtectionPipeline;
 
 namespace fs = std::filesystem;
 
@@ -109,6 +111,33 @@ std::string utf8_path(const fs::path& path) {
 /// A path for Qt display or settings. Never use QString::fromStdString(path.string()) on a map path.
 QString display_path(const fs::path& path) {
 	return QString::fromStdWString(path.wstring());
+}
+
+/// Export MPQ's archive step: packs every file of the map folder (subfolders such as scripts\ included) into `file_name`, replacing it.
+/// False when the archive could not be created; a file that fails to add is only logged, as before.
+bool write_map_archive(const fs::path& folder, const std::wstring& file_name) {
+	fs::remove(file_name);
+
+	uint64_t file_count = std::distance(fs::recursive_directory_iterator{ folder }, {});
+
+	HANDLE handle;
+	bool open = SFileCreateArchive(file_name.c_str(), MPQ_CREATE_LISTFILE | MPQ_CREATE_ATTRIBUTES, file_count, &handle);
+	if (!open) {
+		return false;
+	}
+
+	for (const auto& entry : fs::recursive_directory_iterator(folder)) {
+		if (entry.is_regular_file() && !is_map_write_temp_file(entry.path())) {
+			const std::string archive_name = utf8_path(entry.path().lexically_relative(folder));
+			bool success = SFileAddFileEx(handle, entry.path().c_str(), archive_name.c_str(), MPQ_FILE_COMPRESS, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
+			if (!success) {
+				std::println("Error {} adding file {}", GetLastError(), utf8_path(entry.path()));
+			}
+		}
+	}
+	SFileCompactArchive(handle, nullptr, false);
+	SFileCloseArchive(handle);
+	return true;
 }
 
 /// Map::save() with any exception shown in a dialog, so a throw while saving cannot close the editor without a message.
@@ -321,6 +350,10 @@ HiveWE::HiveWE(QWidget* parent)
 	connect(new QShortcut(QKeySequence(Qt::Key_R), this, nullptr, nullptr, Qt::WindowShortcut), &QShortcut::activated, this, &HiveWE::toggle_region_palette);
 
 	connect(ui->ribbon->trigger_editor, &QRibbonButton::clicked, [this]() {
+		// The button is disabled then (apply_trigger_editing_state); this covers a click that gets here anyway.
+		if (map && map->keeps_script) {
+			return;
+		}
 		bool created = false;
 		window_handler.create_or_raise<TriggerEditor>(nullptr, created);
 	});
@@ -685,13 +718,18 @@ void HiveWE::load_map(const fs::path& directory) {
 		map->name = "Untitled";
 		map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
 		update_map_context("Draft", "Unsaved map");
+		apply_trigger_editing_state(false);
 		report(text + " HiveWE opened a blank map instead.");
 		return;
 	}
-	add_recent_map(directory);
+	// The kept-script hook opens sandbox archives through here and must leave the user's recent-maps list alone.
+	if (!qa_kept_script_check) {
+		add_recent_map(directory);
+	}
 
 	map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
 	update_map_context("Loaded");
+	apply_trigger_editing_state(true);
 
 	// Custom objects whose base object is missing were left out of the load, and a save drops them for good.
 	if (!map->skipped_objects.empty()) {
@@ -843,8 +881,11 @@ void HiveWE::load_mpq() {
 
 	settings.setValue("openDirectory", file_name);
 
-	fs::path mpq_path = file_name.toStdWString();
+	open_mpq(file_name.toStdWString(), {});
+}
 
+void HiveWE::open_mpq(const fs::path& mpq_path, const fs::path& unpack_location_override) {
+	QSettings settings;
 	mpq::MPQ mpq;
 	bool opened = mpq.open(mpq_path, MPQ_OPEN_READ_ONLY);
 	if (!opened) {
@@ -871,11 +912,14 @@ void HiveWE::load_mpq() {
 		return;
 	}
 
-	fs::path unpack_location = QFileDialog::getExistingDirectory(
-								   this, "Choose Unpacking Location",
-								   settings.value("openDirectory", QDir::current().path()).toString(),
-								   QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks)
-								   .toStdWString();
+	fs::path unpack_location = unpack_location_override;
+	if (unpack_location.empty()) {
+		unpack_location = QFileDialog::getExistingDirectory(
+							  this, "Choose Unpacking Location",
+							  settings.value("openDirectory", QDir::current().path()).toString(),
+							  QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks)
+							  .toStdWString();
+	}
 
 	if (unpack_location.empty()) {
 		return;
@@ -920,7 +964,10 @@ void HiveWE::load_mpq() {
 	// MPQ files are looked up by name hash, so this recovers them regardless of listfile
 	// presence.
 	// A name the archive lacks is skipped silently; one it holds but cannot extract is an error.
-	for (const std::string& name : map->imports.blacklist) {
+	// A script under scripts\ has a fixed name too, and losing it would lose the map's code.
+	std::vector<std::string> names_to_extract(map->imports.blacklist.begin(), map->imports.blacklist.end());
+	names_to_extract.insert(names_to_extract.end(), subfolder_script_file_names.begin(), subfolder_script_file_names.end());
+	for (const std::string& name : names_to_extract) {
 		if (mpq.extract_file(name, final_directory / name) == decltype(mpq)::ExtractResult::failed) {
 			QMessageBox::critical(this, "Unpacking failed",
 								  "The file " + QString::fromStdString(name) + " could not be extracted from the archive into\n"
@@ -1054,29 +1101,10 @@ void HiveWE::export_mpq() {
 		return;
 	}
 
-	fs::remove(file_name);
-
-	uint64_t file_count = std::distance(fs::recursive_directory_iterator{ map->filesystem_path }, {});
-
-	HANDLE handle;
-	bool open = SFileCreateArchive(file_name.c_str(), MPQ_CREATE_LISTFILE | MPQ_CREATE_ATTRIBUTES, file_count, &handle);
-	if (!open) {
+	if (!write_map_archive(map->filesystem_path, file_name)) {
 		QMessageBox::critical(this, "Exporting failed", "There was an error creating the archive.");
 		std::println("{}", GetLastError());
-		return;
 	}
-
-	for (const auto& entry : fs::recursive_directory_iterator(map->filesystem_path)) {
-		if (entry.is_regular_file() && !is_map_write_temp_file(entry.path())) {
-			const std::string archive_name = utf8_path(entry.path().lexically_relative(map->filesystem_path));
-			bool success = SFileAddFileEx(handle, entry.path().c_str(), archive_name.c_str(), MPQ_FILE_COMPRESS, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
-			if (!success) {
-				std::println("Error {} adding file {}", GetLastError(), utf8_path(entry.path()));
-			}
-		}
-	}
-	SFileCompactArchive(handle, nullptr, false);
-	SFileCloseArchive(handle);
 }
 
 void HiveWE::play_test() {
@@ -1121,6 +1149,7 @@ void HiveWE::create_new_map() {
 	window_handler.close_all();
 	reset_map_session();
 	map->load(template_directory);
+	apply_trigger_editing_state(false);
 
 	const NewMapDialog::Result settings = dialog.result();
 	const int desired_width = settings.width + 1;
@@ -2005,6 +2034,32 @@ void HiveWE::reset_map_session() {
 			terrain_palette->refresh();
 		}
 	});
+}
+
+void HiveWE::apply_trigger_editing_state(const bool notify) {
+	const bool editable = !map || !map->keeps_script;
+	const QString off_text = QString::fromUtf8(trigger_editing_off_text.data(), trigger_editing_off_text.size());
+	// Every way into the Trigger Editor goes through this button or the global search (which checks keeps_script itself), and every
+	// trigger edit happens inside that window, so disabling the button turns all of them off.
+	ui->ribbon->trigger_editor->setEnabled(editable);
+	ui->ribbon->trigger_editor->setToolTip(editable ? QString() : off_text);
+	if (trigger_editor_action) {
+		trigger_editor_action->setEnabled(editable);
+		trigger_editor_action->setToolTip(editable ? QString("Open the Trigger Editor") : off_text);
+		trigger_editor_action->setStatusTip(trigger_editor_action->toolTip());
+	}
+	if (editable || !notify) {
+		return;
+	}
+
+	const QString text = QString::fromUtf8(kept_script_notice.data(), kept_script_notice.size());
+	if (qa_dialog_log) {
+		*qa_dialog_log << text;
+	} else if (qa_offscreen && !qa_kept_script_check) {
+		// Map::load printed it to stderr already. An automated run has nobody to answer a dialog.
+	} else {
+		QMessageBox::information(this, "Map Script Kept", text);
+	}
 }
 
 void HiveWE::update_map_context(const QString& status, const QString& detail_override) {
@@ -3758,6 +3813,355 @@ void HiveWE::run_qa_unsaved_check() {
 		}
 
 		qa_prompt_real = false;
+		finish();
+	});
+}
+
+void HiveWE::run_qa_kept_script_check() {
+	if (!qa_offscreen || !qa_kept_script_check) {
+		return;
+	}
+
+	// Everything below works on copies in a temporary folder: the startup map folder is never written.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(180000, this, [temp]() {
+		std::println("FAIL the kept script check did not finish within 180 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto write_lines = [&](const bool done) {
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + (done ? "\nDONE\n" : "\n"));
+			}
+		};
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			std::println("{}", lines.back().toStdString());
+			std::fflush(stdout);
+			write_lines(false);
+			return passed;
+		};
+		const auto finish = [&]() {
+			write_lines(true);
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+		const auto read_file = [](const fs::path& path) {
+			std::ifstream in(path, std::ios::binary);
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+		const auto process_events = []() {
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+			QApplication::processEvents();
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		};
+		// Open Map without the recent-maps registry write; the notice comes from apply_trigger_editing_state, as in load_map.
+		const auto open_map = [&](const fs::path& path) {
+			window_handler.close_all();
+			process_events();
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(path);
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		};
+
+		// Watches for modal dialogs from now on: clicks OK on the first one (recording its title and text), closes any later one.
+		struct Watch {
+			QStringList titles;
+			QString text;
+			bool off_screen = true;
+			QPointer<QTimer> timer;
+		};
+		const auto watch_dialogs = [this]() {
+			auto watch = std::make_shared<Watch>();
+			auto* timer = new QTimer(this);
+			watch->timer = timer;
+			connect(timer, &QTimer::timeout, this, [watch]() {
+				QWidget* modal = QApplication::activeModalWidget();
+				if (!modal || !modal->isVisible()) {
+					return;
+				}
+				watch->titles << modal->windowTitle();
+				watch->off_screen = watch->off_screen && std::ranges::none_of(QGuiApplication::screens(), [&](const QScreen* screen) {
+					return screen->geometry().intersects(modal->frameGeometry());
+				});
+				auto* box = qobject_cast<QMessageBox*>(modal);
+				if (box && watch->titles.size() == 1 && box->button(QMessageBox::Ok)) {
+					watch->text = box->text();
+					box->button(QMessageBox::Ok)->click();
+				} else {
+					modal->close();
+				}
+			});
+			timer->start(20);
+			return watch;
+		};
+		const auto stop_watch = [](const std::shared_ptr<Watch>& watch) {
+			if (watch->timer) {
+				watch->timer->stop();
+				watch->timer->deleteLater();
+			}
+		};
+
+		if (!check(temp->isValid(), "a temporary folder was created")) {
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = temp->path().toStdWString();
+		const std::string marker = "// QA kept script: hand-written code that must survive\r\n";
+
+		// root: war3map.j in the folder root. scripts: only scripts\war3map.j. Both without war3map.wtg and war3map.wct.
+		const auto make_kept_copy = [&](const std::string& name, const bool under_scripts) {
+			const fs::path folder = root / name;
+			fs::copy(fs::path("data") / "test map", folder, fs::copy_options::recursive, ec);
+			fs::remove(folder / "war3map.wtg", ec);
+			fs::remove(folder / "war3map.wct", ec);
+			// A trigger string literal, so Strip trigger strings has something to resolve in the kept script.
+			const std::string script = marker + "function QaKeptName takes nothing returns string\r\n return \"TRIGSTR_001\"\r\nendfunction\r\n"
+				+ read_file(folder / "war3map.j");
+			fs::path script_path = folder / "war3map.j";
+			if (under_scripts) {
+				fs::remove(script_path, ec);
+				fs::create_directories(folder / "scripts", ec);
+				script_path = folder / "scripts" / "war3map.j";
+			}
+			std::ofstream(script_path, std::ios::binary) << script;
+			return std::pair { folder, script };
+		};
+		const auto [root_folder, root_script] = make_kept_copy("kept_root", false);
+		const auto [scripts_folder, scripts_script] = make_kept_copy("kept_scripts", true);
+		const fs::path normal_folder = root / "normal";
+		fs::copy(fs::path("data") / "test map", normal_folder, fs::copy_options::recursive, ec);
+		if (!check(!ec && root_script.starts_with(marker) && fs::exists(scripts_folder / "scripts" / "war3map.j"), "sandbox copies made")) {
+			return finish();
+		}
+
+		const auto no_trigger_files = [&](const fs::path& folder) {
+			return !fs::exists(folder / "war3map.wtg") && !fs::exists(folder / "war3map.wct") && !fs::exists(folder / "war3map.lua");
+		};
+		const auto editing_off = [&]() {
+			return !ui->ribbon->trigger_editor->isEnabled() && (!trigger_editor_action || !trigger_editor_action->isEnabled());
+		};
+		const auto editing_on = [&]() {
+			return ui->ribbon->trigger_editor->isEnabled() && (!trigger_editor_action || trigger_editor_action->isEnabled());
+		};
+
+		// --- Open: the notice, editing off, no unsaved state ---------------------------------------------------------------------------
+		open_map(root_folder);
+		{
+			const auto watch = watch_dialogs();
+			apply_trigger_editing_state(true);
+			stop_watch(watch);
+			check(map->keeps_script, "a map with war3map.j and no war3map.wtg keeps its script");
+			check(watch->titles == QStringList { "Map Script Kept" } && watch->text.contains("Trigger editing is turned off"),
+				  "open: one notice, clicked OK (dialogs: " + watch->titles.join(", ") + ")");
+			check(watch->off_screen, "open: the notice was outside every screen");
+		}
+		check(editing_off(), "open: the Trigger Editor button and menu action are disabled");
+		check(!ui->ribbon->trigger_editor->toolTip().isEmpty(), "open: the disabled button says why");
+		ui->ribbon->trigger_editor->click();
+		if (trigger_editor_action) {
+			trigger_editor_action->trigger();
+		}
+		process_events();
+		check(!window_handler.get_open<TriggerEditor>(), "open: clicking the button or the menu action opens no Trigger Editor");
+		check(!has_unsaved_work(), "open: the map does not count as unsaved");
+
+		// --- Save without changes: no warning, script untouched, no trigger files ------------------------------------------------------
+		{
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map();
+			stop_watch(watch);
+			check(saved && watch->titles.isEmpty(), "Save without changes: saved with no dialog (dialogs: " + watch->titles.join(", ") + ")");
+			check(read_file(root_folder / "war3map.j") == root_script, "Save: war3map.j is byte for byte the same");
+			check(no_trigger_files(root_folder), "Save: no war3map.wtg, war3map.wct or war3map.lua was written");
+			check(!has_unsaved_work(), "Save: the map counts as saved afterwards");
+		}
+
+		// --- A moved unit: unsaved, one warning on Save, still saved -------------------------------------------------------------------
+		if (check(!map->units.units.empty(), "the map has a placed unit to move")) {
+			map->units.units.front().position.x += 1.f;
+			check(has_unsaved_work(), "a moved unit counts as unsaved");
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map();
+			stop_watch(watch);
+			check(watch->titles == QStringList { "Script Not Updated" } && watch->text.contains("placed units"),
+				  "Save after a moved unit: one Script Not Updated warning naming placed units, clicked OK (dialogs: " + watch->titles.join(", ") + ")");
+			check(watch->off_screen, "Save warning: the dialog was outside every screen");
+			check(saved && read_file(root_folder / "war3map.j") == root_script && no_trigger_files(root_folder),
+				  "Save after the warning: saved, script unchanged, no trigger files");
+			check(!has_unsaved_work(), "Save after the warning: the map counts as saved");
+
+			const auto again = watch_dialogs();
+			save_current_map();
+			stop_watch(again);
+			check(again->titles.isEmpty(), "a second Save without new changes shows no warning");
+
+			// Players/Forces fills in missing slots when it opens. That alone is no change, but it must not hide one made before.
+			bool created = false;
+			const auto open_and_close_scenario = [&]() {
+				auto* scenario = window_handler.create_or_raise<ScenarioPropertiesEditor>(nullptr, created);
+				scenario->close();
+				process_events();
+			};
+			open_and_close_scenario();
+			check(!has_unsaved_work(), "Players/Forces opened on a saved map: still saved");
+			const auto clean = watch_dialogs();
+			save_current_map();
+			stop_watch(clean);
+			check(clean->titles.isEmpty(), "Players/Forces opened on a saved map: Save shows no warning (dialogs: " + clean->titles.join(", ") + ")");
+
+			if (check(!map->info.players.empty(), "the map has a player to change")) {
+				map->info.players.front().race = map->info.players.front().race == PlayerRace::orc ? PlayerRace::human : PlayerRace::orc;
+				open_and_close_scenario();
+				check(has_unsaved_work(), "a changed player race stays unsaved after opening Players/Forces");
+				const auto changed = watch_dialogs();
+				save_current_map();
+				stop_watch(changed);
+				check(changed->titles == QStringList { "Script Not Updated" } && changed->text.contains("players"),
+					  "a changed player race, then Players/Forces opened: Save still warns about players (dialogs: " + changed->titles.join(", ") + ")");
+			}
+		}
+
+		// --- Save As into a new folder (the copy step of save_current_map_as, without its folder picker) ---------------------------------
+		{
+			const fs::path target = root / "save_as" / "kept_root";
+			fs::create_directories(target, ec);
+			hierarchy.map_directory = target;
+			const bool saved = save_map_reporting_errors(target);
+			check(saved && read_file(target / "war3map.j") == root_script && no_trigger_files(target),
+				  "Save As: the new folder has the script byte for byte and no trigger files");
+			check(fs::exists(target / "war3map.w3e") && fs::exists(target / "war3mapUnits.doo"), "Save As: the map files were written");
+		}
+
+		// --- Map Protector, current map: its save keeps the script ----------------------------------------------------------------------
+		{
+			const fs::path protector_temp = root / "protector_temp";
+			fs::create_directories(protector_temp, ec);
+			ProtectionOptions options;
+			options.clear_author = true;
+			const auto watch = watch_dialogs();
+			const SyncSaveResult result = run_sync_save_and_restore(protector_temp, options);
+			stop_watch(watch);
+			check(watch->titles.isEmpty(), "Map Protector save: no dialog for an author change (dialogs: " + watch->titles.join(", ") + ")");
+			check(result.success,"Map Protector save of the current map succeeded: " + QString::fromStdString(result.error));
+			check(read_file(protector_temp / "war3map.j") == root_script && no_trigger_files(protector_temp),
+				  "Map Protector save: script byte for byte, no trigger files");
+		}
+
+		// Map Protector's pack step (run_async_pack, here on this thread) with Strip trigger strings: the kept script's trigger string is
+		// resolved, the rest of it is kept, and war3map.wts is gone.
+		ProtectionOptions pack_options;
+		pack_options.remove_gui_triggers = true;
+		pack_options.strip_trigger_strings = true;
+		pack_options.obfuscate_asset_paths = false;
+		pack_options.inject_junk_files = false;
+		pack_options.encrypt_files = false;
+		pack_options.remove_listfile = true;
+		const auto read_archived = [](const fs::path& archive, const char* name) -> std::optional<std::string> {
+			mpq::MPQ opened;
+			if (!opened.open(archive, MPQ_OPEN_READ_ONLY) || !opened.file_exists(name)) {
+				return std::nullopt;
+			}
+			const std::vector<std::uint8_t> bytes = opened.file_open(name).read();
+			return std::string(bytes.begin(), bytes.end());
+		};
+		const auto resolved = [&](const std::string& script) {
+			std::string text = script;
+			text.replace(text.find("\"TRIGSTR_001\""), 13, "\"Player 1\"");
+			return text;
+		};
+		{
+			const fs::path archive = root / "protected_root.w3x";
+			const PackResult packed = run_async_pack(root / "protector_temp", archive, pack_options);
+			check(packed.success, "Map Protector pack of the kept map succeeded: " + QString::fromStdString(packed.error));
+			check(read_archived(archive, "war3map.j") == resolved(root_script),
+				  "Map Protector pack: war3map.j is the kept script with only its trigger string resolved");
+			check(!read_archived(archive, "war3map.wts") && !read_archived(archive, "war3map.wtg") && !read_archived(archive, "war3map.wct"),
+				  "Map Protector pack: no war3map.wts, war3map.wtg or war3map.wct");
+		}
+
+		// --- scripts\war3map.j only: Save As and the Export MPQ archive carry it -------------------------------------------------------
+		open_map(scripts_folder);
+		apply_trigger_editing_state(false);
+		check(map->keeps_script && editing_off(), "a map with only scripts\\war3map.j keeps its script, editing off");
+		{
+			const fs::path target = root / "save_as" / "kept_scripts";
+			fs::create_directories(target, ec);
+			hierarchy.map_directory = target;
+			const bool saved = save_map_reporting_errors(target);
+			check(saved && read_file(target / "scripts" / "war3map.j") == scripts_script && !fs::exists(target / "war3map.j") && no_trigger_files(target),
+				  "Save As (scripts\\): scripts\\war3map.j byte for byte, no root script, no trigger files");
+
+			const fs::path archive = root / "kept_scripts.w3x";
+			check(write_map_archive(map->filesystem_path, archive.wstring()), "Export MPQ: the archive was written");
+			mpq::MPQ exported;
+			std::string archived;
+			if (exported.open(archive) && exported.file_exists("scripts\\war3map.j")) {
+				const std::vector<std::uint8_t> bytes = exported.file_open("scripts\\war3map.j").read();
+				archived.assign(bytes.begin(), bytes.end());
+			}
+			check(archived == scripts_script, "Export MPQ: the archive holds scripts\\war3map.j byte for byte");
+			check(!exported.file_exists("war3map.wtg") && !exported.file_exists("war3map.j"), "Export MPQ: no war3map.wtg and no root script");
+		}
+
+		// Map Protector on the scripts\-only map: its save, then the pack with Strip trigger strings and without a (listfile).
+		const fs::path protected_scripts = root / "protected_scripts.w3x";
+		{
+			const fs::path protector_temp = root / "protector_scripts_temp";
+			fs::create_directories(protector_temp, ec);
+			const SyncSaveResult saved = run_sync_save_and_restore(protector_temp, ProtectionOptions {});
+			check(saved.success && read_file(protector_temp / "scripts" / "war3map.j") == scripts_script && !fs::exists(protector_temp / "war3map.j"),
+				  "Map Protector save (scripts\\): scripts\\war3map.j byte for byte, no root script: " + QString::fromStdString(saved.error));
+			const PackResult packed = run_async_pack(protector_temp, protected_scripts, pack_options);
+			check(packed.success, "Map Protector pack (scripts\\) succeeded: " + QString::fromStdString(packed.error));
+			check(read_archived(protected_scripts, "scripts\\war3map.j") == resolved(scripts_script),
+				  "Map Protector pack (scripts\\): scripts\\war3map.j has its trigger string resolved, the rest kept");
+			check(!read_archived(protected_scripts, "war3map.wts") && !read_archived(protected_scripts, "war3map.j")
+					  && !read_archived(protected_scripts, "(listfile)"),
+				  "Map Protector pack (scripts\\): no war3map.wts, no root script, no (listfile)");
+		}
+
+		// Open Map (MPQ) on that protected archive, with the unpack folder given instead of picked: the script under scripts\ is
+		// extracted by name although the archive has no (listfile), the map keeps it, and the notice comes from load_map.
+		{
+			const fs::path unpack_location = root / "unpacked";
+			fs::create_directories(unpack_location, ec);
+			const auto watch = watch_dialogs();
+			open_mpq(protected_scripts, unpack_location);
+			stop_watch(watch);
+			const fs::path unpacked = unpack_location / "protected_scripts";
+			check(fs::exists(unpacked / "war3map.w3i") && map->filesystem_path == fs::absolute(unpacked) / "",
+				  "Open Map (MPQ): the protected archive was unpacked and opened");
+			check(read_file(unpacked / "scripts" / "war3map.j") == resolved(scripts_script),
+				  "Open Map (MPQ): scripts\\war3map.j was extracted by name from an archive without a (listfile)");
+			check(map->keeps_script && editing_off(), "Open Map (MPQ): the map keeps its script, editing off");
+			check(watch->titles == QStringList { "Map Script Kept" }, "Open Map (MPQ): one notice from load_map (dialogs: " + watch->titles.join(", ") + ")");
+			check(watch->off_screen, "Open Map (MPQ): the notice was outside every screen");
+		}
+
+		// --- Switching maps resets: a normal map has editing on, saves trigger files and a generated script -----------------------------
+		open_map(normal_folder);
+		{
+			const auto watch = watch_dialogs();
+			apply_trigger_editing_state(true);
+			stop_watch(watch);
+			check(!map->keeps_script && editing_on() && watch->titles.isEmpty(), "a normal map: editing on again, no notice");
+		}
+		fs::remove(normal_folder / "war3map.wtg", ec);
+		map->headless = true; // a script compile message would be a dialog
+		check(save_current_map() && fs::exists(normal_folder / "war3map.wtg") && fs::exists(normal_folder / "war3map.j"),
+			  "a normal map: Save writes war3map.wtg and the generated script as before");
+
 		finish();
 	});
 }

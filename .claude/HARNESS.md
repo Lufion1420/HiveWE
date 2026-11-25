@@ -37,7 +37,7 @@ Parallel review and QA: as soon as `cpp-dev` returns, launch `reviewer` and `qa-
 
 QA tiers: the orchestrator names the tier in each QA brief.
 - **Smoke:** `ctest --preset Agent` plus one `data/test map` save. For small changes and every fix round.
-- **Build mode (name it in every QA brief):** `reuse` or `rebuild`. `reuse` is allowed only when `cpp-dev`'s report states the exact build and `ctest` result on the current tree and no source file is newer than `build/Agent/Release/HiveWE.exe` and `HiveWE_tests.exe` (staleness recipe in `agents/qa-verifier.md`); QA then skips build and `ctest` and runs only the targeted offscreen checks and hooks. Anything else is `rebuild`. The lock file, one-build-at-a-time and offscreen rules apply unchanged (user, 2026-11-24).
+- **Build mode (name it in every QA brief):** `reuse` or `rebuild`. `reuse` is allowed only when `cpp-dev`'s report states the exact build and `ctest` result on the current tree and the staleness check in `agents/qa-verifier.md` prints no file; QA then skips build and `ctest` and runs only the targeted offscreen checks and hooks. Anything else is `rebuild`. The lock file, one-build-at-a-time and offscreen rules apply unchanged (user, 2026-11-24).
 - **Targeted:** map-diff on a map subset for the changed writer.
 - **Full:** the 237-map map-diff sweep, once per task on the final round, and always when a writer or the script generator changed.
 

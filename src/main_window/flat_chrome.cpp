@@ -107,6 +107,7 @@ void HiveWE::setup_flat_chrome() {
 
 	// Editors
 	auto* trigger_editor = link(ribbon->trigger_editor, "Trigger Editor", "trigger-editor", "Open the Trigger Editor");
+	trigger_editor_action = trigger_editor;
 	auto* object_editor = hint(link(ribbon->object_editor, "Object Editor", "object-editor", "Open the Object Editor. Shortcut: O"), "O");
 	auto* model_editor = link(ribbon->model_editor, "Model Editor", "model-editor", "Open the Model Editor");
 	auto* asset_manager = link(ribbon->asset_manager, "Asset Manager", "asset-manager", "Open the Asset Manager");

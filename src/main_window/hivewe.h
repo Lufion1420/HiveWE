@@ -115,6 +115,14 @@ public:
 	/// answers. Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_unsaved_check = false;
 	void run_qa_unsaved_check();
+	/// Set by --qa-kept-script-check (needs --qa-offscreen; --qa-script-out <file> optional): works on sandbox copies of data/test map without
+	/// war3map.wtg. Checks the notice on open and the Script Not Updated warning (real dialogs, clicked in-process), that trigger editing is off,
+	/// and that Save, Save As, Export MPQ's folder and the Map Protector save keep the script byte for byte and write no trigger files.
+	/// Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_kept_script_check = false;
+	void run_qa_kept_script_check();
+	/// After a map load: turns trigger editing off or on for map->keeps_script, and with `notify` tells the user once when it is off.
+	void apply_trigger_editing_state(bool notify);
 	/// Set by the unsaved check hook only: a QMessageBox button that answers the unsaved changes prompt instead of showing it.
 	static inline int qa_prompt_answer = 0;
 	static inline int qa_prompt_count = 0;
@@ -132,6 +140,9 @@ public:
 
 	void load_folder();
 	void load_mpq();
+	/// Open Map (MPQ) after the archive was picked: checks, unpacks into `unpack_location_override` (the folder dialog asks when it is
+	/// empty) / the archive's stem, and loads the result.
+	void open_mpq(const fs::path& mpq_path, const fs::path& unpack_location_override);
 	void save();
 	void save_as();
 	void export_mpq();
@@ -208,6 +219,8 @@ private:
 	void reset_palettes();
 	QString sidebar_flat_title_for_view(SidebarPaletteView view) const;
 	QAction* link_ribbon_action(QAbstractButton* source, const QString& text, const QString& icon_name, const QString& tooltip = {});
+	/// The Flat menu and toolbar action of the Trigger Editor (null before setup_flat_chrome). apply_trigger_editing_state disables it.
+	QAction* trigger_editor_action = nullptr;
 	void update_active_palette_visuals();
 	void hide_palette_sidebar();
 	void show_palette_view(SidebarPaletteView view, bool show_feedback = true);

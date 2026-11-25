@@ -35,6 +35,7 @@ import Doodads;
 import Triggers;
 import Terrain;
 import GameplayConstants;
+import ScriptPreservation;
 import Utilities;
 import UnorderedMap;
 import "brush.h";
@@ -96,6 +97,9 @@ export class Map: public QObject {
 	bool headless = false;
 	/// Set by save(): the generated script did not compile, so the old war3map.j was kept.
 	bool script_compile_failed = false;
+	/// Set by load() (see keeps_existing_script): the map's trigger data cannot rebuild its script, so save() keeps the script files
+	/// as they are and writes no war3map.wtg, war3map.wct or script, and trigger editing is off. A new Map starts without it.
+	bool keeps_script = false;
 
 	TriggerStrings trigger_strings;
 	Triggers triggers;
@@ -140,6 +144,8 @@ export class Map: public QObject {
 
   private:
 	std::optional<MapFiles> saved_state;
+	/// script_inputs() at the last remember_saved_state(), while keeps_script is set.
+	std::optional<MapFiles> saved_script_inputs;
 
   public:
 	void load(const fs::path& path) {
@@ -203,6 +209,17 @@ export class Map: public QObject {
 			if (hierarchy.map_file_exists("war3map.wct")) {
 				triggers.load_scripts();
 			}
+		}
+
+		TriggerDataPresence trigger_data;
+		trigger_data.wtg = hierarchy.map_file_exists("war3map.wtg");
+		trigger_data.wct = hierarchy.map_file_exists("war3map.wct");
+		trigger_data.script = std::ranges::any_of(map_script_file_names, [](const std::string_view name) {
+			return hierarchy.map_file_exists(fs::path(name));
+		});
+		keeps_script = keeps_existing_script(trigger_data);
+		if (keeps_script) {
+			std::println(stderr, "{}", kept_script_notice);
 		}
 
 		std::println("Trigger loading: {:>5}ms", timer.elapsed_ms());
@@ -523,8 +540,11 @@ export class Map: public QObject {
 			regions.save(terrain.offset.x, terrain.offset.y);
 			info.save(terrain.tileset);
 			trigger_strings.save();
-			triggers.save();
-			triggers.save_scripts();
+			// As in save(): a kept script means no trigger files are written.
+			if (!keeps_script) {
+				triggers.save();
+				triggers.save_scripts();
+			}
 			// war3map.imp lists the map folder, which the Asset Manager and others change directly.
 			if (!filesystem_path.empty()) {
 				imports.save(filesystem_path);
@@ -554,6 +574,60 @@ export class Map: public QObject {
 	/// Call when the map folder and memory agree (after a load or a successful save).
 	void remember_saved_state() {
 		saved_state = serialized_state();
+		saved_script_inputs.reset();
+		if (keeps_script) {
+			try {
+				saved_script_inputs = current_script_inputs();
+			} catch (const std::exception& e) {
+				std::println(stderr, "Kept script check: the map data cannot be written: {}", e.what());
+			}
+		}
+	}
+
+	/// For a change the user did not make (Players/Forces filling in missing slots and forces when it opens): runs `apply`, and what
+	/// was unchanged before still counts as unchanged afterwards, both for the unsaved changes check and for the kept-script warning.
+	/// Edits made before stay pending in each, so only a load or a save (remember_saved_state) clears them.
+	void apply_as_unchanged(const std::function<void()>& apply) {
+		const bool files_saved = !differs_from_saved_state();
+		const bool script_inputs_saved = keeps_script && changes_the_kept_script_misses().empty();
+		apply();
+		if (files_saved) {
+			saved_state = serialized_state();
+		}
+		if (script_inputs_saved) {
+			try {
+				saved_script_inputs = current_script_inputs();
+			} catch (const std::exception& e) {
+				std::println(stderr, "Kept script check: the map data cannot be written: {}", e.what());
+				saved_script_inputs.reset();
+			}
+		}
+	}
+
+	/// script_inputs() for the map in memory, through the real writers. Throws when a writer does.
+	[[nodiscard]]
+	MapFiles current_script_inputs() const {
+		MapFiles writes;
+		{
+			const MapWriteCapture capture(writes);
+			units.save(terrain);
+			regions.save(terrain.offset.x, terrain.offset.y);
+		}
+		return script_inputs(writes, info);
+	}
+
+	/// For a kept script: what changed since the last save that the script creates or sets up, so the game will not show it.
+	/// Empty when nothing did. Says "the map data" when it cannot tell.
+	[[nodiscard]]
+	std::vector<std::string> changes_the_kept_script_misses() const {
+		try {
+			if (!saved_script_inputs) {
+				return { "the map data" };
+			}
+			return changed_script_inputs(*saved_script_inputs, current_script_inputs());
+		} catch (const std::exception&) {
+			return { "the map data" };
+		}
 	}
 
 	/// True when save() would now write something other than at the last remember_saved_state(). Also true when it cannot tell.
@@ -598,6 +672,10 @@ export class Map: public QObject {
 
 		sync_player_start_locations_to_map_info();
 
+		if (keeps_script) {
+			warn_about_changes_the_kept_script_misses();
+		}
+
 		pathing_map.save();
 		terrain.save();
 		shadow_map.save();
@@ -625,14 +703,18 @@ export class Map: public QObject {
 
 		info.save(terrain.tileset);
 		trigger_strings.save();
-		triggers.save();
-		triggers.save_scripts();
-		ScriptMode mode = ScriptMode::jass;
-		if (info.lua) {
-			mode = ScriptMode::lua;
-		}
 
-		const auto result = triggers.generate_map_script(terrain, units, doodads, info, sounds, regions, cameras, mode);
+		// A kept script stays byte for byte (Save As copied it with the folder), and no trigger files are written next to it.
+		std::expected<void, std::string> result;
+		ScriptMode mode = ScriptMode::jass;
+		if (!keeps_script) {
+			triggers.save();
+			triggers.save_scripts();
+			if (info.lua) {
+				mode = ScriptMode::lua;
+			}
+			result = triggers.generate_map_script(terrain, units, doodads, info, sounds, regions, cameras, mode);
+		}
 		script_compile_failed = !result.has_value();
 		if (!result.has_value() && headless) {
 			std::println(stderr, "Script compilation errors:\n{}", result.error());
@@ -824,6 +906,28 @@ export class Map: public QObject {
 	std::vector<FileUsage> get_file_usage() const;
 
   private:
+	/// One warning per save, which never stops it: the edits are saved, but the kept script does not create or set them up.
+	void warn_about_changes_the_kept_script_misses() const {
+		const std::vector<std::string> changed = changes_the_kept_script_misses();
+		if (changed.empty()) {
+			return;
+		}
+		std::string list;
+		for (const std::string& part : changed) {
+			list += (list.empty() ? "" : ", ") + part;
+		}
+		const std::string text = std::format(
+			"This map keeps its existing script, so changes to {} since the last save are written to the map files but the script "
+			"does not include them. In the game, the old script still runs.",
+			list
+		);
+		if (headless) {
+			std::println(stderr, "Warning: {}", text);
+			return;
+		}
+		QMessageBox::warning(nullptr, "Script Not Updated", QString::fromStdString(text), QMessageBox::StandardButton::Ok);
+	}
+
 	bool player_requires_start_location(const PlayerData& player) const {
 		return player.internal_number >= 0 && player.internal_number < 12
 			&& (player.type == PlayerType::human || player.type == PlayerType::computer);

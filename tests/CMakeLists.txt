@@ -36,6 +36,7 @@ add_executable(HiveWE_tests
 	trigger_strings_literal_test.cpp
 	gl_thread_pool_test.cpp
 	saved_state_test.cpp
+	script_preservation_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

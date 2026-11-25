@@ -128,6 +128,7 @@ namespace {
 		REQUIRE(SFileCreateArchive2(archive.c_str(), &create, &handle));
 		for (const auto& [name, content] : files) {
 			const fs::path source = sources / name;
+			fs::create_directories(source.parent_path()); // names such as scripts\war3map.lua
 			write_all(source, content);
 			REQUIRE(SFileAddFileEx(handle, source.c_str(), name.c_str(), MPQ_FILE_COMPRESS, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME));
 		}
@@ -1034,6 +1035,23 @@ TEST_CASE("prepare_source_path unpacks a real archive into the temp folder and d
 		CHECK(read_all(temp / name) == content);
 	}
 	CHECK_FALSE(fs::exists(temp / "(listfile)"));
+}
+
+TEST_CASE("prepare_source_path keeps a script in the scripts folder from an archive without a listfile") {
+	for (const std::string script : { std::string("scripts\\war3map.lua"), std::string("scripts\\war3map.j") }) {
+		CAPTURE(script);
+		const fs::path dir = make_scratch_dir("protector_archive_scripts_folder");
+		auto files = valid_map_files();
+		files[script] = "-- the map's only copy of its code\r\nfunction main() end\r\n";
+		make_archive(dir / "Foo.w3x", files, false);
+		const fs::path temp = make_scratch_dir("protector_archive_scripts_folder_temp");
+
+		const ProtectionOptions options;
+		const SyncSaveResult result = prepare_source_path(dir / "Foo.w3x", temp, options);
+		CHECK_MESSAGE(result.success, result.error);
+		CHECK(read_all(temp / script) == files[script]);
+		CHECK(read_all(temp / "war3map.w3i") == files["war3map.w3i"]);
+	}
 }
 
 TEST_CASE("prepare_source_path fails and names the file when an archive entry cannot be extracted") {

@@ -15,11 +15,13 @@ The brief names the tier. With none named: a fix round or a small change gets sm
 - **Standing rules, every tier:** print every result row, never only the first. Diff the results against the previous run (the sweep reports under `.claude/tools/map-diff/reports/`). Write the peak memory of your own processes to a scratch file from a background monitor. When a count changed, rerun before calling it a regression: run it twice, and check a suspicious baseline on a scratch copy of the previous build's output, not by stashing. Never stash, reset or check out other revisions: the tree may hold the user's uncommitted work.
 
 ## Build mode
-The brief says `reuse` or `rebuild` (HARNESS "Pipeline"). With none named, use `rebuild`. In `reuse` mode, first confirm `cpp-dev`'s report states the exact build and ctest result and that no source is newer than the binaries; if the check below prints any file, switch to `rebuild` and say so. Staleness check (prints newer source files; empty output means fresh), PowerShell:
-`$b=@('build/Agent/Release/HiveWE.exe','build/Agent/Release/HiveWE_tests.exe')|%{(Get-Item $_).LastWriteTime}|sort|select -First 1; Get-ChildItem src,tests,data/shaders,CMakeLists.txt,CMakePresets.json -Recurse -File -ErrorAction SilentlyContinue|?{$_.LastWriteTime -gt $b}|select -Expand FullName`
+The brief says `reuse` or `rebuild` (HARNESS "Pipeline"). With none named, use `rebuild`. In `reuse` mode, first confirm `cpp-dev`'s report states the exact build and ctest result and that no source is newer than the binaries; if the check below prints any file, switch to `rebuild` and say so. Staleness check (prints newer source files; empty output means fresh), PowerShell. App sources are compared with `HiveWE.exe` and test files with `HiveWE_tests.exe`, so a test-only edit after the app linked is not staleness:
+`function Newer($exe,$paths){$t=(Get-Item $exe).LastWriteTime; Get-ChildItem $paths -Recurse -File -ErrorAction SilentlyContinue|?{$_.LastWriteTime -gt $t}|select -Expand FullName}; Newer build/Agent/Release/HiveWE.exe @('src','data/shaders','CMakeLists.txt','CMakePresets.json'); Newer build/Agent/Release/HiveWE_tests.exe tests`
 Adjust the test exe path if `ctest` shows a different location. In `reuse` mode skip steps 1's build and ctest and run only the targeted offscreen checks and hooks; report "build reused" in the output. The lock file still applies to app launches.
 
 ## What to do
+After any permission denial, stop: run no further checks and return the report with the denied command (guardrails "Reporting"). A rebuild was denied on 2026-11-25, likely by the preset-plus-Release-path pattern in `rules/hivewe-build-policy.md` (Needs verification).
+
 1. Build with `cmake --build --preset Agent` (run `cmake --preset Agent` first if it is not configured, or after CMake or dependency changes). Run `ctest --preset Agent`. Report counts and each failing test's name and first error.
 2. Check each acceptance criterion line by line against evidence: a test, a byte comparison, or code you read. Name which one. "Tests pass" is not a checklist item.
    - Bug fix: confirm `cpp-dev` reported RED evidence (the command and its failing output before the fix) and that the same test is green now. One passing run does not prove a regression test. With no RED evidence, judge whether the test would fail on the old code and say you could not run it. If the area has no harness, say so.
@@ -30,6 +32,8 @@ Adjust the test exe path if `ctest` shows a different location. In `reuse` mode 
    - UIA-only open and save of a w3x: extract it to a folder, use the ribbon quick-action Open (Open Map Directory dialog: set edit 1152 with WM_SETTEXT, click button id 1), then Save, then pack with `pack.py`. Window helper: `.claude/tools/ui-capture/wins.ps1`.
    - Force flags without UI: `data/test map` w3i has one force whose flags sit 8 bytes before `TRIGSTR_002`. Patch those 4 bytes in a scratch copy and run `build/Agent/Release/HiveWE.exe --resave <in> <out>`, then read the flags from the output (verified 2026-11-24: 0x37->0x3B, 0x3B, 0x33, 0x2F->0x2B, 0x77->0x7B).
    - Follow the resource limits in `harness-guardrails.md` for any Python or StormLib work.
+   - Monitor scripts must tolerate a process exiting between the listing and `Get-Process`.
+   - Stock map 0460 `war3map.w3q` differs between save 1 and save 2 on older builds too: compare save 2 with save 3 (open ticket 1220895469636543).
 5. Clean up files you created. Do not modify `data/test map/`; work on a copy in your scratchpad.
 
 ## GUI runs never disturb the user

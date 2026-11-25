@@ -142,6 +142,8 @@ Checks: `.claude/tools/script-check/`.
 - `stock_object_data::load()` needs `world_edit_strings` and `world_edit_game_strings` loaded, and reads `data/overrides` relative to the working directory, which under ctest is not the repository root.
 - Trigger round-trip sweep: set `HIVEWE_TRIGGER_ROUNDTRIP_ROOT` (it also checks cut wct files). wtg/wct round-trip checks must compare custom text per trigger id on maps with non-empty text (stock 0239, 0104, 0136; human05 and undead02 have none).
 - doctest `-tc` filters split on commas.
+- A test that uses `std::string` or `std::map` with module imports defines `DOCTEST_CONFIG_USE_STD_HEADERS` before including doctest, else C2027.
+- Never end a `TEST_CASE` name with a backslash: ctest reports it Not Run.
 - A sweep check that a real file was parsed must read the checked copy, not the source folder, or a stubbed copy still passes.
 - doctest `SUBCASE` inside a `for` loop is unreliable, so looped refusal tests use plain blocks.
 
@@ -161,6 +163,11 @@ Checks: `.claude/tools/script-check/`.
 - World Editor 1.31-1.33 maps that omit wct entries would now be refused: Needs verification that any exist.
 - New element ids come from `Triggers::new_element_id` (skips deleted ids). Editor code creates through `make_new_trigger_category` / `make_new_trigger` / `make_new_trigger_variable` and deletes or moves through `Triggers::remove_element` / `set_element_parent`.
 - Both wtg variable readers assign every `TriggerVariable` field, so default member values on that struct affect only editor-created variables. `make_new_trigger_variable` sets type "integer", unknown=1 (unknown=1 Needs verification against a World Editor-written wtg).
+
+## Maps with missing trigger data (2026-11-25)
+
+- A map with a script but without `war3map.wtg` or without `war3map.wct` keeps its script: HiveWE writes no wtg, wct or script and turns trigger editing off (switch: `keeps_existing_script` in `src/base/map/script_preservation.ixx`). A missing wct alone counts because it also holds the map header code (`global_jass`), not only custom-text triggers.
+- A script is any of `map_script_file_names` (`war3map.j`/`.lua`, root or `scripts\`). Any new script reader or writer must loop that list. Whether the game reads `scripts\`: Needs verification.
 
 ## MPQ extraction (2026-11-24)
 

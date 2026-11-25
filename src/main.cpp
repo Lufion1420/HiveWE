@@ -179,6 +179,10 @@ int main(int argc, char* argv[]) {
 				"  --qa-unsaved-check  Needs --qa-offscreen (--qa-script-out <file> optional): on a sandbox copy of data/test map, opens the editor windows, edits\n"
 				"                       object data, triggers, map info, scenario and more, and checks which states count as unsaved and what the prompt's\n"
 				"                       answers do. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory. Exit code 0 only when all pass.\n"
+				"  --qa-kept-script-check  Needs --qa-offscreen (--qa-script-out <file> optional): on sandbox copies of data/test map without war3map.wtg,\n"
+				"                       checks the kept-script notice and save warning (real dialogs, clicked in-process), that trigger editing is off, and\n"
+				"                       that Save, Save As, the Export MPQ archive and the Map Protector save keep the script byte for byte and write no\n"
+				"                       trigger files. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory. Exit code 0 only when all pass.\n"
 				"  --qa-dialog-tab <n> With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -246,6 +250,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_unsaved_check = true;
+		} else if (arguments[i] == "--qa-kept-script-check") {
+			// The hook opens and saves sandbox maps and shows real dialogs, so it must never run in a window the user works in.
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-kept-script-check needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_kept_script_check = true;
 		} else if (arguments[i] == "--qa-region-palette-check") {
 			if (!arguments.contains("--qa-offscreen") || arguments.indexOf("--palette") < 0 || arguments.value(arguments.indexOf("--palette") + 1) != "regions") {
 				std::println(stderr, "--qa-region-palette-check needs --qa-offscreen and --palette regions. See HiveWE --help.");
@@ -432,6 +443,7 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 	// map->load("C:/Users/User/Desktop/MCFC.w3x");
+	w.apply_trigger_editing_state(true);
 
 	w.open_qa_palette();
 	w.open_qa_dialog();
@@ -442,6 +454,7 @@ int main(int argc, char* argv[]) {
 	w.run_qa_object_new_check();
 	w.run_qa_region_palette_check();
 	w.run_qa_unsaved_check();
+	w.run_qa_kept_script_check();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

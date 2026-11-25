@@ -122,6 +122,72 @@ TEST_CASE("run_async_pack does not pack stray MPQ internal files from the map fo
 	SFileCloseArchive(archive);
 }
 
+// A kept script can live only under scripts\ (see ScriptPreservation): Strip trigger strings deletes war3map.wts, so that script must
+// be resolved too, or its TRIGSTR_ text is gone.
+TEST_CASE("run_async_pack strips trigger strings from a script in the scripts folder") {
+	for (const std::string script : { std::string("scripts\\war3map.lua"), std::string("scripts\\war3map.j") }) {
+		CAPTURE(script);
+		const fs::path root = make_scratch_dir("pack_strip_scripts_folder");
+		const fs::path temp_dir = root / "input";
+		fs::create_directories(temp_dir / "scripts");
+		write_all(temp_dir / script, "function main()\r\n print(\"TRIGSTR_001\")\r\nend\r\n");
+		write_all(temp_dir / "war3map.wts", "STRING 1\r\n{\r\nKept text\r\n}\r\n");
+
+		ProtectionOptions options;
+		options.remove_listfile = false;
+		options.remove_attributes = true;
+		options.encrypt_files = false;
+		options.inject_junk_files = false;
+		options.remove_gui_triggers = true;
+		options.strip_trigger_strings = true;
+		options.obfuscate_asset_paths = false;
+
+		const fs::path output = root / "output" / "protected.w3x";
+		const PackResult result = run_async_pack(temp_dir, output, options);
+		REQUIRE_MESSAGE(result.success, result.error);
+
+		HANDLE archive = nullptr;
+		REQUIRE(SFileOpenArchive(output.c_str(), 0, MPQ_OPEN_READ_ONLY, &archive));
+		const std::optional<std::string> packed = read_archive_file(archive, script.c_str());
+		CHECK(packed == std::optional<std::string>("function main()\r\n print(\"Kept text\")\r\nend\r\n"));
+		CHECK_FALSE(SFileHasFile(archive, "war3map.wts"));
+		SFileCloseArchive(archive);
+	}
+}
+
+TEST_CASE("run_async_pack refuses to strip trigger strings when a script in the scripts folder has an unknown one") {
+	const fs::path root = make_scratch_dir("pack_strip_scripts_folder_unknown");
+	const fs::path temp_dir = root / "input";
+	fs::create_directories(temp_dir / "scripts");
+	write_all(temp_dir / "scripts" / "war3map.j", "call BJDebugMsg(\"TRIGSTR_999\")\r\n");
+	write_all(temp_dir / "war3map.wts", "STRING 1\r\n{\r\nKept text\r\n}\r\n");
+
+	ProtectionOptions options;
+	options.inject_junk_files = false;
+	options.strip_trigger_strings = true;
+	options.obfuscate_asset_paths = false;
+	const PackResult result = run_async_pack(temp_dir, root / "output" / "protected.w3x", options);
+	CHECK_FALSE(result.success);
+	CHECK(result.error.find("TRIGSTR_999") != std::string::npos);
+	CHECK(fs::exists(temp_dir / "war3map.wts"));
+}
+
+TEST_CASE("rewrite_script_asset_references rewrites a path in a script in the scripts folder") {
+	const fs::path dir = make_scratch_dir("rewrite_script_scripts_folder");
+	fs::create_directories(dir / "scripts");
+	write_all(dir / "scripts" / "war3map.lua", "AddSpecialEffect(\"war3mapImported\\\\Custom.mdx\", 0, 0)\n");
+
+	RenameCandidate candidate;
+	candidate.original_relative_path = "war3mapImported/Custom.mdx";
+	candidate.new_relative_path = "a3f9c1e2.mdx";
+	candidate.match_key = asset_match_key("war3mapImported/Custom.mdx");
+
+	CHECK(rewrite_script_asset_references(dir, { candidate }).success);
+	const std::string rewritten = read_all(dir / "scripts" / "war3map.lua");
+	CHECK(rewritten.find("a3f9c1e2.mdx") != std::string::npos);
+	CHECK(rewritten.find("war3mapImported") == std::string::npos);
+}
+
 TEST_CASE("escape_script_string / unescape_script_string round-trip") {
 	const std::vector<std::string> samples = {
 		"war3mapImported/Custom.mdx",

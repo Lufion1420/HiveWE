@@ -11,6 +11,7 @@ import Map;
 import MapGlobal;
 import Hierarchy;
 import Imports;
+import ScriptPreservation;
 import MapInfo;
 import BinaryReader;
 import MPQ;
@@ -237,7 +238,10 @@ SyncSaveResult unpack_source_archive(const fs::path& source_file, const fs::path
 
 	// extract_file: an absent name is skipped, a name the archive holds but cannot extract is an error.
 	static const Imports imports;
-	for (const std::string& name : imports.blacklist) {
+	// Plus a script under scripts\: it has a fixed name too, and losing it would lose the map's code.
+	std::vector<std::string> names_to_extract(imports.blacklist.begin(), imports.blacklist.end());
+	names_to_extract.insert(names_to_extract.end(), subfolder_script_file_names.begin(), subfolder_script_file_names.end());
+	for (const std::string& name : names_to_extract) {
 		if (mpq.extract_file(name, temp_dir / name) == decltype(mpq)::ExtractResult::failed) {
 			return { false, std::format("Failed to unpack the archive: {} could not be extracted.", name) };
 		}
@@ -566,8 +570,9 @@ export AssetObfuscationResult rewrite_script_asset_references(const fs::path& te
 		candidates_by_match_key[candidate.match_key] = &candidate;
 	}
 
-	for (const char* script_name : { "war3map.j", "war3map.lua" }) {
-		const fs::path script_path = temp_dir / script_name;
+	// Every script location, scripts\ included: a kept script may live only there.
+	for (const std::string_view script_name : map_script_file_names) {
+		const fs::path script_path = temp_dir / fs::path(script_name);
 		if (!fs::exists(script_path)) {
 			continue;
 		}
@@ -578,7 +583,7 @@ export AssetObfuscationResult rewrite_script_asset_references(const fs::path& te
 			text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 		}
 
-		const std::vector<StringLiteralSpan> spans = find_string_literals(text, std::string_view(script_name) == "war3map.lua");
+		const std::vector<StringLiteralSpan> spans = find_string_literals(text, script_name.ends_with(".lua"));
 
 		std::string rebuilt;
 		rebuilt.reserve(text.size());
@@ -629,8 +634,9 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 
 	const std::unordered_map<std::string, std::string> trigger_string_table = parse_trigger_strings_file(wts_path);
 
-	for (const char* script_name : { "war3map.j", "war3map.lua" }) {
-		const fs::path script_path = temp_dir / script_name;
+	// Every script location, scripts\ included: war3map.wts is deleted below, so a script left unresolved would lose its text.
+	for (const std::string_view script_name : map_script_file_names) {
+		const fs::path script_path = temp_dir / fs::path(script_name);
 		if (!fs::exists(script_path)) {
 			continue;
 		}
@@ -641,7 +647,7 @@ SyncSaveResult strip_trigger_strings_step(const fs::path& temp_dir) {
 			text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 		}
 
-		const std::vector<StringLiteralSpan> spans = find_string_literals(text, std::string_view(script_name) == "war3map.lua");
+		const std::vector<StringLiteralSpan> spans = find_string_literals(text, script_name.ends_with(".lua"));
 
 		std::string rebuilt;
 		rebuilt.reserve(text.size());

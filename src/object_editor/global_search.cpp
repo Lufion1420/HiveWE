@@ -9,11 +9,15 @@
 #include <QDialog>
 #include <ui_object_editor.h>
 #include <QPainter>
+#include <QMessageBox>
 
 import std;
 import WindowHandler;
 import Globals;
 import TableModel;
+import Map;
+import MapGlobal;
+import ScriptPreservation;
 
 GlobalSearchWidget::GlobalSearchWidget(QWidget* parent) : QDialog(parent) {
 	setWindowFlag(Qt::FramelessWindowHint, true);
@@ -130,6 +134,9 @@ GlobalSearchWidget::GlobalSearchWidget(QWidget* parent) : QDialog(parent) {
 			} else if (index.data() == "Open Object Editor") {
 				bool created;
 				window_handler.create_or_raise<ObjectEditor>(nullptr, created);
+			} else if (index.data() == "Open Trigger Editor" && map && map->keeps_script) {
+				QMessageBox::information(this, "Trigger Editor",
+										 QString::fromUtf8(trigger_editing_off_text.data(), trigger_editing_off_text.size()));
 			} else if (index.data() == "Open Trigger Editor") {
 				bool created;
 				window_handler.create_or_raise<TriggerEditor>(nullptr, created);

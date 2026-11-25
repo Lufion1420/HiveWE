@@ -28,6 +28,7 @@ HiveWE is a C++23 Warcraft III World Editor replacement (`.ixx` modules + Qt `.c
 - It compares `Map::serialized_state()`: the real writers captured in memory (`MapWriteCapture` in `hierarchy.ixx`), object data and gameplay constants as sorted edits.
 - A new writer in `Map::save` must be added there too. Writers stay const and write only through `Hierarchy::map_file_write`.
 - Editor windows must not write widget content back or normalise data unless the user edited it, or maps show as unsaved.
+- A dialog that must normalise map data on open does it through `Map::apply_as_unchanged`, never `remember_saved_state` (that also clears pending edits and resets the kept-script warning baseline).
 
 ## Workflows
 

@@ -23,6 +23,7 @@ import Triggers;
 import Globals;
 import OpenGLUtilities;
 import MapGlobal;
+import ScriptPreservation;
 
 constexpr int map_header_id = 0;
 
@@ -130,6 +131,11 @@ TriggerEditor::TriggerEditor(QWidget* parent) : QMainWindow(parent) {
 	ui.actionCreateComment->setIcon(comment_icon);
 
 	connect(ui.actionGenerateScript, &QAction::triggered, [&]() {
+		// A kept script (see ScriptPreservation) would be overwritten from trigger data that cannot rebuild it.
+		if (map->keeps_script) {
+			compile_output->setPlainText(QString::fromUtf8(trigger_editing_off_text.data(), trigger_editing_off_text.size()));
+			return;
+		}
 		save_changes();
 
 		ScriptMode mode = ScriptMode::jass;
