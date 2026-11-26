@@ -77,7 +77,8 @@ std::string Triggers::resolve_parameter(
 		}
 		case TriggerParameter::Type::string:
 			if (get_base_type(type, trigger_data) == "string") {
-				return "\"" + string_replaced(parameter.value, "\\", "\\\\") + "\"";
+				// The World Editor stores the text as typed and escapes it on output.
+				return script_string_literal(parameter.value);
 			} else if (type == "abilcode" // ToDo this seems like a hack?
 					   || type == "buffcode" || type == "destructablecode" || type == "itemcode" || type == "ordercode"
 					   || type == "techcode" || type == "unitcode" || type == "heroskillcode" || type == "weathereffectcode"

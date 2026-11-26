@@ -25,6 +25,7 @@ add_executable(HiveWE_tests
 	ally_priorities_script_test.cpp
 	map_info_weather_test.cpp
 	trigger_variable_test.cpp
+	script_string_escape_test.cpp
 	map_save_failure_test.cpp
 	theme_tokens_test.cpp
 	selection_hit_points_test.cpp

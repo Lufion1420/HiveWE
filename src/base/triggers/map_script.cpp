@@ -120,7 +120,7 @@ void generate_init_global_variables(MapScriptWriter& script, const std::vector<T
 
 				if (converted_value.empty()) {
 					if (type == "string") {
-						value = "\"" + variable.initial_value + "\"";
+						value = script_string_literal(variable.initial_value);
 					} else {
 						value = variable.initial_value;
 					}
@@ -261,12 +261,12 @@ void generate_units(
 					if (order_on.empty()) {
 						order_on = abilities_slk.data<std::string_view>("order", std::get<0>(j));
 					}
-					script.call("IssueImmediateOrder", unit_reference, std::format("\"{}\"", order_on));
+					script.call("IssueImmediateOrder", unit_reference, script_string_literal(order_on));
 
 				} else {
 					std::string_view order_off = abilities_slk.data<std::string_view>("orderoff", std::get<0>(j));
 					if (!order_off.empty()) {
-						script.call("IssueImmediateOrder", unit_reference, std::format("\"{}\"", order_off));
+						script.call("IssueImmediateOrder", unit_reference, script_string_literal(order_off));
 					}
 				}
 			}
@@ -492,17 +492,13 @@ bool has_sound_value(const float value) {
 // SetSoundParamsFromLabel supply the rest (a user override of a label value is therefore lost). The 2^32 "default" float and a -1
 // channel get no setter.
 void generate_sounds(MapScriptWriter& script, const Sounds& sounds, const SoundDurationLookup& duration) {
-	const auto quoted = [](const std::string_view text) {
-		return "\"" + string_replaced(std::string(text), "\\", "\\\\") + "\"";
-	};
-
 	script.function("InitSounds", [&]() {
 		for (const auto& i : sounds.sounds) {
 			const std::string sound_name = prefixed_script_identifier("", i.name);
 
 			if (i.music) {
 				// I suppose music files can't be muted?
-				script.set_variable(sound_name, quoted(i.file));
+				script.set_variable(sound_name, script_string_literal(i.file));
 				continue;
 			}
 
@@ -510,34 +506,34 @@ void generate_sounds(MapScriptWriter& script, const Sounds& sounds, const SoundD
 				sound_name,
 				std::format(
 					"CreateSound({}, {}, {}, {}, {}, {}, {})",
-					quoted(i.file),
+					script_string_literal(i.file),
 					i.looping ? "true" : "false",
 					i.is_3d ? "true" : "false",
 					i.stop_out_of_range ? "true" : "false",
 					i.fade_in_rate,
 					i.fade_out_rate,
-					quoted(i.eax_effect)
+					script_string_literal(i.eax_effect)
 				)
 			);
 
 			const bool has_label = !i.label.empty();
 			if (has_label) {
-				script.call("SetSoundParamsFromLabel", sound_name, quoted(i.label));
+				script.call("SetSoundParamsFromLabel", sound_name, script_string_literal(i.label));
 			}
 			if (!i.facial_animation_label.empty()) {
-				script.call("SetSoundFacialAnimationLabel", sound_name, quoted(i.facial_animation_label));
+				script.call("SetSoundFacialAnimationLabel", sound_name, script_string_literal(i.facial_animation_label));
 			}
 			if (!i.facial_animation_group_label.empty()) {
-				script.call("SetSoundFacialAnimationGroupLabel", sound_name, quoted(i.facial_animation_group_label));
+				script.call("SetSoundFacialAnimationGroupLabel", sound_name, script_string_literal(i.facial_animation_group_label));
 			}
 			if (!i.facial_animation_set_path.empty()) {
-				script.call("SetSoundFacialAnimationSetFilepath", sound_name, quoted(i.facial_animation_set_path));
+				script.call("SetSoundFacialAnimationSetFilepath", sound_name, script_string_literal(i.facial_animation_set_path));
 			}
 			if (i.speaker_key != -1) {
-				script.call("SetDialogueSpeakerNameKey", sound_name, quoted(std::format("TRIGSTR_{}", i.speaker_key)));
+				script.call("SetDialogueSpeakerNameKey", sound_name, script_string_literal(std::format("TRIGSTR_{}", i.speaker_key)));
 			}
 			if (i.text_key != -1) {
-				script.call("SetDialogueTextKey", sound_name, quoted(std::format("TRIGSTR_{}", i.text_key)));
+				script.call("SetDialogueTextKey", sound_name, script_string_literal(std::format("TRIGSTR_{}", i.text_key)));
 			}
 
 			if (const auto milliseconds = duration(i)) {
@@ -999,22 +995,6 @@ void generate_main(MapScriptWriter& script, const Terrain& terrain, const MapInf
 		script.call("InitCustomTriggers");
 		script.call("RunInitializationTriggers");
 	});
-}
-
-/// Quoted script string for text that may be a raw literal from the w3i (a TRIGSTR_ key passes through unchanged).
-static std::string script_string_literal(const std::string& text) {
-	std::string out = "\"";
-	for (const char c : text) {
-		switch (c) {
-			case '\\': out += "\\\\"; break;
-			case '"': out += "\\\""; break;
-			case '\n': out += "\\n"; break;
-			case '\r': break;
-			default: out += c;
-		}
-	}
-	out += '"';
-	return out;
 }
 
 void generate_map_configuration(MapScriptWriter& script, const Terrain& terrain, const Units& units, const MapInfo& map_info) {

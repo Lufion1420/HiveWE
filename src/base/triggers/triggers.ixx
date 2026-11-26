@@ -422,10 +422,10 @@ struct MapScriptWriter {
 		std::format_to(std::back_inserter(script), "udg_{} = {}", name, value);
 	}
 
-	/// The ID should not be quoted
+	/// The ID should not be quoted. A JASS rawcode is written as is (an apostrophe in the id is not escaped).
 	std::string four_cc(std::string_view id) {
 		if (mode == ScriptMode::lua) {
-			return std::format("FourCC(\"{}\")", id);
+			return "FourCC(" + script_string_literal(id) + ")";
 		} else {
 			return std::format("'{}'", id);
 		}
@@ -886,6 +886,12 @@ export class Triggers {
 			}
 		}
 		return order;
+	}
+
+	/// Test seam: one GUI trigger as generate_map_script converts it, from trigger_data and variables.
+	std::string generate_gui_trigger_script(const Trigger& trigger, const ScriptMode mode) const {
+		std::vector<std::string> map_initializations;
+		return convert_gui_to_jass(trigger, map_initializations, mode);
 	}
 
   private:

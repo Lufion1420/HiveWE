@@ -108,30 +108,17 @@ bool contains_path_reference(const std::string& content, const std::string& need
 /// than newline are dropped rather than risking an escape sequence the game's script parser
 /// doesn't accept - trigger string text is always printable text in practice (WC3 itself uses
 /// the literal 2-character sequence "|n", not a real newline byte, for tooltip line breaks).
+/// The escapes are the script generator's script_string_literal(), without the surrounding quotes.
 export std::string escape_script_string(const std::string& text) {
-	std::string result;
-	result.reserve(text.size());
+	std::string printable;
+	printable.reserve(text.size());
 	for (const char c : text) {
-		switch (c) {
-			case '\\':
-				result += "\\\\";
-				break;
-			case '"':
-				result += "\\\"";
-				break;
-			case '\n':
-				result += "\\n";
-				break;
-			case '\r':
-				break; // dropped: a lone \n is already a valid escaped line break
-			default:
-				if (static_cast<unsigned char>(c) >= 0x20) {
-					result += c;
-				}
-				break;
+		if (static_cast<unsigned char>(c) >= 0x20 || c == '\n' || c == '\r') {
+			printable += c;
 		}
 	}
-	return result;
+	const std::string literal = script_string_literal(printable);
+	return literal.substr(1, literal.size() - 2);
 }
 
 /// Inverse of escape_script_string(): turns a string literal's raw, still-escaped source content

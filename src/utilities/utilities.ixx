@@ -46,6 +46,25 @@ export std::string string_replaced(const std::string_view source, const std::str
 	return new_string;
 }
 
+/// `text` as a double-quoted JASS or Lua string literal: backslash, quote and line feed are escaped, a carriage return is dropped,
+/// every other byte (tabs, UTF-8) passes through. For map-derived text only; code such as custom script must stay raw. A TRIGSTR_ key
+/// is unchanged.
+export std::string script_string_literal(const std::string_view text) {
+	std::string out = "\"";
+	out.reserve(text.size() + 2);
+	for (const char c : text) {
+		switch (c) {
+			case '\\': out += "\\\\"; break;
+			case '"': out += "\\\""; break;
+			case '\n': out += "\\n"; break;
+			case '\r': break;
+			default: out += c;
+		}
+	}
+	out += '"';
+	return out;
+}
+
 export std::string to_lowercase_copy(const std::string_view string) {
 	std::string output(string);
 	std::ranges::transform(output, output.begin(), [](unsigned char c) {
