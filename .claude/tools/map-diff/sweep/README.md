@@ -22,7 +22,7 @@ Scripts of the differential sweep (fourth sweep, 2026-11-20). Not run since bein
 
 The 78-kind classifier from reports 1-3 is not in the repo and was not rebuilt.
 
-Old-versus-new comparisons: when the change touches `data/`, give the old-build sandbox the HEAD files (`git cat-file --filters HEAD:<path>`), or data-driven differences are hidden. To probe a base object value headlessly, set it on an object in a map copy and `--resave`: a record equal to the base data is dropped (`slk::SLK::set_shadow_data`).
+Old-versus-new comparisons: when the change touches `data/`, give the old-build sandbox the HEAD files (`git cat-file --filters HEAD:<path>`), or data-driven differences are hidden. Also compare each run's `%TEMP%\input.lua` (the generated script): a map whose script fails to compile (exit 3) keeps its old script, which hides generator changes. To probe a base object value headlessly, set it on an object in a map copy and `--resave`: a record equal to the base data is dropped (`slk::SLK::set_shadow_data`).
 
 When comparing two sweeps, do not compare the `err` fields: they are cut to a fixed length and hold paths, so their content depends on path length. Compare the full `w4/work/logs/<id>.err.txt` logs with paths normalised.
 

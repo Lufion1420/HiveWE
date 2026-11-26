@@ -103,12 +103,13 @@ Checks: `.claude/tools/script-check/`.
 - Lua version: Warcraft III 3.0.1 and its World Editor embed Lua 5.3.4 (string in both exes, 2026-11-26). The vcpkg baseline 188e854 resolves the `lua` port to 5.5.0, so Lua comes from the own-name overlay port `overlay-ports/lua53`. Never switch to the `lua` port. How the game treats a leading BOM or `#` line is unknown (the checker strips both): Needs verification.
 - Map Protector's `save_restoring_state` (`src/map_protector/protection_pipeline.ixx`) catches a throwing `map->save` and restores state.
 - `MapScriptWriter::call` formats float args with `"{}"` (can produce exponents), and `string_view` concatenations can format as char ranges. Pre-format arguments as `std::string`.
-- `MapScriptWriter::four_cc` writes object ids into the generated script unescaped. An id validator (new-object dialogs accept exactly 4 ASCII letters or digits) must be checked against that, and against maps already on disk: `id_fits` stays length-only so existing maps still save.
+- Map-derived text inside a script string literal goes through `script_string_literal` (`src/utilities/utilities.ixx`). Code and trusted data stay raw: custom script, comments, TriggerData presets, tileset light-model paths. The World Editor doubles backslashes in GUI strings and string variable defaults (stock maps); how it writes newlines and quotes in variable defaults: Needs verification.
+- `MapScriptWriter::four_cc` escapes object ids in Lua only; JASS rawcodes are written raw. An id validator (new-object dialogs accept exactly 4 ASCII letters or digits) must be checked against that, and against maps already on disk: `id_fits` stays length-only so existing maps still save.
 - Identifiers: every non-`[A-Za-z0-9_]` becomes `_`, trim first, and use the same helper at declaration and use.
 - Lua globals: `__jarray(0)`, `__jarray(false)` or `__jarray("")` by base type, `{}` for handle arrays; scalars `0`, `false`, `""`, `nil`.
 - `gg_unit_` and `gg_dest_` numbers are zero-padded to 4 (`{:0>4}`). Declared names come from scanning trigger text, created names from placed objects. Any padding, length or type difference leaves a global undeclared (JASS) or nil (Lua). Known open: unit numbers of 10000 and above are truncated by the fixed 4-char scan.
 - Test seam: `generate_*` and `MapScriptWriter` are private to `Triggers`. Export a narrow helper declared in `triggers.ixx` and defined in the `module Triggers;` unit (example: `generate_variable_script`); no `Map` is needed.
-- Test setup: `ini::INI::set_whole_data` supplies TriggerTypes/TriggerTypeDefaults (a missing section makes `data()` throw). `const T x;` fails with C2737 when only some members have default initialisers. `data/test map` is a JASS map: Lua save output needs a Lua `war3map.w3i` (`resave_smoke` uses `tests/fixtures/resave/lua_map.w3i`).
+- Test setup: supply TriggerTypes/TriggerTypeDefaults (a missing section makes `data()` throw). `ini::INI::set_whole_data` stores one unsplit value, so a test needing comma fields sets `ini_data` directly. `const T x;` fails with C2737 when only some members have default initialisers. `data/test map` is a JASS map: Lua save output needs a Lua `war3map.w3i` (`resave_smoke` uses `tests/fixtures/resave/lua_map.w3i`).
 - WC3 3.0.1 writes no Lua runtime errors to `Documents\Warcraft III\Logs\War3Log.txt`, and Lua errors in `UITimer` callbacks fail silently. Use the simulator in `script-check`.
 
 ## w3i facts (strict parse of 466 stock maps, 2026-11-08)
@@ -202,5 +203,7 @@ Checks: `.claude/tools/script-check/`.
 - `--resave` and Map Protector call `Map::save` directly and make no backup. Under `--qa-offscreen` the backup root is a temp folder or the hook's folder, never the real AppData.
 
 ## Save temp files and folder listings (verified 2026-11-22)
+
+- A new map-owned `war3map*` file needs an `Imports::blacklist` entry (exact, case-sensitive file name, matched in any folder in listings). The list drives `war3map.imp`, the Asset Manager listing, Map Protector renaming and extract-by-name in both MPQ open paths. The Asset Manager's path rule alone protects only root files with the stem `war3map`, `war3mapMap`, `war3mapPreview` or `war3mapPath`.
 
 - Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `map_archive::write` (Export MPQ), `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy, `find_file_usage`, `map_backup::select_files`, the Browse Models `enumerate_catalog`.
