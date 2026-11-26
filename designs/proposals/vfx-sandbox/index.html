@@ -1,0 +1,38 @@
+<!doctype html>
+<html data-theme="dark"><head><meta charset="utf-8"><title>VFX Sandbox / Overview</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+body { margin: 0; padding: 20px; background: var(--color-window); color: var(--color-text); font: 13px/1.5 var(--font-family); }
+h1 { font-size: 18px; } h2 { font-size: 14px; margin-top: 26px; }
+a { color: var(--color-accent); } img { display: block; max-width: 1200px; width: 100%; border: 1px solid var(--color-border-strong); }
+p { max-width: 900px; }
+</style></head><body>
+<h1>VFX Sandbox: gate 1 (direction pick)</h1>
+<p>Two layouts of one new window. The 3D view pictures are composed from real HiveWE renders of stock effects on the real terrain
+capture; the live view will look different in detail. "war3mapImported\..." names, delays, durations and counts are sample values
+(430 is the real stock VFX/SFX count). Pages open in Light with <code>#light</code> after the file name.</p>
+
+<h2>A (recommended): library, 3D view over a timeline with one bar per effect, settings panel</h2>
+<p><a href="a-playing.html">a-playing.html</a>: overlap between effects is visible at a glance and delays are changed by dragging bars.</p>
+<img src="renders/a-playing-dark.png" alt="A playing, dark">
+<img src="renders/a-playing-light.png" alt="A playing, light">
+<p><a href="a-empty.html">a-empty.html</a>: new composition; hint in the view and the timeline, transport and settings disabled.</p>
+<img src="renders/a-empty-dark.png" alt="A empty">
+<p><a href="a-problems.html">a-problems.html</a>: Custom filter with a search, an effect being dragged in, and a saved effect whose import is gone.</p>
+<img src="renders/a-problems-dark.png" alt="A custom filter, drag, missing file">
+<p><a href="a-library-states.html">a-library-states.html</a>: list without imports, search without a match, unreadable model, partly drawn effect.</p>
+<img src="renders/a-library-states-dark.png" alt="A list states">
+<p><a href="a-lua.html">a-lua.html</a>: second step, the Copy as Lua dialog.</p>
+<img src="renders/a-lua-dark.png" alt="Copy as Lua" style="max-width:760px">
+
+<h2>B: thumbnail library, large 3D view with one scrubber, spell steps as an editable table</h2>
+<p><a href="b-steps.html">b-steps.html</a>: every value of every effect is visible and typed directly; timing is read as numbers.</p>
+<img src="renders/b-steps-dark.png" alt="B steps table">
+
+<h2>Build notes</h2>
+<ul>
+<li>Window: QMainWindow with QDockWidgets and a QToolBar, like the Model Editor. Theme colours from data/themes/Flat.tokens.</li>
+<li>Needs custom painting: the timeline (A), the effect list delegate (thumbnail, two lines, Custom tag), the in-view labels, grid and move handles (OpenGL).</li>
+<li>Reuse: ModelCatalog and its VFX/SFX rule, the model thumbnail cache, AnimationTimeline controls, ColorButton, theme::icon.</li>
+</ul>
+</body></html>

@@ -1,7 +1,7 @@
 ---
 name: wc3-format-specialist
 description: Warcraft III file-format and compatibility expert for HiveWE. Use BEFORE implementation when a task touches war3map files, MDX/MDL, SLK/object data, MPQ, triggers, save paths or Map Protector. Returns a source-tagged implementation note. Does not write source code.
-tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, mcp__codegraph__codegraph_explore, mcp__codegraph__codegraph_search, mcp__codegraph__codegraph_node, mcp__codegraph__codegraph_callers
+tools: Read, Glob, Grep, Bash, WebFetch, WebSearch
 model: opus
 ---
 

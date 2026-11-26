@@ -1,0 +1,40 @@
+<!doctype html>
+<html data-theme="dark"><head><meta charset="utf-8"><title>VFX Sandbox / B / Spell steps table, one effect selected</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="widgets.css"></head>
+<body><script src="icons.js"></script><script src="common.js"></script>
+<script>
+const tiles = [['cfire'], ['carc'], ['cring'], ['cheal'], ['thunder'], ['ring'], ['flame'], ['nova', 'sel'], ['holy'], ['bliz'], ['tele'], ['crune']]
+	.map(([k, st]) => `<div class="tile ${st || ''}"><div class="pic"><img src="viewport/th-${FX[k].t}.png"></div><div class="nm elide">${FX[k].n}</div><div class="small ${FX[k].c ? 'tag' : 'muted'}" style="margin:0">${FX[k].c ? 'Custom' : 'Stock'}</div></div>`).join('');
+const lib = `<div class="dock" style="width:300px;flex:none"><div class="dtitle">Effects<span class="dbtns">&#10064; &#10005;</span></div><div class="dbody">
+	${segments('All', ['468', '38', '430'])}${search('')}${check('Include unit and doodad models', false)}
+	<div class="list"><div class="grid">${tiles}</div><div class="vscroll"><i style="top:3px;height:40px"></i></div></div>
+	<div class="small muted">468 effects, 468 shown</div></div></div>`;
+const scrub = `<div class="transport" style="border-top:1px solid var(--color-border)"><div class="tbtn">${ic('pause', 's')}</div><div class="tbtn">${ic('restart', 's')}</div>${slider(22.6)}
+	<div class="muted nw" style="width:96px;text-align:right">1.20 / 5.30 s</div>${check('Loop', true)}${combo('1.0x', 66)}</div>`;
+/* [title, width (0 = stretch), right aligned] */
+const cols = [['', 32], ['Effect', 0], ['Start (s)', 66, 1], ['X', 60, 1], ['Y', 54, 1], ['Height', 58, 1], ['Scale', 58, 1], ['Facing', 56, 1], ['Pitch', 46, 1], ['Roll', 42, 1], ['Tint', 42], ['Opacity', 64, 1], ['Animation', 100], ['Speed', 56, 1], ['Ends', 118]];
+const cell = (i, v, extra = '') => `<div class="td ${cols[i][2] ? 'num' : ''} ${cols[i][1] ? '' : 'flex'} ${extra}" ${cols[i][1] ? `style="width:${cols[i][1]}px"` : ''}>${v}</div>`;
+const sw = c => `<div style="width:24px;height:14px;background:${c};border:1px solid var(--color-border-strong)"></div>`;
+const rows = [
+	[true, 'thunder', '0.00', '-384.0', '0.0', '0.0', '1.00', '0&#176;', '#ffffff', '100 %', 'Birth', '1.00x', 'After animation'],
+	[true, 'ring', '0.30', '0.0', '0.0', '0.0', '1.40', '0&#176;', '#ffffff', '100 %', 'Stand', '1.00x', 'At 3.00 s'],
+	[true, 'nova', '0.80', '0.0', '0.0', '32.0', '0.80', '0&#176;', '#c8f0ff', '100 %', 'Birth', '1.00x', 'After animation'],
+	[true, 'holy', '1.10', '256.0', '96.0', '0.0', '1.00', '90&#176;', '#ffffff', '100 %', 'Birth', '1.00x', 'After animation'],
+	[false, 'cring', '1.40', '0.0', '0.0', '8.0', '1.25', '0&#176;', '#ffd27a', '80 %', 'Stand', '1.50x', 'At 3.40 s'],
+	[true, 'bliz', '2.00', '64.0', '-64.0', '0.0', '1.00', '0&#176;', '#ffffff', '100 %', 'Birth', '1.00x', 'After animation'],
+];
+const body = rows.map((r, n) => {
+	const [on, k, start, x, y, h, sc, face, tint, op, anim, speed, ends] = r, sel = k === 'nova';
+	const v = [check('', on), `<span class="elide">${FX[k].n}</span>${FX[k].c ? '<span class="tag" style="margin-left:8px">Custom</span>' : ''}`, start, x, y, h,
+		sel ? spin(sc, 0, 'focus') : sc, face, '0&#176;', '0&#176;', sw(tint), op, anim, speed, ends];
+	return `<div class="tr ${n % 2 ? 'alt' : ''} ${sel ? 'sel' : ''}" ${on ? '' : 'style="color:var(--color-text-muted)"'}>${v.map((c, i) => cell(i, c, sel && i === 6 ? 'editor' : '')).join('')}</div>`;
+}).join('');
+const steps = `<div class="dock" style="height:262px;flex:none"><div class="dtitle">Spell Steps<span class="dbtns">&#10064; &#10005;</span></div>
+	<div class="transport">${btn('Duplicate', '', 'duplicate')}${btn('Remove', '', 'remove')}${btn('Start at Playhead')}<div class="grow"></div><span class="muted">Drag an effect here or onto the ground. Double-click a cell to edit it.</span></div>
+	<div class="table"><div class="tr hd">${cols.map((c, i) => cell(i, c[0])).join('')}</div>${body}</div></div>`;
+const labels = `<div class="vlabel" style="left:33.4%;top:76%"><span>Caster</span></div><div class="vlabel" style="left:58%;top:71%"><span>Target</span></div><div class="vtime">1.20 s</div>`;
+document.body.innerHTML = `<div class="window">${titlebar('Frost Judgement* - VFX Sandbox')}${toolbar()}
+	<div class="row grow" style="align-items:stretch">${lib}<div class="splitv"></div><div class="col grow">
+	<div class="view grow"><img class="scene" src="viewport/scene-b.jpg">${labels}</div>${scrub}<div class="splith"></div>${steps}</div></div>
+	${statusbar('Drag an effect: move.  Shift + drag: height.  Right drag: orbit.  Wheel: zoom.', ['6 effects', 'Selected X 0.0  Y 0.0  Z 32.0', 'Cursor 192.0, -64.0', 'Unsaved changes'])}</div>`;
+</script></body></html>

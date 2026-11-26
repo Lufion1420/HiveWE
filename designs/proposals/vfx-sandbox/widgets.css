@@ -1,0 +1,184 @@
+/* Shared classes. Each one maps to a Qt widget (named in the comment) and follows data/themes/Flat.qss.in.
+   QSS only: no shadows, filters, transforms or transitions. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100vw; height: 100vh; overflow: hidden; background: var(--color-window); color: var(--color-text);
+  font-family: var(--font-family); font-size: var(--font-size-base); line-height: 1.25; }
+.row { display: flex; align-items: center; min-width: 0; }
+.col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.grow { flex: 1 1 0; min-width: 0; min-height: 0; }
+.muted { color: var(--color-text-muted); }
+.small { font-size: var(--font-size-small); }
+.strong { font-weight: var(--font-weight-strong); }
+.err { color: var(--color-error); }
+.warn { color: var(--color-warn); }
+.nw { white-space: nowrap; }
+.elide { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }  /* QFontMetrics::elidedText */
+svg.i { width: var(--toolbar-icon); height: var(--toolbar-icon); flex: none; }
+svg.i.s { width: 16px; height: 16px; }
+svg.i.xs { width: 14px; height: 14px; }
+
+/* native Windows title bar (not styled by us) */
+.titlebar { flex: none; height: 31px; display: flex; align-items: center; gap: 8px; padding-left: 12px; background: var(--color-window);
+  color: var(--color-text-muted); }
+.titlebar .ico { width: 14px; height: 14px; background: var(--color-accent); border-radius: 2px; }
+.titlebar .wb { width: 44px; text-align: center; font-size: 13px; }
+.window { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+/* QToolBar / QToolButton */
+.toolbar { flex: none; height: 37px; display: flex; align-items: center; gap: var(--space-1); padding: 0 6px; border-bottom: 1px solid var(--color-border); }
+.tbtn { height: var(--toolbar-button); min-width: var(--toolbar-button); display: flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid transparent; border-radius: var(--radius-button); white-space: nowrap; }
+.tbtn.text { padding: 0 6px; }
+.tbtn.checked { background: var(--color-checked-bg); border-color: var(--color-checked-border); }
+.tbtn.disabled { color: var(--color-text-disabled); }
+.tbtn.menu { padding: 0 0 0 6px; }                          /* popupMode MenuButtonPopup */
+.tbtn.menu .mb { width: 16px; height: 100%; display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--color-border-strong); }
+.tsep { width: 1px; height: 20px; background: var(--color-border); margin: 0 6px; flex: none; }
+.tlabel { color: var(--color-text-muted); padding: 0 var(--space-2); white-space: nowrap; }
+.arrow { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 4px solid var(--color-text-muted); flex: none; }
+.arrow.up { border-top: 0; border-bottom: 4px solid var(--color-text-muted); }
+
+/* Inputs: QLineEdit, QDoubleSpinBox, QComboBox, QPushButton, QCheckBox, QSlider */
+.edit, .spin, .combo { height: var(--control-height); display: flex; align-items: center; gap: 6px; border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-input); background: var(--color-input-bg); padding-left: var(--space-3); min-width: 0; white-space: nowrap; overflow: hidden; }
+.edit { padding-right: var(--space-3); }
+.edit.focus, .spin.focus { border-color: var(--color-focus); }
+.edit .ph { color: var(--color-text-muted); }
+.combo { background: var(--color-button-top); }
+.combo > span, .spin > span { flex: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.combo .dd { width: 20px; height: 100%; display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--color-border-strong); flex: none; }
+.spin .ud { width: 16px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-evenly;
+  border-left: 1px solid var(--color-border); flex: none; }
+.spin .ud .arrow { border-left-width: 3.5px; border-right-width: 3.5px; }
+.disabled > .edit, .disabled > .spin, .disabled > .combo, .edit.disabled, .spin.disabled, .combo.disabled {
+  color: var(--color-text-disabled); background: var(--color-window); border-color: var(--color-border); }
+.btn { height: var(--control-height); display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 var(--space-4);
+  background: var(--color-button-top); border: 1px solid var(--color-border-strong); border-radius: var(--radius-button); white-space: nowrap; }
+.btn.default { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text); min-width: 76px; }
+.btn.disabled { background: var(--color-window); border-color: var(--color-border); color: var(--color-text-disabled); }
+.check { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.check i { width: 14px; height: 14px; border: 1px solid var(--color-border-strong); background: var(--color-input-bg); border-radius: 2px; flex: none;
+  position: relative; }
+.check.on i { background: var(--color-accent); border-color: var(--color-accent); }
+.check.on i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 8px; height: 8px;
+  background: var(--color-accent-text); clip-path: polygon(0 55%, 15% 40%, 38% 62%, 85% 12%, 100% 28%, 38% 92%); }  /* check.png */
+.check.disabled { color: var(--color-text-disabled); }
+.check.disabled i { background: var(--color-window); border-color: var(--color-border); }
+.slider { position: relative; height: 14px; flex: 1; min-width: 40px; }
+.slider .g { position: absolute; left: 0; right: 0; top: 5px; height: 4px; border-radius: 2px; background: var(--color-border-strong); }
+.slider .s { position: absolute; left: 0; top: 5px; height: 4px; border-radius: 2px; background: var(--color-accent); }
+.slider .h { position: absolute; top: 1px; width: 12px; height: 12px; margin-left: -6px; border-radius: 6px; background: var(--color-accent); }
+.disabled .slider .s, .disabled .slider .h { background: var(--color-border-strong); }
+
+/* checkable QToolButton row, [toolPageButton] */
+.seg { display: flex; gap: var(--space-2); }
+.seg > div { flex: 1; height: var(--control-height); display: flex; align-items: center; justify-content: center; gap: 5px;
+  background: var(--color-button-top); border: 1px solid var(--color-border-strong); border-radius: var(--radius-button); white-space: nowrap; }
+.seg > div.on { background: var(--color-checked-bg); border-color: var(--color-checked-border); }
+.seg > div .n { color: var(--color-text-muted); }
+
+/* QDockWidget */
+.dock { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--color-panel); }
+.dtitle { flex: none; height: 25px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3);
+  background: var(--color-titlebar-top); border-bottom: 1px solid var(--color-border); font-weight: var(--font-weight-strong); }
+.dtitle .dbtns { display: flex; gap: 12px; color: var(--color-text-muted); font-weight: 400; font-size: 11px; }
+.dbody { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: var(--space-3); }
+.splitv { width: 4px; flex: none; background: var(--color-window); border-left: 1px solid var(--color-border); }
+.splith { height: 4px; flex: none; background: var(--color-window); border-top: 1px solid var(--color-border); }
+
+/* QListView (effect list, custom delegate: thumbnail + name + folder + source tag) */
+.list { flex: 1; min-height: 0; overflow: hidden; background: var(--color-base); border: 1px solid var(--color-border); position: relative; }
+.item { height: 44px; display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-2); border: 1px solid transparent; }
+.item.sel { background: var(--color-selection); border-color: var(--color-accent); color: var(--color-selection-text); }
+.item.hover { background: var(--color-hover); }
+.thumb { width: 38px; height: 38px; flex: none; background: #333842; display: flex; align-items: center; justify-content: center; }
+.thumb img { width: 100%; height: 100%; display: block; }
+.thumb.bad { color: #9da0a8; font-size: 20px; font-weight: 600; }   /* ModelThumbnailCache "!" tile */
+.item .two { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tag { flex: none; font-size: var(--font-size-small); color: var(--color-text); border: 1px solid var(--color-accent); border-radius: 2px; padding: 0 4px; margin-right: 14px; }  /* like #objectEditorPill; margin clears the scroll bar */
+.vscroll { position: absolute; right: 0; top: 0; bottom: 0; width: 12px; background: var(--color-base); }
+.vscroll i { position: absolute; left: 3px; width: 6px; border-radius: 3px; background: var(--color-border-strong); }
+.listmsg { position: absolute; left: 16px; right: 16px; top: 40%; text-align: center; color: var(--color-text-muted); line-height: 1.6; }
+
+/* QListView icon mode (direction B), same look as QListView#browseList */
+.grid { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; padding: 4px 14px 4px 4px; }
+.tile { width: 130px; border: 1px solid transparent; padding: 2px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tile.sel { background: var(--color-selection); border-color: var(--color-accent); }
+.tile .pic { width: 124px; height: 98px; background: #333842; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.tile .pic img { width: 108px; height: 108px; }
+.tile .nm { font-size: var(--font-size-small); width: 100%; text-align: center; }
+
+/* QGroupBox */
+.group { position: relative; border: 1px solid var(--color-border); border-radius: var(--radius-group); margin-top: 8px; padding: 12px 8px 8px;
+  display: flex; flex-direction: column; gap: 6px; flex: none; }
+.group > .gt { position: absolute; top: -8px; left: 8px; padding: 0 4px; background: var(--color-panel); font-weight: var(--font-weight-strong); }
+.group.disabled, .group.disabled > .gt { color: var(--color-text-disabled); }
+.form { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.form > .lb { width: 62px; flex: none; white-space: nowrap; }
+.form > .lb2 { width: 40px; flex: none; text-align: right; white-space: nowrap; }
+.swatch { width: 46px; height: 22px; flex: none; border: 1px solid var(--color-border-strong); border-radius: var(--radius-button); }  /* ColorButton */
+
+/* 3D view: a QOpenGLWidget. The picture is composed from real HiveWE renders; labels are QPainter text. */
+.view { position: relative; overflow: hidden; background: #1d3318; }
+.view img.scene { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
+.vlabel { position: absolute; width: 80px; margin-left: -40px; text-align: center; color: #ffffff; font-size: var(--font-size-small); }
+.vlabel span { background: rgba(0,0,0,0.55); padding: 1px 5px; }
+.vtime { position: absolute; left: 8px; top: 8px; color: #ffffff; background: rgba(0,0,0,0.55); padding: 3px 7px; }
+.vhint { position: absolute; left: 50%; top: 24%; width: 360px; margin-left: -180px; text-align: center; line-height: 1.7; color: #ffffff;
+  background: rgba(0,0,0,0.62); border: 1px dashed #b4b8bf; border-radius: 3px; padding: 14px; }
+
+/* Timeline: one custom widget (QWidget::paintEvent), colours from the theme tokens */
+.transport { flex: none; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 var(--space-3); }
+.tl { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--color-border); background: var(--color-base); overflow: hidden; }
+.tlrow { flex: none; height: 26px; display: flex; border-bottom: 1px solid var(--color-border); }
+.tlrow.sel { background: var(--color-selection); }
+.tlrow.alt { background: var(--color-alt-base); }
+.tlrow.alt.sel, .tlrow.sel { background: var(--color-selection); }
+.tlhead { height: 22px; background: var(--color-window); color: var(--color-text-muted); font-size: var(--font-size-small); }
+.tlname { width: 262px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 var(--space-3); border-right: 1px solid var(--color-border-strong); }
+.tlname .d { flex: none; width: 40px; text-align: right; color: var(--color-text-muted); font-size: var(--font-size-small); }
+.tlrow.sel .tlname .d { color: var(--color-selection-text); }
+.tlarea { flex: 1; position: relative; min-width: 0; margin-right: 12px; }
+.tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--color-border); }
+.tlhead .tick { top: 12px; background: var(--color-border-strong); }
+.tick.minor { top: 17px; }
+.tlab { position: absolute; top: 4px; margin-left: 4px; white-space: nowrap; }
+.bar { position: absolute; top: 4px; height: 18px; border: 1px solid var(--color-border-strong); border-radius: 2px; background: var(--color-button-top);
+  font-size: var(--font-size-small); line-height: 16px; padding-left: 6px; white-space: nowrap; overflow: hidden; }
+.bar.sel { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text); }
+.bar.off { background: transparent; border-style: dashed; color: var(--color-text-muted); }
+.bar.bad { background: transparent; border: 1px dashed var(--color-error); color: var(--color-error); }
+.tail { position: absolute; top: 4px; height: 18px; border: 1px solid var(--color-border-strong); border-left: 0; background: transparent; }  /* death animation */
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--color-warn); }
+.playgrip { position: absolute; top: 0; width: 0; height: 0; margin-left: -6px; border-left: 6px solid transparent; border-right: 6px solid transparent;
+  border-top: 10px solid var(--color-warn); }
+.tlempty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--color-text-muted); }
+
+/* QStatusBar */
+.statusbar { flex: none; height: var(--statusbar-height); display: flex; align-items: center; border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted); font-size: var(--font-size-small); padding: 0 var(--space-2); white-space: nowrap; }
+.statusbar .sg { border-left: 1px solid var(--color-border); padding: 0 var(--space-3); line-height: 16px; }
+
+/* QTableView (direction B "Spell Steps") */
+.table { flex: 1; min-height: 0; background: var(--color-base); border-top: 1px solid var(--color-border); overflow: hidden; }
+.tr { display: flex; height: 26px; align-items: stretch; }
+.tr.alt { background: var(--color-alt-base); }
+.tr.sel { background: var(--color-selection); }
+.tr.hd { height: 23px; background: var(--color-window); border-bottom: 1px solid var(--color-border); color: var(--color-text-muted); }
+.td { display: flex; align-items: center; padding: 0 var(--space-3); white-space: nowrap; overflow: hidden; flex: none; }
+.td.num { justify-content: flex-end; }
+.td.flex { flex: 1 1 0; min-width: 120px; }
+.td.editor { padding: 1px 0; }
+.td.editor .spin { width: 100%; padding-left: 4px; }
+
+/* QDialog */
+.dialog { width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--color-window); }
+.dialog .inner { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 11px; }
+.code { flex: 1; min-height: 0; background: var(--color-input-bg); border: 1px solid var(--color-border-strong); border-radius: var(--radius-input);
+  padding: 6px 8px; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; line-height: 1.4; white-space: pre; overflow: hidden; }
+
+/* contrast on selected rows (delegate and timeline painting use the selection text colour; only the warning icon stays red) */
+.item.sel .muted, .tile.sel .muted { color: var(--color-selection-text); }
+.tlrow.sel .tlname.err { color: var(--color-selection-text); }
+.tlrow.sel .tlname.err svg { color: var(--color-error); }
+.bar.bad { background: var(--color-base); }

@@ -1,0 +1,76 @@
+/* VFX Sandbox proposal tokens: Flat Dark (default) and Flat Light.
+   Names and values equal data/themes/Flat.tokens; Flat.qss.in refers to them as @{name}.
+   A page picks Light with #light in the URL (common.js sets <html data-theme="light">). */
+@font-face { font-family: "Inter"; font-weight: 400; src: url("../../../data/fonts/Inter-Regular.ttf"); }
+@font-face { font-family: "Inter"; font-weight: 600; src: url("../../../data/fonts/Inter-SemiBold.ttf"); }
+
+:root {
+  --font-family: "Inter", "Segoe UI", sans-serif;
+  --font-size-base: 12px;
+  --font-size-small: 11px;
+  --font-size-title: 12px;
+  --font-size-heading: 16px;
+  --font-weight-strong: 600;
+  --space-1: 2px; --space-2: 4px; --space-3: 8px; --space-4: 12px;
+  --radius-button: 3px; --radius-input: 3px; --radius-group: 3px;
+  --row-height: 22px; --control-height: 24px; --toolbar-height: 36px; --toolbar-button: 28px; --toolbar-icon: 20px;
+  --dock-tab-height: 24px; --statusbar-height: 22px; --tab-indicator-width: 2px;
+
+  --color-window: #2b2d30;
+  --color-base: #1e1f22;
+  --color-alt-base: #25272a;
+  --color-panel: #2b2d30;
+  --color-menu-bg: #2b2d30;
+  --color-border: #393b40;
+  --color-border-strong: #4e5157;
+  --color-text: #dfe1e5;
+  --color-text-muted: #9da0a8;
+  --color-text-disabled: #5c5f66;
+  --color-accent: #3574f0;
+  --color-accent-hover: #4682f4;
+  --color-accent-text: #ffffff;
+  --color-hover: #393b40;
+  --color-selection: #2e436e;
+  --color-selection-text: #dfe1e5;
+  --color-checked-bg: #2e436e;
+  --color-checked-border: #3574f0;
+  --color-button-top: #393b40;
+  --color-button-hover: #43454a;
+  --color-button-pressed: #4e5157;
+  --color-titlebar-top: #2b2d30;
+  --color-input-bg: #1e1f22;
+  --color-focus: #3574f0;
+  --color-ok: #5fb865;
+  --color-warn: #e0a030;
+  --color-error: #e5534b;
+}
+
+[data-theme="light"] {
+  --color-window: #f2f3f5;
+  --color-base: #ffffff;
+  --color-alt-base: #f7f8fa;
+  --color-panel: #f2f3f5;
+  --color-menu-bg: #ffffff;
+  --color-border: #d1d3d9;
+  --color-border-strong: #b4b8bf;
+  --color-text: #1e1f22;
+  --color-text-muted: #6c707e;
+  --color-text-disabled: #a8adb8;
+  --color-accent: #3574f0;
+  --color-accent-hover: #2a62d6;
+  --color-accent-text: #ffffff;
+  --color-hover: #e6e8ec;
+  --color-selection: #d5e2fc;
+  --color-selection-text: #1e1f22;
+  --color-checked-bg: #d5e2fc;
+  --color-checked-border: #3574f0;
+  --color-button-top: #e6e8ec;
+  --color-button-hover: #dcdee3;
+  --color-button-pressed: #c9ccd3;
+  --color-titlebar-top: #f2f3f5;
+  --color-input-bg: #ffffff;
+  --color-focus: #3574f0;
+  --color-ok: #2e8b3d;
+  --color-warn: #b87500;
+  --color-error: #c9372c;
+}

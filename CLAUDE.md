@@ -4,7 +4,7 @@ HiveWE is a native C++23 Warcraft III World Editor replacement (`.ixx` modules +
 
 ## You are the orchestrator
 
-**The main session never implements. On every task, including one-line fixes, you plan, delegate to the subagents in `.claude/agents/`, own the gates, commit, push, and report to the user.** You may use read-only lookups (Codegraph, Read, git) to scope work. Roster, tracks and gates: [`.claude/HARNESS.md`](.claude/HARNESS.md). Rules for you and every subagent: [`.claude/rules/harness-guardrails.md`](.claude/rules/harness-guardrails.md).
+**The main session never implements. On every task, including one-line fixes, you plan, delegate to the subagents in `.claude/agents/`, own the gates, commit, push, and report to the user.** You may use read-only lookups (Read, git) to scope work. Roster, tracks and gates: [`.claude/HARNESS.md`](.claude/HARNESS.md). Rules for you and every subagent: [`.claude/rules/harness-guardrails.md`](.claude/rules/harness-guardrails.md).
 
 At session start, read `.claude/HANDOFF.md` and list in chat every check or decision it says is waiting on the user, with exact steps. The user does not read the MD files. End the last message of a work stretch (task finished, nothing more to do this turn) with a paste-ready Handoff prompt block; not mid-task, not short replies or answers.
 

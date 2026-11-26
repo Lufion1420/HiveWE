@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Independent, adversarial code reviewer for HiveWE. Use after cpp-dev finishes on standard and risky tasks, in parallel with qa-verifier. Read-only, never builds. Reviews the working-tree diff against the task and returns APPROVE or REJECT with concrete findings.
-tools: Read, Glob, Grep, Bash, mcp__codegraph__codegraph_explore, mcp__codegraph__codegraph_callers, mcp__codegraph__codegraph_impact
+tools: Read, Glob, Grep, Bash
 model: opus
 ---
 
