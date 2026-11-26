@@ -13,7 +13,7 @@ Scripts of the differential sweep (fourth sweep, 2026-11-20). Not run since bein
 
 1. `enum.py <dll_dir> <out.json> <mask>`: list CASC map paths (`maps_all.json` is the sorted list `ext_all.py` reads).
 2. `gettd.py <dll_dir> <out>`: extract the game's `triggerdata.txt` (fdiff `--triggerdata`, expected at `stock/TriggerData.txt`).
-3. `ext_all.py <S> <w4>` runs `ext1.py` per map (known names plus `(listfile)` entries, never `SFileFindFirstFile`) to fill `stock/` and `stock_scripts/`. `mpq_extract.py <dll_dir> <mpq> <outdir>` extracts from a single archive.
+3. `ext_all.py <S> <w4>` runs `ext1.py` per map (known names plus `(listfile)` entries, never `SFileFindFirstFile`) to fill `stock/` and `stock_scripts/`. `mpq_extract.py <dll_dir> <mpq> <outdir>` extracts from a single archive. Both miss imports (`ext1.py` takes only `war3map*` listfile names and flattens `\` to `_`, `mpq_extract.py` only known names): for load checks extract the full `(listfile)`.
 4. `subset2.py <S> <subset.json>` (or older `subset.py <S>`): choose the maps (v39 or Lua scripts); prints counts.
 5. `drive4.py` (needs `S`): loops `one.py <id> <lang>` over the subset with a timeout and skips finished ids, so a sweep can run in chunks (stop it, rerun to resume). `one.py` calls `sweep/resave.py` (HiveWE `--resave`), `files/fdiff.py`, `scripts/sdiff.py`, and `sim/simdiff.py` for Lua maps, and counts `SetUnitColor` and `SetResourceAmount`. Writes `w4/work/res/<id>.json`.
 6. `agg.py <S>`: aggregate the results (status, peak memory, colour/gold counts, fdiff histogram, sdiff lost-line heads).
@@ -24,7 +24,7 @@ The 78-kind classifier from reports 1-3 is not in the repo and was not rebuilt.
 
 Old-versus-new comparisons: when the change touches `data/`, give the old-build sandbox the HEAD files (`git cat-file --filters HEAD:<path>`), or data-driven differences are hidden. Also compare each run's `%TEMP%\input.lua` (the generated script): a map whose script fails to compile (exit 3) keeps its old script, which hides generator changes. To probe a base object value headlessly, set it on an object in a map copy and `--resave`: a record equal to the base data is dropped (`slk::SLK::set_shadow_data`).
 
-When comparing two sweeps, do not compare the `err` fields: they are cut to a fixed length and hold paths, so their content depends on path length. Compare the full `w4/work/logs/<id>.err.txt` logs with paths normalised.
+When comparing two sweeps, do not compare the `err` fields: they are cut to a fixed length and hold paths, so their content depends on path length. Compare the full `w4/work/logs/<id>.err.txt` logs with paths normalised. Ignore pjass "Maybe you meant" suggestion text in those diffs: it is nondeterministic.
 
 `%TEMP%/input.lua` is shared by every HiveWE process: see `../scripts/README.md`. To check for a clash, compare the hash and size of each generated script (all distinct, none the user's map) instead of watching processes: `Win32_Process.CommandLine` can be empty for a process that has just started.
 

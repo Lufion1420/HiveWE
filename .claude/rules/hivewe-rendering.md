@@ -23,6 +23,12 @@ paths:
 - Debug overlay (`glwidget.cpp`): distinguish HiveWE terrain-space vs Warcraft world-space; user readouts prefer Warcraft coordinates.
 - Treat debug overlays as user-facing tools — trim low-signal entries.
 
+## Image decoding and fallbacks
+
+- `Hierarchy::open_file` can return another format than the requested extension (a `filealiases.json` target gets a `.dds` retry, `.blp`/`.tga` targets only): image decoders choose by content (`blp::has_blp1_magic`), never by `path.extension()`.
+- An undecodable image gives a placeholder and one log line in `Texture` and `GroundTexture`; `PathingTexture` returns an error. `ResourceManager::load` turns a loader throw into an error result and many callers use `.value()`, so check every caller before making any loader stricter.
+- The linked SOIL2 library has no `SOIL_free_image_data` (declared in the header, link error): free SOIL buffers with `std::free`, BLP buffers with `delete[]`.
+
 ## Model Editor and preview
 
 - The Model Editor and the main-window sidebar Model Preview share `ModelEditorGLWidget`: a playback change there also changes the preview.

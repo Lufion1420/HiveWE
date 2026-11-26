@@ -14,6 +14,7 @@ Primary implementation units are `.ixx` modules; Qt UI stays in `.cpp`/`.h`.
 - `snake_case` functions/fields/files; `PascalCase` types.
 - Imports by logical name: `import Map;`, `import BinaryReader;`, `import Terrain;`.
 - Do not auto-sort includes.
+- `src/resources/texture.ixx` must keep its `#include` global module fragment, not `import std`: Qt `.cpp` files that include std headers import it (C2374 in `mocs_compilation`).
 
 ## Globals
 
