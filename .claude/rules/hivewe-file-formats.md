@@ -19,6 +19,7 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - Triggers/script: `src/base/triggers/`.
 - Object SLK merges: `src/object_editor/slk_conversions.ixx`.
 - Which map files are referenced (Asset Manager): `src/base/map/asset_usage.ixx` does the matching; `Map::get_file_usage` (`unused_files.cpp`) hands it the in-memory state.
+- Export MPQ's archive step: `src/base/map/map_archive_export.ixx` (Qt-free). It builds `<target>.hivewe-tmp`, checks the flush before compacting, and replaces the target only on success.
 
 ## Rules
 
@@ -72,6 +73,8 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - `Doodads::load` zeroes `Doodad::auto_increment`, `Unit()` increments `Unit::auto_increment`, and `Triggers::load` zeroes `Trigger::next_id`. The readers therefore cannot be dry-run against an open map without saving and restoring these statics.
 - From a Python replay over the stock 3.0.1 maps: units use `random_type` -1 and 641 with no payload. That is not damage.
 - StormLib (verified 2026-11-24): `SFileCreateArchive` always forces `dwFileFlags1 = MPQ_FILE_DEFAULT_INTERNAL` (`SFileCreateArchive.cpp:102`) and so writes a `(listfile)` regardless of `MPQ_CREATE_LISTFILE`; only `SFileCreateArchive2` with `dwFileFlags1 = 0` omits it (`run_async_pack` in `src/map_protector/protection_pipeline.ixx` does this). `SFileCompactArchive` still works without a listfile because the names stay in memory in the same session. `MPQ_OPEN_READ_ONLY` does not change the read and extract paths.
+- StormLib 9.30 write failures (verified 2026-11-26): `SFileCompactArchive` ignores the result of its own flush and `SListFileSaveToMpq` clears the listfile flag even when the write fails, so any pack must call and check `SFileFlushArchive` before compacting (`run_async_pack` does not yet). Compact writes `<archive>.tmp` through a `MAX_PATH+1` buffer and cuts a longer name silently (`map_archive::max_path_length`). `SFileCreateArchive` on an existing non-MPQ file appends the archive to it. `SFileCloseArchive` frees the handle even when it returns false.
+- `fs::rename` over a file held open with `GENERIC_READ`/`FILE_SHARE_READ` fails with Windows error 5.
 - The live game install on this machine is found through `find_warcraft_directory` at `C:/Program Files (x86)/Warcraft III`. The registry's Blizzard GamePath/Program/InstallPath values under `F:\` are stale.
 
 ## Generated map script must match the World Editor (verified 2026-11-09)
@@ -91,7 +94,8 @@ Checks: `.claude/tools/script-check/`.
 - The World Editor creates `ugol` with `CreateBlightedGoldmine(p, x, y, face)`, not `BlzCreateUnitWithSkin` (40 JASS maps).
 - `InitAllyPriorities` is omitted by the World Editor when no player has a priority on another (463/466; 3 unexplained, Needs verification).
 - `generate_map_script` writes fixed shared paths (`%TEMP%/input.lua`, `data/tools/war3map.j`), so saves and resaves cannot run in parallel. On a script compile error, HiveWE's generated script can be taken from `%TEMP%/input.lua` right after the resave.
-- Save pitfall (Asana 1220330960297388, open): the Lua step writes `%TEMP%/input.lua` unchecked (`src/base/triggers/map_script.cpp`). A failed open makes HiveWE copy the previous save's script, possibly another map's, into war3map.lua and still report success. Map Protector's `save_restoring_state` (`src/map_protector/protection_pipeline.ixx`) catches a throwing `map->save` and restores state.
+- `install_map_script` returns an error instead of installing a stale file from those shared paths: keep every write and removal there checked. HiveWE does not syntax-check Lua scripts on save, so on a Lua map `Map::script_compile_failed` means a write failure (ticket 1220926531963465).
+- Map Protector's `save_restoring_state` (`src/map_protector/protection_pipeline.ixx`) catches a throwing `map->save` and restores state.
 - `MapScriptWriter::call` formats float args with `"{}"` (can produce exponents), and `string_view` concatenations can format as char ranges. Pre-format arguments as `std::string`.
 - `MapScriptWriter::four_cc` writes object ids into the generated script unescaped. An id validator (new-object dialogs accept exactly 4 ASCII letters or digits) must be checked against that, and against maps already on disk: `id_fits` stays length-only so existing maps still save.
 - Identifiers: every non-`[A-Za-z0-9_]` becomes `_`, trim first, and use the same helper at declaration and use.
@@ -191,4 +195,4 @@ Checks: `.claude/tools/script-check/`.
 
 ## Save temp files and folder listings (verified 2026-11-22)
 
-- Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `export_mpq`, `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy, `find_file_usage`, `map_backup::select_files`.
+- Any loop that lists a map folder to copy, list or pack files must skip `is_map_write_temp_file` (`*.hivewe-tmp`). `Imports::save` builds `war3map.imp` from a folder listing, so a stray temp file becomes an import. Current loops: `Imports::save`, `map_archive::write` (Export MPQ), `run_async_pack`, `copy_source_folder`, the `Map::save` Save-As copy, `find_file_usage`, `map_backup::select_files`, the Browse Models `enumerate_catalog`.
