@@ -14,6 +14,25 @@ namespace fs = std::filesystem;
 using namespace std::string_literals;
 
 namespace slk {
+	/// One object data field record kept as the bytes it was read from (field id through end token), because the meta data does not know
+	/// its id, or knows it but the type byte cannot be derived from the meta data (see modification_tables.ixx).
+	export struct RawModification {
+		std::string field_id; // as read, cut at the first NUL
+		std::uint32_t type = 0;
+		std::uint32_t level = 0; // as read; 0 in files without level and data pointer ints
+		std::uint32_t pointer = 0;
+		std::string value; // decoded like a known field's value; for type 3 the text itself
+		/// The shadow column this record stands in for while that column still holds `value`. Empty for an unknown field id.
+		std::string column;
+		bool skin = false; // read from a war3mapSkin.* file, so it is written back there
+		std::vector<std::uint8_t> bytes;
+
+		bool operator==(const RawModification&) const = default;
+	};
+
+	/// Raw records per object id, in file order.
+	export using RawModificationMap = hive::unordered_map<std::string, std::vector<RawModification>>;
+
 	export class SLK {
 		/// column_header should be lowercase
 		[[nodiscard]]
@@ -44,6 +63,9 @@ namespace slk {
 		hive::unordered_map<std::string, size_t> column_headers;
 		hive::unordered_map<std::string, hive::unordered_map<std::string, std::string>> base_data;
 		hive::unordered_map<std::string, hive::unordered_map<std::string, std::string>> shadow_data;
+		/// Object data field records the object data reader kept as bytes (see RawModification). They follow their object through
+		/// copy_row and remove_row and are written back by the object data writer.
+		RawModificationMap raw_modifications;
 
 		// The following map is only used in meta SLKs and maps the field (+unit/ability ID) to a meta ID
 		hive::unordered_map<std::string, std::string> meta_map;
@@ -457,6 +479,10 @@ namespace slk {
 				const auto shadow_row_copy = shadow_data.at(row_header);
 				shadow_data[new_row_header] = shadow_row_copy;
 			}
+			if (copy_shadow_data && raw_modifications.contains(row_header)) {
+				const auto raw_copy = raw_modifications.at(row_header);
+				raw_modifications[new_row_header] = raw_copy;
+			}
 
 			size_t index = row_headers.size();
 			row_headers.emplace(new_row_header, index);
@@ -473,6 +499,7 @@ namespace slk {
 
 			base_data.erase(row_header);
 			shadow_data.erase(row_header);
+			raw_modifications.erase(row_header);
 
 			const size_t index = row_headers.at(row_header);
 			if (index == rows() - 1) {
@@ -561,6 +588,27 @@ namespace slk {
 				for (const auto& [field, value] : fields) {
 					append(field);
 					append(value);
+				}
+			}
+
+			// Raw records are written too, so they count. Nothing is added for a table without any, so such tables compare as before.
+			if (!raw_modifications.empty()) {
+				ids.clear();
+				for (const auto& [id, records] : raw_modifications) {
+					ids.push_back(id);
+				}
+				std::ranges::sort(ids);
+				result += "raw;";
+				for (const std::string_view id : ids) {
+					const auto& records = raw_modifications.at(id);
+					append(id);
+					result += std::to_string(records.size());
+					result += ';';
+					for (const RawModification& record : records) {
+						append(record.column);
+						result += record.skin ? '1' : '0';
+						append(std::string_view(reinterpret_cast<const char*>(record.bytes.data()), record.bytes.size()));
+					}
 				}
 			}
 			return result;

@@ -155,6 +155,9 @@ int main(int argc, char* argv[]) {
 				"                       model-editor (stock model units/human/footman/footman.mdx), browse-models (the Model Editor's model browser; with --qa-script-out <file>\n"
 				"                       it waits for the thumbnails, writes result lines to <file> and a PNG of the dialog next to it).\n"
 				"                       asset-manager with --qa-script-out <file> writes each listed file's state and users to <file> and quits.\n"
+				"  --qa-object <category>:<id>  With --qa-open-dialog object-editor: select this object (default unit:hfoo; categories unit, item,\n"
+				"                       doodad, destructible, ability, upgrade, buff). With --qa-script-out <file> the field rows the details panel\n"
+				"                       shows are written to <file> as \"name | meta | value\" lines, then HiveWE quits (exit 3 if the object is not found).\n"
 				"  --qa-model-editor-script \"<steps>\"  With --qa-open-dialog model-editor and --qa-script-out <file>: drive the Model Editor's widgets in-process\n"
 				"                       (steps separated by ';', for example \"wait:3000;pause;slider:500;expect:timefrac=0.5\") and write PASS/FAIL/INFO lines to the file, then quit.\n"
 				"                       The steps are listed above ModelEditor::run_qa_script in src/model_editor/model_editor.cpp.\n"
@@ -345,6 +348,12 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_model = arguments[++i];
+		} else if (arguments[i] == "--qa-object") {
+			if (i + 1 >= arguments.size() || !arguments[i + 1].contains(':') || !arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-object needs <category>:<id> and --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_object = arguments[++i];
 		} else if (arguments[i] == "--qa-model-editor-script" || arguments[i] == "--qa-script-out") {
 			const bool is_script = arguments[i] == "--qa-model-editor-script";
 			if (i + 1 >= arguments.size() || !arguments.contains("--qa-offscreen")) {

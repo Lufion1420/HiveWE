@@ -513,8 +513,18 @@ export void add_editor_text_reference(std::vector<AssetReference>& references, c
 	references.push_back({ std::string(open_editor_source_prefix) + std::string(title), std::move(text) });
 }
 
-/// Every edited field of every object in an object data table, whatever the field.
+/// Every edited field of every object in an object data table, whatever the field, including fields kept raw because the meta data
+/// does not know their id.
 export void add_object_references(std::vector<AssetReference>& references, const slk::SLK& slk, const bool has_model_variations) {
+	const auto append_raw = [&](std::string& text, const std::string& id) {
+		if (const auto found = slk.raw_modifications.find(id); found != slk.raw_modifications.end()) {
+			for (const slk::RawModification& record : found->second) {
+				text += record.value;
+				text += '\n';
+			}
+		}
+	};
+
 	for (const auto& [id, fields] : slk.shadow_data) {
 		std::string text;
 		for (const auto& [field, value] : fields) {
@@ -525,11 +535,21 @@ export void add_object_references(std::vector<AssetReference>& references, const
 			text += value;
 			text += '\n';
 		}
+		append_raw(text, id);
 		// The model of the base object counts too: editing only the variation count adds files next to it.
 		if (has_model_variations) {
 			text += slk.data<std::string>("file", id);
 		}
 		references.push_back({ std::string(id), std::move(text), has_model_variations });
+	}
+
+	for (const auto& [id, records] : slk.raw_modifications) {
+		if (slk.shadow_data.contains(id) || records.empty()) {
+			continue;
+		}
+		std::string text;
+		append_raw(text, id);
+		references.push_back({ std::string(id), std::move(text), false });
 	}
 }
 

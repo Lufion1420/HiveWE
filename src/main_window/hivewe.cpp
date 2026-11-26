@@ -2660,8 +2660,44 @@ void HiveWE::open_qa_dialog() {
 	} else if (name == "object-editor") {
 		auto* editor = new ObjectEditor(nullptr);
 		shown = editor;
-		// Opens the details panel of a stock unit so the field table, summary and bookmarks can be captured.
-		QTimer::singleShot(2000, editor, [editor]() { editor->select_id(ObjectEditor::Category::unit, "hfoo"); });
+		// Opens the details panel of an object (--qa-object, default the stock unit hfoo) so the field table, summary and bookmarks can be
+		// captured. With --qa-script-out the visible field rows are written to that file and HiveWE quits.
+		static const std::array<std::pair<QStringView, ObjectEditor::Category>, 7> categories = { {
+			{ u"unit", ObjectEditor::Category::unit },
+			{ u"item", ObjectEditor::Category::item },
+			{ u"doodad", ObjectEditor::Category::doodad },
+			{ u"destructible", ObjectEditor::Category::destructible },
+			{ u"ability", ObjectEditor::Category::ability },
+			{ u"upgrade", ObjectEditor::Category::upgrade },
+			{ u"buff", ObjectEditor::Category::buff },
+		} };
+		const QString category_name = qa_object.section(':', 0, 0);
+		const std::string id = qa_object.section(':', 1).toStdString();
+		const auto category = std::ranges::find_if(categories, [&](const auto& entry) { return entry.first == category_name; });
+		if (category == categories.end()) {
+			std::println(stderr, "--qa-object: unknown category {}.", category_name.toStdString());
+			QTimer::singleShot(0, this, []() { QApplication::exit(2); });
+			return;
+		}
+		QTimer::singleShot(2000, editor, [editor, category = category->second, id]() {
+			editor->select_id(category, id);
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			const QStringList lines = editor->qa_visible_fields(id);
+			QFile file(qa_script_out);
+			const bool written = file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate);
+			if (written) {
+				QTextStream stream(&file);
+				stream.setEncoding(QStringConverter::Utf8);
+				stream << "OBJECT " << qa_object << "\n";
+				for (const QString& line : lines) {
+					stream << line << "\n";
+				}
+				stream << "DONE\n";
+			}
+			QTimer::singleShot(0, editor, [ok = written && !lines.isEmpty()]() { QApplication::exit(ok ? 0 : 3); });
+		});
 	} else if (name == "asset-manager") {
 		auto* asset_manager = new AssetManager(this);
 		shown = asset_manager;

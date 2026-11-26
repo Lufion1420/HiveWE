@@ -2990,6 +2990,20 @@ void ObjectEditor::addTypeTreeView(
 	});
 }
 
+QStringList ObjectEditor::qa_visible_fields(const std::string& id) const {
+	QStringList lines;
+	if (!current_details_view || !current_details_view->model() || current_details_id != id) {
+		return lines;
+	}
+	const QAbstractItemModel* model = current_details_view->model();
+	for (int row = 0; row < model->rowCount(); row++) {
+		lines.push_back(model->headerData(row, Qt::Vertical, Qt::DisplayRole).toString() + " | "
+						+ model->headerData(row, Qt::Vertical, SingleModel::MetaRole).toString() + " | "
+						+ model->data(model->index(row, 0), Qt::DisplayRole).toString());
+	}
+	return lines;
+}
+
 void ObjectEditor::select_id(Category category, const std::string& id) {
 	explorer_area->setCurrentIndex(static_cast<int>(category));
 	current_category = category;

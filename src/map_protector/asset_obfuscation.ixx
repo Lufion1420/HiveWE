@@ -600,6 +600,54 @@ export bool rewrite_raw_custom_object_paths(
 	return changed;
 }
 
+/// Rewrites asset paths in one raw-kept field whose id the meta data does not know (see slk::RawModification), with the rule
+/// rewrite_raw_custom_object_paths uses: only string values, and per comma segment only those with a known asset extension that match a
+/// candidate. Fields standing in for a known column are left to the shadow value. Returns true if the value changed; on a malformed
+/// record nothing changes.
+export bool rewrite_raw_modification_paths(
+	slk::RawModification& raw,
+	const bool optional_ints,
+	const std::unordered_map<std::string, const RenameCandidate*>& candidates_by_match_key
+) {
+	static constexpr std::array<std::string_view, 5> known_extensions = { ".blp", ".tga", ".png", ".mdx", ".mdl" };
+	if (!raw.column.empty() || raw.type != 3) {
+		return false;
+	}
+	const size_t fixed = 4 + 4 + (optional_ints ? 8 : 0); // field id, type, [level, data pointer]
+	if (raw.bytes.size() < fixed + 1 + 4 || raw.bytes[raw.bytes.size() - 5] != 0) {
+		return false;
+	}
+	const std::string value(raw.bytes.begin() + fixed, raw.bytes.end() - 5);
+	if (value.find('\0') != std::string::npos) {
+		return false;
+	}
+
+	std::vector<std::string> segments = absl::StrSplit(value, ',');
+	bool changed = false;
+	for (std::string& segment : segments) {
+		const std::string key = asset_match_key(segment);
+		if (!std::ranges::any_of(known_extensions, [&](const std::string_view ext) { return key.ends_with(ext); })) {
+			continue;
+		}
+		if (const RenameCandidate* found = find_object_data_candidate(segment, "", candidates_by_match_key)) {
+			segment = found->new_relative_path.string();
+			changed = true;
+		}
+	}
+	if (!changed) {
+		return false;
+	}
+
+	const std::string rewritten = absl::StrJoin(segments, ",");
+	std::vector<uint8_t> bytes(raw.bytes.begin(), raw.bytes.begin() + fixed);
+	bytes.insert(bytes.end(), rewritten.begin(), rewritten.end());
+	bytes.push_back(0);
+	bytes.insert(bytes.end(), raw.bytes.end() - 4, raw.bytes.end()); // end token as read
+	raw.bytes = std::move(bytes);
+	raw.value = rewritten;
+	return true;
+}
+
 export FileRewriteResult rewrite_object_data_file(
 	const fs::path& file_path,
 	const std::string_view file_name,
@@ -615,7 +663,10 @@ export FileRewriteResult rewrite_object_data_file(
 
 	// Custom objects on a base id the stock tables lack (Map::load skips them too) are carried over as raw bytes, untouched.
 	std::vector<RawCustomObject> preserved_objects;
-	auto shadow_map_result = extract_modification_shadow_map_path(file_path, template_slk, meta_slk, optional_ints, &preserved_objects);
+	// Fields the meta data does not know are carried over as their bytes too (see load_modification_table).
+	slk::RawModificationMap raw_fields;
+	auto shadow_map_result =
+		extract_modification_shadow_map_path(file_path, template_slk, meta_slk, optional_ints, &preserved_objects, &raw_fields);
 	if (!shadow_map_result) {
 		return { false, shadow_map_result.error(), false };
 	}
@@ -624,7 +675,7 @@ export FileRewriteResult rewrite_object_data_file(
 	// Merged stock+shadow view, needed for field_to_meta_id()'s alias/oldid resolution (ability
 	// field-name aliasing) - matches how src/models/table_model.ixx's field_type() resolves the
 	// same classification for the live Object Editor UI.
-	slk::SLK scratch = shadow_map_to_slk(template_slk, shadow_map);
+	slk::SLK scratch = shadow_map_to_slk(template_slk, shadow_map, &raw_fields);
 
 	bool changed = false;
 	for (auto& [object_id, fields] : shadow_map) {
@@ -714,9 +765,16 @@ export FileRewriteResult rewrite_object_data_file(
 			changed = true;
 		}
 	}
+	for (auto& [object_id, records] : raw_fields) {
+		for (slk::RawModification& record : records) {
+			if (rewrite_raw_modification_paths(record, optional_ints, candidates_by_match_key)) {
+				changed = true;
+			}
+		}
+	}
 
 	if (changed) {
-		scratch = shadow_map_to_slk(template_slk, shadow_map); // rebuild: shadow_map above was mutated in place
+		scratch = shadow_map_to_slk(template_slk, shadow_map, &raw_fields); // rebuild: shadow_map above was mutated in place
 		// save_modification_file() throws on a field it cannot write, so check first and fail this file instead.
 		if (const auto errors = collect_save_modification_file_errors(scratch, meta_slk, optional_ints); !errors.empty()) {
 			const auto& first = errors.front();

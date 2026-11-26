@@ -623,3 +623,30 @@ TEST_CASE("asset usage: thousands of imports and megabytes of script") {
 	CHECK(lookups <= 1500 + 1500 * 4);
 	CHECK(lookups == asked.size());
 }
+
+TEST_CASE("asset usage: portrait and extra model fields and fields kept raw count") {
+	MapFolder map;
+	map.write("war3mapImported/Portrait.mdx");
+	map.write("war3mapImported/Extra.mdx");
+	map.write("war3mapImported/RawOnly.mdx");
+	map.write("war3mapImported/RawNextToKnown.blp");
+	map.write("war3mapImported/Unrelated.mdx");
+
+	slk::SLK units = table_with({ { "h000", "portrait", "war3mapImported\\Portrait.mdx" }, { "h000", "file1", "war3mapImported\\Extra.mdl" } });
+	slk::RawModification raw_only;
+	raw_only.field_id = "zzzz";
+	raw_only.type = 3;
+	raw_only.value = "war3mapImported\\RawOnly.mdx";
+	units.raw_modifications["hfoo"].push_back(raw_only); // an object whose only change is a field the meta data does not know
+	slk::RawModification next_to_known = raw_only;
+	next_to_known.value = "war3mapImported\\RawNextToKnown.blp";
+	units.raw_modifications["h000"].push_back(next_to_known);
+	add_object_references(map.request.references, units, false);
+
+	const auto files = map.usage();
+	CHECK(used_by(files, "war3mapImported/Portrait.mdx", "h000"));
+	CHECK(used_by(files, "war3mapImported/Extra.mdx", "h000"));
+	CHECK(used_by(files, "war3mapImported/RawOnly.mdx", "hfoo"));
+	CHECK(used_by(files, "war3mapImported/RawNextToKnown.blp", "h000"));
+	CHECK_FALSE(used(files, "war3mapImported/Unrelated.mdx"));
+}

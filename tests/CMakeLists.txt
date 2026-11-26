@@ -42,6 +42,7 @@ add_executable(HiveWE_tests
 	map_archive_export_test.cpp
 	lua_syntax_test.cpp
 	trigger_category_tree_test.cpp
+	object_data_unknown_fields_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
@@ -53,6 +54,7 @@ target_compile_definitions(HiveWE_tests PRIVATE
 	MDL_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mdl"
 	THEMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../data/themes"
 	TEST_MAP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../data/test map"
+	OVERRIDES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../data/overrides"
 )
 
 # MSVC's LTCG code generator hits an internal compiler error (C1001 in blp.ixx / LNK1000

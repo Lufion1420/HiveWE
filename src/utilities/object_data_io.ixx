@@ -96,11 +96,15 @@ export struct ObjectDataImportPackage {
 	std::string source_locale;
 	std::string source_game_version;
 	hive::unordered_map<ObjectDataCategory, ModificationShadowMap> categories;
+	/// Fields of the binary package the meta data does not know, kept as bytes (see slk::RawModification).
+	hive::unordered_map<ObjectDataCategory, slk::RawModificationMap> raw_categories;
 	std::optional<ScenarioImportData> scenario;
 };
 
 export struct ObjectDataApplyPlan {
 	hive::unordered_map<ObjectDataCategory, ModificationShadowMap> merged;
+	/// The imported raw fields of the objects the import applies (new objects and overwritten ones).
+	hive::unordered_map<ObjectDataCategory, slk::RawModificationMap> raw;
 	std::vector<ImportConflict> conflicts;
 	std::vector<ImportConflict> additions;
 	ImportValidationReport validation;
@@ -508,17 +512,33 @@ export ImportValidationReport validate_shadow_map(
 	return report;
 }
 
+/// An object the map already has (edited fields or kept unknown fields) conflicts unless both its known fields and its unknown fields
+/// (`imported_raw`, from the binary package) match the imported ones.
 export std::vector<ImportConflict> detect_import_conflicts(
 	const ObjectCategoryDescriptor& descriptor,
-	const ModificationShadowMap& imported
+	const ModificationShadowMap& imported,
+	const slk::RawModificationMap* imported_raw = nullptr
 ) {
+	static const hive::unordered_map<std::string, std::string> no_fields;
+	static const std::vector<slk::RawModification> no_raw;
 	std::vector<ImportConflict> conflicts;
 	for (const auto& [object_id, fields] : imported) {
 		const auto current = descriptor.slk->shadow_data.find(object_id);
-		if (current == descriptor.slk->shadow_data.end()) {
+		const auto current_raw = descriptor.slk->raw_modifications.find(object_id);
+		const bool has_raw = current_raw != descriptor.slk->raw_modifications.end() && !current_raw->second.empty();
+		if (current == descriptor.slk->shadow_data.end() && !has_raw) {
 			continue;
 		}
-		if (shadow_object_fields_equivalent(descriptor, object_id, fields, current->second)) {
+		const auto& current_fields = current == descriptor.slk->shadow_data.end() ? no_fields : current->second;
+		const auto& current_records = has_raw ? current_raw->second : no_raw;
+		const std::vector<slk::RawModification>* imported_records = &no_raw;
+		if (imported_raw) {
+			if (const auto found = imported_raw->find(object_id); found != imported_raw->end()) {
+				imported_records = &found->second;
+			}
+		}
+		if (shadow_object_fields_equivalent(descriptor, object_id, fields, current_fields)
+			&& same_unknown_raw_records(*imported_records, current_records)) {
 			continue;
 		}
 
@@ -538,7 +558,7 @@ export std::vector<ImportConflict> detect_import_additions(
 ) {
 	std::vector<ImportConflict> additions;
 	for (const auto& [object_id, fields] : imported) {
-		if (descriptor.slk->shadow_data.contains(object_id)) {
+		if (descriptor.slk->shadow_data.contains(object_id) || descriptor.slk->raw_modifications.contains(object_id)) {
 			continue;
 		}
 
@@ -613,10 +633,28 @@ export ObjectDataApplyPlan build_import_plan(
 		for (const auto& [object_id, fields] : descriptor.slk->shadow_data) {
 			current[object_id] = fields;
 		}
+		// An object whose only changes are kept unknown fields is one the map already has, too.
+		for (const auto& [object_id, records] : descriptor.slk->raw_modifications) {
+			if (!records.empty()) {
+				(void)current[object_id];
+			}
+		}
 
 		plan.merged[descriptor.category] = merge_import_category(current, imported->second, overwrite_ids);
 
-		for (ImportConflict conflict : detect_import_conflicts(descriptor, imported->second)) {
+		// Same rule as merge_import_category: an object the map already has keeps its own data unless it is overwritten.
+		if (const auto raw = package.raw_categories.find(descriptor.category); raw != package.raw_categories.end()) {
+			for (const auto& [object_id, records] : raw->second) {
+				if (current.contains(object_id) && !overwrite_ids.contains(object_id)) {
+					continue;
+				}
+				plan.raw[descriptor.category][object_id] = records;
+			}
+		}
+
+		const auto imported_raw = package.raw_categories.find(descriptor.category);
+		const slk::RawModificationMap* raw_fields = imported_raw == package.raw_categories.end() ? nullptr : &imported_raw->second;
+		for (ImportConflict conflict : detect_import_conflicts(descriptor, imported->second, raw_fields)) {
 			plan.conflicts.push_back(std::move(conflict));
 		}
 
@@ -711,9 +749,12 @@ export std::expected<ObjectDataImportPackage, ImportValidationReport> load_binar
 
 	for (const auto& descriptor : object_data_category_descriptors()) {
 		ModificationShadowMap combined;
+		slk::RawModificationMap raw_fields;
 		const fs::path main_path = directory / descriptor.main_file;
 		if (fs::exists(main_path)) {
-			const auto extracted = extract_modification_shadow_map_path(main_path, *descriptor.slk, *descriptor.meta_slk, descriptor.optional_ints);
+			const auto extracted = extract_modification_shadow_map_path(
+				main_path, *descriptor.slk, *descriptor.meta_slk, descriptor.optional_ints, nullptr, &raw_fields
+			);
 			if (!extracted) {
 				report.add(ValidationSeverity::error, descriptor.key, extracted.error());
 				continue;
@@ -723,7 +764,10 @@ export std::expected<ObjectDataImportPackage, ImportValidationReport> load_binar
 
 		const fs::path skin_path = directory / descriptor.skin_file;
 		if (fs::exists(skin_path)) {
-			const auto extracted = extract_modification_shadow_map_path(skin_path, *descriptor.slk, *descriptor.meta_slk, descriptor.optional_ints);
+			slk::RawModificationMap skin_raw_fields;
+			const auto extracted = extract_modification_shadow_map_path(
+				skin_path, *descriptor.slk, *descriptor.meta_slk, descriptor.optional_ints, nullptr, &skin_raw_fields
+			);
 			if (!extracted) {
 				report.add(ValidationSeverity::error, descriptor.key, extracted.error());
 				continue;
@@ -732,8 +776,19 @@ export std::expected<ObjectDataImportPackage, ImportValidationReport> load_binar
 				auto& target = combined[object_id];
 				target.insert(fields.begin(), fields.end());
 			}
+			// Unknown fields of the skin file go back to the skin file on save.
+			for (auto& [object_id, records] : skin_raw_fields) {
+				auto& target = raw_fields[object_id];
+				for (slk::RawModification& record : records) {
+					record.skin = true;
+					target.push_back(std::move(record));
+				}
+			}
 		}
 
+		if (!raw_fields.empty()) {
+			package.raw_categories.emplace(descriptor.category, std::move(raw_fields));
+		}
 		if (!combined.empty()) {
 			package.categories.emplace(descriptor.category, std::move(combined));
 			const ImportValidationReport category_report = validate_shadow_map(descriptor, package.categories.at(descriptor.category), true);
@@ -974,6 +1029,7 @@ export bool apply_object_data_plan(const ObjectDataApplyPlan& plan) {
 
 	struct Snapshot {
 		hive::unordered_map<ObjectDataCategory, ModificationShadowMap> shadow;
+		hive::unordered_map<ObjectDataCategory, slk::RawModificationMap> raw;
 	};
 
 	Snapshot snapshot;
@@ -983,6 +1039,7 @@ export bool apply_object_data_plan(const ObjectDataApplyPlan& plan) {
 			current[object_id] = fields;
 		}
 		snapshot.shadow.emplace(descriptor.category, std::move(current));
+		snapshot.raw.emplace(descriptor.category, descriptor.slk->raw_modifications);
 	}
 
 	auto restore_snapshot = [&]() {
@@ -1025,6 +1082,9 @@ export bool apply_object_data_plan(const ObjectDataApplyPlan& plan) {
 					descriptor.table->refreshRow(object_id);
 				}
 			}
+
+			// After the row copies above, which bring their source's raw fields along.
+			descriptor.slk->raw_modifications = snapshot.raw.at(descriptor.category);
 		}
 	};
 
@@ -1033,6 +1093,14 @@ export bool apply_object_data_plan(const ObjectDataApplyPlan& plan) {
 			const auto found = plan.merged.find(descriptor.category);
 			if (found == plan.merged.end()) {
 				continue;
+			}
+
+			// Taken before the loop below adds rows: an import over an object the map already has replaces its unknown fields.
+			std::set<std::string> existing_ids;
+			for (const auto& [object_id, fields] : found->second) {
+				if (descriptor.slk->shadow_data.contains(object_id) || descriptor.slk->raw_modifications.contains(object_id)) {
+					existing_ids.insert(object_id);
+				}
 			}
 
 			for (const auto& [object_id, fields] : found->second) {
@@ -1065,6 +1133,14 @@ export bool apply_object_data_plan(const ObjectDataApplyPlan& plan) {
 
 				if (descriptor.table && descriptor.slk->row_headers.contains(object_id)) {
 					descriptor.table->refreshRow(object_id);
+				}
+			}
+
+			// Imported raw fields replace the object's unknown fields when it existed, and any record of the same field otherwise (a row
+			// copy above may have brought its source's records), so no field is written twice.
+			if (const auto raw = plan.raw.find(descriptor.category); raw != plan.raw.end()) {
+				for (const auto& [object_id, records] : raw->second) {
+					merge_imported_raw_records(descriptor.slk->raw_modifications[object_id], records, existing_ids.contains(object_id));
 				}
 			}
 		}

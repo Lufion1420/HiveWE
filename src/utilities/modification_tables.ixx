@@ -20,9 +20,32 @@ export struct ModificationSerializeError {
 	std::string message;
 };
 
+/// The type byte the writer uses for a field of this meta data type (0 int, 1 real, 2 unreal, 3 string).
+/// equipmentType, itemTag and occlusionType (3.0 additions) fall to 3: their UnitEditorData values are words ("Head", "Shop", "Auto")
+/// like weaponType's. Which byte the World Editor writes for them is not verified, so a value read from a file keeps the byte it was
+/// read with (see is_unverified_write_type); this default applies only to values edited in HiveWE.
+export uint32_t modification_write_type(const std::string_view type) {
+	if (type == "int" || type == "bool" || type.ends_with("Flags") || type == "attackBits" || type == "channelType" || type == "deathType"
+		|| type == "defenseTypeInt" || type == "detectionType" || type == "spellDetail" || type == "teamColor" || type == "techAvail") {
+		return 0;
+	} else if (type == "real") {
+		return 1;
+	} else if (type == "unreal") {
+		return 2;
+	}
+	return 3;
+}
+
+/// Meta data types whose type byte in World Editor files is not known. A field of such a type read with another byte than
+/// modification_write_type gives is kept raw next to its shadow value and written back with its own bytes while the value is unchanged.
+export bool is_unverified_write_type(const std::string_view type) {
+	return type == "equipmentType" || type == "itemTag" || type == "occlusionType";
+}
+
 namespace {
 
-/// The layout of one modification table, with what is done with it left to the callbacks.
+/// The layout of one modification table, with what is done with it left to the callbacks. `record` holds the field's bytes from its
+/// id through its end token, exactly as read.
 void walk_modification_table(
 	BinaryReader& reader,
 	const uint32_t version,
@@ -32,9 +55,11 @@ void walk_modification_table(
 		const std::string& original_id,
 		const std::string& modified_id,
 		const std::string& modification_id,
+		uint32_t type,
 		uint32_t level_variation,
 		uint32_t data_pointer,
-		std::string data
+		std::string data,
+		std::span<const uint8_t> record
 	)>& on_field
 ) {
 	const uint32_t objects = reader.read<uint32_t>();
@@ -54,6 +79,7 @@ void walk_modification_table(
 		const uint32_t modifications = reader.read<uint32_t>();
 
 		for (size_t j = 0; j < modifications; j++) {
+			const size_t record_start = reader.position;
 			const std::string modification_id = reader.read_string(4);
 			const uint32_t type = reader.read<uint32_t>();
 
@@ -81,9 +107,70 @@ void walk_modification_table(
 			}
 			reader.advance(4);
 
-			on_field(original_id, modified_id, modification_id, level_variation, data_pointer, std::move(data));
+			const std::span<const uint8_t> record(reader.buffer.data() + record_start, reader.position - record_start);
+			on_field(original_id, modified_id, modification_id, type, level_variation, data_pointer, std::move(data), record);
 		}
 	}
+}
+
+/// How the readers file one field record.
+struct FieldPlacement {
+	std::string column; // the shadow column, empty when the meta data does not know the id
+	bool keep_raw = false;
+};
+
+/// "Unknown" is decided by the meta row before any level or data pointer suffix is added, so an unknown id in a levelled table no longer
+/// becomes a column such as "a1".
+FieldPlacement place_field(
+	const slk::SLK& meta_slk,
+	const std::string& modification_id,
+	const uint32_t type,
+	const uint32_t level_variation,
+	const uint32_t data_pointer,
+	const bool optional_ints
+) {
+	if (!meta_slk.row_headers.contains(modification_id)) {
+		return { "", true };
+	}
+
+	std::string column_header = to_lowercase_copy(meta_slk.data<std::string_view>("field", modification_id));
+	if (column_header.empty()) {
+		return { "", true };
+	}
+	if (optional_ints) {
+		if (data_pointer != 0) {
+			column_header += static_cast<char>('a' + data_pointer - 1);
+		}
+		if (meta_slk.data<std::string_view>("repeat", modification_id) != "0") {
+			column_header += std::to_string(level_variation);
+		}
+	}
+
+	const std::string_view meta_type = meta_slk.data<std::string_view>("type", modification_id);
+	const bool keep_raw = is_unverified_write_type(meta_type) && type != modification_write_type(meta_type);
+	return { std::move(column_header), keep_raw };
+}
+
+slk::RawModification make_raw(
+	const std::string& modification_id,
+	const uint32_t type,
+	const uint32_t level,
+	const uint32_t pointer,
+	std::string value,
+	std::string column,
+	const bool skin,
+	const std::span<const uint8_t> record
+) {
+	slk::RawModification raw;
+	raw.field_id = modification_id;
+	raw.type = type;
+	raw.level = level;
+	raw.pointer = pointer;
+	raw.value = std::move(value);
+	raw.column = std::move(column);
+	raw.skin = skin;
+	raw.bytes.assign(record.begin(), record.end());
+	return raw;
 }
 
 } // namespace
@@ -98,6 +185,8 @@ export struct SkippedObject {
 /// A custom object whose base id is not in the loaded object data (stock campaign maps carry such leftovers, e.g. humanx03's n003 on
 /// nbsh) is skipped with all its field changes instead of failing the load; it is not kept, so a save drops it. Each skipped object is
 /// appended once to `skipped` when that is given (the file name is left empty here).
+/// A field whose id the meta data does not know is kept as its bytes in `slk.raw_modifications` (marked `skin_file`), so a save writes
+/// it back unchanged.
 export void load_modification_table(
 	BinaryReader& reader,
 	const uint32_t version,
@@ -105,7 +194,8 @@ export void load_modification_table(
 	const slk::SLK& meta_slk,
 	const bool modification,
 	const bool optional_ints,
-	std::vector<SkippedObject>* skipped = nullptr
+	std::vector<SkippedObject>* skipped = nullptr,
+	const bool skin_file = false
 ) {
 	std::set<std::string> skipped_ids;
 	walk_modification_table(
@@ -130,31 +220,21 @@ export void load_modification_table(
 		[&](const std::string& original_id,
 			const std::string& modified_id,
 			const std::string& modification_id,
+			const uint32_t type,
 			const uint32_t level_variation,
 			const uint32_t data_pointer,
-			std::string data) {
+			std::string data,
+			const std::span<const uint8_t> record) {
 			if (modification && skipped_ids.contains(modified_id)) {
 				return;
 			}
-			std::string column_header = to_lowercase_copy(meta_slk.data<std::string_view>("field", modification_id));
-			if (optional_ints) {
-				if (data_pointer != 0) {
-					column_header += static_cast<char>('a' + data_pointer - 1);
-				}
-				if (meta_slk.data<std::string_view>("repeat", modification_id) != "0") {
-					column_header += std::to_string(level_variation);
-				}
+			const std::string& object_id = modification ? modified_id : original_id;
+			FieldPlacement placement = place_field(meta_slk, modification_id, type, level_variation, data_pointer, optional_ints);
+			if (placement.keep_raw) {
+				slk.raw_modifications[object_id].push_back(make_raw(modification_id, type, level_variation, data_pointer, data, placement.column, skin_file, record));
 			}
-
-			if (column_header == "") {
-				std::println("Unknown mod id: {}", modification_id);
-				return;
-			}
-
-			if (modification) {
-				slk.set_shadow_data(column_header, modified_id, data);
-			} else {
-				slk.set_shadow_data(column_header, original_id, data);
+			if (!placement.column.empty()) {
+				slk.set_shadow_data(placement.column, object_id, std::move(data));
 			}
 		}
 	);
@@ -169,7 +249,7 @@ export void check_modification_file_layout(BinaryReader& reader, const bool opti
 			version,
 			optional_ints,
 			[](const std::string&, const std::string&) {},
-			[](const std::string&, const std::string&, const std::string&, uint32_t, uint32_t, std::string) {}
+			[](const std::string&, const std::string&, const std::string&, uint32_t, uint32_t, uint32_t, std::string, std::span<const uint8_t>) {}
 		);
 	}
 }
@@ -195,7 +275,8 @@ export std::expected<void, std::string> load_modification_file_reader(
 	slk::SLK& base_data,
 	const slk::SLK& meta_slk,
 	const bool optional_ints,
-	std::vector<SkippedObject>* skipped = nullptr
+	std::vector<SkippedObject>* skipped = nullptr,
+	const bool skin_file = false
 ) {
 	const auto version = peek_modification_file_version(reader);
 	if (!version) {
@@ -203,8 +284,8 @@ export std::expected<void, std::string> load_modification_file_reader(
 	}
 
 	[[maybe_unused]] const uint32_t consumed_version = reader.read<uint32_t>();
-	load_modification_table(reader, *version, base_data, meta_slk, false, optional_ints, skipped);
-	load_modification_table(reader, *version, base_data, meta_slk, true, optional_ints, skipped);
+	load_modification_table(reader, *version, base_data, meta_slk, false, optional_ints, skipped, skin_file);
+	load_modification_table(reader, *version, base_data, meta_slk, true, optional_ints, skipped, skin_file);
 	return {};
 }
 
@@ -232,10 +313,13 @@ export void load_modification_file(
 		std::cout << "Unknown modification table version of " << version << " detected. Attempting to load, but may crash.\n";
 	}
 
+	// Unknown fields of a war3mapSkin.* file are written back to that file.
+	const bool skin_file = file_name.starts_with("war3mapSkin.");
+
 	// Map::load's caller shows this text, so it names the file.
 	try {
-		load_modification_table(reader, version, base_data, meta_slk, false, optional_ints, skipped);
-		load_modification_table(reader, version, base_data, meta_slk, true, optional_ints, skipped);
+		load_modification_table(reader, version, base_data, meta_slk, false, optional_ints, skipped, skin_file);
+		load_modification_table(reader, version, base_data, meta_slk, true, optional_ints, skipped, skin_file);
 	} catch (const std::exception& error) {
 		throw std::runtime_error(std::format("{}: {}", file_name, error.what()));
 	}
@@ -309,17 +393,8 @@ bool write_modification_property(
 		sub_writer.write<uint8_t>('\0');
 	}
 
-	int write_type = -1;
 	const std::string_view type = meta_slk.data<std::string_view>("type", meta_data_key);
-	if (type == "int" || type == "bool" || type.ends_with("Flags") || type == "attackBits" || type == "channelType" || type == "deathType" || type == "defenseTypeInt" || type == "detectionType" || type == "spellDetail" || type == "teamColor" || type == "techAvail") {
-		write_type = 0;
-	} else if (type == "real") {
-		write_type = 1;
-	} else if (type == "unreal") {
-		write_type = 2;
-	} else {
-		write_type = 3;
-	}
+	const uint32_t write_type = modification_write_type(type);
 
 	sub_writer.write<uint32_t>(write_type);
 
@@ -348,22 +423,38 @@ bool write_modification_property(
 	return true;
 }
 
-} // namespace
 
-export void save_modification_table(BinaryWriter& writer, const slk::SLK& slk, const slk::SLK& meta_slk, const bool custom, const bool optional_ints, const bool skin) {
+/// Whether `raw` belongs in this file: an unknown field (no column) goes back to the file it was read from.
+bool raw_goes_to_file(const slk::RawModification& raw, const bool skin) {
+	return raw.column.empty() && raw.skin == skin;
+}
+
+/// The one table writer. Without `errors` a field that cannot be written throws; with it the field is left out and reported.
+/// Objects come in shadow_data order, then objects that hold only raw records for this file. A skin file gets no shadow fields, only the
+/// unknown fields read from a skin file; a main file gets the shadow fields (a raw record stands in for its column while the value is the
+/// one it was read with) and then the unknown fields read from a main file.
+void write_modification_table(
+	BinaryWriter& writer,
+	const slk::SLK& slk,
+	const slk::SLK& meta_slk,
+	const bool custom,
+	const bool optional_ints,
+	const bool skin,
+	std::vector<ModificationSerializeError>* errors
+) {
+	static const std::vector<slk::RawModification> no_raw;
+	const auto raw_of = [&](const std::string& id) -> const std::vector<slk::RawModification>& {
+		const auto found = slk.raw_modifications.find(id);
+		return found == slk.raw_modifications.end() ? no_raw : found->second;
+	};
+
 	BinaryWriter sub_writer;
-
 	size_t count = 0;
-	for (const auto& [id, properties] : slk.shadow_data) {
-		if (!custom && properties.contains("oldid")) {
-			continue;
-		} else if (custom && !properties.contains("oldid")) {
-			continue;
-		}
-		count++;
 
+	const auto write_object = [&](const std::string& id, const hive::unordered_map<std::string, std::string>* properties) {
+		count++;
 		if (custom) {
-			sub_writer.write_string(properties.at("oldid"));
+			sub_writer.write_string(properties->at("oldid"));
 			sub_writer.write_string(id);
 		} else {
 			sub_writer.write_string(id);
@@ -373,19 +464,71 @@ export void save_modification_table(BinaryWriter& writer, const slk::SLK& slk, c
 		sub_writer.write<uint32_t>(1);
 		sub_writer.write<uint32_t>(0);
 
-		if (skin) {
-			sub_writer.write<uint32_t>(0);
+		const std::vector<slk::RawModification>& raw = raw_of(id);
+		size_t written_modifications = 0;
+		BinaryWriter property_writer;
+
+		if (!skin && properties) {
+			for (const auto& [property_id, value] : *properties) {
+				if (property_id == "oldid") {
+					continue;
+				}
+				const auto standing_in = std::ranges::find_if(raw, [&](const slk::RawModification& record) {
+					return record.column == property_id && record.value == value;
+				});
+				if (standing_in != raw.end()) {
+					property_writer.buffer.insert(property_writer.buffer.end(), standing_in->bytes.begin(), standing_in->bytes.end());
+					written_modifications++;
+					continue;
+				}
+
+				const size_t before = property_writer.buffer.size();
+				if (!write_modification_property(property_writer, slk, meta_slk, id, property_id, value, optional_ints, errors)) {
+					property_writer.buffer.resize(before);
+					continue;
+				}
+				written_modifications++;
+			}
+		}
+
+		for (const slk::RawModification& record : raw) {
+			if (raw_goes_to_file(record, skin)) {
+				property_writer.buffer.insert(property_writer.buffer.end(), record.bytes.begin(), record.bytes.end());
+				written_modifications++;
+			}
+		}
+
+		sub_writer.write<uint32_t>(written_modifications);
+		sub_writer.buffer.insert(sub_writer.buffer.end(), property_writer.buffer.begin(), property_writer.buffer.end());
+	};
+
+	for (const auto& [id, properties] : slk.shadow_data) {
+		if (custom != properties.contains("oldid")) {
 			continue;
 		}
-		sub_writer.write<uint32_t>(properties.size() - (properties.contains("oldid") ? 1 : 0));
+		write_object(id, &properties);
+	}
 
-		for (const auto& [property_id, value] : properties) {
-			write_modification_property(sub_writer, slk, meta_slk, id, property_id, value, optional_ints, nullptr);
+	// An original object whose only changes are raw records has no shadow_data entry. A custom object always has one (its oldid).
+	if (!custom) {
+		for (const auto& [id, records] : slk.raw_modifications) {
+			if (slk.shadow_data.contains(id)) {
+				continue;
+			}
+			if (std::ranges::any_of(records, [&](const slk::RawModification& record) { return raw_goes_to_file(record, skin); })) {
+				write_object(id, nullptr);
+			}
 		}
 	}
 
 	writer.write<uint32_t>(count);
 	writer.write_vector(sub_writer.buffer);
+}
+
+} // namespace
+
+export void save_modification_table(BinaryWriter& writer, const slk::SLK& slk, const slk::SLK& meta_slk, const bool custom, const bool optional_ints, const bool skin) {
+	write_modification_table(writer, slk, meta_slk, custom, optional_ints, skin, nullptr);
 }
 
 export std::vector<ModificationSerializeError> save_modification_table_collect_errors(
@@ -397,51 +540,7 @@ export std::vector<ModificationSerializeError> save_modification_table_collect_e
 	const bool skin
 ) {
 	std::vector<ModificationSerializeError> errors;
-	BinaryWriter sub_writer;
-
-	size_t count = 0;
-	for (const auto& [id, properties] : slk.shadow_data) {
-		if (!custom && properties.contains("oldid")) {
-			continue;
-		} else if (custom && !properties.contains("oldid")) {
-			continue;
-		}
-		count++;
-
-		if (custom) {
-			sub_writer.write_string(properties.at("oldid"));
-			sub_writer.write_string(id);
-		} else {
-			sub_writer.write_string(id);
-			sub_writer.write<uint32_t>(0);
-		}
-
-		sub_writer.write<uint32_t>(1);
-		sub_writer.write<uint32_t>(0);
-
-		if (skin) {
-			sub_writer.write<uint32_t>(0);
-			continue;
-		}
-
-		size_t written_modifications = 0;
-		BinaryWriter property_writer;
-
-		for (const auto& [property_id, value] : properties) {
-			const size_t before = property_writer.buffer.size();
-			if (!write_modification_property(property_writer, slk, meta_slk, id, property_id, value, optional_ints, &errors)) {
-				property_writer.buffer.resize(before);
-				continue;
-			}
-			written_modifications++;
-		}
-
-		sub_writer.write<uint32_t>(written_modifications);
-		sub_writer.buffer.insert(sub_writer.buffer.end(), property_writer.buffer.begin(), property_writer.buffer.end());
-	}
-
-	writer.write<uint32_t>(count);
-	writer.write_vector(sub_writer.buffer);
+	write_modification_table(writer, slk, meta_slk, custom, optional_ints, skin, &errors);
 	return errors;
 }
 
@@ -478,17 +577,17 @@ export void save_modification_file(const std::string_view file_name, const slk::
 }
 
 export size_t count_modification_objects(const slk::SLK& slk) {
-	size_t count = 0;
-	for (const auto& [id, properties] : slk.shadow_data) {
-		(void)id;
-		(void)properties;
-		count++;
+	size_t count = slk.shadow_data.size();
+	for (const auto& [id, records] : slk.raw_modifications) {
+		if (!slk.shadow_data.contains(id) && !records.empty()) {
+			count++;
+		}
 	}
 	return count;
 }
 
 export bool modification_table_has_data(const slk::SLK& slk) {
-	return !slk.shadow_data.empty();
+	return !slk.shadow_data.empty() || std::ranges::any_of(slk.raw_modifications, [](const auto& entry) { return !entry.second.empty(); });
 }
 
 export using ModificationShadowMap = hive::unordered_map<std::string, hive::unordered_map<std::string, std::string>>;
@@ -503,12 +602,15 @@ export struct RawCustomObject {
 
 /// With `preserved` given, a custom object whose base id is unknown is not an error: it is left out of the returned map and its raw
 /// bytes are appended to `preserved` (its field changes are not interpreted at all).
+/// With `raw_fields` given, the fields load_modification_table keeps raw are appended there (skin=false) and their object gets an entry
+/// in the returned map even when it has no other field; without it they are left out.
 export std::expected<ModificationShadowMap, std::string> extract_modification_shadow_map(
 	BinaryReader reader,
 	const slk::SLK& template_slk,
 	const slk::SLK& meta_slk,
 	const bool optional_ints,
-	std::vector<RawCustomObject>* preserved = nullptr
+	std::vector<RawCustomObject>* preserved = nullptr,
+	slk::RawModificationMap* raw_fields = nullptr
 ) {
 	const auto version = peek_modification_file_version(reader);
 	if (!version) {
@@ -548,19 +650,15 @@ export std::expected<ModificationShadowMap, std::string> extract_modification_sh
 			}
 
 			for (size_t j = 0; j < modifications; j++) {
+				const size_t record_start = reader.position;
 				const std::string modification_id = reader.read_string(4);
 				const uint32_t type = reader.read<uint32_t>();
 
-				std::string column_header = to_lowercase_copy(meta_slk.data<std::string_view>("field", modification_id));
+				uint32_t level_variation = 0;
+				uint32_t data_pointer = 0;
 				if (optional_ints) {
-					const uint32_t level_variation = reader.read<uint32_t>();
-					const uint32_t data_pointer = reader.read<uint32_t>();
-					if (data_pointer != 0) {
-						column_header += static_cast<char>('a' + data_pointer - 1);
-					}
-					if (meta_slk.data<std::string_view>("repeat", modification_id) != "0") {
-						column_header += std::to_string(level_variation);
-					}
+					level_variation = reader.read<uint32_t>();
+					data_pointer = reader.read<uint32_t>();
 				}
 
 				std::string data;
@@ -580,11 +678,19 @@ export std::expected<ModificationShadowMap, std::string> extract_modification_sh
 				}
 				reader.advance(4);
 
-				if (column_header.empty() || preserve_raw) {
+				if (preserve_raw) {
 					continue;
 				}
 
-				shadow_map[object_id][column_header] = std::move(data);
+				FieldPlacement placement = place_field(meta_slk, modification_id, type, level_variation, data_pointer, optional_ints);
+				if (placement.keep_raw && raw_fields) {
+					const std::span<const uint8_t> record(reader.buffer.data() + record_start, reader.position - record_start);
+					(*raw_fields)[object_id].push_back(make_raw(modification_id, type, level_variation, data_pointer, data, placement.column, false, record));
+					(void)shadow_map[object_id];
+				}
+				if (!placement.column.empty()) {
+					shadow_map[object_id][placement.column] = std::move(data);
+				}
 			}
 
 			if (preserve_raw) {
@@ -629,13 +735,14 @@ export std::expected<ModificationShadowMap, std::string> extract_modification_sh
 	const slk::SLK& template_slk,
 	const slk::SLK& meta_slk,
 	const bool optional_ints,
-	std::vector<RawCustomObject>* preserved = nullptr
+	std::vector<RawCustomObject>* preserved = nullptr,
+	slk::RawModificationMap* raw_fields = nullptr
 ) {
 	const auto file = read_file(path);
 	if (!file) {
 		return std::unexpected(file.error());
 	}
-	return extract_modification_shadow_map(std::move(file.value()), template_slk, meta_slk, optional_ints, preserved);
+	return extract_modification_shadow_map(std::move(file.value()), template_slk, meta_slk, optional_ints, preserved, raw_fields);
 }
 
 /// Like build_modification_file_buffer, with the raw custom objects appended to the custom table unchanged.
@@ -664,8 +771,16 @@ export std::vector<u8> build_modification_file_buffer_with_raw(
 	return std::vector<u8>(writer.buffer.begin(), writer.buffer.end());
 }
 
-export slk::SLK shadow_map_to_slk(const slk::SLK& template_slk, const ModificationShadowMap& shadow_map) {
+/// `raw_fields` (from extract_modification_shadow_map) become the scratch table's raw records, so its writers keep them.
+export slk::SLK shadow_map_to_slk(
+	const slk::SLK& template_slk,
+	const ModificationShadowMap& shadow_map,
+	const slk::RawModificationMap* raw_fields = nullptr
+) {
 	slk::SLK scratch;
+	if (raw_fields) {
+		scratch.raw_modifications = *raw_fields;
+	}
 	scratch.base_data = template_slk.base_data;
 	scratch.row_headers = template_slk.row_headers;
 	scratch.column_headers = template_slk.column_headers;
@@ -689,4 +804,45 @@ export slk::SLK shadow_map_to_slk(const slk::SLK& template_slk, const Modificati
 	}
 
 	return scratch;
+}
+
+/// Whether two raw records would be written as the same field of the same file: same id, level and data pointer, and both going to the
+/// main file (a record standing in for a known column always does) or both to the skin file.
+export bool same_raw_field(const slk::RawModification& a, const slk::RawModification& b) {
+	const bool a_skin = a.column.empty() && a.skin;
+	const bool b_skin = b.column.empty() && b.skin;
+	return a.field_id == b.field_id && a.level == b.level && a.pointer == b.pointer && a_skin == b_skin;
+}
+
+/// Adds imported raw records to an object's own. With `overwrite` (the import replaces an object the map already has) the object's
+/// unknown-field records are dropped first; records standing in for a known column stay unless the import brings the same field. A
+/// record of the same field (same_raw_field) is always replaced, so no field is written twice.
+export void merge_imported_raw_records(
+	std::vector<slk::RawModification>& target,
+	const std::vector<slk::RawModification>& imported,
+	const bool overwrite
+) {
+	if (overwrite) {
+		std::erase_if(target, [](const slk::RawModification& record) { return record.column.empty(); });
+	}
+	for (const slk::RawModification& record : imported) {
+		std::erase_if(target, [&](const slk::RawModification& existing) { return same_raw_field(existing, record); });
+		target.push_back(record);
+	}
+}
+
+/// Whether two objects hold the same unknown-field records, in any order. Records standing in for a known column are left out: their
+/// shadow value is compared instead.
+export bool same_unknown_raw_records(const std::vector<slk::RawModification>& a, const std::vector<slk::RawModification>& b) {
+	const auto unknown = [](const std::vector<slk::RawModification>& records) {
+		std::vector<std::pair<bool, std::vector<uint8_t>>> result;
+		for (const slk::RawModification& record : records) {
+			if (record.column.empty()) {
+				result.emplace_back(record.skin, record.bytes);
+			}
+		}
+		std::ranges::sort(result);
+		return result;
+	};
+	return unknown(a) == unknown(b);
 }

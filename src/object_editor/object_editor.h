@@ -53,6 +53,8 @@ public:
 	void open_by_id(TableModel* table, const std::string& id, const QString& name, QIcon icon);
 	/// For --qa-object-new-check: drives the real Add dialog for units (typed ids, activated signal) and appends PASS/FAIL lines. Adds one custom unit in memory.
 	bool run_qa_new_object_check(QStringList& lines);
+	/// For --qa-object: the field rows the details panel shows for `id` ("name | meta | value"), or empty when that object is not open.
+	QStringList qa_visible_fields(const std::string& id) const;
 
 private:
 	QDialog* build_new_object_dialog(QTreeView* view, BaseFilter* filter, BaseTreeModel* tree_model, TableModel* table, const QString& name);

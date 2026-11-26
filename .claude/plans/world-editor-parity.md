@@ -22,7 +22,7 @@ HiveWE side:
 - [INFERRED] marks a runtime consequence or a claim I reasoned out, not observed.
 - Screenshots taken during the audit were temporary and not kept. They were used only to confirm the two Map Info tab facts noted below; no status rests on them alone.
 
-Global caveat on every row: maps saved by the 3.0 WE do not load, and saves write 2.0.3-era formats. See [FORMAT: w3i v39], [FORMAT: doo v12/13], [FORMAT: units v12/13], [FORMAT: w3r v7], [FORMAT: w3c v3], [FORMAT: MDX SKIN], [FORMAT: _de layer], [FORMAT: stale meta overrides]. COMPLETE below means "complete for maps HiveWE can load".
+Global caveat on every row: maps saved by the 3.0 WE do not load, and saves write 2.0.3-era formats. See [FORMAT: w3i v39], [FORMAT: doo v12/13], [FORMAT: units v12/13], [FORMAT: w3r v7], [FORMAT: w3c v3], [FORMAT: MDX SKIN], [FORMAT: _de layer]. COMPLETE below means "complete for maps HiveWE can load".
 
 ## 1. Modules
 
@@ -178,7 +178,7 @@ RUN menu contents. Tools: Selection Brush (Space), Brush Size submenu (1, 2, 3, 
 | Replace Cliff Type | S:2639, L:ReplaceCliffTypeDialog | MISSING | | grep: no match |
 | Replace Doodads | S:2640, L:ReplaceDoodadsDialog | MISSING | | grep: no match |
 | Replace Units | S:2641, L:ReplaceUnitsDialog | MISSING | | grep: no match |
-| Gameplay Constants | S:2642, L:MiscDataDialog, B:CMiscDataDialog | PARTIAL | Searchable table, saved to war3mapMisc.txt. Six 3.0 rows absent [FORMAT: stale meta overrides]. No reset all. | menus/gameplay_constants_editor.cpp:16-65, base/gameplay_constants.ixx:64-71, base/map/map.ixx:451 |
+| Gameplay Constants | S:2642, L:MiscDataDialog, B:CMiscDataDialog | PARTIAL | Searchable table, saved to war3mapMisc.txt. Six 3.0 rows added to the meta override 2026-11-26 (their display here: Needs verification). No reset all. | menus/gameplay_constants_editor.cpp:16-65, base/gameplay_constants.ixx:64-71, base/map/map.ixx:451 |
 | Game Interface | S:2643, B:CSkinDialog, L:SkinDialog, S:821, RUN: Advanced > Game Interface, dialog 1022x675 with "Use Custom Game Interface" checkbox, Name/Value list (for example "Icon - Attack Type Chaos" = a .blp path), Edit Value, Reset Value, Display Values As Raw Data, OK, Cancel | MISSING | war3mapSkin.txt preserved, never edited. | base/imports.ixx:43 |
 | View Entire Map | S:2644 | PARTIAL | Reset camera only. Full-map framing not confirmed. | main_window/hivewe.cpp:190 |
 | Reset Texture Variations | S:2645 | MISSING | | grep: no match |
@@ -220,7 +220,7 @@ RUN menu contents. Tools: Selection Brush (Space), Brush Size submenu (1, 2, 3, 
 
 | Item | WE evidence | HiveWE | What is missing / notes | Code |
 |---|---|---|---|---|
-| Tabs: Units, Items, Doodads, Destructibles, Abilities, Upgrades, Buffs | S:320 onward, B:CObjectPane* | COMPLETE | Tabs and save paths for base and skin files. Unknown 3.0 fields: [FORMAT: stale meta overrides]. | object_editor/object_editor.cpp:763-801, base/map/map.ixx:411-429 |
+| Tabs: Units, Items, Doodads, Destructibles, Abilities, Upgrades, Buffs | S:320 onward, B:CObjectPane* | COMPLETE | Tabs and save paths for base and skin files. | object_editor/object_editor.cpp:763-801, base/map/map.ixx:411-429 |
 | New, Rename, Delete Custom Object; Copy and Paste Object | S:2717-2719, S:2744-2745 | COMPLETE | Add, Duplicate, Copy, Paste, Remove, rename. | object_editor/object_editor.cpp:1156, 1248, 1316, 1392, 2270-2274 |
 | Reset Selected Object, Reset Standard Objects | S:2720-2721 | MISSING | Only "Reset Filters". | object_editor/object_editor.cpp:1731 |
 | Export, Import per object type | S:2722-2723 | MISSING | All-object bundle only. | main_window/hivewe.cpp:1311-1399 |

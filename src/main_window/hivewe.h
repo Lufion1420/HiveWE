@@ -79,6 +79,9 @@ public:
 	static inline QString qa_script_out;
 	/// Set by --qa-model: the model the model-editor hook opens (default units/human/footman/footman.mdx).
 	static inline QString qa_model = "units/human/footman/footman.mdx";
+	/// Set by --qa-object <category>:<id>: the object the object-editor hook selects (default unit:hfoo). With --qa-script-out the hook
+	/// writes the field rows the details panel shows to that file and quits.
+	static inline QString qa_object = "unit:hfoo";
 	/// Opens qa_open_dialog with sample data. Never saves: nothing here accepts a dialog.
 	void open_qa_dialog();
 	/// Set by --qa-change-tileset <out folder> (needs --qa-offscreen, --qa-tile-texture and --qa-script-out): runs Change Tileset on the loaded

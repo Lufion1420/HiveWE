@@ -55,7 +55,8 @@ export struct UnwritableObjectData {
 	std::vector<ModificationSerializeError> errors;
 };
 
-/// Checks the seven object data tables Map::save() writes (the skin files hold no fields) with the same rules as the writer.
+/// Checks the seven object data tables Map::save() writes with the same rules as the writer. The skin passes are checked too, but they
+/// write only fields kept raw from a war3mapSkin.* file (unknown ids), which cannot fail.
 export std::optional<UnwritableObjectData> find_unwritable_object_data() {
 	struct Table {
 		std::string_view file_name;
