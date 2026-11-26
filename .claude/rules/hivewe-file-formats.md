@@ -49,7 +49,6 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - Map Protector's `rewrite_object_data_file` rewrites an object-data file wholesale from the shadow map, so anything load/extract skipped must be carried over as raw bytes or it is lost. Done for unknown-base custom objects (`RawCustomObject`, `build_modification_file_buffer_with_raw`); output is v3 layout. `RawCustomObject.bytes` always holds the version-3 layout. `verify_no_dangling_text_references` scans object-data files as raw bytes, so it also sees paths inside raw-kept objects.
 - `save_modification_table(..., skin=true)` writes empty field lists and is correct only for `Map::save`'s own skin output. Rewrites of an existing `war3mapSkin.*` use skin=false, or its fields are wiped.
 - In C++ tests with `optional_ints`, a nonzero data pointer renames the field column (`file` becomes `filea`).
-- Never write C++ containing backslash literals through a bash heredoc (it eats them, C4129); use Edit or Write.
 - `war3mapUnits.doo`: a record is a unit only if it has a `units_slk` row, else an item. Dropping object-data rows changes that sorting (placed items of dropped .w3t items are kept).
 - "Missing from HiveWE's loaded tables" is not "missing from the game": `Map::load` ignores the game data sets `custom_v0`/`custom_v1`/`melee_v0`. Any drop keyed on a base-id lookup needs a visible warning.
 - In `slk::SLK`, `add_row` fills `row_headers` but not `base_data`; `copy_row` needs `base_data`, so a row added that way cannot be copied.
@@ -141,6 +140,7 @@ Checks: `.claude/tools/script-check/`.
 ## Tests
 
 - `tests/binary_writer_test.cpp`, `tests/modification_tables_test.cpp`, `tests/mdl_reader_test.cpp`, `tests/map_format_check_test.cpp`, `tests/map_body_check_test.cpp`.
+- A byte-exact fixture needs its own `-text` or `binary` line in a `.gitattributes`, because the root sets `* text=auto eol=lf`.
 - The stock sweeps in `tests/map_body_check_test.cpp` pass silently unless `HIVEWE_STOCK_BODY_ROOT` and `HIVEWE_BODY_CHECK_CASC` are set. Confirm the printed "stock maps checked" line.
 - The stock v39 sweep in `tests/map_format_check_test.cpp` passes silently when `HIVEWE_STOCK_W3I_ROOT` is unset. Confirm the "stock v39 files checked: N" message. `HiveWE_tests.exe -tc="*stock v39*"` with the variable set runs that sweep alone.
 - `Doodads::load` and `Units::load` can be tested without GL if the `Terrain` is heap-allocated and never destroyed (its destructor calls GL). Both readers refuse unknown versions before using it. `new Terrain()` has a 0 offset because `Terrain` has no user-provided constructor, so it is value-initialized.

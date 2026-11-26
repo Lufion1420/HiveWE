@@ -52,6 +52,8 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 - Qt stylesheets cannot target top-level `QTreeWidget` items: build per-item colours from palette tokens in code and rebuild them on `QEvent::PaletteChange`.
 - Change Tileset (2026-11-24): `change_tileset` sets `Terrain::tile_list_changed`; `TerrainPalette::refresh` then clears the brush clipboard, and `TileSetter::save_tiles` clears undo only when the list changed, else calls `WorldUndoManager::mark_changed()` (a texture-only change must still mark the map unsaved). `reset_map_session` deletes all palettes, so New/Open map needs no explicit clipboard clearing. QA hooks that run Change Tileset must point `hierarchy.map_directory` at a temp folder (texture override files land there); `--qa-tileset-clipboard-check` writes only to a `QTemporaryDir`. Filed: Ctrl+V twice leaves `TerrainBrush` in pasting mode after `clear_clipboard` (return_mode); OK with no change marks the map unsaved (old code did too); the hook does not restore `hierarchy.map_directory` (harmless, app exits; `MapDirectoryRestore` in `asset_obfuscation.ixx` is the pattern).
 - UIA Toggle on a `QPushButton` emits `toggled`, not `clicked`; the sidebar mode buttons use `toggled`.
+- Trigger Explorer (2026-11-26): drag and drop is switched off by `TreeModel::supportedDropActions()` (Asana 1220928841134189). Triggers and variables with a missing category are listed directly under the map header, so do not assume the header's children are all categories.
+- `QList::size()` streams through `QDataStream` as 64 bits: cast to the type the reader expects.
 
 ## Flat themes (074f2d1)
 

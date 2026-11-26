@@ -27,6 +27,9 @@ python -I selfcheck.py <stock_root> [--triggerdata TriggerData.txt] [--limit N] 
 - `selfcheck.py` compares each map folder with itself, one subprocess per map with a timeout. A
   correct parser gives `identical` everywhere. It also lists files that have trailing bytes.
 
+`w3parsers.parse_wtg` alone can scan trigger category trees across all map corpora in under 3 minutes,
+one process per file. Copy the parser to the scratchpad and run it with `python -I -B`.
+
 ## Per-file status
 
 | status | meaning |

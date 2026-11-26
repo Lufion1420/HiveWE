@@ -41,7 +41,7 @@ description: >-
 
 ## Tool quirks
 
-- Bash tool heredocs eat backslashes and apostrophes: write sources and Windows paths with Write or Edit, or build them with `chr(92)` / `string.char(92)`. `cat > f` without a heredoc waits on stdin.
+- Bash tool heredocs eat backslashes and apostrophes: write sources and Windows paths with Write or Edit, or build them with `chr(92)` / `string.char(92)`. A Python heredoc can also turn `\n` in the Python source into a real newline: write C++ escapes with Edit (a lost backslash gives C4129). `cat > f` without a heredoc waits on stdin.
 - PowerShell: aliases shadow function names (`R`, `Diff`) and variables are case-insensitive (`$Repo` is `$repo`); `Start-Process -ArgumentList` drops quoting; `run_in_background` on a wrapper returns when `Start-Process` returns, so background the runner script itself and poll for its output file.
 - Never chain `sed` or other steps after a command that can hang (a hung app blocks the whole chain).
 - `ctest -R` matches ctest test names, not doctest case names (there is no prefix): use `HiveWE_tests.exe -tc="*name*"` or `ctest -R` on a keyword in the name. `git diff --stat` omits untracked new test files, so list them with `git status`.
