@@ -22,7 +22,7 @@ Deferred by the user (do not relist): Asset Manager bulk-delete test, old-save s
   - e4936b8 unknown object-data fields are kept on save; 20 3.0 fields added (1220328770305449). ctest 569/569; sweep 244 maps, 5 differ only by keeping dropped records. Pushed.
   - e84afdc three 3.0 map files off the imports list (1220328770232513). ctest 574/574; 2 maps differ in war3map.imp only.
   - 05a15da string escaping in generated scripts (1220368404765486). ctest 583/583; generated script differs on 9 of 245 maps, matching the World Editor.
-- e84afdc, 05a15da and the handoff commit are pushed only after e4936b8's CI passed (run 45829578942). Check `git status -sb` and the newest run with `gh run list`.
+- e4936b8's CI passed (run 45829578942). e84afdc, 05a15da and the handoff commits were pushed together after it; their CI result comes from the newest run (`gh run list`) and is not yet confirmed.
 - Closed as already shipped: 1220328770305385 (237b507), 1220328579880627 (9a38559).
 - Not verified: any game or World Editor load, Map Protector export end to end for the imports change.
 - Filed this session: 1220930104098194 (unknown-field leftovers), 1220931674071675 (optimizer skin bone indices); comments on 1220367279958021, 1220845243296342, 1220369437207221.
