@@ -26,6 +26,44 @@ namespace {
 	}
 }
 
+TEST_CASE("Imports::save does not list the 3.0 map files, also when an older war3map.imp did, and leaves them as they are") {
+	const fs::path map = fs::temp_directory_path() / "hivewe_imports_test" / "own_files";
+	std::error_code ec;
+	fs::remove_all(map, ec);
+	touch(map / "war3mapImported" / "a.blp");
+
+	const fs::path original = hierarchy.map_directory;
+	hierarchy.map_directory = map;
+	const auto saved_imp = [&]() {
+		Imports().save(map);
+		return read_all(map / "war3map.imp");
+	};
+
+	// Without the new files: version 1, one entry (the byte 13 and the NUL terminated path).
+	const std::string expected = std::string("\x01\0\0\0\x01\0\0\0\x0D", 9) + "war3mapImported\\a.blp" + std::string(1, '\0');
+	CHECK(saved_imp() == expected);
+
+	const std::map<std::string, std::string> own_files = {
+		{ "war3map.w3l", std::string("W3L!\x03\0\0\0", 8) },
+		{ "war3map.w3grp", std::string(12, '\0') },
+		{ "war3mapPostProcessing.txt", "[ASSAO]\r\nRadius=6.000000\r\n" },
+	};
+	for (const auto& [name, content] : own_files) {
+		std::ofstream(map / name, std::ios::binary) << content;
+	}
+	// An older HiveWE listed them as imports: the next save writes the list without them.
+	std::ofstream(map / "war3map.imp", std::ios::binary | std::ios::trunc)
+		<< std::string("\x01\0\0\0\x01\0\0\0\x0D", 9) + "war3map.w3l" + std::string(1, '\0');
+
+	CHECK(saved_imp() == expected);
+	for (const auto& [name, content] : own_files) {
+		CAPTURE(name);
+		CHECK(read_all(map / name) == content);
+	}
+
+	hierarchy.map_directory = original;
+}
+
 TEST_CASE("Imports::save lists imported files with non-code-page names as UTF-8 and keeps ASCII names unchanged") {
 	const fs::path map = fs::temp_directory_path() / "hivewe_imports_test" / fs::path(u8"地图_КАРТА");
 	std::error_code ec;

@@ -171,6 +171,25 @@ TEST_CASE("map archive export: a successful export has the same bytes as before 
 	CHECK(read_all(current) == legacy_bytes);
 }
 
+TEST_CASE("map archive export: the 3.0 map files are packed byte for byte") {
+	const fs::path folder = make_map("own_files");
+	const std::map<std::string, std::string> files = {
+		{ "war3map.w3l", std::string("W3L!\x03\0\0\0", 8) },
+		{ "war3map.w3grp", std::string(12, '\0') },
+		{ "war3mapPostProcessing.txt", "[ASSAO]\r\nRadius=6.000000\r\n" },
+	};
+	for (const auto& [name, content] : files) {
+		write_all(folder / name, content);
+	}
+	const fs::path target = folder.parent_path() / "out.w3x";
+	const auto result = map_archive::write(folder, target);
+	REQUIRE(result.ok);
+	for (const auto& [name, content] : files) {
+		CAPTURE(name);
+		CHECK(read_archived(target, name) == content);
+	}
+}
+
 TEST_CASE("map archive export: root-level archive internal names in the folder are skipped") {
 	const fs::path folder = make_map("internal_names");
 	write_all(folder / "(listfile)", "JUNK LISTFILE");

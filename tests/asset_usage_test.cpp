@@ -8,6 +8,7 @@
 import std;
 import types;
 import AssetUsage;
+import Imports;
 import SLK;
 import MDX;
 import BinaryWriter;
@@ -112,6 +113,25 @@ TEST_CASE("asset usage: every object data field counts, including comma separate
 	CHECK(used_by(files, "war3mapImported/First.mdx", "A000"));
 	CHECK(used_by(files, "war3mapImported/Second.mdx", "A000"));
 	CHECK(used_by(files, "war3mapImported/BTNUpgradeTwo.blp", "R000"));
+	CHECK_FALSE(used(files, "war3mapImported/Unrelated.blp"));
+}
+
+TEST_CASE("asset usage: the 3.0 map files are not listed, and what they name counts as used") {
+	MapFolder map;
+	// As Map::get_file_usage sets it.
+	map.request.unlisted_file_names = Imports().blacklist;
+	map.write("war3map.w3l", "W3L!\x03\0\0\0war3mapImported\\Light.mdl\0"s);
+	map.write("war3map.w3grp", std::string(12, '\0'));
+	map.write("war3mapPostProcessing.txt", "[ASSAO]\r\nRadius=6.000000\r\n");
+	map.write("war3mapImported/Light.mdx");
+	map.write("war3mapImported/Unrelated.blp");
+
+	const auto files = map.usage();
+	CHECK(find(files, "war3map.w3l") == nullptr);
+	CHECK(find(files, "war3map.w3grp") == nullptr);
+	CHECK(find(files, "war3mapPostProcessing.txt") == nullptr);
+	CHECK(files.size() == 2);
+	CHECK(used_by(files, "war3mapImported/Light.mdx", "war3map.w3l"));
 	CHECK_FALSE(used(files, "war3mapImported/Unrelated.blp"));
 }
 

@@ -1054,6 +1054,25 @@ TEST_CASE("prepare_source_path keeps a script in the scripts folder from an arch
 	}
 }
 
+TEST_CASE("prepare_source_path keeps the 3.0 map files from an archive without a listfile") {
+	const fs::path dir = make_scratch_dir("protector_archive_own_files");
+	auto files = valid_map_files();
+	files["war3map.w3l"] = std::string("W3L!\x03\0\0\0", 8);
+	files["war3map.w3grp"] = std::string(12, '\0');
+	files["war3mapPostProcessing.txt"] = "[ASSAO]\r\nRadius=6.000000\r\n";
+	make_archive(dir / "Foo.w3x", files, false);
+	const fs::path temp = make_scratch_dir("protector_archive_own_files_temp");
+
+	const ProtectionOptions options;
+	const SyncSaveResult result = prepare_source_path(dir / "Foo.w3x", temp, options);
+	CHECK_MESSAGE(result.success, result.error);
+	for (const std::string name : { "war3map.w3l", "war3map.w3grp", "war3mapPostProcessing.txt" }) {
+		CAPTURE(name);
+		REQUIRE(fs::exists(temp / name));
+		CHECK(read_all(temp / name) == files[name]);
+	}
+}
+
 TEST_CASE("prepare_source_path fails and names the file when an archive entry cannot be extracted") {
 	const fs::path dir = make_scratch_dir("protector_archive_blocked");
 	make_archive(dir / "Foo.w3x", valid_map_files());

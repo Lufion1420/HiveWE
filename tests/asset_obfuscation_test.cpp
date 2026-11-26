@@ -7,6 +7,7 @@ import Hierarchy;
 import MDX;
 import Utilities;
 import AssetObfuscation;
+import Imports;
 import BinaryWriter;
 import BinaryReader;
 
@@ -69,6 +70,20 @@ TEST_CASE("enumerate_rename_candidates excludes blacklisted core files") {
 	CHECK(find_by_original(candidates, "war3mapImported/Custom.blp") != nullptr);
 	CHECK(find_by_original(candidates, "war3map.w3i") == nullptr);
 	CHECK(find_by_original(candidates, "war3map.j") == nullptr);
+}
+
+TEST_CASE("enumerate_rename_candidates never renames the 3.0 map files") {
+	const fs::path dir = make_scratch_dir("own_files");
+	write_file(dir / "war3map.w3l");
+	write_file(dir / "war3map.w3grp");
+	write_file(dir / "war3mapPostProcessing.txt");
+	write_file(dir / "war3mapImported" / "Custom.blp");
+
+	// The list the pipeline passes.
+	const auto candidates = enumerate_rename_candidates(dir, Imports().blacklist, {});
+
+	CHECK(candidates.size() == 1);
+	CHECK(find_by_original(candidates, "war3mapImported/Custom.blp") != nullptr);
 }
 
 TEST_CASE("enumerate_rename_candidates excludes stock-override paths") {

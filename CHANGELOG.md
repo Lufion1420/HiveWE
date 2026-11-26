@@ -7,6 +7,7 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Warcraft III 3.0 map files are no longer treated as imports** — `war3map.w3l`, `war3map.w3grp` and `war3mapPostProcessing.txt` are now part of the map: they are no longer listed in `war3map.imp`, shown by the Asset Manager (where the post-processing file could be deleted as unused) or renamed by Map Protector. Not checked in the game.
 - **Saving a map no longer loses object-data fields HiveWE does not recognise** — They are now kept (for abilities, doodads and upgrades, such a field made saving fail instead), but text (.ini) export still leaves them out. Importing object data also keeps them and asks about conflicts that differ only in these fields. Not checked in the game.
 - **20 Warcraft III 3.0 object data fields and gameplay constants are now recognised** — They include unit portrait and extra model fields (now shown in the Object Editor), item Tag, Equipment, Team Color and Editor Suffix, and six gameplay constants. Where a map keeps these unit fields in the skin file, HiveWE keeps their values but saves them to the main object file, as it already does for other skin fields.
 - **Trigger Editor shows every trigger category** — Categories stored before their parent, in a parent loop or with a missing parent now appear (before, they disappeared along with their triggers). A related crash and circular-move bug in the drop handling is also fixed; drag and drop itself is still switched off.
