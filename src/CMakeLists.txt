@@ -43,6 +43,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 	"base/terrain.ixx"
 
 	"base/triggers/triggers.ixx"
+	"base/triggers/lua_syntax.ixx"
 	"base/triggers/gui.cpp"
 	"base/triggers/map_script.cpp"
 

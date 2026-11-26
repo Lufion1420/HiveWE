@@ -25,6 +25,7 @@
     "glm",
     "imgui",
     "libjpeg-turbo",
+    "lua53",
     {
       "name": "mimalloc",
       "features": [

@@ -1,0 +1,9 @@
+# Byte-exact fixtures: the golden war3map.lua keeps its mixed LF and CRLF line endings on every checkout (the root
+# .gitattributes normalises text to LF), and the binary map files are never converted.
+*.lua -text
+*.w3i binary
+*.wtg binary
+*.wct binary
+*.doo binary
+*.w3a binary
+*.w3u binary

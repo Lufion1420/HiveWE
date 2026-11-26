@@ -33,6 +33,7 @@ import Globals;
 import Units;
 import Doodads;
 import Triggers;
+import LuaSyntax;
 import Terrain;
 import GameplayConstants;
 import ScriptPreservation;
@@ -716,10 +717,13 @@ export class Map: public QObject {
 		if (!result.has_value() && headless) {
 			std::println(stderr, "Script compilation errors:\n{}", result.error());
 		} else if (!result.has_value() && mode == ScriptMode::lua) {
+			// The other map files are saved either way; only war3map.lua keeps its previous version. The error already names line and region.
+			const bool syntax_error = result.error().starts_with(lua_syntax_error_prefix);
 			QMessageBox::warning(
 				nullptr,
 				"Lua script",
-				"The map script could not be written: " + QString::fromStdString(result.error()),
+				QString(syntax_error ? "war3map.lua was not updated; the other map files are still saved.\n\n" : "The map script could not be written: ")
+					+ QString::fromStdString(result.error()),
 				QMessageBox::StandardButton::Ok
 			);
 		} else if (!result.has_value()) {

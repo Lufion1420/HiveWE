@@ -16,6 +16,7 @@ import MapInfo;
 import BinaryReader;
 import MPQ;
 import AssetObfuscation;
+import LuaSyntax;
 
 namespace fs = std::filesystem;
 
@@ -52,7 +53,53 @@ export struct SyncSaveResult {
 export struct PackResult {
 	bool success = false;
 	std::string error;
+	/// Set on success when something was packed the user should know about (a Lua script that already had a syntax error).
+	std::string warning;
 };
+
+/// The parse result of one Lua script under a map folder.
+export struct LuaScriptParse {
+	std::string name;
+	std::optional<LuaSyntaxError> error;
+};
+
+/// Parses every Lua script of map_script_file_names present under `directory`. A file that cannot be read is left out.
+export std::vector<LuaScriptParse> parse_lua_scripts(const fs::path& directory) {
+	std::vector<LuaScriptParse> result;
+	for (const std::string_view name : map_script_file_names) {
+		if (!name.ends_with(".lua")) {
+			continue;
+		}
+		std::ifstream in(directory / fs::path(name), std::ios::binary);
+		if (!in) {
+			continue;
+		}
+		const std::string text { std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>() };
+		result.push_back({ std::string(name), check_lua_syntax(text) });
+	}
+	return result;
+}
+
+/// Compares the Lua scripts before and after the pack's rewrite steps. Refuses (success false) when a script that parsed before no
+/// longer parses: a rewrite broke it. A script that already failed to parse is packed with a warning: protection did not cause it.
+export PackResult judge_rewritten_lua_scripts(const std::vector<LuaScriptParse>& before, const std::vector<LuaScriptParse>& after) {
+	PackResult result { true, "", "" };
+	for (const LuaScriptParse& script : after) {
+		if (!script.error) {
+			continue;
+		}
+		const auto original = std::ranges::find(before, script.name, &LuaScriptParse::name);
+		const std::string where = describe_lua_syntax_error(*script.error, {}, "It has a Lua syntax error", false);
+		if (original == before.end() || !original->error) {
+			return { false, std::format("Protecting the map broke '{}', so no protected map was written. {}", script.name, where), "" };
+		}
+		if (!result.warning.empty()) {
+			result.warning += ' ';
+		}
+		result.warning += std::format("'{}' already had a syntax error before protection and was packed as it is. {}", script.name, where);
+	}
+	return result;
+}
 
 /// Runs `save`, then `restore`, which runs even when `save` throws. A throw becomes {false, what()}.
 /// Test seam for run_sync_save_and_restore(), which cannot be called in tests (no Map).
@@ -761,6 +808,9 @@ export AssetObfuscationResult run_asset_obfuscation(const fs::path& temp_dir) {
 }
 
 export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& output_path, const ProtectionOptions& options) {
+	// The rewrite steps below edit war3map.lua as text; their output is parsed again just before packing.
+	const std::vector<LuaScriptParse> scripts_before = parse_lua_scripts(temp_dir);
+
 	if (options.obfuscate_asset_paths) {
 		const AssetObfuscationResult obfuscation_result = run_asset_obfuscation(temp_dir);
 		if (!obfuscation_result.success) {
@@ -778,6 +828,11 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 		if (!strip_result.success) {
 			return { false, strip_result.error };
 		}
+	}
+
+	const PackResult script_check = judge_rewritten_lua_scripts(scripts_before, parse_lua_scripts(temp_dir));
+	if (!script_check.success) {
+		return script_check;
 	}
 
 	if (options.inject_junk_files && options.junk_file_count > 0) {
@@ -843,5 +898,5 @@ export PackResult run_async_pack(const fs::path& temp_dir, const fs::path& outpu
 		return { false, std::format("There was an error writing the protected archive (error code {}).", GetLastError()) };
 	}
 
-	return { true, "" };
+	return { true, "", script_check.warning };
 }

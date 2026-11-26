@@ -40,6 +40,7 @@ add_executable(HiveWE_tests
 	asset_usage_test.cpp
 	map_backup_test.cpp
 	map_archive_export_test.cpp
+	lua_syntax_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
@@ -71,6 +72,11 @@ add_test(NAME resave_smoke COMMAND ${CMAKE_COMMAND}
 	"-DUNWRITABLE_W3A=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/unwritable_field.w3a"
 	"-DUNKNOWN_BASE_W3U=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/unknown_base.w3u"
 	"-DSKINNED_DOO=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/skinned_doodads.doo"
+	"-DLUA_W3I=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/lua_map.w3i"
+	"-DBROKEN_LUA_WCT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/broken_lua_header.wct"
+	"-DLUA_GOLDEN_WTG=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/lua_golden.wtg"
+	"-DLUA_GOLDEN_WCT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/lua_golden.wct"
+	"-DLUA_GOLDEN=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resave/lua_golden.lua"
 	-P ${CMAKE_CURRENT_SOURCE_DIR}/resave_smoke.cmake
 )
 set_tests_properties(resave_smoke PROPERTIES SKIP_REGULAR_EXPRESSION "RESAVE_SMOKE_SKIPPED" TIMEOUT 300)

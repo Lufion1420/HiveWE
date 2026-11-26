@@ -142,6 +142,44 @@ else()
 	file(REMOVE "${sandbox}/war3map.w3u")
 endif()
 
+# Lua maps: the generated war3map.lua is syntax-checked. The fixture w3i is data/test map's with the script type set to Lua.
+# Control: the generated Lua script parses, exit 0. Then a map header with a syntax error: the rest is saved, no war3map.lua is
+# written (the sandbox has none to keep), exit 3, and stderr names the line's region.
+file(COPY_FILE "${LUA_W3I}" "${sandbox}/war3map.w3i")
+set(lua_output "${OUTPUT}_lua")
+file(REMOVE_RECURSE "${lua_output}")
+run_resave(result errors "${sandbox}" "${lua_output}")
+if(NOT result EQUAL 0 OR NOT EXISTS "${lua_output}/war3map.lua")
+	message(FATAL_ERROR "--resave of a Lua map exited with ${result}, expected 0 and a war3map.lua: ${errors}")
+endif()
+file(REMOVE_RECURSE "${lua_output}")
+# Golden: the whole generated war3map.lua for a map header (CRLF lines), an initialised variable, a GUI trigger and a GUI trigger
+# converted to custom text, byte for byte. lua_golden.lua was checked equal to the output of the build before the syntax check.
+# Parts come from the game data in CASC (SetDayNightModels, sound environment), so a different game version can change them.
+file(COPY_FILE "${LUA_GOLDEN_WTG}" "${sandbox}/war3map.wtg")
+file(COPY_FILE "${LUA_GOLDEN_WCT}" "${sandbox}/war3map.wct")
+run_resave(result errors "${sandbox}" "${lua_output}")
+if(NOT result EQUAL 0)
+	message(FATAL_ERROR "--resave of the golden Lua map exited with ${result}, expected 0: ${errors}")
+endif()
+execute_process(COMMAND ${CMAKE_COMMAND} -E compare_files "${LUA_GOLDEN}" "${lua_output}/war3map.lua" RESULT_VARIABLE golden_differs)
+if(NOT golden_differs EQUAL 0)
+	message(FATAL_ERROR "The generated war3map.lua differs from ${LUA_GOLDEN}; the new output is ${lua_output}/war3map.lua")
+endif()
+file(REMOVE_RECURSE "${lua_output}")
+file(COPY_FILE "${INPUT}/war3map.wtg" "${sandbox}/war3map.wtg")
+file(COPY_FILE "${BROKEN_LUA_WCT}" "${sandbox}/war3map.wct")
+run_resave(result errors "${sandbox}" "${lua_output}")
+if(NOT result EQUAL 3 OR NOT errors MATCHES "Lua syntax error at line [0-9]+ \\(Map header\\)")
+	message(FATAL_ERROR "--resave of a Lua map with a broken map header exited with ${result}, expected 3 and the syntax error: ${errors}")
+endif()
+if(NOT EXISTS "${lua_output}/war3map.w3i" OR EXISTS "${lua_output}/war3map.lua")
+	message(FATAL_ERROR "--resave of a Lua map with a broken map header: expected the map saved without a war3map.lua")
+endif()
+file(REMOVE_RECURSE "${lua_output}")
+file(COPY_FILE "${INPUT}/war3map.w3i" "${sandbox}/war3map.w3i")
+file(COPY_FILE "${INPUT}/war3map.wct" "${sandbox}/war3map.wct")
+
 # A map with a script but no war3map.wtg (script-only or protected): the save keeps the script byte for byte, writes no trigger
 # files and says so on stderr, exit 0. Once with the script in the root, once under scripts\ only, and once with war3map.wtg but no
 # war3map.wct (the map header code lives only in the wct, so a generated script would lose it; the wtg stays as it was).

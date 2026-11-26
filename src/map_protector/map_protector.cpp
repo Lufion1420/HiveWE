@@ -366,7 +366,7 @@ void MapProtector::on_export_finished(PackResult result) {
 	set_options_enabled(true);
 
 	if (result.success) {
-		status_label->setText("Done - saved to " + output_path_edit->text());
+		status_label->setText("Done - saved to " + output_path_edit->text() + (result.warning.empty() ? QString() : " (with a warning)"));
 	} else {
 		status_label->setText(QString::fromStdString("Error: " + result.error));
 	}
@@ -377,6 +377,11 @@ void MapProtector::on_export_finished(PackResult result) {
 		pack_thread->wait();
 		pack_thread->deleteLater();
 		pack_thread = nullptr;
+	}
+
+	// After the thread is joined, so the modal box cannot race the pack thread's cleanup.
+	if (result.success && !result.warning.empty()) {
+		QMessageBox::warning(this, "Map Protector", QString::fromStdString(result.warning));
 	}
 }
 

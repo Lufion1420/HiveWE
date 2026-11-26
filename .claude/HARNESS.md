@@ -49,7 +49,7 @@ Add-ons on any track:
 - **Toolchain failure:** run `build-engineer`.
 - **Agent definition files (`.claude/agents/*.md` must stay LF).** A CRLF rewrite made an agent unavailable for the rest of a WarMash session (the registry does not reload mid-session). `.gitattributes` pins `eol=lf`, but the working copy can still be CRLF: check `git ls-files --eol` after any edit and convert with `sed -i 's/\r$//'`. `.claude/rules/*.md` can be CRLF in the working copy too (`harness-guardrails.md` was on 2026-11-22): check them the same way.
 
-Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPROVE on Standard and Risky). Internal-only changes get no changelog entry, so `release-manager` is skipped for them. After each QA-PASS commit the orchestrator also redeploys the Tools folder (standing order, see guardrails "Git and releases").
+Then the orchestrator commits and pushes, only after QA PASS (and reviewer APPROVE on Standard and Risky). Internal-only changes get no changelog entry, so `release-manager` is skipped for them. After each QA-PASS commit the orchestrator also redeploys the Tools folder (standing order, see guardrails "Git and releases"). Watch CI by run id: take it from `gh run list`, then `gh run watch <id>`; do not pass a short SHA.
 
 ## Choosing work
 - The handoff "Next step" always names an Asana ticket from "Next up". Read "Next up" at session start and check that the named ticket is still open before starting.

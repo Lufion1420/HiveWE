@@ -31,7 +31,7 @@ description: >-
 - Crash debugging: the `Agent` preset produces no PDB. `cdbX64.exe` from the WindowsApps alias works, and `.exr -1` names the C++ exception class.
 - 0xc0000409 crashes leave minidumps in `%LOCALAPPDATA%\CrashDumps`. In cdb, `!peb` shows the working dir, `s -d @rsp L?8000 e06d7363` then `.exr <addr>` recovers the C++ exception type, and `ub HiveWE+0x<ret>` finds the throwing call without a PDB.
 - A first-chance `std::out_of_range` "Trying to read out of range of buffer" on a GL pool thread is normal (caught in `ResourceManager::load_impl`).
-- StormLib via ctypes: `SFILE_FIND_DATA.cFileName` is `[260]`. `SFileFindFirstFile` looped forever on one archive; extracting by names from `(listfile)` works.
+- StormLib via ctypes: `SFILE_FIND_DATA.cFileName` is `[260]`. `SFileFindFirstFile` looped forever on one archive; extracting by names from `(listfile)` works. `SFileOpenFileEx` returns a 1-byte C++ `bool`: set `restype = ctypes.c_bool`, or absent files look present.
 - Run the stock ctest suite without `-j`: `ctest -j` with the CASC stock test failed once with error 2 (Needs verification).
 - An orphaned `HiveWE_tests.exe` from a background `ctest` can lock the link (LNK1104) while `ctest` passes on the stale exe: check the link line in the build output. QA must stop its own ctest children.
 - Use PowerShell for `reg`: Git Bash rewrites `HKCU\Software\HiveWE` into an invalid key.

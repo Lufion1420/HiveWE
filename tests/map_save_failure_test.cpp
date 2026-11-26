@@ -175,10 +175,10 @@ TEST_CASE("install_map_script copies the Lua script into the map") {
 	const MapDirectoryScope scope(sandbox.map);
 	write_all(sandbox.map / "war3map.lua", "OLD");
 
-	const auto result = install_map_script("NEW SCRIPT", ScriptMode::lua, sandbox.output);
+	const auto result = install_map_script("NEW_SCRIPT = 1", ScriptMode::lua, sandbox.output);
 
 	REQUIRE(result.has_value());
-	CHECK(read_all(sandbox.map / "war3map.lua") == "NEW SCRIPT");
+	CHECK(read_all(sandbox.map / "war3map.lua") == "NEW_SCRIPT = 1");
 }
 
 TEST_CASE("install_map_script refuses a Lua input file it cannot write and keeps war3map.lua") {
@@ -189,7 +189,7 @@ TEST_CASE("install_map_script refuses a Lua input file it cannot write and keeps
 	write_all(sandbox.output.input_script, "STALE SCRIPT OF ANOTHER MAP");
 	make_read_only(sandbox.output.input_script);
 
-	const auto result = install_map_script("NEW SCRIPT", ScriptMode::lua, sandbox.output);
+	const auto result = install_map_script("NEW_SCRIPT = 1", ScriptMode::lua, sandbox.output);
 
 	make_writable(sandbox.output.input_script);
 	CHECK_FALSE(result.has_value());
@@ -203,10 +203,24 @@ TEST_CASE("install_map_script refuses a Lua input path that is a folder and keep
 	fs::create_directories(sandbox.output.input_script);
 
 	std::expected<void, std::string> result;
-	CHECK_NOTHROW(result = install_map_script("NEW SCRIPT", ScriptMode::lua, sandbox.output));
+	CHECK_NOTHROW(result = install_map_script("NEW_SCRIPT = 1", ScriptMode::lua, sandbox.output));
 
 	CHECK_FALSE(result.has_value());
 	CHECK(read_all(sandbox.map / "war3map.lua") == "OLD");
+}
+
+TEST_CASE("install_map_script refuses a Lua script with a syntax error and keeps war3map.lua") {
+	const ScriptSandbox sandbox("lua_syntax_error");
+	const MapDirectoryScope scope(sandbox.map);
+	write_all(sandbox.map / "war3map.lua", "OLD");
+
+	const auto result = install_map_script("local a = 1\nif a != 2 then\nend\n", ScriptMode::lua, sandbox.output);
+
+	REQUIRE_FALSE(result.has_value());
+	CHECK(contains(result.error(), "line 2"));
+	CHECK(read_all(sandbox.map / "war3map.lua") == "OLD");
+	// The generated script is still written to the input file, so it can be inspected.
+	CHECK(read_all(sandbox.output.input_script) == "local a = 1\nif a != 2 then\nend\n");
 }
 
 // F2: JASS compiler process. The stub compiler gets the same arguments as clijasshelper: --scriptonly common.j blizzard.j
@@ -416,9 +430,9 @@ TEST_CASE("map_file_add does not carry a read-only attribute of the source into 
 	make_writable(sandbox.tools / "first.lua");
 	CHECK(read_all(sandbox.map / "war3map.lua") == "FIRST");
 
-	const auto result = install_map_script("SECOND", ScriptMode::lua, sandbox.output);
+	const auto result = install_map_script("SECOND = 2", ScriptMode::lua, sandbox.output);
 	CHECK(result.has_value());
-	CHECK(read_all(sandbox.map / "war3map.lua") == "SECOND");
+	CHECK(read_all(sandbox.map / "war3map.lua") == "SECOND = 2");
 	CHECK_FALSE(fs::exists(sandbox.map / "war3map.lua.hivewe-tmp"));
 }
 

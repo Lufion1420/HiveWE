@@ -31,6 +31,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(mimalloc CONFIG REQUIRED)
 find_package(unofficial-qscintilla CONFIG REQUIRED)
 find_package(tracy CONFIG REQUIRED)
+find_package(lua53 CONFIG REQUIRED) # overlay-ports/lua53: syntax check of generated war3map.lua
 
 qt_standard_project_setup()
 
@@ -87,6 +88,7 @@ target_link_libraries(HiveWE_lib PUBLIC
 	unordered_dense::unordered_dense
 	nlohmann_json::nlohmann_json
 	unofficial::qscintilla::qscintilla
+	lua53::lua53
 	${BULLET_LIBRARIES}
 )
 

@@ -200,6 +200,10 @@ int main(int argc, char* argv[]) {
 				"                       script that did not compile (warning), failures (held target or source file, old file kept) and refusals.\n"
 				"                       Backups go into the sandbox. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory.\n"
 				"                       Exit code 0 only when all pass.\n"
+				"  --qa-lua-script-check  Needs --qa-offscreen (--qa-script-out <file> optional): on a sandbox copy of data/test map switched to\n"
+				"                       Lua, checks the war3map.lua syntax check through Save, Save As and Export MPQ, clicking their real dialogs\n"
+				"                       in-process: a valid script, syntax errors in the map header and in a trigger, a write failure. Backups and\n"
+				"                       the generated input.lua go into the sandbox. Writes PASS/FAIL lines and quits. Exit code 0 only when all pass.\n"
 				"  --qa-dialog-tab <n> With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -295,6 +299,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_export_mpq_check = true;
+		} else if (arguments[i] == "--qa-lua-script-check") {
+			// The hook opens and saves a sandbox map and shows real dialogs, so it must never run in a window the user works in.
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-lua-script-check needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_lua_script_check = true;
 		} else if (arguments[i] == "--qa-region-palette-check") {
 			if (!arguments.contains("--qa-offscreen") || arguments.indexOf("--palette") < 0 || arguments.value(arguments.indexOf("--palette") + 1) != "regions") {
 				std::println(stderr, "--qa-region-palette-check needs --qa-offscreen and --palette regions. See HiveWE --help.");
@@ -498,6 +509,7 @@ int main(int argc, char* argv[]) {
 	w.run_qa_asset_delete_check();
 	w.run_qa_save_safety_check();
 	w.run_qa_export_mpq_check();
+	w.run_qa_lua_script_check();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

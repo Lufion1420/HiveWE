@@ -1093,6 +1093,8 @@ std::expected<void, std::string> Triggers::generate_map_script(
 	std::vector<std::string> initialization_triggers;
 
 	std::string trigger_script;
+	// Where the user's own text lands, so a Lua syntax error can name the map header or the trigger it is in.
+	std::vector<ScriptSpan> trigger_spans;
 	for (const auto& i : triggers) {
 		if (i.is_comment || !i.is_enabled) {
 			continue;
@@ -1101,6 +1103,9 @@ std::expected<void, std::string> Triggers::generate_map_script(
 		// (0239 "Cursed Flute"). JASS calls InitTrig_ for it, so the GUI path must still define one there.
 		if (!i.custom_text.empty() || (mode == ScriptMode::lua && i.classifier == Classifier::script)) {
 			append_custom_text_trigger(trigger_script, initialization_triggers, i, mode);
+			// append_custom_text_trigger ends with the custom text and one line break.
+			const std::size_t text_end = trigger_script.size() - 1;
+			trigger_spans.push_back({ text_end - i.custom_text.size(), text_end, "Trigger " + i.name });
 		} else {
 			trigger_script += convert_gui_to_jass(i, initialization_triggers, mode);
 		}
@@ -1152,8 +1157,18 @@ std::expected<void, std::string> Triggers::generate_map_script(
 	generate_cameras(script_writer, cameras);
 
 	script_writer.write_ln(global_jass);
+	std::vector<ScriptSpan> spans;
+	// write_ln adds one line break after the header.
+	const std::size_t header_end = script_writer.script.size() - 1;
+	spans.push_back({ header_end - global_jass.size(), header_end, "Map header" });
 
 	script_writer.write(trigger_script);
+	const std::size_t triggers_begin = script_writer.script.size() - trigger_script.size();
+	for (ScriptSpan& span : trigger_spans) {
+		span.begin += triggers_begin;
+		span.end += triggers_begin;
+		spans.push_back(std::move(span));
+	}
 
 	generate_trigger_initialization(script_writer, initialization_triggers, triggers);
 	generate_players(script_writer, map_info);
@@ -1162,10 +1177,19 @@ std::expected<void, std::string> Triggers::generate_map_script(
 	generate_main(script_writer, terrain, map_info);
 	generate_map_configuration(script_writer, terrain, units, map_info);
 
-	return install_map_script(script_writer.script, mode, {});
+	std::vector<ScriptRegion> script_regions;
+	if (mode == ScriptMode::lua) {
+		script_regions = lines_of_spans(script_writer.script, spans);
+	}
+	return install_map_script(script_writer.script, mode, {}, script_regions);
 }
 
-std::expected<void, std::string> install_map_script(const std::string_view script, const ScriptMode mode, const MapScriptOutput& paths) {
+std::expected<void, std::string> install_map_script(
+	const std::string_view script,
+	const ScriptMode mode,
+	const MapScriptOutput& paths,
+	const std::vector<ScriptRegion>& regions
+) {
 	const auto display = [](const fs::path& p) { return QString::fromStdWString(p.wstring()).toStdString(); };
 	const std::string kept = mode == ScriptMode::lua ? "The map's previous war3map.lua was kept." : "The map's previous war3map.j was kept.";
 
@@ -1184,6 +1208,10 @@ std::expected<void, std::string> install_map_script(const std::string_view scrip
 	}
 
 	if (mode == ScriptMode::lua) {
+		// Like a JASS compile error: the input file keeps the generated script for inspection, the map keeps its previous war3map.lua.
+		if (const std::optional<LuaSyntaxError> error = check_lua_syntax(script)) {
+			return std::unexpected(std::format("{} {}", describe_lua_syntax_error(*error, regions), kept));
+		}
 		hierarchy.map_file_add(path, "war3map.lua");
 		return {};
 	}

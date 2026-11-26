@@ -139,6 +139,12 @@ public:
 	/// map folder, a folder, a path too long). Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_export_mpq_check = false;
 	void run_qa_export_mpq_check();
+	/// Set by --qa-lua-script-check (needs --qa-offscreen; --qa-script-out <file> optional): on a sandbox copy of data/test map switched to
+	/// Lua, checks the syntax check of the generated war3map.lua through Save, Save As and Export MPQ, clicking their real dialogs in-process:
+	/// a valid script, a broken map header, an unclosed header function, a broken custom-text trigger, a write failure and the fixed script.
+	/// TMP points into the sandbox for the run. Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_lua_script_check = false;
+	void run_qa_lua_script_check();
 	/// Installed with QAccessible::installUpdateHandler under --qa-offscreen only. Forwards nothing to the platform backend, which plays the
 	/// Windows sound for message boxes (QAccessible::Alert) and menus (PopupMenuStart, MenuCommand), so QA runs make no sound. UIA queries
 	/// (patterns, properties) still work; UIA clients get no change events. Counts the Alert events it swallowed.

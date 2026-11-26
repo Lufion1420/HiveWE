@@ -21,6 +21,7 @@ import <soil2/SOIL2.h>;
 import MapGlobal;
 import WorldUndoManager;
 import Triggers;
+import LuaSyntax;
 import TableModel;
 import UnitsUndo;
 import SkinnedMeshGlobals;
@@ -5379,6 +5380,289 @@ void HiveWE::run_qa_export_mpq_check() {
 			check(!map->script_compile_failed && last_box(fixed, "Export MPQ", QMessageBox::Information, { "exported to" })
 					  && archived(out / "fixed.w3x", "war3map.j").has_value(),
 				  "script fixed again: information dialog and a new war3map.j in the archive" + dialogs(fixed));
+		}
+
+		finish();
+	});
+}
+
+void HiveWE::run_qa_lua_script_check() {
+	if (!qa_offscreen || !qa_lua_script_check) {
+		return;
+	}
+
+	// Everything below works on copies in a temporary folder; backups, archives and the generated input.lua go there too.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(180000, this, [temp]() {
+		std::println("FAIL the Lua script check did not finish within 180 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		const QByteArray original_tmp = qgetenv("TMP");
+		const auto write_lines = [&](const bool done) {
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + (done ? "\nDONE\n" : "\n"));
+			}
+		};
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			std::println("{}", lines.back().toStdString());
+			std::fflush(stdout);
+			write_lines(false);
+			return passed;
+		};
+		const auto finish = [&]() {
+			qputenv("TMP", original_tmp);
+			qa_backup_root.clear();
+			qa_export_mpq_file.clear();
+			qa_save_as_folder.clear();
+			write_lines(true);
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+		const auto read_file = [](const fs::path& path) {
+			std::ifstream in(path, std::ios::binary);
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+		const auto process_events = []() {
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+			QApplication::processEvents();
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		};
+		const auto open_map = [&](const fs::path& path) {
+			window_handler.close_all();
+			process_events();
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(path);
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		};
+
+		// Watches for modal dialogs: records each message box (title, icon, text) and clicks OK; closes anything else.
+		struct Watch {
+			QStringList titles;
+			QStringList texts;
+			QList<int> icons;
+			bool off_screen = true;
+			QPointer<QTimer> timer;
+		};
+		const auto watch_dialogs = [this]() {
+			auto watch = std::make_shared<Watch>();
+			auto* timer = new QTimer(this);
+			watch->timer = timer;
+			connect(timer, &QTimer::timeout, this, [watch]() {
+				QWidget* modal = QApplication::activeModalWidget();
+				if (!modal || !modal->isVisible()) {
+					return;
+				}
+				watch->titles << modal->windowTitle();
+				watch->off_screen = watch->off_screen && std::ranges::none_of(QGuiApplication::screens(), [&](const QScreen* screen) {
+					return screen->geometry().intersects(modal->frameGeometry());
+				});
+				auto* box = qobject_cast<QMessageBox*>(modal);
+				if (box && box->button(QMessageBox::Ok)) {
+					watch->texts << box->text();
+					watch->icons << static_cast<int>(box->icon());
+					box->button(QMessageBox::Ok)->click();
+				} else {
+					watch->texts << QString();
+					watch->icons << -1;
+					modal->close();
+				}
+			});
+			timer->start(20);
+			return watch;
+		};
+		const auto stop_watch = [](const std::shared_ptr<Watch>& watch) {
+			if (watch->timer) {
+				watch->timer->stop();
+				watch->timer->deleteLater();
+			}
+		};
+		const auto dialogs = [](const std::shared_ptr<Watch>& watch) {
+			return " (dialogs: " + watch->titles.join(", ") + ")";
+		};
+		// The last dialog with `title` has `icon` and its text contains every one of `parts`.
+		const auto last_box = [](const std::shared_ptr<Watch>& watch, const QString& title, const QMessageBox::Icon icon, const QStringList& parts) {
+			const qsizetype index = watch->titles.lastIndexOf(title);
+			if (index < 0 || watch->icons.value(index) != static_cast<int>(icon)) {
+				return false;
+			}
+			return std::ranges::all_of(parts, [&](const QString& part) { return watch->texts.value(index).contains(part); });
+		};
+		const auto box_text = [](const std::shared_ptr<Watch>& watch, const QString& title) {
+			return watch->texts.value(watch->titles.lastIndexOf(title));
+		};
+		const auto save = [&]() {
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map();
+			stop_watch(watch);
+			return std::pair { saved, watch };
+		};
+		const auto archived = [](const fs::path& archive, const std::string& name) -> std::optional<std::string> {
+			mpq::MPQ opened;
+			if (!opened.open(archive, MPQ_OPEN_READ_ONLY) || !opened.file_exists(name)) {
+				return std::nullopt;
+			}
+			const std::vector<std::uint8_t> bytes = opened.file_open(name).read();
+			return std::string(bytes.begin(), bytes.end());
+		};
+		const auto move_unit = [&]() {
+			map->units.units.front().position.x += 1.f;
+		};
+
+		if (!check(temp->isValid(), "a temporary folder was created")) {
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = fs::path(temp->path().toStdWString()).make_preferred();
+		const fs::path map_folder = root / "map";
+		const fs::path out = root / "out";
+		const fs::path tmp = root / "tmp";
+		fs::copy(fs::path("data") / "test map", map_folder, fs::copy_options::recursive, ec);
+		fs::create_directories(out, ec);
+		fs::create_directories(tmp, ec);
+		if (!check(!ec && fs::exists(map_folder / "war3map.w3i"), "sandbox copy made")) {
+			return finish();
+		}
+		// generate_map_script writes QDir::tempPath()/input.lua: point it into the sandbox so the user's temp folder is not touched.
+		qputenv("TMP", QString::fromStdWString(tmp.wstring()).toLocal8Bit());
+		const fs::path input_lua = fs::path(QDir::tempPath().toStdWString()).make_preferred() / "input.lua";
+		if (!check(fs::equivalent(input_lua.parent_path(), tmp, ec), "the generated input.lua goes into the sandbox")) {
+			return finish();
+		}
+		qa_backup_root = QString::fromStdWString((root / "backups").wstring());
+		check(QAccessible::installUpdateHandler(qa_silent_accessibility_update) == qa_silent_accessibility_update,
+			  "the silent accessibility handler is installed (no system sounds)");
+
+		open_map(map_folder);
+		if (!check(map->loaded && !map->units.units.empty(), "the sandbox map is open and has a placed unit")) {
+			return finish();
+		}
+		map->info.lua = true; // data/test map is a JASS map
+
+		// --- Accepted: a valid script is written ---------------------------------------------------------------------------------------
+		{
+			move_unit();
+			const auto [saved, watch] = save();
+			const std::string script = read_file(map_folder / "war3map.lua");
+			check(saved && !map->script_compile_failed && watch->titles.isEmpty(), "Lua map: Save writes the script, no dialog" + dialogs(watch));
+			check(!script.empty() && !check_lua_syntax(script).has_value(), "Lua map: the saved war3map.lua parses");
+			check(transient_notice->text() == "Map saved", "Lua map: notice \"Map saved\"");
+		}
+
+		// --- Refused: a syntax error in the map header ---------------------------------------------------------------------------------
+		const std::string saved_header = map->triggers.global_jass;
+		const std::string good_script = read_file(map_folder / "war3map.lua");
+		{
+			map->triggers.global_jass = "function QA_Header()\n  local broken = = 1\nend\n";
+			move_unit();
+			const std::string units_before = read_file(map_folder / "war3mapUnits.doo");
+			const auto [saved, watch] = save();
+			check(saved && map->script_compile_failed, "broken header: Save finishes, the script step failed" + dialogs(watch));
+			check(watch->titles == QStringList { "Lua script" }
+					  && last_box(watch, "Lua script", QMessageBox::Warning,
+								  { "war3map.lua was not updated", QString::fromUtf8(lua_syntax_error_prefix.data(), lua_syntax_error_prefix.size()),
+									"(Map header)", "unexpected symbol near '='", "previous war3map.lua was kept" }),
+				  "broken header: one Lua script warning naming the syntax error, its line and the map header: " + box_text(watch, "Lua script"));
+			check(watch->off_screen, "broken header: the dialog was outside every screen");
+			check(read_file(map_folder / "war3map.lua") == good_script, "broken header: war3map.lua keeps the previous script byte for byte");
+			check(read_file(map_folder / "war3mapUnits.doo") != units_before, "broken header: the other map files were still saved");
+			check(read_file(input_lua).contains("local broken = = 1"), "broken header: input.lua holds the generated script for inspection");
+			check(transient_notice->text() == "Saved without a new map script", "broken header: notice \"Saved without a new map script\"");
+		}
+
+		// --- Refused: an unclosed function in the header is noticed at the end; the message points back at the header -----------------------
+		{
+			map->triggers.global_jass = "function QA_Unclosed()\n  local open = 1\n";
+			const auto [saved, watch] = save();
+			const int header_line = lua_line_of_offset(read_file(input_lua), read_file(input_lua).find("function QA_Unclosed"));
+			check(saved && map->script_compile_failed
+					  && last_box(watch, "Lua script", QMessageBox::Warning,
+								  { "'end' expected", QString("It refers to line %1 (Map header)").arg(header_line), "(HiveWE-generated code)" }),
+				  "unclosed header function: the warning names the header line it opened at: " + box_text(watch, "Lua script"));
+			check(read_file(map_folder / "war3map.lua") == good_script, "unclosed header function: war3map.lua unchanged");
+		}
+
+		// --- Refused: a syntax error in a custom-text trigger names the trigger ------------------------------------------------------------
+		{
+			map->triggers.global_jass = saved_header;
+			Trigger trigger = make_new_trigger(Classifier::script, "QA Broken Trigger", map->triggers.new_element_id(), 0);
+			trigger.custom_text = "function QA_Trigger()\n  if 1 != 2 then end\nend";
+			map->triggers.triggers.push_back(trigger);
+			const auto [saved, watch] = save();
+			check(saved && last_box(watch, "Lua script", QMessageBox::Warning, { "(Trigger QA Broken Trigger)" }),
+				  "broken trigger: the warning names the trigger: " + box_text(watch, "Lua script"));
+			check(read_file(map_folder / "war3map.lua") == good_script, "broken trigger: war3map.lua unchanged");
+			map->triggers.triggers.pop_back();
+			map->triggers.global_jass = "function QA_Header()\n  local broken = = 1\nend\n";
+		}
+
+		// --- Save As: the copy holds the previous script, the warning is shown ----------------------------------------------------------------
+		{
+			const fs::path pick = root / "pick";
+			fs::create_directories(pick, ec);
+			qa_save_as_folder = QString::fromStdWString(pick.wstring());
+			move_unit();
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map_as();
+			stop_watch(watch);
+			qa_save_as_folder.clear();
+			const fs::path target = map->filesystem_path;
+			const bool in_pick = fs::path(target).make_preferred().lexically_normal().native().starts_with(pick.native());
+			check(saved && map->script_compile_failed && in_pick
+					  && last_box(watch, "Lua script", QMessageBox::Warning, { "war3map.lua was not updated", "(Map header)" }),
+				  "Save As with a broken header: saved into the new folder with the Lua script warning (map now at "
+					  + QString::fromStdWString(target.wstring()) + QString(", saved %1, script failed %2)").arg(saved).arg(map->script_compile_failed)
+					  + dialogs(watch));
+			check(read_file(target / "war3map.lua") == good_script, "Save As with a broken header: the new folder has the previous war3map.lua");
+			check(transient_notice->text() == "Saved without a new map script", "Save As with a broken header: notice \"Saved without a new map script\"");
+		}
+
+		// --- Export MPQ: warns that the archive holds the previous script ------------------------------------------------------------------
+		{
+			const fs::path archive = out / "broken.w3x";
+			qa_export_mpq_file = QString::fromStdWString(archive.wstring());
+			const auto watch = watch_dialogs();
+			export_mpq();
+			stop_watch(watch);
+			qa_export_mpq_file.clear();
+			check(map->script_compile_failed && last_box(watch, "Lua script", QMessageBox::Warning, { "(Map header)" })
+					  && last_box(watch, "Export MPQ", QMessageBox::Warning, { "exported to", "contains the previous map script" }),
+				  "Export MPQ with a broken header: the Lua warning, then the export warning about the previous script" + dialogs(watch));
+			check(archived(archive, "war3map.lua") == good_script, "Export MPQ with a broken header: the archive holds the previous war3map.lua");
+		}
+
+		// --- A genuine write failure keeps its own message ---------------------------------------------------------------------------------
+		{
+			map->triggers.global_jass = saved_header;
+			fs::remove(input_lua, ec);
+			fs::create_directories(input_lua, ec); // a folder where input.lua should go: the script cannot be written
+			const auto [saved, watch] = save();
+			const QString text = box_text(watch, "Lua script");
+			check(saved && map->script_compile_failed && last_box(watch, "Lua script", QMessageBox::Warning, { "The map script could not be written" })
+					  && !text.contains("syntax error"),
+				  "input.lua cannot be written: the warning says the script could not be written, not a syntax error: " + text);
+			fs::remove(input_lua, ec);
+		}
+
+		// --- Fixed again: the new script is written, no dialog ------------------------------------------------------------------------------
+		{
+			move_unit();
+			const auto [saved, watch] = save();
+			const std::string script = read_file(map->filesystem_path / "war3map.lua");
+			check(saved && !map->script_compile_failed && watch->titles.isEmpty() && !check_lua_syntax(script).has_value(),
+				  "header fixed: Save writes a parsing war3map.lua, no dialog" + dialogs(watch));
+			check(transient_notice->text() == "Map saved", "header fixed: notice \"Map saved\"");
 		}
 
 		finish();

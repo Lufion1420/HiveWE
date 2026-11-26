@@ -15,6 +15,7 @@ import MapInfo;
 import BinaryReader;
 import BinaryWriter;
 import INI;
+import LuaSyntax;
 
 namespace fs = std::filesystem;
 using namespace std::literals::string_literals;
@@ -656,9 +657,15 @@ export struct MapScriptOutput {
 	std::chrono::milliseconds compile_timeout = std::chrono::minutes(2);
 };
 
-/// Writes `script` to the input file, compiles it (JASS) and copies the result into the map folder as war3map.lua or war3map.j.
-/// On any failure the map's existing script file is left untouched and the error is returned.
-export std::expected<void, std::string> install_map_script(std::string_view script, ScriptMode mode, const MapScriptOutput& output);
+/// Writes `script` to the input file, compiles it (JASS) or syntax-checks it (Lua), and copies the result into the map folder as
+/// war3map.lua or war3map.j. On any failure the map's existing script file is left untouched and the error is returned. A Lua syntax
+/// error starts with lua_syntax_error_prefix and names the line's entry in `regions` (lines outside them are HiveWE-generated code).
+export std::expected<void, std::string> install_map_script(
+	std::string_view script,
+	ScriptMode mode,
+	const MapScriptOutput& output,
+	const std::vector<ScriptRegion>& regions = {}
+);
 
 export class Triggers {
 	std::unordered_map<std::string, int> argument_counts;
