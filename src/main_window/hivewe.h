@@ -25,6 +25,8 @@ namespace fs = std::filesystem;
 #include <QString>
 #include <memory>
 
+class QAccessibleEvent;
+
 #include "global_search.h"
 
 import QRibbon;
@@ -131,6 +133,19 @@ public:
 	/// midway, through save_current_map and save_current_map_as. Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_save_safety_check = false;
 	void run_qa_save_safety_check();
+	/// Set by --qa-export-mpq-check (needs --qa-offscreen; --qa-script-out <file> optional): on a sandbox copy of data/test map, runs Export MPQ
+	/// with the file picker answered by qa_export_mpq_file and clicks its real result dialogs in-process: success, a replaced archive, a script
+	/// that did not compile (warning, with and without a previous script), failures (held target, held source file) and refusals (inside the
+	/// map folder, a folder, a path too long). Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_export_mpq_check = false;
+	void run_qa_export_mpq_check();
+	/// Installed with QAccessible::installUpdateHandler under --qa-offscreen only. Forwards nothing to the platform backend, which plays the
+	/// Windows sound for message boxes (QAccessible::Alert) and menus (PopupMenuStart, MenuCommand), so QA runs make no sound. UIA queries
+	/// (patterns, properties) still work; UIA clients get no change events. Counts the Alert events it swallowed.
+	static void qa_silent_accessibility_update(QAccessibleEvent* event);
+	static inline int qa_silenced_alerts = 0;
+	/// Only with --qa-offscreen: the file export_mpq uses instead of asking with the file picker.
+	static inline QString qa_export_mpq_file;
 	/// Only with --qa-offscreen: the backup root to use instead of a temporary one (QA runs never back up into the user's AppData).
 	static inline QString qa_backup_root;
 	/// Only with --qa-offscreen: the folder save_current_map_as uses instead of asking with the folder picker.

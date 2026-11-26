@@ -3,6 +3,7 @@
 
 #define QT_NO_OPENGL
 
+#include <QAccessible>
 #include <QApplication>
 #include <QCoreApplication>
 #include <QFile>
@@ -194,6 +195,11 @@ int main(int argc, char* argv[]) {
 				"                       that is not empty or inside the map's folder, and that a Save As failing midway leaves Save on the original folder.\n"
 				"                       Backups go into the sandbox. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory.\n"
 				"                       Exit code 0 only when all pass.\n"
+				"  --qa-export-mpq-check  Needs --qa-offscreen (--qa-script-out <file> optional): on a sandbox copy of data/test map, runs Export MPQ\n"
+				"                       with the file picker answered in-process and clicks its real result dialogs: success, a replaced archive, a\n"
+				"                       script that did not compile (warning), failures (held target or source file, old file kept) and refusals.\n"
+				"                       Backups go into the sandbox. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory.\n"
+				"                       Exit code 0 only when all pass.\n"
 				"  --qa-dialog-tab <n> With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -282,6 +288,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_save_safety_check = true;
+		} else if (arguments[i] == "--qa-export-mpq-check") {
+			// The hook opens and saves a sandbox map and shows real dialogs, so it must never run in a window the user works in.
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-export-mpq-check needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_export_mpq_check = true;
 		} else if (arguments[i] == "--qa-region-palette-check") {
 			if (!arguments.contains("--qa-offscreen") || arguments.indexOf("--palette") < 0 || arguments.value(arguments.indexOf("--palette") + 1) != "regions") {
 				std::println(stderr, "--qa-region-palette-check needs --qa-offscreen and --palette regions. See HiveWE --help.");
@@ -353,6 +366,8 @@ int main(int argc, char* argv[]) {
 
 	if (HiveWE::qa_offscreen) {
 		a.installEventFilter(new NoActivateFilter(&a));
+		// Silent QA runs: Qt's Windows accessibility backend plays the system sound for message boxes and menus on these events.
+		QAccessible::installUpdateHandler(HiveWE::qa_silent_accessibility_update);
 	}
 
 	ads::CDockManager::setConfigFlag(ads::CDockManager::FocusHighlighting);
@@ -482,6 +497,7 @@ int main(int argc, char* argv[]) {
 	w.run_qa_kept_script_check();
 	w.run_qa_asset_delete_check();
 	w.run_qa_save_safety_check();
+	w.run_qa_export_mpq_check();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

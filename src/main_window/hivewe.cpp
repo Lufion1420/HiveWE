@@ -48,6 +48,7 @@ import "trigger_editor.h";
 #include "QProcess"
 #include "QKeySequence"
 #include "QString"
+#include <QAccessible>
 #include <QApplication>
 #include <QGuiApplication>
 #include <QComboBox>
@@ -102,6 +103,7 @@ import MapArchiveCheck;
 import ScriptPreservation;
 import ProtectionPipeline;
 import MapBackup;
+import MapArchiveExport;
 
 namespace fs = std::filesystem;
 
@@ -117,31 +119,101 @@ QString display_path(const fs::path& path) {
 	return QString::fromStdWString(path.wstring());
 }
 
-/// Export MPQ's archive step: packs every file of the map folder (subfolders such as scripts\ included) into `file_name`, replacing it.
-/// False when the archive could not be created; a file that fails to add is only logged, as before.
-bool write_map_archive(const fs::path& folder, const std::wstring& file_name) {
-	fs::remove(file_name);
+/// The system's text for a Windows error code, without the trailing line break.
+QString windows_error_text(const std::uint32_t code) {
+	return QString::fromLocal8Bit(std::system_category().message(static_cast<int>(code))).trimmed();
+}
 
-	uint64_t file_count = std::distance(fs::recursive_directory_iterator{ folder }, {});
-
-	HANDLE handle;
-	bool open = SFileCreateArchive(file_name.c_str(), MPQ_CREATE_LISTFILE | MPQ_CREATE_ATTRIBUTES, file_count, &handle);
-	if (!open) {
-		return false;
+/// Export MPQ's result dialog for map_archive::write. `script_not_updated`: the save before the export could not generate the map
+/// script, so the archive holds the script that was in the folder before (or none).
+void show_export_result(QWidget* parent, const fs::path& folder, const fs::path& target, const map_archive::Result& result,
+						const bool script_not_updated) {
+	using map_archive::Step;
+	const QString target_text = display_path(target);
+	if (result.ok) {
+		const QString written = "The map was exported to\n" + target_text + "\n\n" + QString::number(result.added) + " files were added to the archive.";
+		if (!script_not_updated) {
+			QMessageBox::information(parent, "Export MPQ", written);
+			return;
+		}
+		std::error_code ec;
+		const bool has_script = std::ranges::any_of(map_script_file_names, [&](const std::string_view name) {
+			return fs::exists(folder / fs::path(name), ec);
+		});
+		QMessageBox::warning(parent, "Export MPQ",
+							 written + "\n\nThe map script in it is not up to date. "
+								 + (has_script ? "The archive contains the previous map script, because the new one could not be generated."
+											   : "The archive contains no map script: the map had none before, and the new one could not be generated.")
+								 + "\n\nFix the script errors shown while saving, then export again.");
+		return;
 	}
 
-	for (const auto& entry : fs::recursive_directory_iterator(folder)) {
-		if (entry.is_regular_file() && !is_map_write_temp_file(entry.path())) {
-			const std::string archive_name = utf8_path(entry.path().lexically_relative(folder));
-			bool success = SFileAddFileEx(handle, entry.path().c_str(), archive_name.c_str(), MPQ_FILE_COMPRESS, MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
-			if (!success) {
-				std::println("Error {} adding file {}", GetLastError(), utf8_path(entry.path()));
-			}
+	if (map_archive::is_refusal(result.step)) {
+		QString reason;
+		if (result.step == Step::inside_map_folder) {
+			reason = "The file\n" + target_text + "\nis inside the map's own folder, so the archive would pack itself.\n\nChoose a location outside\n"
+				+ display_path(folder);
+		} else if (result.step == Step::target_is_folder) {
+			reason = "The path\n" + target_text + "\nis a folder. Choose a file name.";
+		} else if (result.step == Step::target_read_only) {
+			reason = "The existing file\n" + target_text
+				+ "\nis read-only, so it cannot be replaced. It was kept unchanged.\n\nClear its read-only attribute, or choose another file name.";
+		} else {
+			reason = "The path\n" + target_text + "\nis too long: the archive's temporary files would pass the Windows limit of "
+				+ QString::number(map_archive::max_path_length) + " characters. Choose a shorter path or file name.";
+		}
+		QMessageBox::warning(parent, "Export MPQ", "The map was not exported. Nothing was written.\n\n" + reason);
+		return;
+	}
+
+	fs::path temp = target;
+	temp += map_archive::temp_suffix;
+	QString what;
+	switch (result.step) {
+		case Step::check_target: what = "The target location could not be checked."; break;
+		case Step::list_folder: what = "The map folder could not be read completely, so no archive was made."; break;
+		case Step::stale_temp: what = "A temporary file left by an earlier export could not be removed:\n" + display_path(temp); break;
+		case Step::create: what = "The archive could not be created."; break;
+		case Step::add: what = QString::number(result.failed.size()) + " of the map's files could not be added to the archive."; break;
+		case Step::nothing_added: what = "The map folder has no files to add."; break;
+		case Step::flush: what = "The archive's file list and attributes could not be written."; break;
+		case Step::compact: what = "The archive could not be compacted."; break;
+		case Step::close: what = "The archive could not be finished (closing it failed)."; break;
+		case Step::verify: what = "The finished archive could not be read back, or files were missing from it."; break;
+		case Step::replace:
+			what = result.target_existed ? "The new archive could not replace the existing file. Another program may have it open."
+										 : "The new archive could not be moved to its place.";
+			break;
+		default: what = "The export failed."; break;
+	}
+
+	QString text = "The map could not be exported to\n" + target_text + "\n\n" + what;
+	if (result.error != 0) {
+		text += "\n\nWindows error " + QString::number(result.error) + ": " + windows_error_text(result.error);
+	}
+	text += result.target_existed ? "\n\nThe existing file was kept unchanged." : "\n\nNo file was written there.";
+	if (!result.leftover.empty()) {
+		text += "\n\nA temporary file could not be deleted:\n" + display_path(result.leftover);
+	}
+
+	QStringList names;
+	for (const map_archive::FailedFile& file : result.failed) {
+		names << QString::fromUtf8(file.name.data(), static_cast<qsizetype>(file.name.size())) + " (error " + QString::number(file.error) + ": "
+				+ windows_error_text(file.error) + ")";
+	}
+	constexpr qsizetype shown = 10;
+	if (!names.isEmpty()) {
+		text += "\n\nFiles:\n" + names.mid(0, shown).join('\n');
+		if (names.size() > shown) {
+			text += QString("\n... and %1 more (see Show Details)").arg(names.size() - shown);
 		}
 	}
-	SFileCompactArchive(handle, nullptr, false);
-	SFileCloseArchive(handle);
-	return true;
+
+	QMessageBox box(QMessageBox::Critical, "Exporting failed", text, QMessageBox::Ok, parent);
+	if (names.size() > shown) {
+		box.setDetailedText(names.join('\n'));
+	}
+	box.exec();
 }
 
 /// Backups made before editor saves (see MapBackup). Headless --resave and the Map Protector call Map::save directly and make none.
@@ -244,27 +316,6 @@ bool save_map_reporting_errors(const fs::path& path) {
 		QMessageBox::critical(nullptr, "Saving failed", text);
 		return false;
 	}
-}
-
-/// True when `path` is `folder` or lies inside it, compared without letter case after resolving both.
-bool path_is_within(const fs::path& path, const fs::path& folder) {
-	const auto normalized = [](const fs::path& p) {
-		std::error_code ec;
-		fs::path result = fs::weakly_canonical(p, ec);
-		if (ec) {
-			result = fs::absolute(p, ec);
-		}
-		std::wstring text = result.make_preferred().native();
-		while (text.size() > 3 && text.back() == L'\\') {
-			text.pop_back();
-		}
-		for (wchar_t& c : text) {
-			c = static_cast<wchar_t>(std::towlower(static_cast<std::wint_t>(c)));
-		}
-		return fs::path(text);
-	};
-	const fs::path relative = normalized(path).lexically_relative(normalized(folder));
-	return !relative.empty() && *relative.begin() != "..";
 }
 
 std::shared_ptr<mdx::MDX> load_preview_mdx(const fs::path& path) {
@@ -1270,18 +1321,27 @@ void HiveWE::export_mpq() {
 		return;
 	}
 
-	QSettings settings;
-	const QString directory = settings.value("openDirectory", QDir::current().path()).toString() + "/" + display_path(map->filesystem_path.filename());
-	std::wstring file_name = QFileDialog::getSaveFileName(this, "Export Map to MPQ", directory, "Warcraft III Scenario (*.w3x)").toStdWString();
+	// Read before the picker: the save that just ran decides whether the archive gets an up-to-date script.
+	const bool script_not_updated = map->script_compile_failed;
 
+	fs::path file_name;
+	if (qa_offscreen && !qa_export_mpq_file.isEmpty()) {
+		// The QA hook's answer to the file picker.
+		file_name = qa_export_mpq_file.toStdWString();
+	} else {
+		QSettings settings;
+		const QString directory = settings.value("openDirectory", QDir::current().path()).toString() + "/" + display_path(map->filesystem_path.filename());
+		file_name = QFileDialog::getSaveFileName(this, "Export Map to MPQ", directory, "Warcraft III Scenario (*.w3x)").toStdWString();
+	}
 	if (file_name.empty()) {
 		return;
 	}
 
-	if (!write_map_archive(map->filesystem_path, file_name)) {
-		QMessageBox::critical(this, "Exporting failed", "There was an error creating the archive.");
-		std::println("{}", GetLastError());
+	const map_archive::Result result = map_archive::write(map->filesystem_path, file_name);
+	if (!result.ok) {
+		std::println(stderr, "Export MPQ failed at step {} (error {}), {} files added", static_cast<int>(result.step), result.error, result.added);
 	}
+	show_export_result(this, map->filesystem_path, file_name, result, script_not_updated);
 }
 
 void HiveWE::play_test() {
@@ -4595,7 +4655,12 @@ void HiveWE::run_qa_kept_script_check() {
 				  "Save As (scripts\\): scripts\\war3map.j byte for byte, no root script, no trigger files");
 
 			const fs::path archive = root / "kept_scripts.w3x";
-			check(write_map_archive(map->filesystem_path, archive.wstring()), "Export MPQ: the archive was written");
+			const map_archive::Result written = map_archive::write(map->filesystem_path, archive);
+			check(written.ok && written.added > 0 && written.failed.empty(),
+				  QString("Export MPQ: the archive was written (step %1, error %2, %3 files)")
+					  .arg(static_cast<int>(written.step))
+					  .arg(written.error)
+					  .arg(written.added));
 			mpq::MPQ exported;
 			std::string archived;
 			if (exported.open(archive) && exported.file_exists("scripts\\war3map.j")) {
@@ -4987,6 +5052,333 @@ void HiveWE::run_qa_save_safety_check() {
 			check(!has_unsaved_work(), "the next Save: the map counts as saved");
 			const std::string imp = read_file(map_folder / "war3map.imp");
 			check(imp.find("pick_fails") == std::string::npos, "the next Save: war3map.imp does not list the other folder");
+		}
+
+		finish();
+	});
+}
+
+void HiveWE::qa_silent_accessibility_update(QAccessibleEvent* event) {
+	if (event && event->type() == QAccessible::Alert) {
+		qa_silenced_alerts++;
+	}
+}
+
+void HiveWE::run_qa_export_mpq_check() {
+	if (!qa_offscreen || !qa_export_mpq_check) {
+		return;
+	}
+
+	// Everything below works on a copy in a temporary folder, and the backups and archives go there too.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(180000, this, [temp]() {
+		std::println("FAIL the Export MPQ check did not finish within 180 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		const auto write_lines = [&](const bool done) {
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + (done ? "\nDONE\n" : "\n"));
+			}
+		};
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			std::println("{}", lines.back().toStdString());
+			std::fflush(stdout);
+			write_lines(false);
+			return passed;
+		};
+		const auto finish = [&]() {
+			qa_backup_root.clear();
+			qa_export_mpq_file.clear();
+			write_lines(true);
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+		const auto read_file = [](const fs::path& path) {
+			std::ifstream in(path, std::ios::binary);
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+		const auto process_events = []() {
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+			QApplication::processEvents();
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		};
+		const auto open_map = [&](const fs::path& path) {
+			window_handler.close_all();
+			process_events();
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(path);
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		};
+
+		// Watches for modal dialogs: records each message box (title, icon, text, detailed text) and clicks OK; closes anything else.
+		struct Watch {
+			QStringList titles;
+			QStringList texts;
+			QStringList details;
+			QList<int> icons;
+			bool off_screen = true;
+			QPointer<QTimer> timer;
+		};
+		const auto watch_dialogs = [this]() {
+			auto watch = std::make_shared<Watch>();
+			auto* timer = new QTimer(this);
+			watch->timer = timer;
+			connect(timer, &QTimer::timeout, this, [watch]() {
+				QWidget* modal = QApplication::activeModalWidget();
+				if (!modal || !modal->isVisible()) {
+					return;
+				}
+				watch->titles << modal->windowTitle();
+				watch->off_screen = watch->off_screen && std::ranges::none_of(QGuiApplication::screens(), [&](const QScreen* screen) {
+					return screen->geometry().intersects(modal->frameGeometry());
+				});
+				auto* box = qobject_cast<QMessageBox*>(modal);
+				if (box && box->button(QMessageBox::Ok)) {
+					watch->texts << box->text();
+					watch->details << box->detailedText();
+					watch->icons << static_cast<int>(box->icon());
+					box->button(QMessageBox::Ok)->click();
+				} else {
+					watch->texts << QString();
+					watch->details << QString();
+					watch->icons << -1;
+					modal->close();
+				}
+			});
+			timer->start(20);
+			return watch;
+		};
+		const auto stop_watch = [](const std::shared_ptr<Watch>& watch) {
+			if (watch->timer) {
+				watch->timer->stop();
+				watch->timer->deleteLater();
+			}
+		};
+		const auto dialogs = [](const std::shared_ptr<Watch>& watch) {
+			return " (dialogs: " + watch->titles.join(", ") + ")";
+		};
+		// Export MPQ through the real slot: the save, then the file picker answered with `target`, then the result dialog.
+		const auto export_to = [&](const fs::path& target) {
+			qa_export_mpq_file = QString::fromStdWString(target.wstring());
+			const auto watch = watch_dialogs();
+			export_mpq();
+			stop_watch(watch);
+			qa_export_mpq_file.clear();
+			return watch;
+		};
+		// The last dialog with `title` has `icon` and its text contains every one of `parts`.
+		const auto last_box = [](const std::shared_ptr<Watch>& watch, const QString& title, const QMessageBox::Icon icon, const QStringList& parts) {
+			const qsizetype index = watch->titles.lastIndexOf(title);
+			if (index < 0 || watch->icons.value(index) != static_cast<int>(icon)) {
+				return false;
+			}
+			return std::ranges::all_of(parts, [&](const QString& part) { return watch->texts.value(index).contains(part); });
+		};
+		const auto no_temp_files = [](const fs::path& folder) {
+			std::error_code ec;
+			for (auto it = fs::directory_iterator(folder, ec); !ec && it != fs::directory_iterator(); it.increment(ec)) {
+				if (it->path().filename().native().find(L".hivewe-tmp") != std::wstring::npos) {
+					return false;
+				}
+			}
+			return !ec;
+		};
+		const auto archived = [](const fs::path& archive, const std::string& name) -> std::optional<std::string> {
+			mpq::MPQ opened;
+			if (!opened.open(archive, MPQ_OPEN_READ_ONLY) || !opened.file_exists(name)) {
+				return std::nullopt;
+			}
+			const std::vector<std::uint8_t> bytes = opened.file_open(name).read();
+			return std::string(bytes.begin(), bytes.end());
+		};
+		// Files map_archive::write packs from the folder: regular files except save temp files and root archive internal names.
+		const auto packed_count = [](const fs::path& folder) {
+			std::size_t count = 0;
+			std::error_code ec;
+			for (auto it = fs::recursive_directory_iterator(folder, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+				std::error_code type_ec;
+				if (!it->is_regular_file(type_ec) || is_map_write_temp_file(it->path())) {
+					continue;
+				}
+				const QString name = QString::fromStdWString(it->path().lexically_relative(folder).wstring()).toLower();
+				count += (name == "(listfile)" || name == "(attributes)" || name == "(signature)") ? 0 : 1;
+			}
+			return count;
+		};
+		const auto hold = [](const fs::path& path, const DWORD share) {
+			return CreateFileW(path.c_str(), GENERIC_READ, share, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		};
+
+		if (!check(temp->isValid(), "a temporary folder was created")) {
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = fs::path(temp->path().toStdWString()).make_preferred();
+		const fs::path map_folder = root / "map";
+		const fs::path out = root / "out";
+		fs::copy(fs::path("data") / "test map", map_folder, fs::copy_options::recursive, ec);
+		fs::create_directories(out, ec);
+		if (!check(!ec && fs::exists(map_folder / "war3map.w3i"), "sandbox copy made")) {
+			return finish();
+		}
+		qa_backup_root = QString::fromStdWString((root / "backups").wstring());
+		open_map(map_folder);
+		if (!check(map->loaded && fs::equivalent(map->filesystem_path, map_folder), "the sandbox map is open")) {
+			return finish();
+		}
+
+		// Silent run: main() installed the handler that keeps Alert and menu events from the Windows backend's system sounds.
+		check(QAccessible::installUpdateHandler(qa_silent_accessibility_update) == qa_silent_accessibility_update,
+			  "the silent accessibility handler is installed (no system sounds)");
+
+		// --- Success: path and file count --------------------------------------------------------------------------------------------
+		{
+			const fs::path target = out / "exported.w3x";
+			const int alerts_before = qa_silenced_alerts;
+			const auto watch = export_to(target);
+			check(qa_silenced_alerts > alerts_before, QString("the message box's Alert event reached the silent handler (%1 alerts)").arg(qa_silenced_alerts - alerts_before));
+			const std::size_t count = packed_count(map_folder);
+			check(!map->script_compile_failed, "control: the sandbox map's script compiles" + dialogs(watch));
+			check(watch->titles == QStringList { "Export MPQ" }
+					  && last_box(watch, "Export MPQ", QMessageBox::Information,
+								  { "exported to", QString::fromStdWString(target.wstring()), QString::number(count) + " files" }),
+				  QString("Export MPQ: one information dialog naming the file and %1 files").arg(count) + dialogs(watch));
+			check(watch->off_screen, "Export MPQ: the dialog was outside every screen");
+			check(archived(target, "war3map.w3i") == read_file(map_folder / "war3map.w3i") && archived(target, "(listfile)").has_value(),
+				  "Export MPQ: the archive holds war3map.w3i byte for byte and a (listfile)");
+			check(no_temp_files(out), "Export MPQ: no temporary file left");
+		}
+
+		// --- An existing file is replaced --------------------------------------------------------------------------------------------
+		{
+			const fs::path target = out / "replaced.w3x";
+			std::ofstream(target, std::ios::binary) << "OLD ARCHIVE";
+			const auto watch = export_to(target);
+			check(last_box(watch, "Export MPQ", QMessageBox::Information, { "exported to" }) && archived(target, "war3map.w3i").has_value(),
+				  "Export MPQ over an existing file: replaced, information dialog" + dialogs(watch));
+			check(no_temp_files(out), "Export MPQ over an existing file: no temporary file left");
+		}
+
+		// --- Failure: the old file is held open, so it is kept ------------------------------------------------------------------------
+		{
+			const fs::path target = out / "held.w3x";
+			std::ofstream(target, std::ios::binary) << "OLD ARCHIVE";
+			const HANDLE held = hold(target, FILE_SHARE_READ);
+			check(held != INVALID_HANDLE_VALUE, "the old archive is held open (read, share read)");
+			const auto watch = export_to(target);
+			if (held != INVALID_HANDLE_VALUE) {
+				CloseHandle(held);
+			}
+			check(last_box(watch, "Exporting failed", QMessageBox::Critical, { "could not replace the existing file", "Windows error", "kept unchanged" }),
+				  "held old archive: Exporting failed, with the Windows error and that the old file was kept" + dialogs(watch));
+			check(read_file(target) == "OLD ARCHIVE" && no_temp_files(out), "held old archive: old bytes unchanged, no temporary file left");
+		}
+
+		// --- Failure: map files that cannot be read; more than ten, so the list goes into the details -----------------------------------
+		{
+			std::vector<HANDLE> held;
+			for (int i = 0; i < 11; i++) {
+				const fs::path file = map_folder / ("qa_locked_" + std::to_string(i) + ".txt");
+				std::ofstream(file, std::ios::binary) << "held";
+				held.push_back(hold(file, 0));
+			}
+			check(std::ranges::none_of(held, [](const HANDLE h) { return h == INVALID_HANDLE_VALUE; }), "11 map files are held open (no sharing)");
+			const fs::path target = out / "locked.w3x";
+			const auto watch = export_to(target);
+			for (const HANDLE h : held) {
+				if (h != INVALID_HANDLE_VALUE) {
+					CloseHandle(h);
+				}
+			}
+			const qsizetype index = watch->titles.lastIndexOf("Exporting failed");
+			check(last_box(watch, "Exporting failed", QMessageBox::Critical, { "11 of the map's files could not be added", "No file was written", "and 1 more" })
+					  && !watch->texts.value(index).contains("kept unchanged"),
+				  "held map files: Exporting failed naming the count, no old file to keep" + dialogs(watch));
+			bool all_named = index >= 0;
+			for (int i = 0; i < 11; i++) {
+				all_named = all_named && watch->details.value(index).contains(QString("qa_locked_%1.txt").arg(i));
+			}
+			check(all_named, "held map files: the details list all 11 files");
+			check(!fs::exists(target) && no_temp_files(out), "held map files: no archive and no temporary file written");
+			for (int i = 0; i < 11; i++) {
+				fs::remove(map_folder / ("qa_locked_" + std::to_string(i) + ".txt"), ec);
+			}
+		}
+
+		// --- Refusals: nothing is written ---------------------------------------------------------------------------------------------
+		{
+			const fs::path inside = map_folder / "inside.w3x";
+			const auto watch = export_to(inside);
+			check(last_box(watch, "Export MPQ", QMessageBox::Warning, { "not exported", "inside the map's own folder" }) && !fs::exists(inside)
+					  && no_temp_files(map_folder),
+				  "target inside the map folder: refused, nothing written" + dialogs(watch));
+
+			const fs::path folder_target = out / "a_folder.w3x";
+			fs::create_directories(folder_target, ec);
+			const auto folder_watch = export_to(folder_target);
+			check(last_box(folder_watch, "Export MPQ", QMessageBox::Warning, { "not exported", "is a folder" }) && fs::is_empty(folder_target, ec),
+				  "target that is a folder: refused, nothing written" + dialogs(folder_watch));
+
+			const std::size_t length = map_archive::max_path_length - out.native().size() - 1 - 10;
+			const fs::path long_target = out / (std::wstring(length - 4, L'x') + L".w3x");
+			const auto long_watch = export_to(long_target);
+			check(length < 250 && last_box(long_watch, "Export MPQ", QMessageBox::Warning, { "not exported", "too long" }) && !fs::exists(long_target)
+					  && no_temp_files(out),
+				  "path too long for the temporary files: refused, nothing written" + dialogs(long_watch));
+
+			const fs::path read_only = out / "read_only.w3x";
+			std::ofstream(read_only, std::ios::binary) << "OLD ARCHIVE";
+			fs::permissions(read_only, fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write, fs::perm_options::remove, ec);
+			const auto read_only_watch = export_to(read_only);
+			const bool still_read_only = (fs::status(read_only, ec).permissions() & fs::perms::owner_write) == fs::perms::none;
+			check(last_box(read_only_watch, "Export MPQ", QMessageBox::Warning, { "not exported", "read-only", "kept unchanged" })
+					  && read_file(read_only) == "OLD ARCHIVE" && still_read_only && no_temp_files(out),
+				  "read-only existing file: refused, old bytes and read-only attribute kept" + dialogs(read_only_watch));
+			fs::permissions(read_only, fs::perms::owner_write, fs::perm_options::add, ec);
+		}
+
+		// --- Warning: the script did not compile, so the archive holds the previous script, or none --------------------------------------
+		{
+			const std::string previous_script = read_file(map_folder / "war3map.j");
+			check(!previous_script.empty(), "the sandbox map has a war3map.j");
+			const std::string saved_header = map->triggers.global_jass;
+			map->triggers.global_jass = "this is not valid JASS\n";
+
+			const fs::path target = out / "script_failed.w3x";
+			const auto watch = export_to(target);
+			check(map->script_compile_failed, "a broken map header makes the script compile fail" + dialogs(watch));
+			check(last_box(watch, "Export MPQ", QMessageBox::Warning, { "exported to", "contains the previous map script" }),
+				  "script not compiled: the export is a warning saying the archive has the previous script" + dialogs(watch));
+			check(archived(target, "war3map.j") == previous_script, "script not compiled: the archive holds the previous war3map.j byte for byte");
+
+			for (const std::string_view name : map_script_file_names) {
+				fs::remove(map_folder / fs::path(name), ec);
+			}
+			const fs::path no_script = out / "no_script.w3x";
+			const auto none_watch = export_to(no_script);
+			check(last_box(none_watch, "Export MPQ", QMessageBox::Warning, { "exported to", "contains no map script" })
+					  && !watch->texts.value(watch->titles.lastIndexOf("Export MPQ")).contains("contains no map script"),
+				  "script not compiled, no script before: the warning says the archive has no map script" + dialogs(none_watch));
+			check(!archived(no_script, "war3map.j").has_value() && archived(no_script, "war3map.w3i").has_value(),
+				  "script not compiled, no script before: no war3map.j in the archive");
+
+			map->triggers.global_jass = saved_header;
+			const auto fixed = export_to(out / "fixed.w3x");
+			check(!map->script_compile_failed && last_box(fixed, "Export MPQ", QMessageBox::Information, { "exported to" })
+					  && archived(out / "fixed.w3x", "war3map.j").has_value(),
+				  "script fixed again: information dialog and a new war3map.j in the archive" + dialogs(fixed));
 		}
 
 		finish();

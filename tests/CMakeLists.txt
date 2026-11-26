@@ -39,6 +39,7 @@ add_executable(HiveWE_tests
 	script_preservation_test.cpp
 	asset_usage_test.cpp
 	map_backup_test.cpp
+	map_archive_export_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
