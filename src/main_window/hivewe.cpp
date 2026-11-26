@@ -1346,7 +1346,15 @@ void HiveWE::export_mpq() {
 }
 
 void HiveWE::play_test() {
-	if (!save_current_map()) {
+	if (!map) {
+		return;
+	}
+	// A script that cannot be updated leaves an old or no script in the map, so the game is not started. The save's script error
+	// dialog says so, which keeps it to one dialog.
+	map->script_failure_note = "Warcraft III was not started, because the map script could not be updated.";
+	const bool saved = save_current_map();
+	map->script_failure_note.clear();
+	if (!saved || map->script_compile_failed) {
 		return;
 	}
 	QProcess* warcraft = new QProcess;
@@ -1358,6 +1366,13 @@ void HiveWE::play_test() {
 	QSettings settings;
 	if (settings.value("testArgs").toString() != "")
 		arguments << settings.value("testArgs").toString().split(' ');
+
+	if (qa_offscreen) {
+		// QA runs never start the game: the command is only recorded, for the hook that checks it.
+		qa_game_launches << warcraft_path + " " + arguments.join(' ');
+		delete warcraft;
+		return;
+	}
 
 	warcraft->start(warcraft_path, arguments);
 }
@@ -5663,6 +5678,573 @@ void HiveWE::run_qa_lua_script_check() {
 			check(saved && !map->script_compile_failed && watch->titles.isEmpty() && !check_lua_syntax(script).has_value(),
 				  "header fixed: Save writes a parsing war3map.lua, no dialog" + dialogs(watch));
 			check(transient_notice->text() == "Map saved", "header fixed: notice \"Map saved\"");
+		}
+
+		finish();
+	});
+}
+
+void HiveWE::run_qa_trigger_tree_check() {
+	if (!qa_offscreen || !qa_trigger_tree_check) {
+		return;
+	}
+
+	// Everything below works on a copy in a temporary folder; backups and the generated script's input file go there too.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(180000, this, [temp]() {
+		std::println("FAIL the trigger tree check did not finish within 180 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		const QByteArray original_tmp = qgetenv("TMP");
+		const auto write_lines = [&](const bool done) {
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + (done ? "\nDONE\n" : "\n"));
+			}
+		};
+		// Written line by line, so a crash keeps the results before it.
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			std::println("{}", lines.back().toStdString());
+			std::fflush(stdout);
+			write_lines(false);
+			return passed;
+		};
+		const auto finish = [&]() {
+			qputenv("TMP", original_tmp);
+			qa_backup_root.clear();
+			write_lines(true);
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+		const auto read_file = [](const fs::path& path) {
+			std::ifstream in(path, std::ios::binary);
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+		const auto process_events = []() {
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+			QApplication::processEvents();
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		};
+
+		if (!check(temp->isValid(), "a temporary folder was created")) {
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = fs::path(temp->path().toStdWString()).make_preferred();
+		const fs::path folder = root / "map";
+		const fs::path tmp = root / "tmp";
+		fs::copy(fs::path("data") / "test map", folder, fs::copy_options::recursive, ec);
+		fs::create_directories(tmp, ec);
+		if (!check(!ec && fs::exists(folder / "war3map.wtg"), "sandbox copy made")) {
+			return finish();
+		}
+		qputenv("TMP", QString::fromStdWString(tmp.wstring()).toLocal8Bit());
+		qa_backup_root = QString::fromStdWString((root / "backups").wstring());
+		check(QAccessible::installUpdateHandler(qa_silent_accessibility_update) == qa_silent_accessibility_update,
+			  "the silent accessibility handler is installed (no system sounds)");
+
+		const auto open_map = [&]() {
+			window_handler.close_all();
+			process_events();
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(folder);
+			map->headless = true; // save refusals print instead of opening a dialog
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		};
+
+		TriggerEditor* editor = nullptr;
+		TreeModel* model = nullptr;
+		int rows_moved = 0;
+		const auto open_editor = [&]() {
+			bool created = false;
+			editor = window_handler.create_or_raise<TriggerEditor>(nullptr, created);
+			auto* explorer = editor->findChild<TriggerExplorer*>();
+			model = explorer ? qobject_cast<TreeModel*>(explorer->model()) : nullptr;
+			if (model) {
+				connect(model, &QAbstractItemModel::rowsMoved, editor, [&rows_moved]() { ++rows_moved; });
+			}
+			process_events();
+			return model != nullptr;
+		};
+		const auto close_editor = [&]() {
+			editor->close();
+			process_events();
+			editor = nullptr;
+			model = nullptr;
+		};
+
+		const std::function<QModelIndex(const QModelIndex&, int)> find_index = [&](const QModelIndex& parent, const int id) -> QModelIndex {
+			for (int row = 0; row < model->rowCount(parent); ++row) {
+				const QModelIndex index = model->index(row, 0, parent);
+				if (static_cast<TreeItem*>(index.internalPointer())->id == id) {
+					return index;
+				}
+				if (const QModelIndex found = find_index(index, id); found.isValid()) {
+					return found;
+				}
+			}
+			return {};
+		};
+		constexpr int not_shown = -1000;
+		// The id of the item a tree item is listed under, or not_shown.
+		const auto shown_under = [&](const int id) {
+			const QModelIndex index = find_index({}, id);
+			if (!index.isValid() || !index.parent().isValid()) {
+				return not_shown;
+			}
+			return static_cast<TreeItem*>(index.parent().internalPointer())->id;
+		};
+		// The ids listed directly under an item, in order, restricted to `ids`.
+		const auto listed_under = [&](const int id, const QList<int>& ids) {
+			QList<int> result;
+			const QModelIndex parent = find_index({}, id);
+			for (int row = 0; parent.isValid() && row < model->rowCount(parent); ++row) {
+				const int child = static_cast<TreeItem*>(model->index(row, 0, parent).internalPointer())->id;
+				if (ids.contains(child)) {
+					result << child;
+				}
+			}
+			return result;
+		};
+		const auto stored_parent = [&](const int id) {
+			for (const TriggerCategory& category : map->triggers.categories) {
+				if (category.id == id) {
+					return category.parent_id;
+				}
+			}
+			for (const Trigger& trigger : map->triggers.triggers) {
+				if (trigger.id == id) {
+					return trigger.parent_id;
+				}
+			}
+			for (const TriggerVariable& variable : map->triggers.variables) {
+				if (variable.id == id) {
+					return variable.parent_id;
+				}
+			}
+			return not_shown;
+		};
+		// A drag of `source` dropped onto `target`, through the model's own mime data and drop handler.
+		const auto drop = [&](const int source, const int target) {
+			const QModelIndex source_index = find_index({}, source);
+			const QModelIndex target_index = find_index({}, target);
+			if (!source_index.isValid() || !target_index.isValid()) {
+				check(false, QString("drag %1 onto %2: both are shown in the tree").arg(source).arg(target));
+				return false;
+			}
+			const std::unique_ptr<QMimeData> mime(model->mimeData({ source_index }));
+			return model->dropMimeData(mime.get(), Qt::MoveAction, -1, -1, target_index);
+		};
+
+		// TreeModel::supportedDropActions() is IgnoreAction, so the view itself refuses every drop; the drags here call the model.
+		lines << "INFO drag and drop is switched off in the Trigger Explorer view; the drags below call the model's drop handler";
+		open_map();
+		const auto new_category = [&](const std::string& name, const int parent) {
+			const int id = map->triggers.new_element_id();
+			map->triggers.categories.push_back(make_new_trigger_category(name, id, parent));
+			return id;
+		};
+		const auto new_trigger = [&](const std::string& name, const int parent) {
+			const int id = map->triggers.new_element_id();
+			map->triggers.triggers.push_back(make_new_trigger(Classifier::comment, name, id, parent));
+			return id;
+		};
+		const auto new_variable = [&](const std::string& name, const int parent) {
+			const int id = map->triggers.new_element_id();
+			map->triggers.variables.push_back(make_new_trigger_variable(name, id, parent));
+			return id;
+		};
+
+		// --- A healthy tree: shown as stored, opening changes nothing -------------------------------------------------------------------
+		const int a = new_category("QaA", 0);
+		const int b = new_category("QaB", a);
+		const int c = new_category("QaC", 0);
+		const int p = new_category("QaP", 0);
+		const int q = new_category("QaQ", p);
+		const int r = new_category("QaR", q);
+		const int ta = new_trigger("QaTriggerA", a);
+		const int tb = new_trigger("QaTriggerB", b);
+		const int tc = new_trigger("QaTriggerC", c);
+		const int tq = new_trigger("QaTriggerQ", q);
+		const int vb = new_variable("QaVariableB", b);
+		if (!check(save_current_map(), "healthy sample categories saved into the copy")) {
+			return finish();
+		}
+		open_map();
+		const std::string healthy_wtg = read_file(folder / "war3map.wtg");
+		{
+			const auto state = map->serialized_state();
+			if (!check(open_editor(), "the Trigger Editor opens with its tree model")) {
+				return finish();
+			}
+			check(shown_under(a) == 0 && shown_under(b) == a && shown_under(c) == 0 && shown_under(p) == 0 && shown_under(q) == p && shown_under(r) == q
+					  && shown_under(ta) == a && shown_under(tb) == b && shown_under(vb) == b && shown_under(tc) == c && shown_under(tq) == q,
+				  "healthy: every element is listed under its stored parent");
+			check(listed_under(0, { a, c, p }) == QList<int> { a, c, p } && listed_under(a, { b, ta }) == QList<int> { b, ta }
+					  && listed_under(b, { tb, vb }) == QList<int> { tb, vb },
+				  "healthy: categories keep their order, listed before triggers and variables");
+			check(state && map->serialized_state() == state && !has_unsaved_work(), "healthy: opening the window changes no map data");
+			close_editor();
+			check(map->serialized_state() == state && !has_unsaved_work(), "healthy: closing the window changes no map data");
+			check(save_current_map() && read_file(folder / "war3map.wtg") == healthy_wtg, "healthy: war3map.wtg is saved byte for byte");
+		}
+
+		// --- Normal drags ---------------------------------------------------------------------------------------------------------------
+		{
+			open_editor();
+			rows_moved = 0;
+			check(drop(b, c) && stored_parent(b) == c && shown_under(b) == c && shown_under(tb) == b && rows_moved == 1,
+				  "drag a category onto another: moved with its contents");
+			check(has_unsaved_work(), "a moved category counts as unsaved");
+			check(!drop(b, c) && stored_parent(b) == c, "drag a category onto its own parent: nothing happens");
+			check(drop(ta, c) && stored_parent(ta) == c && shown_under(ta) == c, "drag a trigger onto a category: moved");
+			check(drop(ta, tb) && stored_parent(ta) == b && shown_under(ta) == b, "drag a trigger onto a trigger: moved into that one's category");
+			check(!drop(ta, 0) && stored_parent(ta) == b && shown_under(ta) == b, "drag a trigger onto the map header: refused");
+
+			// --- A category moved under one that is stored later ------------------------------------------------------------------------
+			check(drop(a, c) && stored_parent(a) == c && shown_under(a) == c, "drag a category onto one stored after it: moved");
+			close_editor();
+			check(save_current_map(), "the moves are saved");
+			open_map();
+			const auto state = map->serialized_state();
+			open_editor();
+			check(stored_parent(a) == c && stored_parent(b) == c, "reopened: the stored parents are the moved ones");
+			check(shown_under(a) == c && shown_under(b) == c && shown_under(tb) == b && shown_under(ta) == b && shown_under(vb) == b,
+				  "reopened: the category under a later category and everything in the moved ones are shown");
+			check(state && map->serialized_state() == state && !has_unsaved_work(), "reopened: opening the window changes no map data");
+			close_editor();
+		}
+
+		// --- A stored cycle and missing parents -----------------------------------------------------------------------------------------
+		{
+			const int x = new_category("QaX", 0);
+			const int y = new_category("QaY", x);
+			const int z = new_category("QaZ", 999999);
+			const int w = new_category("QaW", 0);
+			for (TriggerCategory& category : map->triggers.categories) {
+				if (category.id == x) {
+					category.parent_id = y;
+				} else if (category.id == w) {
+					category.parent_id = w;
+				}
+			}
+			const int tx = new_trigger("QaTriggerX", x);
+			const int ty = new_trigger("QaTriggerY", y);
+			const int tz = new_trigger("QaTriggerZ", z);
+			const int tw = new_trigger("QaTriggerW", w);
+			const int orphan = new_trigger("QaTriggerOrphan", 888888);
+			const int orphan_variable = new_variable("QaVariableOrphan", 888888);
+			check(save_current_map(), "a cycle, a self parent and missing parents saved into the copy");
+			open_map();
+			const std::string broken_wtg = read_file(folder / "war3map.wtg");
+			const auto state = map->serialized_state();
+			open_editor();
+			check(stored_parent(x) == y && stored_parent(y) == x && stored_parent(z) == 999999 && stored_parent(w) == w,
+				  "broken: the stored parents are kept as read");
+			check(shown_under(x) == 0 && shown_under(y) == x && shown_under(tx) == x && shown_under(ty) == y,
+				  "broken: the categories of a cycle and their triggers are shown, the first one under the map header");
+			check(shown_under(z) == 0 && shown_under(tz) == z && shown_under(w) == 0 && shown_under(tw) == w,
+				  "broken: categories with a missing parent or themselves as parent are shown under the map header");
+			check(shown_under(orphan) == 0 && shown_under(orphan_variable) == 0,
+				  "broken: a trigger and a variable with a missing parent are shown under the map header");
+			check(state && map->serialized_state() == state && !has_unsaved_work(), "broken: opening the window changes no map data");
+			close_editor();
+			check(map->serialized_state() == state && !has_unsaved_work(), "broken: closing the window changes no map data");
+			check(save_current_map() && read_file(folder / "war3map.wtg") == broken_wtg, "broken: war3map.wtg is saved byte for byte");
+
+			open_editor();
+			if (find_index({}, orphan).isValid()) {
+				check(!drop(tc, orphan) && stored_parent(tc) == c, "broken: drag a trigger onto a root level trigger: refused like the map header");
+			}
+			if (find_index({}, y).isValid()) {
+				check(drop(y, 0) && stored_parent(y) == 0 && shown_under(y) == 0, "broken: dragging a cycle's category to the map header repairs it");
+			}
+			close_editor();
+			check(save_current_map(), "the repaired map is saved");
+		}
+
+		// --- Onto itself or its own subcategory (last: the old code corrupted the tree here) ---------------------------------------------
+		{
+			open_map();
+			open_editor();
+			rows_moved = 0;
+			const auto refused = [&](const int target, const QString& what) {
+				const bool moved = drop(p, target);
+				check(!moved && stored_parent(p) == 0 && stored_parent(q) == p && stored_parent(r) == q && stored_parent(tq) == q && shown_under(p) == 0
+						  && shown_under(q) == p && shown_under(r) == q && shown_under(tq) == q && rows_moved == 0 && !has_unsaved_work(),
+					  "drag a category onto " + what + ": refused, nothing written, tree unchanged");
+			};
+			refused(p, "itself");
+			refused(q, "its subcategory");
+			refused(r, "a subcategory of its subcategory");
+			refused(tq, "a trigger inside its subcategory");
+			check(drop(r, p) && stored_parent(r) == p && shown_under(r) == p, "drag a subcategory further up: moved");
+			close_editor();
+		}
+
+		finish();
+	});
+}
+
+void HiveWE::run_qa_test_map_check() {
+	if (!qa_offscreen || !qa_test_map_check) {
+		return;
+	}
+
+	// Everything below works on copies in a temporary folder; backups and the generated input.lua go there too.
+	const auto temp = std::make_shared<QTemporaryDir>();
+	QTimer::singleShot(180000, this, [temp]() {
+		std::println("FAIL the Test Map check did not finish within 180 s: a dialog is probably blocking (sandbox was {})", temp->path().toStdString());
+		std::fflush(stdout);
+		temp->remove(); // _Exit runs no destructors
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this, temp]() {
+		QStringList lines;
+		bool all_passed = true;
+		const QByteArray original_tmp = qgetenv("TMP");
+		const auto write_lines = [&](const bool done) {
+			if (qa_script_out.isEmpty()) {
+				return;
+			}
+			QFile file(qa_script_out);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+				file.write(lines.join(QChar('\n')).toUtf8() + (done ? "\nDONE\n" : "\n"));
+			}
+		};
+		const auto check = [&](const bool passed, const QString& text) {
+			lines << (passed ? "PASS " : "FAIL ") + text;
+			all_passed = all_passed && passed;
+			std::println("{}", lines.back().toStdString());
+			std::fflush(stdout);
+			write_lines(false);
+			return passed;
+		};
+		const auto finish = [&]() {
+			qputenv("TMP", original_tmp);
+			qa_backup_root.clear();
+			qa_save_as_folder.clear();
+			write_lines(true);
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+		const auto read_file = [](const fs::path& path) {
+			std::ifstream in(path, std::ios::binary);
+			return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		};
+		const auto process_events = []() {
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+			QApplication::processEvents();
+			QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+		};
+		const auto open_map = [&](const fs::path& path) {
+			window_handler.close_all();
+			process_events();
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(path);
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		};
+
+		// Watches for modal dialogs: records each message box (title, icon, text) and clicks OK; closes anything else.
+		struct Watch {
+			QStringList titles;
+			QStringList texts;
+			QList<int> icons;
+			bool off_screen = true;
+			QPointer<QTimer> timer;
+		};
+		const auto watch_dialogs = [this]() {
+			auto watch = std::make_shared<Watch>();
+			auto* timer = new QTimer(this);
+			watch->timer = timer;
+			connect(timer, &QTimer::timeout, this, [watch]() {
+				QWidget* modal = QApplication::activeModalWidget();
+				if (!modal || !modal->isVisible()) {
+					return;
+				}
+				watch->titles << modal->windowTitle();
+				watch->off_screen = watch->off_screen && std::ranges::none_of(QGuiApplication::screens(), [&](const QScreen* screen) {
+					return screen->geometry().intersects(modal->frameGeometry());
+				});
+				auto* box = qobject_cast<QMessageBox*>(modal);
+				if (box && box->button(QMessageBox::Ok)) {
+					watch->texts << box->text();
+					watch->icons << static_cast<int>(box->icon());
+					box->button(QMessageBox::Ok)->click();
+				} else {
+					watch->texts << QString();
+					watch->icons << -1;
+					modal->close();
+				}
+			});
+			timer->start(20);
+			return watch;
+		};
+		const auto stop_watch = [](const std::shared_ptr<Watch>& watch) {
+			if (watch->timer) {
+				watch->timer->stop();
+				watch->timer->deleteLater();
+			}
+		};
+		const auto dialogs = [](const std::shared_ptr<Watch>& watch) {
+			return " (dialogs: " + watch->titles.join(", ") + (watch->texts.isEmpty() ? QString() : ": " + watch->texts.join(" | ")) + ")";
+		};
+
+		if (!check(temp->isValid(), "a temporary folder was created")) {
+			return finish();
+		}
+		std::error_code ec;
+		const fs::path root = fs::path(temp->path().toStdWString()).make_preferred();
+		const fs::path map_folder = root / "map";
+		const fs::path kept_folder = root / "kept";
+		const fs::path pick = root / "pick";
+		const fs::path tmp = root / "tmp";
+		const fs::path fake_game = root / "game";
+		fs::copy(fs::path("data") / "test map", map_folder, fs::copy_options::recursive, ec);
+		fs::copy(fs::path("data") / "test map", kept_folder, fs::copy_options::recursive, ec);
+		fs::remove(kept_folder / "war3map.wtg", ec);
+		fs::remove(kept_folder / "war3map.wct", ec);
+		fs::create_directories(pick, ec);
+		fs::create_directories(tmp, ec);
+		fs::create_directories(fake_game / "x86_64", ec);
+		// An empty file stands in for the game while play_test runs, so no code path of this hook can start the real one.
+		std::ofstream(fake_game / "x86_64" / "Warcraft III.exe", std::ios::binary).flush();
+		if (!check(!ec && fs::exists(map_folder / "war3map.w3i") && fs::exists(kept_folder / "war3map.j")
+					   && fs::exists(fake_game / "x86_64" / "Warcraft III.exe"),
+				   "sandbox copies made")) {
+			return finish();
+		}
+		qputenv("TMP", QString::fromStdWString(tmp.wstring()).toLocal8Bit());
+		const fs::path input_lua = fs::path(QDir::tempPath().toStdWString()).make_preferred() / "input.lua";
+		if (!check(fs::equivalent(input_lua.parent_path(), tmp, ec), "the generated input.lua goes into the sandbox")) {
+			return finish();
+		}
+		qa_backup_root = QString::fromStdWString((root / "backups").wstring());
+		check(QAccessible::installUpdateHandler(qa_silent_accessibility_update) == qa_silent_accessibility_update,
+			  "the silent accessibility handler is installed (no system sounds)");
+
+		struct Run {
+			std::shared_ptr<Watch> watch;
+			QStringList launches;
+		};
+		// Test Map through the real slot, with its dialogs clicked and the commands it would have started.
+		const auto test_map = [&]() {
+			const fs::path game_directory = hierarchy.root_directory;
+			hierarchy.root_directory = fake_game;
+			qa_game_launches.clear();
+			const auto watch = watch_dialogs();
+			play_test();
+			stop_watch(watch);
+			hierarchy.root_directory = game_directory;
+			return Run { watch, qa_game_launches };
+		};
+		const QString not_started = "Warcraft III was not started";
+		// One launch of the sandbox's stand-in with the open map, and no dialog.
+		const auto launched = [&](const Run& run) {
+			return run.watch->titles.isEmpty() && run.launches.size() == 1 && run.launches.front().contains("-launch -loadfile")
+				&& run.launches.front().contains("game") && run.launches.front().contains(QString::fromStdWString(fs::canonical(map->filesystem_path).wstring()));
+		};
+		// No launch, and exactly one dialog `title` with `icon` whose text says so and contains `part`.
+		const auto stopped = [&](const Run& run, const QString& title, const QMessageBox::Icon icon, const QString& part) {
+			return run.launches.isEmpty() && run.watch->titles == QStringList { title } && run.watch->icons.value(0) == static_cast<int>(icon)
+				&& run.watch->texts.value(0).contains(not_started) && run.watch->texts.value(0).contains(part) && run.watch->off_screen;
+		};
+
+		// --- JASS -------------------------------------------------------------------------------------------------------------------------
+		open_map(map_folder);
+		if (!check(map->loaded && !map->info.lua, "the sandbox JASS map is open")) {
+			return finish();
+		}
+		{
+			const Run run = test_map();
+			check(!map->script_compile_failed && launched(run), "JASS, script compiles: the game is started, no dialog" + dialogs(run.watch));
+
+			const std::string saved_header = map->triggers.global_jass;
+			const std::string previous_script = read_file(map_folder / "war3map.j");
+			map->triggers.global_jass = "this is not valid JASS\n";
+			const Run broken = test_map();
+			check(map->script_compile_failed, "control: the broken header makes the JASS compile fail");
+			check(stopped(broken, "vJass output", QMessageBox::Information, "There were compilation errors"),
+				  "JASS compile error: not started, one dialog with the errors that says so" + dialogs(broken.watch));
+			check(read_file(map_folder / "war3map.j") == previous_script && transient_notice->text() == "Saved without a new map script",
+				  "JASS compile error: the previous war3map.j is kept and the notice says the script is old");
+
+			const auto watch = watch_dialogs();
+			const bool saved = save_current_map();
+			stop_watch(watch);
+			check(saved && watch->titles == QStringList { "vJass output" } && !watch->texts.value(0).contains(not_started),
+				  "a plain Save afterwards: the script dialog without the Test Map line" + dialogs(watch));
+
+			map->triggers.global_jass = saved_header;
+			const Run fixed = test_map();
+			check(!map->script_compile_failed && launched(fixed), "JASS fixed: the game is started again" + dialogs(fixed.watch));
+		}
+
+		// --- Lua --------------------------------------------------------------------------------------------------------------------------
+		map->info.lua = true;
+		{
+			const std::string saved_header = map->triggers.global_jass;
+			const Run run = test_map();
+			check(!map->script_compile_failed && launched(run), "Lua, script parses: the game is started, no dialog" + dialogs(run.watch));
+
+			map->triggers.global_jass = "function QA_Header()\n  local broken = = 1\nend\n";
+			const Run broken = test_map();
+			check(stopped(broken, "Lua script", QMessageBox::Warning, "war3map.lua was not updated"),
+				  "Lua syntax error: not started, one warning with the error that says so" + dialogs(broken.watch));
+
+			map->triggers.global_jass = saved_header;
+			fs::remove(input_lua, ec);
+			fs::create_directories(input_lua, ec); // a folder where input.lua should go: the script cannot be written
+			const Run unwritable = test_map();
+			check(stopped(unwritable, "Lua script", QMessageBox::Warning, "The map script could not be written"),
+				  "Lua script cannot be written: not started, one warning that says so" + dialogs(unwritable.watch));
+			fs::remove(input_lua, ec);
+
+			// A map without a folder yet: Test Map saves it through Save As (the picker is answered by qa_save_as_folder).
+			map->triggers.global_jass = "function QA_Header()\n  local broken = = 1\nend\n";
+			map->filesystem_path.clear();
+			qa_save_as_folder = QString::fromStdWString(pick.wstring());
+			const Run save_as_broken = test_map();
+			qa_save_as_folder.clear();
+			check(!map->filesystem_path.empty() && stopped(save_as_broken, "Lua script", QMessageBox::Warning, "war3map.lua was not updated"),
+				  "unsaved map with a syntax error: saved through Save As, not started, one warning" + dialogs(save_as_broken.watch));
+
+			map->triggers.global_jass = saved_header;
+			const Run fixed = test_map();
+			check(!map->script_compile_failed && launched(fixed), "Lua fixed: the game is started again" + dialogs(fixed.watch));
+		}
+
+		// --- A refused save never starts the game -----------------------------------------------------------------------------------------
+		{
+			Unit& bad_unit = map->units.add_unit("hfoo", glm::vec3(64.f, 64.f, 0.f));
+			bad_unit.id = "hfoo5";
+			const Run run = test_map();
+			check(run.launches.isEmpty() && run.watch->titles.size() == 1, "refused save: not started, one dialog" + dialogs(run.watch));
+		}
+
+		// --- A kept script is not generated, so it cannot fail: the game is started -------------------------------------------------------
+		open_map(kept_folder);
+		{
+			const auto watch = watch_dialogs();
+			apply_trigger_editing_state(false);
+			stop_watch(watch);
+			const std::string kept_script = read_file(kept_folder / "war3map.j");
+			check(map->keeps_script, "control: the map without war3map.wtg keeps its script");
+			const Run run = test_map();
+			check(!map->script_compile_failed && launched(run), "kept script: the game is started, no dialog" + dialogs(run.watch));
+			check(read_file(kept_folder / "war3map.j") == kept_script, "kept script: war3map.j is unchanged");
 		}
 
 		finish();

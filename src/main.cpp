@@ -204,6 +204,13 @@ int main(int argc, char* argv[]) {
 				"                       Lua, checks the war3map.lua syntax check through Save, Save As and Export MPQ, clicking their real dialogs\n"
 				"                       in-process: a valid script, syntax errors in the map header and in a trigger, a write failure. Backups and\n"
 				"                       the generated input.lua go into the sandbox. Writes PASS/FAIL lines and quits. Exit code 0 only when all pass.\n"
+				"  --qa-trigger-tree-check  Needs --qa-offscreen (--qa-script-out <file> optional): on a sandbox copy of data/test map, drives the Trigger\n"
+				"                       Editor's tree in-process: valid and refused category drags, a category moved under a later one, and a stored\n"
+				"                       parent cycle or missing parent. Writes PASS/FAIL lines and quits. Run it from a sandbox working directory.\n"
+				"                       Exit code 0 only when all pass.\n"
+				"  --qa-test-map-check  Needs --qa-offscreen (--qa-script-out <file> optional): on sandbox copies of data/test map, runs Test Map with a\n"
+				"                       script that is and is not updated, clicking its real dialogs in-process. Warcraft III is never started.\n"
+				"                       Writes PASS/FAIL lines and quits. Run it from a sandbox working directory. Exit code 0 only when all pass.\n"
 				"  --qa-dialog-tab <n> With --qa-open-dialog: select tab n (0-based) of the window's first tab widget.\n"
 				"  --qa-dump-layout <file>  With --qa-offscreen and --palette: 2.5 s after startup, write the widget tree of the open palette\n"
 				"                       (sizes, size hints, policies) to <file>.\n"
@@ -306,6 +313,13 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_lua_script_check = true;
+		} else if (arguments[i] == "--qa-trigger-tree-check" || arguments[i] == "--qa-test-map-check") {
+			// The hooks open and save sandbox maps and open windows, so they must never run in a window the user works in.
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "{} needs --qa-offscreen. See HiveWE --help.", arguments[i].toStdString());
+				return 2;
+			}
+			(arguments[i] == "--qa-trigger-tree-check" ? HiveWE::qa_trigger_tree_check : HiveWE::qa_test_map_check) = true;
 		} else if (arguments[i] == "--qa-region-palette-check") {
 			if (!arguments.contains("--qa-offscreen") || arguments.indexOf("--palette") < 0 || arguments.value(arguments.indexOf("--palette") + 1) != "regions") {
 				std::println(stderr, "--qa-region-palette-check needs --qa-offscreen and --palette regions. See HiveWE --help.");
@@ -510,6 +524,8 @@ int main(int argc, char* argv[]) {
 	w.run_qa_save_safety_check();
 	w.run_qa_export_mpq_check();
 	w.run_qa_lua_script_check();
+	w.run_qa_trigger_tree_check();
+	w.run_qa_test_map_check();
 	if (HiveWE::qa_offscreen && !HiveWE::qa_dump_layout_file.isEmpty()) {
 		QTimer::singleShot(2500, &w, [&w]() { w.dump_qa_layout(); });
 	}

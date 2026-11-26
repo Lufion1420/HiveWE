@@ -92,6 +92,9 @@ export class Map: public QObject {
 	bool headless = false;
 	/// Set by save(): the generated script did not compile, so the old war3map.j was kept.
 	bool script_compile_failed = false;
+	/// Put in front of save()'s script error dialog when not empty. Test Map sets it for its own save, so that one dialog also says
+	/// the game was not started.
+	QString script_failure_note;
 	/// Set by load() (see keeps_existing_script): the map's trigger data cannot rebuild its script, so save() keeps the script files
 	/// as they are and writes no war3map.wtg, war3map.wct or script, and trigger editing is off. A new Map starts without it.
 	bool keeps_script = false;
@@ -714,6 +717,7 @@ export class Map: public QObject {
 			result = triggers.generate_map_script(terrain, units, doodads, info, sounds, regions, cameras, mode);
 		}
 		script_compile_failed = !result.has_value();
+		const QString note = script_failure_note.isEmpty() ? QString() : script_failure_note + "\n\n";
 		if (!result.has_value() && headless) {
 			std::println(stderr, "Script compilation errors:\n{}", result.error());
 		} else if (!result.has_value() && mode == ScriptMode::lua) {
@@ -722,7 +726,8 @@ export class Map: public QObject {
 			QMessageBox::warning(
 				nullptr,
 				"Lua script",
-				QString(syntax_error ? "war3map.lua was not updated; the other map files are still saved.\n\n" : "The map script could not be written: ")
+				note
+					+ QString(syntax_error ? "war3map.lua was not updated; the other map files are still saved.\n\n" : "The map script could not be written: ")
 					+ QString::fromStdString(result.error()),
 				QMessageBox::StandardButton::Ok
 			);
@@ -730,7 +735,7 @@ export class Map: public QObject {
 			QMessageBox::information(
 				nullptr,
 				"vJass output",
-				"There were compilation errors:\n" + QString::fromStdString(result.error()),
+				note + "There were compilation errors:\n" + QString::fromStdString(result.error()),
 				QMessageBox::StandardButton::Ok
 			);
 		}

@@ -469,6 +469,67 @@ export TriggerCategory make_new_trigger_category(std::string name, const int id,
 	return category;
 }
 
+/// The wtg's entry for the map header. The Trigger Explorer shows it as its own fixed item, not as a category.
+export bool is_map_header_entry(const TriggerCategory& category) {
+	return category.parent_id == -1 && (category.classifier == Classifier::map || category.id == 0);
+}
+
+/// Where the Trigger Explorer lists each entry of `categories`, by index: the index of its parent category, or nullopt for the map
+/// header (also for the header's own entry). Parents may be stored in any order. A category whose parent is missing, and the first one
+/// (in vector order) of a parent cycle, are listed under the map header, so every category can be reached.
+export std::vector<std::optional<std::size_t>> category_tree_parents(const std::vector<TriggerCategory>& categories) {
+	std::unordered_map<int, std::vector<std::size_t>> indices_by_id;
+	for (std::size_t i = 0; i < categories.size(); i++) {
+		if (!is_map_header_entry(categories[i])) {
+			indices_by_id[categories[i].id].push_back(i);
+		}
+	}
+
+	std::vector<std::optional<std::size_t>> parents(categories.size());
+	for (std::size_t i = 0; i < categories.size(); i++) {
+		if (is_map_header_entry(categories[i]) || categories[i].parent_id == 0) {
+			continue;
+		}
+		const auto found = indices_by_id.find(categories[i].parent_id);
+		if (found == indices_by_id.end()) {
+			continue;
+		}
+		// With a duplicated id: the nearest one stored before the child, else the first one after it.
+		for (const std::size_t candidate : found->second) {
+			if (candidate < i || (candidate > i && !parents[i])) {
+				parents[i] = candidate;
+			}
+			if (candidate > i) {
+				break;
+			}
+		}
+	}
+
+	enum class State {
+		unvisited,
+		on_path,
+		done
+	};
+	std::vector<State> states(categories.size(), State::unvisited);
+	std::vector<std::size_t> path;
+	for (std::size_t i = 0; i < categories.size(); i++) {
+		path.clear();
+		std::optional<std::size_t> at = i;
+		while (at && states[*at] == State::unvisited) {
+			states[*at] = State::on_path;
+			path.push_back(*at);
+			at = parents[*at];
+		}
+		if (at && states[*at] == State::on_path) { // the walk ran into itself
+			parents[*std::min_element(std::ranges::find(path, *at), path.end())].reset();
+		}
+		for (const std::size_t index : path) {
+			states[index] = State::done;
+		}
+	}
+	return parents;
+}
+
 export struct TriggerParameter;
 
 export struct ECA {
@@ -748,9 +809,29 @@ export class Triggers {
 		}
 	}
 
+	/// Whether the category `id` is `ancestor_id` or lies below it by the stored parents. Stops at a stored cycle.
+	bool is_category_inside(int id, const int ancestor_id) const {
+		std::unordered_set<int> visited;
+		while (visited.insert(id).second) {
+			if (id == ancestor_id) {
+				return true;
+			}
+			const auto found = std::ranges::find_if(categories, [id](const TriggerCategory& category) { return category.id == id; });
+			if (found == categories.end()) {
+				break;
+			}
+			id = found->parent_id;
+		}
+		return false;
+	}
+
 	/// Gives the first trigger (comment, gui, script), category or variable with this id a new parent, as the Trigger Explorer
-	/// moves a tree item. Other kinds are left alone.
+	/// moves a tree item. Other kinds are left alone. A category is never put under itself or its own subcategory: nothing is
+	/// written then.
 	void set_element_parent(const Classifier kind, const int id, const int parent_id) {
+		if (kind == Classifier::category && is_category_inside(parent_id, id)) {
+			return;
+		}
 		const auto reparent_first = [&](auto& elements) {
 			if (const auto found = std::ranges::find_if(elements, [&](const auto& element) { return element.id == id; }); found != elements.end()) {
 				found->parent_id = parent_id;

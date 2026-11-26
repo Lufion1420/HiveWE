@@ -21,19 +21,36 @@ TreeModel::TreeModel(QObject* parent) : QAbstractItemModel(parent) {
 	map_header->type = Classifier::script;
 	folders[0] = map_header;
 
-	for (const auto& i : map->triggers.categories) {
-		if (i.parent_id == -1) {
-			continue;
+	// Every category item is made before any is linked, because a parent can be stored after its subcategory. A damaged map's parent
+	// cycles and missing parents are listed under the map header; the map data stays as read.
+	const std::vector<TriggerCategory>& categories = map->triggers.categories;
+	const auto parents = category_tree_parents(categories);
+	std::vector<TreeItem*> category_items(categories.size(), nullptr);
+	for (size_t i = 0; i < categories.size(); i++) {
+		if (!is_map_header_entry(categories[i])) {
+			category_items[i] = new TreeItem();
+			category_items[i]->id = categories[i].id;
+			category_items[i]->type = Classifier::category;
 		}
-
-		TreeItem* item = new TreeItem(folders[i.parent_id]);
-		item->id = i.id;
-		item->type = Classifier::category;
-		folders[i.id] = item;
+	}
+	for (size_t i = 0; i < categories.size(); i++) {
+		if (TreeItem* item = category_items[i]) {
+			item->parent = parents[i] ? category_items[*parents[i]] : map_header;
+			item->parent->appendChild(item);
+			if (item->id != map_header_id) {
+				folders[item->id] = item;
+			}
+		}
 	}
 
+	// A trigger or variable whose category is missing is listed under the map header.
+	const auto folder = [&](const int id) {
+		const auto found = folders.find(id);
+		return found == folders.end() ? map_header : found->second;
+	};
+
 	for (auto& i : map->triggers.triggers) {
-		TreeItem* item = new TreeItem(folders[i.parent_id]);
+		TreeItem* item = new TreeItem(folder(i.parent_id));
 		item->id = i.id;
 		item->type = i.classifier;
 		item->enabled = i.is_enabled;
@@ -42,7 +59,7 @@ TreeModel::TreeModel(QObject* parent) : QAbstractItemModel(parent) {
 	}
 
 	for (const auto& i : map->triggers.variables) {
-		TreeItem* item = new TreeItem(folders[i.parent_id]);
+		TreeItem* item = new TreeItem(folder(i.parent_id));
 		item->id = i.id;
 		item->type = Classifier::variable;
 	}
@@ -140,7 +157,8 @@ QMimeData* TreeModel::mimeData(const QModelIndexList& indexes) const {
 			localIndex = localIndex.parent();
 		}
 
-		stream << indexParentStack.size();
+		// An int, as dropMimeData reads it: size() is 64 bits wide.
+		stream << static_cast<int>(indexParentStack.size());
 		while (!indexParentStack.isEmpty()) {
 			stream << indexParentStack.pop();
 		}
@@ -173,6 +191,10 @@ bool TreeModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int r
 		indexes << currentIndex;
 	}
 
+	if (indexes.empty() || !indexes.front().isValid()) {
+		return false;
+	}
+
 	QModelIndex destinationParentIndex = destinationParent;
 	QModelIndex sourceParent = indexes.front().parent();
 	QModelIndex child = indexes.front();
@@ -181,20 +203,28 @@ bool TreeModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int r
 	TreeItem* destinationParentItem = static_cast<TreeItem*>(destinationParentIndex.internalPointer());
 	TreeItem* childItem = static_cast<TreeItem*>(child.internalPointer());
 
-	if (destinationParentItem->id == map_header_id && childItem->type != Classifier::category) {
-		return false;
-	}
-
 	if (destinationParentItem->id != map_header_id && destinationParentItem->type != Classifier::category) {
 		destinationParentItem = destinationParentItem->parent;
 		destinationParentIndex = destinationParentIndex.parent();
+	}
+
+	// Only categories are listed directly under the map header.
+	if (destinationParentItem->id == map_header_id && childItem->type != Classifier::category) {
+		return false;
 	}
 
 	if (sourceParentItem == destinationParentItem) {
 		return false;
 	}
 
-	beginMoveRows(sourceParent, child.row(), child.row(), destinationParentIndex, destinationParentItem->children.size());
+	// A category never goes onto itself or its own subcategory. beginMoveRows refuses that for the tree as shown; the stored parents
+	// are checked too, because in a damaged map they can differ from it.
+	if (childItem->type == Classifier::category && map->triggers.is_category_inside(destinationParentItem->id, childItem->id)) {
+		return false;
+	}
+	if (!beginMoveRows(sourceParent, child.row(), child.row(), destinationParentIndex, destinationParentItem->children.size())) {
+		return false;
+	}
 	sourceParentItem->children.removeAll(childItem);
 	destinationParentItem->appendChild(childItem);
 	childItem->parent = destinationParentItem;

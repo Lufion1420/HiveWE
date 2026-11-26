@@ -145,6 +145,19 @@ public:
 	/// TMP points into the sandbox for the run. Writes PASS/FAIL lines. Exit code 0 only when all pass.
 	static inline bool qa_lua_script_check = false;
 	void run_qa_lua_script_check();
+	/// Set by --qa-trigger-tree-check (needs --qa-offscreen; --qa-script-out <file> optional): on a sandbox copy of data/test map, drives the
+	/// Trigger Editor's tree model in-process: a healthy tree and its saved bytes, valid drags, a category moved under a later one, a stored
+	/// parent cycle and missing parents, and drags of a category onto itself or its subcategories. Writes PASS/FAIL lines. Exit code 0 only
+	/// when all pass.
+	static inline bool qa_trigger_tree_check = false;
+	void run_qa_trigger_tree_check();
+	/// Set by --qa-test-map-check (needs --qa-offscreen; --qa-script-out <file> optional): on sandbox copies of data/test map, runs Test Map
+	/// and clicks its real dialogs in-process: JASS, Lua, Save As and a kept script, with a script that is and is not updated. The game is
+	/// never started (see qa_game_launches). Writes PASS/FAIL lines. Exit code 0 only when all pass.
+	static inline bool qa_test_map_check = false;
+	void run_qa_test_map_check();
+	/// Under --qa-offscreen Test Map never starts Warcraft III: play_test appends the command it would have run here instead.
+	static inline QStringList qa_game_launches;
 	/// Installed with QAccessible::installUpdateHandler under --qa-offscreen only. Forwards nothing to the platform backend, which plays the
 	/// Windows sound for message boxes (QAccessible::Alert) and menus (PopupMenuStart, MenuCommand), so QA runs make no sound. UIA queries
 	/// (patterns, properties) still work; UIA clients get no change events. Counts the Alert events it swallowed.

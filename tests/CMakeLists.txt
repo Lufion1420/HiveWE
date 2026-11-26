@@ -41,6 +41,7 @@ add_executable(HiveWE_tests
 	map_backup_test.cpp
 	map_archive_export_test.cpp
 	lua_syntax_test.cpp
+	trigger_category_tree_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE
