@@ -2577,6 +2577,11 @@ void HiveWE::activate_palette(Palette* palette, const bool show_feedback) {
 }
 
 void HiveWE::open_qa_palette() {
+	if (qa_show_pathing && qa_offscreen) {
+		// Through the ribbon button, so its checked state and map->render_pathing stay in step as with Ctrl+P.
+		ui->ribbon->pathing_visible->setChecked(true);
+	}
+
 	// The same slots the mode buttons and shortcuts run, so no UI automation is needed to open a palette.
 	if (qa_palette == "terrain") {
 		toggle_terrain_sidebar();

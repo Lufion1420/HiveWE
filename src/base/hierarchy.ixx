@@ -37,6 +37,20 @@ export void remove_map_write_temp_files(const fs::path& directory) {
 	}
 }
 
+/// The paths to try, in order, for a filealiases.json target: the target itself, then for a .blp or .tga texture the same stem with
+/// .dds. 3.0.1 stores most alias targets only as .dds (Textures/Cliff0.blp aliases to Cliff0Legacy.blp, which exists only as
+/// Cliff0Legacy.dds). Other extensions (.mdx, .wav, .slk) get no retry, so they never receive texture bytes.
+export std::vector<std::string> alias_candidates(const std::string& target) {
+	std::vector<std::string> candidates { target };
+	fs::path dds = target;
+	const std::string extension = to_lowercase_copy(dds.extension().string());
+	if (extension == ".blp" || extension == ".tga") {
+		dds.replace_extension(".dds");
+		candidates.push_back(dds.string());
+	}
+	return candidates;
+}
+
 /// Map file contents keyed by file name relative to the map folder.
 export using MapFiles = std::map<fs::path, std::vector<u8>>;
 
@@ -136,7 +150,13 @@ export class Hierarchy {
 		#undef TRY_OPEN
 
 		if (aliases.exists(path_str)) {
-			return open_file(aliases.alias(path_str));
+			const std::vector<std::string> candidates = alias_candidates(aliases.alias(path_str));
+			for (const std::string& candidate : candidates) {
+				if (auto file = open_file(candidate); file) {
+					return file;
+				}
+			}
+			return std::unexpected(path_str + " could not be found in the hierarchy (alias " + candidates.front() + ")");
 		}
 
 		return std::unexpected(path_str + " could not be found in the hierarchy");
@@ -164,7 +184,8 @@ export class Hierarchy {
 			|| (teen && game_data.file_exists("war3.w3mod:_teen.w3mod:"s + path_str))
 			|| game_data.file_exists("war3.w3mod:"s + path_str)
 			|| game_data.file_exists("war3.w3mod:_deprecated.w3mod:"s + path_str)
-			|| (aliases.exists(path_str) ? game_file_exists(aliases.alias(path_str)) : false);
+			|| (aliases.exists(path_str)
+				&& std::ranges::any_of(alias_candidates(aliases.alias(path_str)), [&](const std::string& c) { return game_file_exists(c); }));
 	}
 
 	bool file_exists(const fs::path& path) const {
@@ -185,7 +206,8 @@ export class Hierarchy {
 			|| (teen && game_data.file_exists("war3.w3mod:_teen.w3mod:"s + path_str))
 			|| game_data.file_exists("war3.w3mod:"s + path_str)
 			|| game_data.file_exists("war3.w3mod:_deprecated.w3mod:"s + path_str)
-			|| (aliases.exists(path_str) ? file_exists(aliases.alias(path_str)) : false);
+			|| (aliases.exists(path_str)
+				&& std::ranges::any_of(alias_candidates(aliases.alias(path_str)), [&](const std::string& c) { return file_exists(c); }));
 	}
 
 	[[nodiscard]]

@@ -6,6 +6,13 @@ import BinaryReader;
 import <turbojpeg.h>;
 
 namespace blp {
+	/// True if the bytes are a BLP1 file, the only BLP version load() reads. Decoders pick by content, not by the requested
+	/// extension: a filealiases.json target can resolve to a .dds for a .blp request (Hierarchy alias_candidates).
+	export bool has_blp1_magic(const BinaryReader& reader) {
+		const auto& buffer = reader.buffer;
+		return buffer.size() >= 4 && buffer[0] == 'B' && buffer[1] == 'L' && buffer[2] == 'P' && buffer[3] == '1';
+	}
+
 	export u8* load(BinaryReader& reader, int& width, int& height, int& channels) {
 		const std::string magic_number = reader.read_string(4);
 		if (magic_number != "BLP1") {

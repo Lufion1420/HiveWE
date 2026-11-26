@@ -149,6 +149,7 @@ int main(int argc, char* argv[]) {
 				"  --palette <name>     Open a palette after the startup map has loaded: terrain, doodads, units, pathing or regions.\n"
 				"                       Needs a loaded map, so it only works with the startup map (data/test map).\n"
 				"  --qa-select-first    With --palette units or doodads: select the first unit or doodad of the map, adding a sample one in memory if the map has none (for screenshots).\n"
+				"  --qa-show-pathing    Needs --qa-offscreen. Turn the pathing overlay on after the startup map has loaded (as the ribbon toggle, Ctrl+P).\n"
 				"  --qa-open-dialog <name>  Needs --qa-offscreen. Open one dialog or tool window with sample data after the map has loaded (never saved). Names:\n"
 				"                       settings, unit-properties, item-drop, map-settings, scenario, gameplay-constants, new-map, object-editor,\n"
 				"                       asset-manager, map-protector, import-object-data (empty package), item-tables, config, tile-setter, tile-setter-changes, tile-setter-limits (prints OK/Remove button states to stdout and --qa-script-out), tile-pather,\n"
@@ -246,6 +247,12 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			HiveWE::qa_select_first = true;
+		} else if (arguments[i] == "--qa-show-pathing") {
+			if (!arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "--qa-show-pathing needs --qa-offscreen. See HiveWE --help.");
+				return 2;
+			}
+			HiveWE::qa_show_pathing = true;
 		} else if (arguments[i] == "--qa-doodad-undo-check") {
 			// The hook adds doodads to the loaded map, so it must never run in a window the user works in.
 			if (!arguments.contains("--qa-offscreen") || !arguments.contains("--palette")) {

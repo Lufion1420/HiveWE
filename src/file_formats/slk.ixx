@@ -372,14 +372,34 @@ namespace slk {
 
 		size_t non_matches = 0;
 
-		void merge(const ini::INI& ini, const SLK& meta_slk) {
+		/// With `case_insensitive_sections`, a section that names no row exactly is merged into the one row whose id equals it after
+		/// lowercasing (3.0.1 DoodadSkins.txt has [YCgd] for the Doodads.slk row Ycgd). No match or several matches merge nothing, and
+		/// a row the INI also names exactly takes only that exact section. Keep it off where ids may differ only by case (units, heroes).
+		void merge(const ini::INI& ini, const SLK& meta_slk, const bool case_insensitive_sections = false) {
+			// Lowercased row id to the row id, or to an empty string when several rows share it.
+			std::unordered_map<std::string, std::string> lowercase_rows;
+			if (case_insensitive_sections) {
+				for (const auto& [id, properties] : base_data) {
+					auto [found, inserted] = lowercase_rows.try_emplace(to_lowercase_copy(id), id);
+					if (!inserted) {
+						found->second.clear();
+					}
+				}
+			}
+
 			for (const auto& [section_key, section_value] : ini.ini_data) {
 				auto found_section = base_data.find(section_key);
+				if (found_section == base_data.end() && case_insensitive_sections) {
+					if (const auto found = lowercase_rows.find(to_lowercase_copy(section_key));
+						found != lowercase_rows.end() && !found->second.empty() && !ini.ini_data.contains(found->second)) {
+						found_section = base_data.find(found->second);
+					}
+				}
 				if (found_section == base_data.end()) {
 					continue;
 				}
 
-				auto& [key, section] = *found_section;
+				auto& [row_id, section] = *found_section;
 
 				for (const auto& [key, value] : section_value) {
 					const std::string key_lower = to_lowercase_copy(key);
@@ -405,7 +425,7 @@ namespace slk {
 					std::string id;
 					if (auto found = meta_slk.meta_map.find(key_lower_stripped); found != meta_slk.meta_map.end()) {
 						id = found->second;
-					} else if (auto found = meta_slk.meta_map.find(key_lower_stripped + section_key); found != meta_slk.meta_map.end()) {
+					} else if (auto found = meta_slk.meta_map.find(key_lower_stripped + row_id); found != meta_slk.meta_map.end()) {
 						id = found->second;
 					} else {
 						const size_t nr_position = key_lower_stripped.find_first_of("0123456789");

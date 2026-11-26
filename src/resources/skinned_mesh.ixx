@@ -114,7 +114,12 @@ export class SkinnedMesh: public Resource {
 
 		BinaryReader reader = [&] {
 			ScopedTimer t(profile_casc_ns);
-			return hierarchy.open_file(path).value();
+			auto file = hierarchy.open_file(path);
+			if (!file) {
+				// .value() would throw bad_expected_access, which loses the missing file's name.
+				throw std::runtime_error(file.error());
+			}
+			return std::move(*file);
 		}();
 		this->path = path;
 

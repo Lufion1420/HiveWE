@@ -51,10 +51,11 @@ export class GPUTexture : public Resource {
 				.value();
 		}();
 
-		if (new_path.extension() == ".blp") {
-			int width;
-			int height;
-			int channels;
+		// By content: an alias can answer a .blp request with .dds bytes.
+		if (blp::has_blp1_magic(reader)) {
+			int width = 0;
+			int height = 0;
+			int channels = 0;
 			const u8* data = [&] {
 				ScopedTimer t(profile_parse_ns);
 				return blp::load(reader, width, height, channels);
@@ -63,11 +64,16 @@ export class GPUTexture : public Resource {
 			{
 				ScopedTimer t(profile_gl_ns);
 				glCreateTextures(GL_TEXTURE_2D, 1, &id);
-				glTextureStorage2D(id, std::log2(std::max(width, height)) + 1, GL_RGBA8, width, height);
-				glTextureSubImage2D(id, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
-				glGenerateTextureMipmap(id);
+				if (data == nullptr || width <= 0 || height <= 0) {
+					// Same as the SOIL failure below: an empty texture and a log line.
+					std::println("Error loading texture: {}", path.string());
+				} else {
+					glTextureStorage2D(id, std::log2(std::max(width, height)) + 1, GL_RGBA8, width, height);
+					glTextureSubImage2D(id, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+					glGenerateTextureMipmap(id);
+				}
 			}
-			delete data;
+			delete[] data;
 		} else {
 			ScopedTimer t(profile_parse_ns); // SOIL does both decode and upload internally
 			id = SOIL_load_OGL_texture_from_memory(
@@ -80,7 +86,7 @@ export class GPUTexture : public Resource {
 			if (id == 0) {
 				glCreateTextures(GL_TEXTURE_2D, 1, &id);
 				std::println("Error loading texture: {}", path.string());
-			} else if (new_path.extension() != ".dds") {
+			} else if (!(reader.buffer.size() >= 4 && std::memcmp(reader.buffer.data(), "DDS ", 4) == 0)) {
 				// SOIL only loads a mip chain for DDS (via SOIL_FLAG_DDS_LOAD_DIRECT). For other formats
 				// (TGA, PNG, ...) it uploads only the base level, but the mipmapped min filter set below
 				// then leaves the texture incomplete, so it samples as solid black. Generate the mips.

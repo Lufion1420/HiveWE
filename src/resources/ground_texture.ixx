@@ -4,8 +4,8 @@ import std;
 import BinaryReader;
 import ResourceManager;
 import OpenGLUtilities;
-import BLP;
 import Hierarchy;
+import Texture;
 import <soil2/SOIL2.h>;
 import <glm/glm.hpp>;
 import <glad/glad.h>;
@@ -46,16 +46,18 @@ export class GroundTexture : public Resource {
 			})
 			.value();
 
-		int width;
-		int height;
-		int channels;
-		uint8_t* data;
+		int width = 0;
+		int height = 0;
+		int channels = 0;
+		std::vector<uint8_t> pixels;
 
-		if (new_path.extension() == ".blp") {
-			data = blp::load(reader, width, height, channels);
-		} else {
-			data = SOIL_load_image_from_memory(reader.buffer.data(), static_cast<int>(reader.buffer.size()), &width, &height, &channels, SOIL_LOAD_AUTO);
+		// Many callers take .value(), so an undecodable file gets a placeholder, like a missing one. The tile upload below reads
+		// width >= height and 3 or 4 channels, so anything else gets the placeholder too.
+		if (!decode_image(reader, width, height, channels, pixels) || width < height || (channels != 3 && channels != 4)) {
+			std::println("Could not decode ground texture {}, using a placeholder", new_path.string());
+			placeholder_image(width, height, channels, pixels);
 		}
+		const uint8_t* data = pixels.data();
 
 		tile_size = std::max(height * 0.25f, 1.f);
 		extended = (width == height * 2);
@@ -80,7 +82,6 @@ export class GroundTexture : public Resource {
 				}
 			}
 		}
-		delete data;
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 		glGenerateTextureMipmap(id);
 

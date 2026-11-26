@@ -44,6 +44,7 @@ add_executable(HiveWE_tests
 	lua_syntax_test.cpp
 	trigger_category_tree_test.cpp
 	object_data_unknown_fields_test.cpp
+	missing_asset_fallback_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

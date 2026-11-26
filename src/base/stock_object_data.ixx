@@ -92,7 +92,8 @@ namespace stock_object_data {
 			tables.doodads.meta.substitute(world_edit_strings, "WorldEditStrings");
 			tables.doodads.meta.build_meta_map();
 
-			tables.doodads.data.merge(ini::INI("Doodads/DoodadSkins.txt"), tables.doodads.meta);
+			// 3.0.1 skins name some doodads with other letter case ([YCgd] for Ycgd), so match sections case-insensitively.
+			tables.doodads.data.merge(ini::INI("Doodads/DoodadSkins.txt"), tables.doodads.meta, true);
 			tables.doodads.data.substitute(world_edit_strings, "WorldEditStrings");
 			tables.doodads.data.substitute(world_edit_game_strings, "WorldEditStrings");
 
@@ -123,7 +124,7 @@ namespace stock_object_data {
 			tables.destructibles.meta.substitute(world_edit_strings, "WorldEditStrings");
 			tables.destructibles.meta.build_meta_map();
 
-			tables.destructibles.data.merge(ini::INI("Units/DestructableSkin.txt"), tables.destructibles.meta);
+			tables.destructibles.data.merge(ini::INI("Units/DestructableSkin.txt"), tables.destructibles.meta, true);
 			tables.destructibles.data.substitute(world_edit_strings, "WorldEditStrings");
 			tables.destructibles.data.substitute(world_edit_game_strings, "WorldEditStrings");
 

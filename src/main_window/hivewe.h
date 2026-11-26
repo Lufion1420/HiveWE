@@ -68,6 +68,8 @@ public:
 	static inline QString qa_palette;
 	/// Set by --qa-select-first: with --palette units or doodads, select the first unit or doodad of the map.
 	static inline bool qa_select_first = false;
+	/// Set by --qa-show-pathing (needs --qa-offscreen): turn the pathing overlay on after the map has loaded, as the ribbon toggle (Ctrl+P) does.
+	static inline bool qa_show_pathing = false;
 	void open_qa_palette();
 	/// Set by --qa-open-dialog (needs --qa-offscreen): the dialog or tool window opened after the map has loaded, so it can be captured without clicks.
 	static inline QString qa_open_dialog;
