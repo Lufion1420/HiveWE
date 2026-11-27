@@ -58,6 +58,7 @@ target_sources(HiveWE_lib PUBLIC FILE_SET yeet TYPE CXX_MODULES FILES
 
 	"resources/cliff_mesh.ixx"
 	"resources/gpu_texture.ixx"
+	"resources/model_texture_source.ixx"
 	"resources/ground_texture.ixx"
 	"resources/shader.ixx"
 

@@ -72,6 +72,14 @@ export class ResourceManager {
 		return load_impl<T>(key, paths);
 	}
 
+	/// Like load, for a resource whose identity is not its path text (a model's own texture file, whose path may not fit the system code
+	/// page). `args` go to the constructor.
+	template <typename T, typename... Args>
+	std::expected<std::shared_ptr<T>, std::string> load_keyed(const std::string& key, Args&&... args) {
+		static_assert(std::is_base_of_v<Resource, T>, "T must inherit from Resource");
+		return load_impl<T>(key + T::name, std::forward<Args>(args)...);
+	}
+
 	/// The keys cached right now. Pair with evict_unused_since.
 	std::unordered_set<std::string> snapshot_keys() {
 		std::lock_guard lock(mutex);

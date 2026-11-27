@@ -1,7 +1,6 @@
 #include "browse_models_dialog.h"
 
 #include "model_thumbnail_cache.h"
-#include "model_editor_glwidget.h" // defines QT_NO_OPENGL, as in model_editor.cpp
 
 #include <QAbstractListModel>
 #include <QApplication>
@@ -35,6 +34,9 @@
 	#include <windows.h>
 	#include <psapi.h>
 #endif
+
+// Last of the includes: it imports EditableMesh, and Qt headers pulling in <filesystem> after that import fail to compile (C2011).
+#include "model_editor_glwidget.h" // defines QT_NO_OPENGL, as in model_editor.cpp
 
 import std;
 import BinaryReader;

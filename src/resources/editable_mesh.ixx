@@ -4,6 +4,7 @@ import std;
 import MDX;
 import ResourceManager;
 import GPUTexture;
+export import ModelTextureSource;
 import Shader;
 import SkeletalModelInstance;
 import ParticleEmitter2Renderer;
@@ -56,7 +57,12 @@ export class EditableMesh: public Resource {
 
 	EditableMesh() = delete;
 
-	explicit EditableMesh(std::shared_ptr<mdx::MDX> mdx, std::optional<std::pair<int, std::string>> replaceable_id_override) {
+	/// `texture_source` is where this model looks for its textures before the map and game data; leave it empty for models from there.
+	explicit EditableMesh(
+		std::shared_ptr<mdx::MDX> mdx,
+		std::optional<std::pair<int, std::string>> replaceable_id_override,
+		const ModelTextureSource& texture_source = {}
+	) {
 		this->mdx = mdx;
 
 		size_t vertices = 0;
@@ -238,6 +244,10 @@ export class EditableMesh: public Resource {
 						static_cast<int>(texture.flags)
 					).value());
 				}
+			} else if (const auto own = texture_source.find(texture.file_name)) {
+				textures.push_back(
+					resource_manager.load_keyed<GPUTexture>(own->cache_key + std::to_string(texture.flags), *own, static_cast<int>(texture.flags)).value()
+				);
 			} else {
 				textures.push_back(resource_manager.load<GPUTexture>(texture.file_name, std::to_string(texture.flags), static_cast<int>(texture.flags)).value());
 			}

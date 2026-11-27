@@ -93,6 +93,16 @@ export class SkeletalModelInstance {
 
 	std::vector<std::string> required_animation_names;
 
+	/// The time global-sequence tracks run on. Unset (normal use): the wall clock. Set for a repeatable pose.
+	std::optional<long long> global_time_ms;
+
+	long long global_clock_ms() const {
+		if (global_time_ms) {
+			return *global_time_ms;
+		}
+		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	}
+
 	SkeletalModelInstance() = default;
 
 	explicit SkeletalModelInstance(const std::shared_ptr<mdx::MDX>& model, std::vector<std::string>&& required_animation_names = {}) :
@@ -539,9 +549,7 @@ export class SkeletalModelInstance {
 			if (local_sequence_end == 0) {
 				local_current_frame = 0;
 			} else {
-				local_current_frame =
-					std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()
-					% local_sequence_end;
+				local_current_frame = global_clock_ms() % local_sequence_end;
 			}
 		}
 
@@ -622,9 +630,7 @@ export class SkeletalModelInstance {
 			if (local_sequence_end == 0) {
 				local_current_frame = 0;
 			} else {
-				local_current_frame =
-					std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()
-					% local_sequence_end;
+				local_current_frame = global_clock_ms() % local_sequence_end;
 			}
 		}
 

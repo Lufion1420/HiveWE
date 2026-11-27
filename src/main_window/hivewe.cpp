@@ -2733,7 +2733,11 @@ void HiveWE::open_qa_dialog() {
 		QTimer::singleShot(0, editor, [editor]() {
 			// No message box here: a modal box in an offscreen run would hang it. Report the failure to the result file and exit instead.
 			std::string error;
-			if (!editor->show_model(qa_model.toStdString(), false, nullptr, &error)) {
+			// An absolute path to a file on disk opens like File > Open (its folder's textures count), anything else is a game or map path.
+			const std::filesystem::path model(qa_model.toStdWString());
+			std::error_code ec;
+			const bool local_file = model.is_absolute() && std::filesystem::is_regular_file(model, ec);
+			if (!editor->show_model(model, local_file, nullptr, &error)) {
 				std::println(stderr, "--qa-open-dialog model-editor: cannot open {}: {}", qa_model.toStdString(), error);
 				if (!qa_script_out.isEmpty()) {
 					QFile file(qa_script_out);

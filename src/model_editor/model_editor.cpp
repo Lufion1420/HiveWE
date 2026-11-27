@@ -45,6 +45,7 @@ import BinaryReader;
 import BinaryWriter;
 import Hierarchy;
 import MDX;
+import GPUTexture;
 import Utilities;
 
 class CCustomComponentsFactory: public ads::CDockComponentsFactory {
@@ -467,7 +468,9 @@ bool ModelEditor::show_model(const fs::path& path, const bool local_file, ads::C
 
 std::expected<ads::CDockWidget*, std::string> ModelEditor::open_model(const fs::path& path, const bool local_file) {
 	std::shared_ptr<mdx::MDX> mdx;
-	const std::string extension = to_lowercase_copy(path.extension().string());
+	// path::string() throws for characters the system code page cannot hold.
+	const QString file_name = QString::fromStdWString(path.filename().wstring());
+	const QString extension = QString::fromStdWString(path.extension().wstring()).toLower();
 	try {
 		if (extension == ".mdl") {
 			const auto file = read_text_file(path);
@@ -493,10 +496,11 @@ std::expected<ads::CDockWidget*, std::string> ModelEditor::open_model(const fs::
 			return std::unexpected("Unsupported file type");
 		}
 	} catch (const std::exception& e) {
-		return std::unexpected(std::format("{} is not a readable model: {}", path.filename().string(), e.what()));
+		return std::unexpected(std::format("{} is not a readable model: {}", file_name.toStdString(), e.what()));
 	}
 
-	auto* gl_widget = new ModelEditorGLWidget(nullptr, mdx);
+	// A model from disk looks for its textures in its own folder first; map and game models resolve through the Hierarchy alone.
+	auto* gl_widget = new ModelEditorGLWidget(nullptr, mdx, false, local_file ? ModelTextureSource::beside(path) : ModelTextureSource {});
 	gl_widget->set_wireframe(wireframe_action->isChecked());
 
 	// Only the tab that is on top drives the timeline, inspector and status bar.
@@ -518,7 +522,7 @@ std::expected<ads::CDockWidget*, std::string> ModelEditor::open_model(const fs::
 	auto* dock_tab = dock_manager->createDockWidget("");
 	dock_tab->setFeature(ads::CDockWidget::DockWidgetFeature::DockWidgetDeleteOnClose, true);
 	dock_tab->setWidget(gl_widget);
-	dock_tab->setWindowTitle(QString::fromStdString(path.filename().string()));
+	dock_tab->setWindowTitle(file_name);
 	// Closing the last tab leaves nothing to take over, so the panels are cleared here (another tab's visibilityChanged has already run otherwise).
 	connect(dock_tab, &ads::CDockWidget::closed, this, [this, gl_widget] {
 		if (active == gl_widget) {
@@ -539,6 +543,10 @@ std::expected<ads::CDockWidget*, std::string> ModelEditor::open_model(const fs::
 //   wait:<ms>  play  pause  restart  loop:on|off  speed:<0.25|0.5|1|1.5|2>  wireframe:on|off  geoset:<n>:on|off
 //   seq-combo:<n>  seq-list:<n>  slider:<0..1000>  mark  state  shot:<png of the window>  viewshot:<png of the viewport>
 //   save-mdx:<name.mdx>  (runs the Save to MDX write path into a plain file name beside the result file, re-parses it, compares counts)  quit
+//   open:<model file>  (opens a second model from disk in a new tab, as File > Open does; follow with wait)
+//   seq:<sequence name>  (case-insensitive, whole name)
+//   at:<ms>  (pause <ms> into the sequence with a fresh camera, particles and global sequences stepped from its start: repeatable)
+//   textures  (one INFO line per model texture with the file used, then FAIL if any shows a placeholder or did not decode)
 //   expect:advanced | same | time=<ms>[/tol] | timefrac=<0..1> | rate=<x> | playing=0|1 | loop=0|1 | speed=<x> | wireframe=0|1
 //          | hidden=<n>/0|1 | sequence=<n> | viewfewer | viewdifferent
 // "mark" remembers the playhead and the clock; advanced, same and rate compare against it.
@@ -672,6 +680,47 @@ void ModelEditor::qa_continue() {
 			auto* table = inspector->sequence_table();
 			table->setCurrentIndex(table->model()->index(argument.toInt(), 0));
 			log("INFO", state);
+		} else if (command == "open") {
+			std::string error;
+			const bool opened = show_model(fs::path(argument.toStdWString()), true, nullptr, &error);
+			check(opened, opened ? QString("opened in a new tab") : QString::fromStdString(error));
+		} else if (command == "seq") {
+			const auto& sequences = active->mdx->sequences;
+			const auto found = std::ranges::find_if(sequences, [&](const auto& sequence) {
+				return QString::fromStdString(sequence.name).compare(argument, Qt::CaseInsensitive) == 0;
+			});
+			if (found == sequences.end()) {
+				log("FAIL", "no sequence with that name");
+			} else {
+				const int index = static_cast<int>(found - sequences.begin());
+				sequence_box->setCurrentIndex(index);
+				emit sequence_box->activated(index);
+				check(active->sequence() == index, QString("sequence=%1").arg(active->sequence()));
+			}
+		} else if (command == "at") {
+			bool number = false;
+			const double ms = argument.toDouble(&number);
+			if (!number || !active->show_exact_time(ms)) {
+				log("FAIL", "needs a time in ms and a shown sequence (wait first)");
+			} else {
+				active->reset_camera(); // framed on this sequence, whichever one the editor picked when it opened the model
+				log("INFO", QString("sequence=%1 time=%2 ms").arg(active->sequence()).arg(active->frame() - active->sequence_start()));
+			}
+		} else if (command == "textures") {
+			if (!active->mesh) {
+				log("FAIL", "nothing is shown (wait first)");
+				continue;
+			}
+			int missing = 0;
+			for (std::size_t i = 0; i < active->mesh->textures.size(); ++i) {
+				const auto& texture = *active->mesh->textures[i];
+				const mdx::Texture& wanted = active->mdx->textures[i];
+				missing += texture.missing;
+				log(texture.missing ? "FAIL" : "INFO",
+					QString("%1 replaceable=%2 '").arg(i).arg(wanted.replaceable_id) + QString::fromStdWString(wanted.file_name.wstring()) + "' <- "
+						+ QString::fromStdString(texture.source) + (texture.missing ? " (MISSING)" : ""));
+			}
+			check(missing == 0, QString("%1 textures, %2 missing").arg(active->mesh->textures.size()).arg(missing));
 		} else if (command == "slider") {
 			timeline->findChild<QSlider*>("timelineSlider")->setValue(argument.toInt());
 			log("INFO", state);

@@ -16,10 +16,16 @@ namespace fs = std::filesystem;
 // 2025/07/30 These aren't in the class due to some compiler issue with modules
 InputHandler my_input_handler;
 
-ModelEditorGLWidget::ModelEditorGLWidget(QWidget* parent, std::shared_ptr<mdx::MDX> mdx, const bool compact_preview) :
+ModelEditorGLWidget::ModelEditorGLWidget(
+	QWidget* parent,
+	std::shared_ptr<mdx::MDX> mdx,
+	const bool compact_preview,
+	ModelTextureSource texture_source
+) :
 	QOpenGLWidget(parent),
 	mdx(mdx),
-	compact_preview(compact_preview) {
+	compact_preview(compact_preview),
+	texture_source(std::move(texture_source)) {
 	if (!compact_preview) {
 		makeCurrent();
 	}
@@ -57,7 +63,7 @@ void ModelEditorGLWidget::build_scene() {
 	}
 
 	try {
-		mesh = std::make_shared<EditableMesh>(mdx, std::nullopt);
+		mesh = std::make_shared<EditableMesh>(mdx, std::nullopt, texture_source);
 	} catch (const std::exception& e) {
 		// EditableMesh refuses skin data the renderer cannot hold (a bone index above 255): show nothing rather than crash.
 		std::println("Model Editor: cannot display the model: {}", e.what());
@@ -110,6 +116,9 @@ void ModelEditorGLWidget::paintGL() {
 	// The playhead is owned here (a double, so slow speeds and fast frame rates do not lose time) and handed to the skeleton.
 	// Global-sequence tracks follow the wall clock inside SkeletalModelInstance, so pausing or scrubbing does not freeze them.
 	bool wrapped = false;
+	if (is_playing) {
+		skeleton.global_time_ms.reset();
+	}
 	if (valid_sequence(current_sequence)) {
 		if (is_playing) {
 			const auto advanced = advance_frame(playhead, sequence_start(), sequence_end(), is_looping, playback_speed, delta);
@@ -218,6 +227,7 @@ void ModelEditorGLWidget::set_model(std::shared_ptr<mdx::MDX> model) {
 	}
 
 	mdx = std::move(model);
+	texture_source = {};
 	current_sequence = -1;
 	playhead = 0.0;
 	hidden_geosets.clear();
@@ -276,6 +286,41 @@ void ModelEditorGLWidget::set_frame(const double frame) {
 	}
 	playhead = clamp_frame(frame, sequence_start(), sequence_end());
 	emit frame_changed(playhead);
+}
+
+bool ModelEditorGLWidget::show_exact_time(const double ms) {
+	if (!mesh || !valid_sequence(current_sequence)) {
+		return false;
+	}
+	constexpr int step_ms = 10;
+	const int start = static_cast<int>(sequence_start());
+	const int target = static_cast<int>(clamp_frame(start + ms, sequence_start(), sequence_end()));
+	set_playing(false);
+
+	skeleton = SkeletalModelInstance(mdx);
+	skeleton.set_sequence(current_sequence);
+	skeleton.global_time_ms = 0;
+	skeleton.update_location(glm::vec3(0.f), glm::quat(), glm::vec3(1.f));
+	// A child node can lag its parent by one update on a fresh skeleton: settle the pose before any particle is emitted.
+	for (int i = 0; i < 3; i++) {
+		skeleton.update(0.0, false, false);
+	}
+	skeleton.particles.init(*mdx);
+	skeleton.sequence_just_started = true;
+
+	for (int frame = start, previous = start;; previous = frame, frame = std::min(frame + step_ms, target)) {
+		skeleton.current_frame = frame;
+		skeleton.global_time_ms = frame - start;
+		skeleton.update((frame - previous) / 1000.0, false, false);
+		if (frame == target) {
+			break;
+		}
+	}
+
+	playhead = target;
+	last_skeleton_frame = target;
+	emit frame_changed(playhead);
+	return true;
 }
 
 void ModelEditorGLWidget::set_speed(const double new_speed) {

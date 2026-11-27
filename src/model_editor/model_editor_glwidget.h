@@ -27,7 +27,13 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 	double delta = 0.0;
 
 	ModelEditorGLWidget() = delete;
-	explicit ModelEditorGLWidget(QWidget* parent, std::shared_ptr<mdx::MDX> model, bool compact_preview = false);
+	/// `texture_source` belongs to `model` alone (a model opened from disk); set_model drops it.
+	explicit ModelEditorGLWidget(
+		QWidget* parent,
+		std::shared_ptr<mdx::MDX> model,
+		bool compact_preview = false,
+		ModelTextureSource texture_source = {}
+	);
 	~ModelEditorGLWidget() = default;
 
 	void initializeGL() override;
@@ -57,6 +63,9 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 	bool wireframe_enabled() const { return wireframe; }
 	void set_wireframe(bool enabled);
 	void reset_camera();
+	/// Pauses `ms` into the current sequence (clamped), with particles and global-sequence tracks rebuilt in fixed steps from the sequence
+	/// start, so the same call always shows the same pose. For the --qa-model-editor-script "at" step. False when nothing is shown.
+	bool show_exact_time(double ms);
 
 	int sequence() const { return current_sequence; }
 	double frame() const { return playhead; }
@@ -95,6 +104,7 @@ class ModelEditorGLWidget: public QOpenGLWidget {
 	/// Builds mesh and skeleton for `mdx` (GL context must be current), restoring the requested sequence or picking a preview one.
 	void build_scene();
 
+	ModelTextureSource texture_source;
 	int current_sequence = -1;
 	double playhead = 0.0;
 	/// The last frame handed to the skeleton; a smaller new frame means the sequence wrapped or was scrubbed back.
