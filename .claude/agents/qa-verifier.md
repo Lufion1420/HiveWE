@@ -16,7 +16,7 @@ The brief names the tier. With none named: a fix round or a small change gets sm
 
 ## Build mode
 The brief says `reuse` or `rebuild` (HARNESS "Pipeline"). With none named, use `rebuild`. In `reuse` mode, first confirm `cpp-dev`'s report states the exact build and ctest result and that no source is newer than the binaries; if the check below prints any file, switch to `rebuild` and say so. Staleness check (prints newer source files; empty output means fresh), PowerShell. App sources are compared with `HiveWE.exe` and test files with `HiveWE_tests.exe`, so a test-only edit after the app linked is not staleness:
-`function Newer($exe,$paths){$t=(Get-Item $exe).LastWriteTime; Get-ChildItem $paths -Recurse -File -ErrorAction SilentlyContinue|?{$_.LastWriteTime -gt $t}|select -Expand FullName}; Newer build/Agent/Release/HiveWE.exe @('src','data/shaders','CMakeLists.txt','CMakePresets.json'); Newer build/Agent/Release/HiveWE_tests.exe tests`
+`function Newer($exe,$paths){$t=(Get-Item $exe).LastWriteTime; $paths|%{if(Test-Path $_ -PathType Leaf){Get-Item $_}else{Get-ChildItem $_ -Recurse -File -ErrorAction SilentlyContinue}}|?{$_.LastWriteTime -gt $t}|select -Expand FullName}; Newer build/Agent/Release/HiveWE.exe @('src','data/shaders','CMakeLists.txt','CMakePresets.json'); Newer build/Agent/Release/HiveWE_tests.exe tests`
 Adjust the test exe path if `ctest` shows a different location. In `reuse` mode skip steps 1's build and ctest and run only the targeted offscreen checks and hooks; report "build reused" in the output. The lock file still applies to app launches.
 
 ## What to do
