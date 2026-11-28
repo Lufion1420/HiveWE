@@ -42,6 +42,7 @@ Qt Widgets + docking (`ads::CDockManager`). Respect `.ui` layout files.
 - User-facing values: prefer Warcraft coordinates/IDs over internal engine values.
 - A combo filled from an SLK must be checked for the row-key and first-row pitfalls in `hivewe-file-formats.md`.
 - Errors: Qt dialogs where surrounding code already does.
+- ADS parents only a dock area's current dock widget, and the Model Editor's model tabs share an empty objectName: list tabs with `dockArea(i)->openedDockWidgets()`, not `findChildren` or `dockWidgetsMap()` (reported 2026-11-28, not re-verified).
 - `ColorButton::changeColor` has no `ShowAlphaChannel`, so a picked colour gets alpha 255 (ticketed as backlog).
 - `HiveWE::save_current_map_as` creates the target folder and sets `hierarchy.map_directory` before `Map::save` runs, so a save refusal check must run before the folder picker, as `Map::ensure_unit_ids_fit` does. It refuses a target folder that is not empty or lies inside the map's folder before writing anything, and a failed save restores `map_directory`, `filesystem_path` and the map name; keep both.
 
