@@ -1,0 +1,18 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Model Editor / A - Compact list, search, model that cannot be read</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="widgets.css"></head><body>
+<script src="icons.js"></script><script src="common.js"></script>
+<script>
+const BAD = 'Fire_FI076_FlyingFireball';
+const hits = ['B043_FireballRising_DarkSmoke', 'B044_FireballRising_GreySmoke', 'B045_Fireball_DarkSmoke', 'B046_Fireball_GreySmoke', 'B078_Fireball_Smoke',
+  'B079_Fireball_BreakSmoke', 'B080_Fireball_RingSmoke', BAD, 'Fire_FI105_Fireball', 'Fire_FI111_FireBallBurst', 'Madara_M10_FireBallProjectile'];
+const body = hits.map((n, i) => `<div class="tr ${n === BAD ? 'sel' : i % 2 ? 'alt' : ''}">
+  <div class="td flex">${n}.mdx</div>${n === BAD ? `<span class="warn" style="display:flex">${ic('warn', 'xs')}</span>` : ''}<div class="td muted" style="width:54px;margin-right:12px">fire</div></div>`).join('');
+const list = `<div class="view grow"><div class="hdr"><div class="td flex">Name</div><div class="td" style="width:54px;margin-right:12px">Folder</div></div>${body}</div>`;
+document.body.innerHTML = `<div class="window">${titlebar('Model Editor')}${toolbar({ off: 1 })}
+<div class="row grow" style="align-items:stretch">
+ ${browser({ w: 330, tree: folderTree('Storm_VFX', 200), search: 'fireball', mode: 'compact', list, footer: '11 of 132 shown. Up/Down: browse, Enter: keep tab' })}<div class="splitv"></div>
+ <div class="col grow">${modelTabs([{ name: 'Pein_vfx_B_explosion_v2.mdx' }, { name: BAD + '.mdx', on: 1, preview: 1 }])}
+  ${glMessage(`${ic('warn')}<div class="strong">${BAD}.mdx is not a readable model</div><div class="sub">unexpected end of file</div><div class="sub">Press Down for the next model.</div>`)}${timeline({ off: 1 })}</div><div class="splitv"></div>
+ ${inspector({ off: 1, w: 280 })}
+</div>${statusbar('Could not load ' + BAD + '.mdx', ['Camera: orbit'])}</div>`;
+</script></body></html>

@@ -1,0 +1,10 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Model Editor / B - Model opened from the Library</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="widgets.css"></head><body>
+<script src="icons.js"></script><script src="common.js"></script>
+<script>
+document.body.innerHTML = `<div class="window">${titlebar('Model Editor')}${toolbar({ dir: 'b' })}
+<div class="row grow" style="align-items:stretch">
+ <div class="col grow">${modelTabs([{ name: 'Library', nox: 1 }, { name: 'Pein_vfx_B_explosion_v2.mdx' }, { name: 'Fire_FI105_Fireball.mdx', on: 1 }])}${glEffect('fire', 18)}${timeline()}</div><div class="splitv"></div>
+ ${inspector({ w: 320 })}
+</div>${statusbar('Ready', SB_FI105)}</div>`;
+</script></body></html>

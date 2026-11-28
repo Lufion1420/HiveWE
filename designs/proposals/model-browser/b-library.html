@@ -1,0 +1,18 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Model Editor / B - Library tab is the home screen</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="widgets.css"></head><body>
+<script src="icons.js"></script><script src="common.js"></script>
+<script>
+const tiles = FIRE.slice(4, 20).map((m, k) => `<div class="tile ${m.file === 'Fire_FI105_Fireball.mdx' ? 'sel' : ''}"><div class="thumb">${art(m.kind, k + 7)}</div><div class="nm" data-mid="1">${m.file}</div></div>`).join('');
+const info = `<div class="view">${[['Path', 'fire\\FI105_Fireball\\Fire_FI105_Fireball.mdx'], ['Vertices', '13,332'], ['Triangles', '10,672'], ['Sequences', '2'], ['File size', '0.56 MB']]
+  .map(([k, v], i) => `<div class="tr ${i % 2 ? 'alt' : ''}"><div class="td" style="width:80px">${k}</div><div class="td flex">${v}</div></div>`).join('')}</div>`;
+document.body.innerHTML = `<div class="window">${titlebar('Model Editor')}${toolbar({ dir: 'b', library: 1 })}
+${modelTabs([{ name: 'Library', on: 1, nox: 1 }, { name: 'Pein_vfx_B_explosion_v2.mdx' }])}
+<div class="row grow" style="align-items:stretch">
+ <div class="col" style="width:240px;flex:none;gap:5px;padding:4px">${sources('Folder')}${folderRow('...\\Storm_VFX')}${folderTree('fire', 334)}${check('Include subfolders', true)}${check('Show _ folders', false)}<div class="grow"></div></div><div class="splitv"></div>
+ <div class="col grow" style="gap:5px;padding:4px">${searchRow('', 'thumbs')}<div class="view grow"><div class="grid">${tiles}</div><div class="vscroll"><i style="top:9%;height:34%"></i></div></div><div class="small muted elide">16 of 47 in fire. Arrow keys: browse, Enter: open in a tab</div></div><div class="splitv"></div>
+ <div class="col" style="width:556px;flex:none;gap:5px;padding:4px"><div class="row strong" style="height:24px;flex:none">Fire_FI105_Fireball.mdx</div>${glEffect('fire', 18)}${info}
+  <div class="row" style="justify-content:flex-end;flex:none">${btn('Open in Tab', 'default')}</div></div>
+</div>${timeline()}${statusbar('Ready', SB_FI105)}</div>`;
+document.fonts.ready.then(() => document.querySelectorAll('[data-mid]').forEach(e => { const full = e.textContent; let n = full.length;
+  while (e.scrollWidth > e.clientWidth && n > 6) { n--; e.textContent = full.slice(0, Math.ceil(n / 2)) + '…' + full.slice(full.length - Math.floor(n / 2)); } }));  /* Qt::ElideMiddle */
+</script></body></html>

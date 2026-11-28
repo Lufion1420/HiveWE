@@ -1,0 +1,36 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Model Editor / A - Empty, loading and failed states</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="widgets.css"></head><body>
+<script src="icons.js"></script><script src="common.js"></script>
+<script>
+const cell = (cap, html) => `<div class="cell"><div class="cap">${cap}</div>${html}</div>`;
+const W = 340, H = 462;
+const off = () => ({ searchRow: searchRow('', 'thumbs', 'disabled'), options: optionRow(true, false, 'disabled') });
+const panel = (o) => browser({ w: W, h: H, ...o });
+const pend = FIRE.slice(0, 3).map((m, k) => thumbRow(m, k, k ? 'wait' : '', 'fire\\')).join('');
+const game = GAME.slice(0, 3).map(([n, p], k) => `<div class="item ${k ? '' : 'sel'}"><div class="thumb">${art(['dark', 'water', 'dark'][k], k + 40)}</div><div class="two"><div class="elide">${n}.mdx</div><div class="elide small muted">${p}</div></div></div>`).join('');
+const gl = (cap, view, status) => cell(cap, `<div class="glbox" style="width:${W}px;height:214px">${view}${status}</div>`);
+const small = (rows) => `<div class="view" style="height:136px">${rows}</div>`;
+const treeEmpty = small(treeRow('Storm_VFX', '769', { open: 1 }) + treeRow('_backups', '29', { depth: 1 }) + treeRow('_build', '604', { depth: 1 }) +
+  treeRow('_packs', '0', { depth: 1, sel: 1 }) + treeRow('_previews', '4', { depth: 1 }) + treeRow('auras', '4', { depth: 1 }));
+const treeScan = small(treeRow('Storm_VFX', '61', { open: 1, sel: 1 }) + treeRow('auras', '4', { depth: 1 }) + treeRow('explosions', '7', { depth: 1 }) +
+  treeRow('fire', '47', { depth: 1 }) + treeRow('other', '3', { depth: 1 }));
+document.body.innerHTML = `<div class="sheet">
+<div class="cells">
+ ${cell('Browser / First run, no folder', panel({ path: 'No folder chosen', ...off(), list: msgView(`<div><b>No folder chosen</b><br>Pick a folder with .mdx or .mdl files.<br>Subfolders are included.</div>${btn('Choose Folder...', 'default', 'folder')}`) }))}
+ ${cell('Browser / Scanning the folder', panel({ tree: treeScan, list: `<div class="progress"><i></i></div>${listView(pend, 0, 80)}`, footer: 'Scanning... 61 models found' }))}
+ ${cell('Browser / Folder without models', panel({ tree: treeEmpty, options: optionRow(true, true), list: msgView('<div><b>No models here</b><br>No .mdx or .mdl files in _packs<br>or its subfolders.</div>'), footer: '0 models in _packs' }))}
+ ${cell('Browser / Search without a match', panel({ tree: folderTree('fire', 136), search: 'meteor', list: msgView('<div><b>No model matches "meteor"</b><br>in fire and its subfolders.</div>' + btn('Search All of Storm_VFX')), footer: '0 of 47 shown' }))}
+</div>
+<div class="cells">
+ ${cell('Browser / Remembered folder is missing', panel({ ...off(), list: msgView(`<div><b>Folder not found</b><br>...\\Model -Conversions WIP\\Storm_VFX<br>It was moved, or its drive is not connected.</div><div class="row" style="gap:6px">${btn('Choose Folder...', 'default')}${btn('Retry')}</div>`) }))}
+ ${cell('Browser / Game source (today\'s categories)', panel({ source: 'Game', path: null, tree: gameTree('Units', 224), options: '', list: listView(game, 0, 8), footer: '417 models in Units, 417 shown' }))}
+ ${cell('Browser / Map source, nothing imported', panel({ source: 'Map', path: null, ...off(), list: msgView('<div><b>This map has no imported models</b><br>Add them with the Asset Manager,<br>or pick Folder or Game.</div>'), footer: '0 models in Map (imported)' }))}
+ ${cell('Browser / Subfolders off, none directly inside', panel({ tree: folderTree('fire', 136), options: optionRow(false), list: msgView('<div><b>No models directly in fire</b><br>47 are in its subfolders.</div>' + btn('Include Subfolders')), footer: '0 models in fire' }))}
+</div>
+<div class="cells">
+ ${gl('View / Loading (shown after 150 ms)', glMessage('<div class="strong">Loading Madara_M09_DragonHeadProjectile.mdx</div><div class="progress" style="width:180px"><i></i></div>'), statusbar('Loading...', ['Camera: orbit']))}
+ ${gl('View / Model cannot be read (no message box)', glMessage(`${ic('warn')}<div class="strong">Fire_FI076_FlyingFireball.mdx<br>is not a readable model</div><div class="sub">unexpected end of file</div>`), statusbar('Could not load the model', ['Camera: orbit']))}
+ ${gl('View / Textures missing (model still plays)', '<div class="gl"><svg viewBox="0 0 100 100"><path d="M40 24h22v22H40z" fill="#d8d8d8"/><path d="M26 50h20v20H26z" fill="#ececec"/><path d="M54 56h15v15H54z" fill="#c4c4c4"/></svg></div>', statusbar('Ready', ['!2 textures not found', 'Camera: orbit']))}
+ ${gl('View / No model selected', '<div class="empty-central">Pick a model in the Model Browser,<br>or press Open for a single file.</div>', statusbar('Ready', ['Camera: orbit']))}
+</div></div>`;
+</script></body></html>

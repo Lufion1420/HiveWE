@@ -1,0 +1,12 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Model Editor / A - Browser docked, effect selected</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="widgets.css"></head><body>
+<script src="icons.js"></script><script src="common.js"></script>
+<script>
+const rows = FIRE.slice(11, 18).map((m, k) => thumbRow(m, k + 11, m.file === 'Fire_FI105_Fireball.mdx' ? 'sel' : k === 6 ? 'wait' : '')).join('');
+document.body.innerHTML = `<div class="window">${titlebar('Model Editor')}${toolbar()}
+<div class="row grow" style="align-items:stretch">
+ ${browser({ tree: folderTree('fire', 250), list: listView(rows, 24, 16), footer: '16 of 47 in fire. Up/Down: browse, Enter: keep tab' })}<div class="splitv"></div>
+ <div class="col grow">${modelTabs([{ name: 'Pein_vfx_B_explosion_v2.mdx' }, { name: 'Fire_FI105_Fireball.mdx', on: 1, preview: 1 }], keepTab)}${glEffect('fire', 18)}${timeline()}</div><div class="splitv"></div>
+ ${inspector()}
+</div>${statusbar('Ready', SB_FI105)}</div>`;
+</script></body></html>

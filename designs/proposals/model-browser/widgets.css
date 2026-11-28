@@ -1,0 +1,164 @@
+/* Shared classes. Each one maps to a Qt widget (named in the comment) and follows data/themes/Flat.qss.in.
+   QSS only: no shadows, filters, transforms or transitions. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100vw; height: 100vh; overflow: hidden; background: var(--color-window); color: var(--color-text);
+  font-family: var(--font-family); font-size: var(--font-size-base); line-height: 1.25; }
+.row { display: flex; align-items: center; min-width: 0; }
+.col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.grow { flex: 1 1 0; min-width: 0; min-height: 0; }
+.muted { color: var(--color-text-muted); }
+.small { font-size: var(--font-size-small); }
+.strong { font-weight: var(--font-weight-strong); }
+.err { color: var(--color-error); }
+.warn { color: var(--color-warn); }
+.nw { white-space: nowrap; }
+.elide { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }  /* QFontMetrics::elidedText */
+svg.i { width: var(--toolbar-icon); height: var(--toolbar-icon); flex: none; }
+svg.i.s { width: 16px; height: 16px; }
+svg.i.xs { width: 14px; height: 14px; }
+
+/* native Windows title bar (not styled by us) */
+.titlebar { flex: none; height: 31px; display: flex; align-items: center; gap: 8px; padding-left: 12px; color: var(--color-text-muted); }
+.titlebar .ico { width: 14px; height: 14px; background: var(--color-accent); border-radius: 2px; }
+.titlebar .wb { width: 44px; text-align: center; font-size: 13px; }
+.window { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+/* QToolBar / QToolButton */
+.toolbar { flex: none; height: 37px; display: flex; align-items: center; gap: var(--space-1); padding: 0 6px; border-bottom: 1px solid var(--color-border); }
+.tbtn { height: var(--toolbar-button); min-width: var(--toolbar-button); display: flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid transparent; border-radius: var(--radius-button); white-space: nowrap; flex: none; }
+.tbtn.text { padding: 0 6px; }
+.tbtn.checked { background: var(--color-checked-bg); border-color: var(--color-checked-border); }
+.tbtn.disabled { color: var(--color-text-disabled); }
+.tbtn.small-btn { height: 24px; min-width: 24px; }
+.tsep { width: 1px; height: 20px; background: var(--color-border); margin: 0 6px; flex: none; }
+.tlabel { color: var(--color-text-muted); padding: 0 var(--space-2); white-space: nowrap; }
+.arrow { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 4px solid var(--color-text-muted); flex: none; }
+.arrow.right { border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 4px solid var(--color-text-muted); border-right: 0; }
+
+/* QLineEdit, QComboBox, QPushButton, QCheckBox, QSlider, QProgressBar */
+.edit, .combo { height: var(--control-height); display: flex; align-items: center; gap: 6px; border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-input); background: var(--color-input-bg); padding-left: var(--space-3); min-width: 0; white-space: nowrap; overflow: hidden; flex: none; }
+.edit { padding-right: var(--space-3); }
+.edit.focus, .combo.focus { border-color: var(--color-focus); }
+.edit .ph { color: var(--color-text-muted); }
+.combo { background: var(--color-button-top); }
+.combo > span { flex: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.combo .dd { width: 20px; height: 100%; display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--color-border-strong); flex: none; }
+.combo.disabled, .edit.disabled { color: var(--color-text-disabled); background: var(--color-window); border-color: var(--color-border); }
+.btn { color: var(--color-text); height: var(--control-height); display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 var(--space-4);
+  background: var(--color-button-top); border: 1px solid var(--color-border-strong); border-radius: var(--radius-button); white-space: nowrap; flex: none; }
+.btn.default { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text); min-width: 76px; }
+.btn.disabled { background: var(--color-window); border-color: var(--color-border); color: var(--color-text-disabled); }
+.check { display: flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
+.check i { width: 14px; height: 14px; border: 1px solid var(--color-border-strong); background: var(--color-input-bg); border-radius: 2px; flex: none; position: relative; }
+.check.on i { background: var(--color-accent); border-color: var(--color-accent); }
+.check.on i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 8px; height: 8px; background: var(--color-accent-text);
+  clip-path: polygon(0 55%, 15% 40%, 38% 62%, 85% 12%, 100% 28%, 38% 92%); }  /* check.png */
+.check.disabled { color: var(--color-text-disabled); }
+.check.disabled i { background: var(--color-window); border-color: var(--color-border); }
+.check.on.disabled i { background: var(--color-border); border-color: var(--color-border); }  /* indicator:checked:disabled */
+.check.on.disabled i::after { background: var(--color-text-muted); }
+.tr.sel .warn svg.i { color: var(--color-warn); }
+.slider { position: relative; height: 14px; flex: 1; min-width: 40px; }
+.slider .g { position: absolute; left: 0; right: 0; top: 5px; height: 4px; border-radius: 2px; background: var(--color-border-strong); }
+.slider .s { position: absolute; left: 0; top: 5px; height: 4px; border-radius: 2px; background: var(--color-accent); }
+.slider .h { position: absolute; top: 1px; width: 12px; height: 12px; margin-left: -6px; border-radius: 6px; background: var(--color-accent); }
+.slider.disabled .s, .slider.disabled .h { background: var(--color-border-strong); }
+.progress { height: 16px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-input); background: var(--color-input-bg); position: relative; flex: none; }
+.progress i { position: absolute; left: 30%; width: 28%; top: 1px; bottom: 1px; background: var(--color-accent); border-radius: 2px; }  /* busy bar, range 0..0 */
+
+/* QDockWidget */
+.dock { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--color-panel); }
+.dtitle { flex: none; height: 25px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-3);
+  background: var(--color-titlebar-top); border-bottom: 1px solid var(--color-border); font-weight: var(--font-weight-strong); }
+.dtitle .dbtns { display: flex; gap: 12px; color: var(--color-text-muted); font-weight: 400; font-size: 11px; }
+.dbody { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 5px; padding: var(--space-2) var(--space-2) var(--space-2); }
+.splitv { width: 4px; flex: none; background: var(--color-window); border-left: 1px solid var(--color-border); }
+.splith { height: 5px; flex: none; position: relative; }                       /* QSplitter handle */
+.splith::after { content: ""; position: absolute; left: 45%; width: 10%; top: 2px; height: 1px; background: var(--color-border-strong); }
+
+/* QTabBar (source tabs, inspector tabs) */
+.tabbar { flex: none; height: 25px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--color-border); gap: 1px; }
+.tabbar > div { height: 24px; line-height: 21px; padding: 0 var(--space-4); color: var(--color-text-muted); border: 1px solid transparent; border-bottom: 0;
+  border-top: var(--tab-indicator-width) solid transparent; white-space: nowrap; }
+.tabbar > div.on { color: var(--color-text); background: var(--color-base); border-color: var(--color-border); border-top-color: var(--color-accent); }
+
+/* QTreeView (folder tree, compact list) */
+.view { background: var(--color-base); border: 1px solid var(--color-border); overflow: hidden; position: relative; min-height: 0; display: flex; flex-direction: column; flex: none; }
+.view.grow { flex: 1 1 0; }
+.view.focus { border-color: var(--color-border); }
+.hdr { flex: none; height: 23px; display: flex; align-items: center; background: var(--color-window); border-bottom: 1px solid var(--color-border); color: var(--color-text-muted); }
+.tr { flex: none; height: var(--row-height); display: flex; align-items: center; white-space: nowrap; }
+.tr.alt { background: var(--color-alt-base); }
+.tr.sel { background: var(--color-selection); color: var(--color-selection-text); }
+.tr.hover { background: var(--color-hover); }
+.tr.sel .muted { color: var(--color-selection-text); }
+.td { padding: 0 var(--space-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; min-width: 0; }
+.td.flex { flex: 1 1 0; }
+.td.num { text-align: right; }
+.branch { width: 16px; flex: none; display: flex; align-items: center; justify-content: center; }
+.tr svg.i { margin-right: 4px; color: var(--color-text-muted); }
+.tr.sel svg.i { color: var(--color-selection-text); }
+.tr.dim { color: var(--color-text-muted); }
+
+/* QListView with a delegate: thumbnail + file name + folder (ModelThumbnailCache) */
+.item { flex: none; height: 58px; display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-2); border: 1px solid transparent; }
+.item.sel { background: var(--color-selection); border-color: var(--color-accent); color: var(--color-selection-text); }
+.item.sel .muted { color: var(--color-selection-text); }
+.item.hover { background: var(--color-hover); }
+.thumb { width: 52px; height: 52px; flex: none; background: #333842; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.thumb svg { width: 100%; height: 100%; display: block; }
+.thumb.bad { color: #b4b8bf; font-size: 26px; font-weight: 600; }   /* ModelThumbnailCache "!" tile */
+.two { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; margin-right: 12px; }
+.vscroll { position: absolute; right: 0; top: 0; bottom: 0; width: 12px; background: var(--color-base); }
+.vscroll i { position: absolute; left: 3px; width: 6px; border-radius: 3px; background: var(--color-border-strong); }
+.listmsg { flex: 1; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; text-align: center; padding: 12px;
+  color: var(--color-text-muted); line-height: 1.55; }
+.listmsg b { color: var(--color-text); }
+
+/* QListView icon mode (direction B), as QListView#browseList */
+.grid { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; padding: 3px 12px 3px 3px; }
+.tile { width: 144px; border: 1px solid transparent; padding: 7px 0 3px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tile.sel { background: var(--color-selection); border-color: var(--color-accent); }
+.tile .thumb { width: 128px; height: 128px; }
+.tile .thumb.bad { font-size: 48px; }
+.tile .nm { width: 136px; text-align: center; white-space: nowrap; overflow: hidden; }
+
+/* ads::CDockAreaTitleBar and ads::CDockWidgetTab: the model tabs */
+.ads { flex: none; height: 25px; display: flex; align-items: stretch; background: var(--color-titlebar-top); border-bottom: 1px solid var(--color-border); overflow: hidden; }
+.atab { display: flex; align-items: center; gap: 8px; padding: 0 var(--space-3); color: var(--color-text-muted); font-weight: var(--font-weight-strong);
+  border-bottom: var(--tab-indicator-width) solid transparent; white-space: nowrap; flex: none; }
+.atab.on { color: var(--color-text); background: var(--color-panel); border-bottom-color: var(--color-accent); }
+.atab.preview { font-style: italic; font-weight: 400; }   /* ads--CDockWidgetTab[preview="true"] QLabel */
+.atab .x { font-weight: 400; font-style: normal; font-size: 11px; color: var(--color-text-muted); }
+.ads .tbtn { height: 22px; margin: 0 0 0 6px; align-self: center; }
+
+/* 3D view: ModelEditorGLWidget. The effect drawing is a placeholder; centred texts are QLabel / QPainter text. */
+.gl { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #4c4c4c; }
+.gl > svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.glmsg { position: absolute; left: 24px; right: 24px; top: 50%; margin-top: -48px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; color: #ffffff; line-height: 1.5; }
+.glmsg .sub { color: #d4d6da; }
+.glmsg svg.i { width: 28px; height: 28px; color: #f0b040; }
+.empty-central { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--color-base);
+  color: var(--color-text-muted); text-align: center; line-height: 1.6; }
+
+/* #modelTimeline */
+.timeline { flex: none; height: 33px; display: flex; align-items: center; gap: 6px; padding: 4px var(--space-3); border-top: 1px solid var(--color-border); }
+.timeline .read { min-width: 110px; text-align: right; color: var(--color-text-muted); white-space: nowrap; }
+.timeline.disabled .read { color: var(--color-text-disabled); }
+
+/* QStatusBar */
+.statusbar { flex: none; height: var(--statusbar-height); display: flex; align-items: center; border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted); font-size: var(--font-size-small); padding: 0 var(--space-2); white-space: nowrap; }
+.statusbar .sg { border-left: 1px solid var(--color-border); padding: 0 var(--space-3); line-height: 16px; }
+.statusbar .sg.warn { color: var(--color-warn); }
+
+/* state sheet only (not part of the app) */
+.sheet { padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+.sheet .cells { display: flex; gap: 12px; }
+.cell { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.cell > .cap { color: var(--color-text-muted); white-space: nowrap; }
+.cell > .dock, .cell > .glbox { border: 1px solid var(--color-border); }
+.glbox { display: flex; flex-direction: column; }
