@@ -129,6 +129,10 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **A failed Save As no longer redirects the next Save** — The next Save could write into the folder the failed Save As had targeted.
 - **A failed write keeps the old `war3mapMisc.txt` and map script** — Both are now replaced safely, and the failure is reported.
 
+#### Doodad Merge Selection
+- **Merge Selection exports every selected doodad's geometry** — Before, it could crash or write a model with missing or broken geometry; the merged model now keeps correct materials, normals and animation timers, so effects such as moving water keep moving. The merged model has no animation sequences, so parts hidden in a doodad's Stand pose (such as tree stumps) are left out and other animations are held at the start of Stand.
+- **A failed Merge Selection save shows a warning instead of closing HiveWE** — File names with non-English characters now work too.
+
 ### New Features
 - **HiveWE backs up your map files before each save from the editor** — The files saving can overwrite (`war3map*`, `scripts\war3map.j` / `.lua` and `conversation.json`, not imported assets) are copied to `%LOCALAPPDATA%\HiveWE\HiveWE\backups\<map name>-<id>\<date-time>\`, where `source.txt` names the map; copy them back to restore. HiveWE keeps the newest 10 (registry value `backupKeepCount`) plus the first of each editor session and of each day for 14 days; if a backup fails, the map is still saved and a warning tells you.
 - **Change Tileset shows a preview and mapping per tile and can import custom tiles** — Each tile has a preview and a mapping, and removed tiles are repainted with a replacement you choose; the blight index is remapped too. You can import a BLP or TGA texture as a custom tile, saved into the map folder as a texture override. Everything is applied only on OK, all-or-nothing. DDS is rejected because Warcraft III would find the stock BLP first.

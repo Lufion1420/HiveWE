@@ -5,7 +5,7 @@ Written 2026-11-28 (session 41 of the project). Overwritten at each handoff. For
 - Spawn count this session: 9 (resumes not counted).
 
 ## Checks waiting on the user
-1. **Blocks the next step. Approve the model browser window (gate 2).** Open the PNGs in `designs/references/model-browser-gate2/`: `flat-dark-1440-fire.png`, `flat-dark-1280-fire.png`, `flat-dark-1440-compact.png` (light versions have `flat-light-` names). Reply "approved" or list changes. Defaults used unless changed: the compact list's Folder column shows the top-level folder (full path in the tooltip); visible thumbnails will animate like the old pop-up; disk thumbnails show the frame 40% into the animation, cropped.
+1. (Passed 2026-11-28, do not relist: model browser gate 2 approved with all three defaults. Numbers below are unchanged.)
 2. VFX Sandbox, needed before stage 4, no deadline. What does the "Composition" drop-down list when setups have no fixed folder: recent files (default), or remove the drop-down?
 3. VFX Sandbox, same. Dragging an effect's bar on the timeline: does its "Remove at" time move with it? Default: yes.
 4. VFX Sandbox, needed in stage 2. Starting positions: default is the target in the middle and the caster 500 map units west of it.
@@ -17,6 +17,7 @@ Information for the user (say it once): classic flipbook effects saved by an old
 Deferred by the user (do not relist): Asset Manager bulk-delete test, old-save script spot-check, former checks 6 to 15 of session 38, every Warcraft III load check until WarMash testing is done, and (manual testing deferred) the World Editor save that shows which type byte it writes for item Equipment/Tag and unit Occlusion.
 
 ## State
+- 2026-11-28 (session 42): 1220965115652992 (Doodad merge export) fixed; review APPROVE, QA PASS, ctest 652/652; `build/Agent` now holds this build, not the prototype. CI run 46093630389 passed. Spawns so far: 5.
 - Shipped: 4e77d3f (1220963921479981, Storm VFX R1: WarMash draw order, texture animation, flipbooks; classic MDX flipbooks no longer lost; merge export remaps them) and 681b88b (approved browser mockups). Review APPROVE, QA PASS, ctest 636/636. Deployed to the Tools folder 2026-11-28 (HiveWE was not running).
 - CI: run 46093630389 on 681b88b was still in progress at handoff (configure step): check its result first. The handoff commit carries `[skip ci]` so that it does not cancel that run.
 - Model browser 1220964773977292: gate 1 approved (layout A), gate 2 awaiting approval. Prototype source ONLY in the local git stash "model-browser gate-2 prototype (awaiting user approval, session 41)" (20 files; never drop it). Built OK, ctest 640/640, not reviewed or QA'd; Game and Map tabs disabled and the old pop-up already removed from the Model Editor, so not shippable. The ticket comment lists the remaining work.
@@ -29,7 +30,7 @@ Deferred by the user (do not relist): Asset Manager bulk-delete test, old-save s
 - Untracked `qa-*.png` and `map-protector-flat-*.png` in `designs/current/`, `designs/references/` (includes game and effect art) and stray `512684032` stay uncommitted on purpose.
 
 ## Next step
-1220964773977292 model browser, once check 1 is approved: restore the stash, finish the list in the ticket comment (Standard track), review, QA. While approval is missing: 1220965115652992 (Doodad merge export crash risk), then Storm VFX R2 1220963921514005. User order: browser, R2, R3 1220963821078869, R4 1220963798776370 (packs also listed in the browser), then VFX Sandbox stage 1 1220934951315968.
+1220964773977292 model browser (gate 2 approved 2026-11-28): restore the stash, finish the list in the ticket comment (Standard track), review, QA. Then Storm VFX R2 1220963921514005. User order: browser, R2, R3 1220963821078869, R4 1220963798776370 (packs also listed in the browser), then VFX Sandbox stage 1 1220934951315968.
 
 ## Backlog only, not next steps
 1220965197328565, 1220965197313575, 1220965106820828, 1220965050077643, 1220964770507376, 1220964946930693, 1220963821845299, 1220963799571115, 1220936645897527, 1220933866874909, 1220949503069153, 1220930104098194, 1220931674071675, 1220927374069594, 1220928174960676, 1220329469211176, 1220329518098244, 1220899403091128, 1220898118343928, 1220895469636543, 1220895284225944, 1220885519534133, 1220824083919839 / 1220818407294566 / 1220828873067911 (flat UI batches, at most one per session), 1220328401966062 (needs a user decision), 1220719384135918 / 1220329290824218 (idea and wishlist parents), 1220832845348582, 1220329469370593 and 1220362579055972 (wait for WarMash), 1220841054745630 (HD only). `designs/README.md` still names the old headless Chrome path (see `agents/designer.md`).

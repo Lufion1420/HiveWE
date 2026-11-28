@@ -14,6 +14,7 @@ Primary implementation units are `.ixx` modules; Qt UI stays in `.cpp`/`.h`.
 - `snake_case` functions/fields/files; `PascalCase` types.
 - Imports by logical name: `import Map;`, `import BinaryReader;`, `import Terrain;`.
 - Do not auto-sort includes.
+- Never write `(cond(arguments[i]) ? A : B) = arguments[++i];`: C++17 evaluates the right side first, so the condition sees the next element. Store the condition in a local before the assignment.
 - `src/resources/texture.ixx` must keep its `#include` global module fragment, not `import std`: Qt `.cpp` files that include std headers import it (C2374 in `mocs_compilation`).
 - In a Qt `.cpp`, include a header that imports modules after the Qt headers: once a newly reachable module uses `std::filesystem`, a later `<filesystem>` include (`QFile` pulls it in) fails with C2011/C2995. A global module fragment in that module alone did not fix it.
 

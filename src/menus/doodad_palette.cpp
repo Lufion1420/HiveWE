@@ -25,6 +25,7 @@
 #include <QPushButton>
 #include <QKeySequence>
 #include <QTimer>
+#include <QMessageBox>
 
 #include "brush.h"
 
@@ -43,6 +44,7 @@ import Globals;
 import WindowHandler;
 import SLK;
 import MDX;
+import MdxMergeExport;
 import BinaryWriter;
 import BinaryReader;
 import Hierarchy;
@@ -455,35 +457,17 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 									   settings.value("openDirectory").toString(),
 									   "Warcraft III Model (*.mdx)"
 		)
-									   .toStdString();
+									   .toStdWString();
 
 		if (file_name.empty()) {
 			return;
 		}
 
-		mdx::MDX base;
-
-		glm::vec3 midpoint = glm::vec3(0.f);
-		for (const auto& doodad : brush.selections) {
-			midpoint += doodad->position;
+		if (const auto exported = export_merged_selection(brush.selections, file_name); !exported) {
+			QMessageBox::warning(
+				this, "Merge selection", QString("The merged model was not saved:\n%1").arg(QString::fromStdString(exported.error()))
+			);
 		}
-		midpoint /= brush.selections.size();
-
-		for (const auto& doodad : brush.selections) {
-			const glm::mat4 centered = glm::translate(glm::mat4(1.0f), -midpoint) * doodad->skeleton.matrix;
-			const glm::mat4 final = glm::scale(glm::mat4(1.0f), glm::vec3(128.0f)) * centered;
-			base.merge_with(*doodad->mesh->mdx, final);
-		}
-		base.deduplicate_textures().deduplicate_materials().deduplicate_geosets().calculate_extents();
-
-		auto writer = base.to_mdx();
-		std::ofstream outfile(file_name, std::ios::binary | std::ios::out);
-
-		if (!outfile) {
-			throw std::runtime_error("Error writing merged file ");
-		}
-
-		outfile.write(reinterpret_cast<char const*>(writer.buffer.data()), writer.buffer.size());
 	});
 
 	// Default to Trees/Destructibles
@@ -497,6 +481,57 @@ DoodadPalette::DoodadPalette(QWidget* parent) : Palette(parent) {
 	ui.doodads->setCurrentIndex(ui.doodads->model()->index(0, 0));
 	selection_changed(ui.doodads->model()->index(0, 0));
 	monitor_activation();
+}
+
+std::expected<void, std::string> DoodadPalette::export_merged_selection(
+	const std::unordered_set<Doodad*>& doodads, const fs::path& file_name
+) {
+	if (doodads.empty()) {
+		return std::unexpected("Nothing is selected");
+	}
+
+	glm::vec3 midpoint = glm::vec3(0.f);
+	for (const auto& doodad : doodads) {
+		midpoint += doodad->position;
+	}
+	midpoint /= doodads.size();
+
+	// SkinnedMesh frees its MDX geometry after the GPU upload, so each model is read again from its file.
+	// The reader and writer throw on damaged data; callers (a Qt slot, QA hooks) get the error text instead.
+	try {
+		std::map<fs::path, mdx::MDX> models;
+		std::vector<mdx::MDX::MergePart> parts;
+		for (const auto& doodad : doodads) {
+			if (!doodad->mesh) {
+				continue;
+			}
+			auto found = models.find(doodad->mesh->path);
+			if (found == models.end()) {
+				auto file = hierarchy.open_file(doodad->mesh->path);
+				if (!file) {
+					return std::unexpected(file.error());
+				}
+				found = models.emplace(doodad->mesh->path, mdx::MDX(*file)).first;
+			}
+			const glm::mat4 centered = glm::translate(glm::mat4(1.0f), -midpoint) * doodad->skeleton.matrix;
+			const glm::mat4 final = glm::scale(glm::mat4(1.0f), glm::vec3(128.0f)) * centered;
+			parts.push_back({ &found->second, final });
+		}
+
+		const auto writer = mdx::merged_for_export(parts).to_mdx();
+		std::ofstream outfile(file_name, std::ios::binary | std::ios::out);
+		if (!outfile) {
+			return std::unexpected("Could not open the file for writing");
+		}
+		outfile.write(reinterpret_cast<char const*>(writer.buffer.data()), writer.buffer.size());
+		outfile.close();
+		if (!outfile) {
+			return std::unexpected("Could not write the file");
+		}
+	} catch (const std::exception& error) {
+		return std::unexpected(std::string(error.what()));
+	}
+	return {};
 }
 
 DoodadPalette::~DoodadPalette() {

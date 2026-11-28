@@ -118,73 +118,167 @@ namespace mdx {
 
 	/// Call after deduplicate_textures for best results
 	/// as the texture IDs will be deduplicated so fewer differences
-	/// Material IDs will be sequential, from zero, without gaps after this
+	/// Identical materials share one entry afterwards; first occurrences keep their original order and ids are compact.
 	MDX& MDX::deduplicate_materials() {
-		std::unordered_map<Material, size_t> material_map;
+		// mapping[old id] is the position in `unique`, which keeps first occurrences in their original order
+		std::unordered_map<Material, u32> material_map;
+		std::vector<Material> unique;
 		std::vector<u32> mapping;
 
 		for (const auto& material : materials) {
-			const auto& [elem, inserted] = material_map.emplace(material, mapping.size());
+			const auto& [elem, inserted] = material_map.emplace(material, static_cast<u32>(unique.size()));
+			if (inserted) {
+				unique.push_back(material);
+			}
 			mapping.push_back(elem->second);
 		}
 
+		// An id outside the list (damaged input) is left as is: it stays outside the shorter list.
+		const auto remap = [&](u32& id) {
+			if (id < mapping.size()) {
+				id = mapping[id];
+			}
+		};
 		for (auto& geoset : geosets) {
-			geoset.material_id = mapping[geoset.material_id];
+			remap(geoset.material_id);
+		}
+		for (auto& ribbon : ribbons) {
+			remap(ribbon.material_id);
 		}
 
-		materials.clear();
-		for (const auto& [key, value] : material_map) {
-			materials.push_back(key);
-		}
+		materials = std::move(unique);
 		return *this;
 	}
 
-	/// Call after deduplicate_materials() for best results.
-	/// Does not guarantee correct results if the model has any kind of animation
-	/// as it merges geosets purely based on matching material IDs.
-	/// Requires material IDs to be sequential, from zero, without gaps.
-	/// Requires recalculating extents after.
-	MDX& MDX::deduplicate_geosets() {
-		std::ranges::sort(geosets, [](const auto& a, const auto& b) {
-			return a.material_id < b.material_id;
-		});
+	namespace {
+		/// u16 face indices address at most this many vertices
+		constexpr size_t max_geoset_vertices = static_cast<size_t>(std::numeric_limits<u16>::max()) + 1;
+		/// u8 vertex groups address at most this many matrix groups
+		constexpr size_t max_matrix_groups = static_cast<size_t>(std::numeric_limits<u8>::max()) + 1;
 
-		size_t i = 0;
-		while (i < geosets.size()) {
-			const size_t index = geosets[i].material_id;
-
-			if (i == index) {
-				i += 1;
-				continue;
+		/// Every per-vertex array matches the vertex count and every index points inside its geoset, so its data can be
+		/// appended to another geoset without landing on that geoset's vertices.
+		bool is_self_consistent(const Geoset& g, const size_t material_count) {
+			const size_t n = g.vertices.size();
+			if (g.material_id >= material_count || g.normals.size() != n) {
+				return false;
 			}
-
-			geosets[index].vertices.append_range(geosets[i].vertices);
-			geosets[index].normals.append_range(geosets[i].normals);
-			geosets[index].face_type_groups.append_range(geosets[i].face_type_groups);
-			// Just use triangles
-			// geosets[current_material].face_groups.append_range(geosets[i].face_groups);
-			geosets[index].faces.append_range(geosets[i].faces);
-			// The following three lines are likely wrong but w/e, you should use skin anyway
-			geosets[index].vertex_groups.append_range(geosets[i].vertex_groups);
-			geosets[index].matrix_groups.append_range(geosets[i].matrix_groups);
-			geosets[index].matrix_indices.append_range(geosets[i].matrix_indices);
-
-			// We told the user to recalculate extents after
-			// geosets[index].extents.append_range(geosets[i].extents);
-
-			geosets[index].tangents.append_range(geosets[i].tangents);
-			geosets[index].skin.append_range(geosets[i].skin);
-
-			// By the lord, please don't use multiple uv sets
-			assert(geosets[index].uv_sets.size() == geosets[i].uv_sets.size());
-
-			for (size_t j = 0; j < geosets[i].uv_sets.size(); j++) {
-				geosets[index].uv_sets[j].append_range(geosets[i].uv_sets[j]);
+			if (!std::ranges::all_of(g.uv_sets, [n](const auto& set) { return set.size() == n; })) {
+				return false;
 			}
-
-			geosets.erase(geosets.begin() + i);
+			if ((!g.tangents.empty() && g.tangents.size() != n) || (!g.skin.empty() && g.skin.size() != n * 8)) {
+				return false;
+			}
+			if (!g.vertex_groups.empty() && g.vertex_groups.size() != n) {
+				return false;
+			}
+			if (!std::ranges::all_of(g.faces, [n](const u16 face) { return face < n; })) {
+				return false;
+			}
+			if (g.face_type_groups.size() != g.face_groups.size()
+				|| std::accumulate(g.face_groups.begin(), g.face_groups.end(), uint64_t { 0 }) != g.faces.size()) {
+				return false;
+			}
+			const size_t groups = g.matrix_groups.size();
+			if (!std::ranges::all_of(g.vertex_groups, [groups](const u8 group) { return group < groups; })) {
+				return false;
+			}
+			return std::accumulate(g.matrix_groups.begin(), g.matrix_groups.end(), uint64_t { 0 }) == g.matrix_indices.size();
 		}
 
+		/// Same material, LOD and vertex layout, and the combined geoset still fits its index types.
+		bool can_join(const Geoset& target, const Geoset& source) {
+			if (target.material_id != source.material_id || target.lod != source.lod || target.uv_sets.size() != source.uv_sets.size()) {
+				return false;
+			}
+			if (target.tangents.empty() != source.tangents.empty() || target.skin.empty() != source.skin.empty()
+				|| target.vertex_groups.empty() != source.vertex_groups.empty()) {
+				return false;
+			}
+			if (target.vertices.size() + source.vertices.size() > max_geoset_vertices) {
+				return false;
+			}
+			return target.vertex_groups.empty() || target.matrix_groups.size() + source.matrix_groups.size() <= max_matrix_groups;
+		}
+
+		void append_geoset(Geoset& target, const Geoset& source) {
+			const auto vertex_offset = static_cast<u16>(target.vertices.size());
+			const auto group_offset = static_cast<u8>(target.matrix_groups.size());
+
+			target.vertices.append_range(source.vertices);
+			target.normals.append_range(source.normals);
+			for (const u16 face : source.faces) {
+				target.faces.push_back(static_cast<u16>(face + vertex_offset));
+			}
+			target.face_type_groups.append_range(source.face_type_groups);
+			target.face_groups.append_range(source.face_groups);
+			for (const u8 group : source.vertex_groups) {
+				target.vertex_groups.push_back(static_cast<u8>(group + group_offset));
+			}
+			target.matrix_groups.append_range(source.matrix_groups);
+			target.matrix_indices.append_range(source.matrix_indices);
+			target.tangents.append_range(source.tangents);
+			target.skin.append_range(source.skin);
+			for (size_t j = 0; j < source.uv_sets.size(); j++) {
+				target.uv_sets[j].append_range(source.uv_sets[j]);
+			}
+			// Extents are recalculated by the caller (calculate_extents)
+		}
+	} // namespace
+
+	/// Call after deduplicate_materials() for best results.
+	/// Joins geosets that share a material, LOD and vertex layout into the first such geoset, keeping geoset order.
+	/// A geoset named by a geoset animation keeps its own geoset, as does one with inconsistent data (damaged input) or one
+	/// whose vertices would no longer fit u16 face indices. Geoset ids in geoset animations, bones and gliders are renumbered.
+	/// Merging takes no account of bone animation. Requires recalculating extents after.
+	MDX& MDX::deduplicate_geosets() {
+		std::vector<bool> animated(geosets.size(), false);
+		for (const auto& animation : animations) {
+			if (animation.geoset_id < geosets.size()) {
+				animated[animation.geoset_id] = true;
+			}
+		}
+
+		std::vector<Geoset> result;
+		std::vector<bool> joinable;
+		std::vector<u32> mapping(geosets.size());
+		for (size_t i = 0; i < geosets.size(); i++) {
+			Geoset& geoset = geosets[i];
+			const bool can_merge = !animated[i] && is_self_consistent(geoset, materials.size());
+			if (can_merge) {
+				size_t target = 0;
+				while (target < result.size() && !(joinable[target] && can_join(result[target], geoset))) {
+					target += 1;
+				}
+				if (target < result.size()) {
+					append_geoset(result[target], geoset);
+					mapping[i] = static_cast<u32>(target);
+					continue;
+				}
+			}
+			mapping[i] = static_cast<u32>(result.size());
+			result.push_back(std::move(geoset));
+			joinable.push_back(can_merge);
+		}
+
+		// Ids outside the list (damaged input, or -1 "none" for bones) are left as they are
+		for (auto& animation : animations) {
+			if (animation.geoset_id < mapping.size()) {
+				animation.geoset_id = mapping[animation.geoset_id];
+			}
+		}
+		for (auto& bone : bones) {
+			if (bone.geoset_id >= 0 && static_cast<size_t>(bone.geoset_id) < mapping.size()) {
+				bone.geoset_id = static_cast<int32_t>(mapping[bone.geoset_id]);
+			}
+		}
+		for (auto& glider : gliders) {
+			if (glider < mapping.size()) {
+				glider = mapping[glider];
+			}
+		}
+
+		geosets = std::move(result);
 		return *this;
 	}
 

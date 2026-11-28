@@ -172,6 +172,12 @@ int main(int argc, char* argv[]) {
 				"                       The texture goes into a temporary folder, nothing is written to the map folder. Never saves. Exit code 0 only when all pass.\n"
 				"  --qa-doodad-undo-check  Needs --qa-offscreen and --palette doodads (--qa-script-out <file> optional): adds three doodads in memory, checks delete, undo, redo,\n"
 				"                       undo again and cut with undo through the doodad brush, writes PASS/FAIL lines and quits. Never saves. Exit code 0 only when all pass.\n"
+				"  --qa-merge-export-check <out folder>  Needs --qa-offscreen (--qa-merge-map <map folder> and --qa-script-out <file> optional): copies the map\n"
+				"                       (default data/test map) into <out folder>, loads the copy, selects two doodads of one model and one of another\n"
+				"                       (placing stock ones in memory when the map has none),\n"
+				"                       runs the Doodad palette's Merge Selection export into <out folder> and re-reads the .mdx: vertex and face totals must\n"
+				"                       equal the sources' and every face index must be in range. Also checks that an unwritable target gives an error.\n"
+				"                       Writes only into <out folder>. Writes PASS/FAIL lines and quits. Exit code 0 only when all pass.\n"
 				"  --qa-refusal-checks  Needs --qa-offscreen (--qa-script-out <file> optional): on sandbox copies of data/test map, checks that Save, Save As, Test Map and\n"
 				"                       Export MPQ refuse a unit with a 5-byte id without writing a file, that undo works after Open refused a damaged map, and that\n"
 				"                       a map failing inside Map::load gives one message and leaves a blank map open.\n"
@@ -369,6 +375,15 @@ int main(int argc, char* argv[]) {
 				return 2;
 			}
 			(is_script ? HiveWE::qa_model_editor_script : HiveWE::qa_script_out) = arguments[++i];
+		} else if (arguments[i] == "--qa-merge-export-check" || arguments[i] == "--qa-merge-map") {
+			// The hook loads a copy of a map in place of the startup map, so it must never run in a window the user works in.
+			if (i + 1 >= arguments.size() || !arguments.contains("--qa-offscreen")) {
+				std::println(stderr, "{} needs a folder and --qa-offscreen. See HiveWE --help.", arguments[i].toStdString());
+				return 2;
+			}
+			// Decided before the assignment: its right side (++i) is evaluated first
+			const bool is_out_folder = arguments[i] == "--qa-merge-export-check";
+			(is_out_folder ? HiveWE::qa_merge_export_check : HiveWE::qa_merge_map) = arguments[++i];
 		} else if (arguments[i] == "--qa-change-tileset" || arguments[i] == "--qa-tile-texture") {
 			const bool is_folder = arguments[i] == "--qa-change-tileset";
 			if (i + 1 >= arguments.size() || !arguments.contains("--qa-offscreen")) {
@@ -532,6 +547,7 @@ int main(int argc, char* argv[]) {
 	w.run_qa_change_tileset();
 	w.run_qa_tileset_clipboard_check();
 	w.run_qa_doodad_undo_check();
+	w.run_qa_merge_export_check();
 	w.run_qa_refusal_checks();
 	w.run_qa_object_new_check();
 	w.run_qa_region_palette_check();

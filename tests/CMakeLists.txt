@@ -50,6 +50,7 @@ add_executable(HiveWE_tests
 	layer_animation_test.cpp
 	mdx_layer_flipbook_test.cpp
 	mdx_texture_remap_test.cpp
+	mdx_merge_export_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

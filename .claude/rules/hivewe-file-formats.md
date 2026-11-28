@@ -20,6 +20,7 @@ WC3 compatibility is fragile — tiny ordering or field-size mistakes break save
 - Object SLK merges: `src/object_editor/slk_conversions.ixx`.
 - Which map files are referenced (Asset Manager): `src/base/map/asset_usage.ixx` does the matching; `Map::get_file_usage` (`unused_files.cpp`) hands it the in-memory state.
 - Export MPQ's archive step: `src/base/map/map_archive_export.ixx` (Qt-free). It builds `<target>.hivewe-tmp`, checks the flush before compacting, and replaces the target only on success.
+- Doodad merge export: `src/file_formats/mdx/merge_export.ixx` (see "Doodad merge export").
 
 ## Rules
 
@@ -133,7 +134,7 @@ Checks: `.claude/tools/script-check/`.
 - Camera entry first dword = 24-bit size (low) + variant byte (top; 3 in all 3.0 files). `write_CAMS` writes `size | variant<<24` (variant preserved; throws if size > 0xFFFFFF with variant != 0). All 5229 stock cameras are variant 3 at v1800; local v800 files are variant 0. `decode_camera_word` in `src/file_formats/mdx/mdx.ixx` is the single place to switch; variants 1 and 2 are still refused (layout unknown).
 - Camera depth-of-field tracks IDUF, ELAF, PTSF (f32; ASCII tags, MSVC literals `'FUDI'`, `'FALE'`, `'FSTP'`; always before KCTR/KCRL/KTTR in stock files) are parsed and preserved. Unknown camera tracks are kept as raw bytes tag..end (KCVS is absent from all 15,089 stock models). Write order: IDUF, ELAF, PTSF, raw tracks, KCTR, KCRL, KTTR, so a raw track that was after KCTR in the source moves before it. The MDL reader/writer still lose these tracks. `TrackHeader::save` writes nothing for an empty (0-key) track.
 - Line endings: `mdx_reader.cpp` is LF; `mdx.ixx` and `mdx_writer.cpp` are CRLF. Use Edit, not PowerShell here-string rewrites.
-- Tracks do not describe their value size; the tag decides it. Chunk readers bound loops at reader_pos+size taken before the size dword, 4 bytes short: harmless for well-formed files.
+- Tracks do not describe their value size; the tag decides it. Chunk readers bound loops at reader_pos+size taken before the size dword, 4 bytes short. Known gap (2026-11-28, ticket to follow): a trackless last TXAN entry (4 bytes) is therefore skipped and the next chunk misread (`read_TXAN`, `mdx_reader.cpp`).
 - `Track::operator==` cannot compare none/linear tracks (tangents uninitialized). Refusal tests use `CHECK_THROWS_AS(..., std::runtime_error)`, not bare `CHECK_THROWS`.
 - Env-gated stock test: set `HIVEWE_MDX_DIR` for the "stock models" case in `tests/mdx_camera_test.cpp` (ctest #253, the stock MDX sweep). Without it the case passes with 0 assertions, and no stock `.mdx` are extracted locally. A QA brief for an MDX parser change must supply an extraction folder if a real-model sweep is wanted.
 - `BinaryReader::read_count(smallest_record)` (`src/base/binary_reader.ixx`) is the guard for any u32 count that drives an allocation; `TrackHeader` in the MDX reader uses it. A refusal test proves early refusal only with a huge count, or by checking `reader.position` after the throw: a small forged count throws the same `out_of_range` before the fix.
@@ -144,6 +145,13 @@ Checks: `.claude/tools/script-check/`.
 - Layer texture ids exist both static and as KMTF flipbook track values: every remap goes through `for_each_layer_texture_id` (`mdx.ixx`). Texture dedup and removal keep first occurrences in order with compact ids.
 - When a reader starts keeping data it used to drop, check the merge and optimize consumers. v800 models saved by builds from before 2026-11-28 may have lost their layer KMTF (the pre-v1100 SD reader dropped it).
 - Known gap (filed): `mdx_reader.cpp` near line 750 calls `read_vector<float>(reader.read<uint32_t>() * 12)`, which multiplies in 32 bits and can wrap past the bounds check.
+
+## Doodad merge export
+
+- `mdx::merged_for_export` runs `frozen_to_stand` on each model first: sequence-timeline tracks are frozen at the Stand start and geosets hidden there are dropped. Global-sequence tracks keep running (`merge_with` appends and renumbers the global sequences). Bones, ribbons, emitters and sequences are not merged.
+- The module imports `LayerAnimation` from `src/resources` (GL-free; accepted by review).
+- `SkinnedMesh` clears geoset geometry (vertices, faces, uv_sets, skin and more) after the GPU upload, so later users of `mesh->mdx` geometry must reload the model file. It applies a destructible `texfile` override only when loading GPU textures, so rebuilt MDX data loses it.
+- GEOA static colour and KGAC track values use opposite channel order, so freezing a track into the static colour must swap R and B. Source: WarMash `GeosetAnimation.java` line 18 (`D:\Stuff\Warcraft_3_All_Assets\Projects\WarMash`) swaps the static value and not the track. The `merge_export.ixx` comment calling the static colour BGR looks wrong by that file; the code is right (comment fix pending).
 
 ## Tests
 

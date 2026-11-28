@@ -1,5 +1,10 @@
 #pragma once
 
+// Before any header that imports modules (see hivewe-cpp-modules.md)
+#include <expected>
+#include <filesystem>
+#include <unordered_set>
+
 #include "ui_doodad_palette.h"
 
 #include <QLineEdit>
@@ -59,6 +64,12 @@ public:
 	~DoodadPalette();
 	void activate_palette();
 	DoodadBrush& current_brush() { return brush; }
+
+	/// Merge Selection without the file dialog: reads each doodad's model from its file, merges them around their midpoint
+	/// (MDX::merged_for_export) and writes the .mdx to `file_name`. Never throws and shows no dialog; the error text is returned.
+	static std::expected<void, std::string> export_merged_selection(
+		const std::unordered_set<Doodad*>& doodads, const std::filesystem::path& file_name
+	);
 
 private:
 	void selection_changed(const QModelIndex& index);

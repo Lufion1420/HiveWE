@@ -101,6 +101,13 @@ public:
 	/// checks delete, undo, redo, undo and cut with undo through DoodadBrush and writes PASS/FAIL lines. Never saves. Exit code 0 only when all pass.
 	static inline bool qa_doodad_undo_check = false;
 	void run_qa_doodad_undo_check();
+	/// Set by --qa-merge-export-check <out folder> (needs --qa-offscreen; --qa-merge-map <map folder> and --qa-script-out <file> optional): copies the
+	/// map (default data/test map) into the out folder, loads the copy, selects two doodads of one model and one of another and runs the Doodad palette's
+	/// Merge Selection export (DoodadPalette::export_merged_selection) into the out folder, re-reads the .mdx and compares it with the source models.
+	/// Also checks that an unwritable target gives an error, not a throw. Writes only into the out folder. Exit code 0 only when all pass.
+	static inline QString qa_merge_export_check;
+	static inline QString qa_merge_map;
+	void run_qa_merge_export_check();
 	/// Set by --qa-refusal-checks (needs --qa-offscreen; --qa-script-out <file> optional): works on sandbox copies of data/test map. Checks that a placed
 	/// unit with a 5-byte id is refused by Save, Save As, Test Map and Export MPQ without writing a file, and that undo still works after Open refused
 	/// a damaged map, and that a map whose Map::load throws (a custom unit on an unknown base id) gives one message and leaves a blank map open.

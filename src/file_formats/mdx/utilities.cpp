@@ -6,9 +6,26 @@ import "glm/glm.hpp";
 namespace mdx {
 	/// Will not retain sequences and bones because there is no straightforward way to merge them
 	void MDX::merge_with(const MDX& mdx, const glm::mat4& transform) {
+		// Ids outside the merged model's own lists (damaged input) must stay outside the combined lists, so they become 0xFFFFFFFF
+		// instead of being offset into another model's entries.
+		constexpr uint32_t outside = std::numeric_limits<uint32_t>::max();
+
+		// Normals follow the inverse transpose (correct for rotations and non-uniform scale), tangents the model matrix.
+		// A degenerate (zero scale) transform leaves the directions as they were rather than writing NaN.
+		const glm::mat3 linear(transform);
+		const bool invertible = std::abs(glm::determinant(linear)) > std::numeric_limits<float>::min();
+		const glm::mat3 normal_matrix = invertible ? glm::transpose(glm::inverse(linear)) : glm::mat3(1.f);
+		const auto transform_direction = [](const glm::mat3& matrix, const glm::vec3 direction) {
+			const glm::vec3 result = matrix * direction;
+			const float length = glm::length(result);
+			return std::isfinite(length) && length > 0.f ? result / length : direction;
+		};
+
 		MDX new_mdx = mdx;
+		const size_t source_materials = new_mdx.materials.size();
 		for (auto& geoset : new_mdx.geosets) {
-			geoset.material_id += materials.size();
+			geoset.material_id = geoset.material_id < source_materials ? geoset.material_id + static_cast<uint32_t>(materials.size())
+																	   : outside;
 
 			geoset.matrix_groups.clear();
 			geoset.matrix_indices.clear();
@@ -20,7 +37,10 @@ namespace mdx {
 				vertex = transform * glm::vec4(vertex, 1.f);
 			}
 			for (auto& normal : geoset.normals) {
-				normal = glm::normalize(normal * glm::mat3(transform));
+				normal = transform_direction(normal_matrix, normal);
+			}
+			for (auto& tangent : geoset.tangents) {
+				tangent = glm::vec4(transform_direction(invertible ? linear : glm::mat3(1.f), glm::vec3(tangent)), tangent.w);
 			}
 
 			// Zero skin weights because we will have only 1 bone
@@ -31,9 +51,48 @@ namespace mdx {
 			}
 		}
 
-		// Ids outside the merged model's own lists (damaged input) must stay outside the combined lists, so they become 0xFFFFFFFF
-		// instead of being offset into another model's entries.
-		constexpr uint32_t outside = std::numeric_limits<uint32_t>::max();
+		// Geoset animations move with their geoset; one naming a geoset the model does not have is dropped by validate()
+		const size_t source_geosets = new_mdx.geosets.size();
+		for (auto& animation : new_mdx.animations) {
+			animation.geoset_id = animation.geoset_id < source_geosets ? animation.geoset_id + static_cast<uint32_t>(geosets.size())
+																	   : outside;
+		}
+
+		// Tracks on a global sequence move with the appended global sequences. An id the merged model does not have (damaged input,
+		// or an id in a model without global sequences, which the renderer reads on the sequence timeline) becomes -1, so it never
+		// names another model's global sequence.
+		const size_t source_global_sequences = new_mdx.global_sequences.size();
+		const auto global_offset = static_cast<int32_t>(global_sequences.size());
+		const auto remap_global_sequence = [&](auto& header) {
+			if (header.global_sequence_ID < 0) {
+				return;
+			}
+			header.global_sequence_ID = static_cast<size_t>(header.global_sequence_ID) < source_global_sequences
+				? header.global_sequence_ID + global_offset
+				: -1;
+		};
+		for (auto& animation : new_mdx.animations) {
+			remap_global_sequence(animation.KGAO);
+			remap_global_sequence(animation.KGAC);
+		}
+		for (auto& material : new_mdx.materials) {
+			for (auto& layer : material.layers) {
+				remap_global_sequence(layer.KMTA);
+				remap_global_sequence(layer.KMTE);
+				remap_global_sequence(layer.KFC3);
+				remap_global_sequence(layer.KFCA);
+				remap_global_sequence(layer.KFTC);
+				for (auto& slot : layer.textures) {
+					remap_global_sequence(slot.KMTF);
+				}
+			}
+		}
+		for (auto& animation : new_mdx.texture_animations) {
+			remap_global_sequence(animation.KTAT);
+			remap_global_sequence(animation.KTAR);
+			remap_global_sequence(animation.KTAS);
+		}
+
 		const size_t source_textures = new_mdx.textures.size();
 		const size_t source_texture_animations = new_mdx.texture_animations.size();
 		for (auto& material : new_mdx.materials) {
@@ -58,7 +117,7 @@ namespace mdx {
 
 		geosets.append_range(new_mdx.geosets);
 		// sequences.append_range(new_mdx.sequences);
-		// global_sequences.append_range(new_mdx.global_sequences);
+		global_sequences.append_range(new_mdx.global_sequences);
 		animations.append_range(new_mdx.animations);
 		// bones.append_range(new_mdx.bones);
 		materials.append_range(new_mdx.materials);
@@ -81,6 +140,7 @@ namespace mdx {
 		// Just to be sure
 		validate();
 	}
+
 
 	/// Technically SD supports infinite bones per vertex, but we limit it to 4 like HD does.
 	/// This could cause graphical inconsistencies with the game, but after more than 4 bones the contribution per bone is low enough that we don't care

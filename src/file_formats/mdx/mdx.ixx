@@ -805,6 +805,12 @@ namespace mdx {
 
 		void merge_with(const MDX& mdx, const glm::mat4& transform);
 
+		/// One model of the Doodad palette's merge export (mdx::merged_for_export in module MdxMergeExport)
+		struct MergePart {
+			const MDX* model;
+			glm::mat4 transform;
+		};
+
 		static std::vector<glm::u8vec4> matrix_groups_as_skin_weights(const Geoset& geoset);
 
 		/// True when every skin entry fits a byte, which the shaders' u8 skin layout needs.

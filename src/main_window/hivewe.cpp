@@ -11,6 +11,8 @@
 import std;
 import Hierarchy;
 import BinaryReader;
+import MDX;
+import MdxMergeExport;
 import MPQ;
 import Camera;
 import Globals;
@@ -2905,6 +2907,323 @@ void HiveWE::run_qa_doodad_undo_check() {
 		check(doodads.size() == before && none_present(added) && brush.selections.empty(), "cut: the doodads are gone and the selection is empty");
 		undo_or_redo(true);
 		check(doodads.size() == before + 3 && all_present(added), "cut, undo: the three doodads are back with the same ids, positions and creation numbers");
+
+		finish();
+	});
+}
+
+void HiveWE::run_qa_merge_export_check() {
+	if (!qa_offscreen || qa_merge_export_check.isEmpty()) {
+		return;
+	}
+
+	// Nothing here opens a dialog, but a hang must still end the run.
+	QTimer::singleShot(180000, this, []() {
+		std::println("FAIL the merge export check did not finish within 180 s");
+		std::fflush(stdout);
+		std::_Exit(3);
+	});
+
+	QTimer::singleShot(0, this, [this]() {
+		QStringList lines;
+		bool all_passed = true;
+		// Lines are printed and flushed as they come, so a run that hangs or is killed still shows how far it got.
+		const auto add_line = [&](const QString& line) {
+			lines << line;
+			std::println("{}", line.toStdString());
+			std::fflush(stdout);		};
+		const auto check = [&](const bool passed, const QString& text) {
+			add_line((passed ? "PASS " : "FAIL ") + text);
+			all_passed = all_passed && passed;
+			return passed;
+		};
+		const auto note = [&](const QString& text) { add_line("INFO " + text); };
+		note("merge export check started");
+		const auto finish = [&]() {
+			if (!qa_script_out.isEmpty()) {
+				QFile file(qa_script_out);
+				if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+					file.write(lines.join(QChar('\n')).toUtf8() + "\nDONE\n");
+				}
+			}
+			QApplication::exit(all_passed ? 0 : 1);
+		};
+
+		// Everything is written into the out folder: the map copy and the merged models. The source map is only read.
+		std::error_code ec;
+		const fs::path out = qa_merge_export_check.toStdWString();
+		const fs::path source = qa_merge_map.isEmpty() ? fs::path("data") / "test map" : fs::path(qa_merge_map.toStdWString());
+		// The out folder receives a copy of the map, so it must not be the map folder or inside it (paths compared without case)
+		const auto folded = [](const fs::path& path) {
+			std::error_code error;
+			std::wstring text = fs::weakly_canonical(fs::absolute(path, error), error).generic_wstring();
+			std::ranges::transform(text, text.begin(), [](const wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+			while (text.ends_with(L'/')) {
+				text.pop_back();
+			}
+			return text;
+		};
+		const std::wstring source_text = folded(source);
+		const std::wstring out_text = folded(out);
+		if (!check(out_text != source_text && !out_text.starts_with(source_text + L'/'), "the out folder is not the map folder or inside it")) {
+			return finish();
+		}
+		if (!check(!fs::exists(out, ec) || fs::is_empty(out, ec), "the out folder is absent or empty")) {
+			return finish();
+		}
+		fs::create_directories(out, ec);
+		const fs::path copy = out / "map copy";
+		fs::copy(source, copy, fs::copy_options::recursive, ec);
+		if (!check(!ec && fs::exists(copy / "war3map.w3i"), "the map was copied into the out folder: " + QString::fromStdWString(source.wstring()))) {
+			return finish();
+		}
+		if (const auto opening = check_map_for_opening(copy); !opening) {
+			check(false, "the map copy is refused at open: " + QString::fromStdString(opening.error()));
+			return finish();
+		}
+		try {
+			window_handler.close_all();
+			ui->widget->makeCurrent();
+			reset_map_session();
+			map->load(copy);
+			map->headless = true;
+			map->render_manager.resize_framebuffers(ui->widget->width(), ui->widget->height());
+		} catch (const std::exception& error) {
+			check(false, QString("the map copy failed to load: %1").arg(QString::fromLocal8Bit(error.what())));
+			return finish();
+		}
+		check(fs::equivalent(map->filesystem_path, copy, ec), "the map copy is the open map");
+
+		const auto read_mdx = [](const std::vector<char>& bytes) {
+			BinaryReader reader(decltype(BinaryReader::buffer)(bytes.begin(), bytes.end()));
+			return mdx::MDX(reader);
+		};
+		struct Totals {
+			size_t geosets = 0;
+			size_t vertices = 0;
+			size_t face_indices = 0;
+			size_t global_sequences = 0;
+			size_t global_tracks = 0;
+			size_t file_geosets = 0; // before geosets hidden at Stand start are left out
+		};
+		// The global sequence id of every track kind the merge export keeps (-1 included; an absent track reads -1)
+		const auto global_track_ids = [](const mdx::MDX& model) {
+			std::vector<int32_t> ids;
+			for (const auto& animation : model.animations) {
+				ids.push_back(animation.KGAO.global_sequence_ID);
+				ids.push_back(animation.KGAC.global_sequence_ID);
+			}
+			for (const auto& material : model.materials) {
+				for (const auto& layer : material.layers) {
+					for (const int32_t id : { layer.KMTA.global_sequence_ID, layer.KMTE.global_sequence_ID, layer.KFC3.global_sequence_ID,
+											  layer.KFCA.global_sequence_ID, layer.KFTC.global_sequence_ID }) {
+						ids.push_back(id);
+					}
+					for (const auto& slot : layer.textures) {
+						ids.push_back(slot.KMTF.global_sequence_ID);
+					}
+				}
+			}
+			for (const auto& animation : model.texture_animations) {
+				ids.push_back(animation.KTAT.global_sequence_ID);
+				ids.push_back(animation.KTAR.global_sequence_ID);
+				ids.push_back(animation.KTAS.global_sequence_ID);
+			}
+			return ids;
+		};
+		const auto totals_of = [&](const mdx::MDX& model) {
+			Totals result;
+			result.geosets = model.geosets.size();
+			result.global_sequences = model.global_sequences.size();
+			result.global_tracks = std::ranges::count_if(global_track_ids(model), [](const int32_t id) { return id >= 0; });
+			for (const auto& geoset : model.geosets) {
+				result.vertices += geoset.vertices.size();
+				result.face_indices += geoset.faces.size();
+			}
+			return result;
+		};
+
+		// Doodads grouped by model file, in map order. A model is read only when it is a candidate.
+		std::vector<std::pair<fs::path, std::vector<Doodad*>>> by_model;
+		const auto group_doodads = [&]() {
+			by_model.clear();
+			for (Doodad& doodad : map->doodads.doodads) {
+				if (!doodad.mesh) {
+					continue;
+				}
+				auto group = std::ranges::find_if(by_model, [&](const auto& g) { return g.first == doodad.mesh->path; });
+				if (group == by_model.end()) {
+					by_model.emplace_back(doodad.mesh->path, std::vector<Doodad*>());
+					group = std::prev(by_model.end());
+				}
+				group->second.push_back(&doodad);
+			}
+		};
+		group_doodads();
+		std::map<fs::path, Totals> source_totals;
+		const auto has_geometry = [&](const fs::path& path) {
+			if (!source_totals.contains(path)) {
+				Totals totals;
+				try {
+					if (auto file = hierarchy.open_file(path)) {
+						// What the export takes from the model: its geometry shown at the start of Stand
+						const mdx::MDX model(*file);
+						totals = totals_of(mdx::frozen_to_stand(model));
+						totals.file_geosets = model.geosets.size();
+					}
+				} catch (const std::exception&) {
+				}
+				source_totals[path] = totals;
+			}
+			return source_totals[path].vertices > 0 && source_totals[path].face_indices > 0;
+		};
+		// The placeholder HiveWE shows for a doodad whose model is missing is not a real model
+		const auto is_placeholder = [](const fs::path& path) {
+			std::wstring name = path.filename().wstring();
+			std::ranges::transform(name, name.begin(), [](const wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+			return name == L"invalidmodel.mdx";
+		};
+		const auto usable = [&](const fs::path& path) { return !is_placeholder(path) && has_geometry(path); };
+		const auto find_first = [&]() {
+			return std::ranges::find_if(by_model, [&](const auto& g) { return g.second.size() >= 2 && usable(g.first); });
+		};
+		const auto find_second = [&](const fs::path& first_path) {
+			return std::ranges::find_if(by_model, [&](const auto& g) { return g.first != first_path && usable(g.first); });
+		};
+		auto first = find_first();
+		if (first == by_model.end() || find_second(first->first) == by_model.end()) {
+			// The map lacks the doodads (data/test map has none): place stock ones in memory, never saved.
+			note("the map has no two doodads of one model plus one of another: placing stock doodads in memory");
+			const auto place = [&](const std::string& id, const glm::vec3 position) {
+				try {
+					const Doodad& placed = map->doodads.add_doodad(id, 0, position, map->terrain);
+					return placed.mesh ? placed.mesh->path : fs::path();
+				} catch (const std::exception& error) {
+					note(QString("could not place %1: %2").arg(QString::fromStdString(id), QString::fromLocal8Bit(error.what())));
+					return fs::path();
+				}
+			};
+			place("LTlt", glm::vec3(30.f, 40.f, 0.f));
+			const fs::path tree = place("LTlt", glm::vec3(33.f, 41.f, 0.f));
+			// The second model: the first destructible in table order with a real model other than the tree's
+			for (size_t row = 0; row < destructibles_slk.index_to_row.size() && row < 200; row++) {
+				const auto id = destructibles_slk.index_to_row.find(row);
+				if (id == destructibles_slk.index_to_row.end() || id->second == "LTlt") {
+					continue;
+				}
+				if (const fs::path placed = place(id->second, glm::vec3(36.f, 38.f, 0.f)); !placed.empty() && placed != tree && usable(placed)) {
+					break;
+				}
+			}
+			group_doodads();
+			first = find_first();
+		}
+		if (!check(first != by_model.end(), "the map has two doodads of one model with geometry")) {
+			return finish();
+		}
+		const auto second = find_second(first->first);
+		if (!check(second != by_model.end(), "the map has a doodad of a second model with geometry")) {
+			return finish();
+		}
+
+		std::unordered_set<Doodad*> selection = { first->second[0], first->second[1], second->second[0] };
+		Totals expected;
+		for (const Doodad* doodad : selection) {
+			const Totals& t = source_totals.at(doodad->mesh->path);
+			note(QString("selected %1 (%2): %3 geosets (%4 shown at Stand start), %5 vertices, %6 faces, %7 global sequences, %8 tracks on them")
+					 .arg(QString::fromStdString(doodad->id), QString::fromStdWString(doodad->mesh->path.wstring()))
+					 .arg(t.file_geosets)
+					 .arg(t.geosets)
+					 .arg(t.vertices)
+					 .arg(t.face_indices / 3)
+					 .arg(t.global_sequences)
+					 .arg(t.global_tracks));
+			expected.vertices += t.vertices;
+			expected.face_indices += t.face_indices;
+			expected.global_sequences += t.global_sequences;
+			expected.global_tracks += t.global_tracks;
+		}
+
+		// The same function the Merge Selection button runs after its file dialog
+		const fs::path target = out / "merged.mdx";
+		bool threw = false;
+		std::expected<void, std::string> exported;
+		try {
+			exported = DoodadPalette::export_merged_selection(selection, target);
+		} catch (...) {
+			threw = true;
+		}
+		if (!check(!threw && exported.has_value(), "the merge export succeeded: " + QString::fromStdString(exported ? std::string("written") : exported.error()))) {
+			return finish();
+		}
+
+		std::ifstream file(target, std::ios::binary);
+		const std::vector<char> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+		mdx::MDX merged;
+		try {
+			merged = read_mdx(bytes);
+		} catch (const std::exception& error) {
+			check(false, QString("the merged .mdx is readable: %1").arg(QString::fromLocal8Bit(error.what())));
+			return finish();
+		}
+		check(true, QString("the merged .mdx (%1 bytes) is readable").arg(bytes.size()));
+		const Totals result = totals_of(merged);
+		note(QString("merged: %1 geosets, %2 vertices, %3 faces").arg(result.geosets).arg(result.vertices).arg(result.face_indices / 3));
+		check(result.vertices == expected.vertices, QString("vertex total %1, the sources have %2").arg(result.vertices).arg(expected.vertices));
+		check(result.face_indices == expected.face_indices,
+			  QString("face total %1, the sources have %2").arg(result.face_indices / 3).arg(expected.face_indices / 3));
+
+		size_t out_of_range = 0;
+		size_t unused_vertices = 0;
+		size_t bad_groups = 0;
+		size_t bad_materials = 0;
+		for (const auto& geoset : merged.geosets) {
+			std::vector<bool> used(geoset.vertices.size(), false);
+			for (const uint16_t face : geoset.faces) {
+				if (face >= geoset.vertices.size()) {
+					out_of_range += 1;
+				} else {
+					used[face] = true;
+				}
+			}
+			unused_vertices += std::ranges::count(used, false);
+			const uint64_t grouped = std::accumulate(geoset.face_groups.begin(), geoset.face_groups.end(), uint64_t { 0 });
+			bad_groups += geoset.face_groups.size() != geoset.face_type_groups.size() || grouped != geoset.faces.size();
+			bad_materials += geoset.material_id >= merged.materials.size();
+		}
+		check(out_of_range == 0, QString("face indices outside their geoset: %1").arg(out_of_range));
+		check(bad_groups == 0, QString("geosets whose face groups disagree with their faces: %1").arg(bad_groups));
+		check(bad_materials == 0, QString("geosets with a material id outside the list: %1").arg(bad_materials));
+
+		// Every track that reaches the merged file names one of its global sequences or none
+		check(merged.global_sequences.size() == expected.global_sequences,
+			  QString("global sequences %1, the sources have %2").arg(merged.global_sequences.size()).arg(expected.global_sequences));
+		const auto global_ids = global_track_ids(merged);
+		const size_t on_global = std::ranges::count_if(global_ids, [](const int32_t id) { return id >= 0; });
+		const size_t bad_global = std::ranges::count_if(global_ids, [&](const int32_t id) {
+			return id != -1 && (id < 0 || static_cast<size_t>(id) >= merged.global_sequences.size());
+		});
+		note(QString("tracks on a global sequence: %1 (the sources have %2)").arg(on_global).arg(expected.global_tracks));
+		check(bad_global == 0, QString("tracks naming a global sequence the file does not have: %1").arg(bad_global));
+		note(QString("vertices no face uses: %1 (the sources may have some too)").arg(unused_vertices));
+
+		// Failure path: the out folder itself is not a writable file. An error result, no throw, no dialog.
+		threw = false;
+		std::expected<void, std::string> refused;
+		try {
+			refused = DoodadPalette::export_merged_selection(selection, out);
+		} catch (...) {
+			threw = true;
+		}
+		check(!threw && !refused.has_value(),
+			  "an unwritable target gives an error result: " + QString::fromStdString(refused ? std::string("no error") : refused.error()));
+		threw = false;
+		try {
+			refused = DoodadPalette::export_merged_selection({}, out / "empty.mdx");
+		} catch (...) {
+			threw = true;
+		}
+		check(!threw && !refused.has_value() && !fs::exists(out / "empty.mdx"), "an empty selection gives an error result and writes nothing");
 
 		finish();
 	});
