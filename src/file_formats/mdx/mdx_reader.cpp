@@ -166,9 +166,9 @@ namespace mdx {
 				layer.blend_mode = reader.read<uint32_t>();
 				layer.shading_flags = reader.read<uint32_t>();
 
+				// Stored in layer.textures only after the tracks below: its KMTF track is read into it.
 				LayerTexture layer_texture;
 				layer_texture.id = reader.read<uint32_t>();
-				layer.textures.push_back(layer_texture);
 
 				layer.texture_animation_id = reader.read<uint32_t>();
 				layer.coord_id = reader.read<uint32_t>();
@@ -200,6 +200,7 @@ namespace mdx {
 					}
 				}
 
+				layer.textures.push_back(std::move(layer_texture));
 				material.layers.push_back(std::move(layer));
 			}
 		}

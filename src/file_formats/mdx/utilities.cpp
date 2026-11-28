@@ -31,13 +31,20 @@ namespace mdx {
 			}
 		}
 
+		// Ids outside the merged model's own lists (damaged input) must stay outside the combined lists, so they become 0xFFFFFFFF
+		// instead of being offset into another model's entries.
+		constexpr uint32_t outside = std::numeric_limits<uint32_t>::max();
+		const size_t source_textures = new_mdx.textures.size();
+		const size_t source_texture_animations = new_mdx.texture_animations.size();
 		for (auto& material : new_mdx.materials) {
 			for (auto& layer : material.layers) {
-				layer.texture_animation_id = 0;
-				layer.texture_animation_id += texture_animations.size();
-				for (auto& texture : layer.textures) {
-					texture.id += textures.size();
-				}
+				// 0xFFFFFFFF is "no texture animation" and stays so
+				layer.texture_animation_id = layer.texture_animation_id < source_texture_animations
+					? layer.texture_animation_id + static_cast<uint32_t>(texture_animations.size())
+					: outside;
+				for_each_layer_texture_id(layer, [&](uint32_t& id) {
+					id = id < source_textures ? id + static_cast<uint32_t>(textures.size()) : outside;
+				});
 			}
 		}
 
@@ -69,7 +76,7 @@ namespace mdx {
 		// facefxes.append_range(new_mdx.facefxes);
 		// cameras.append_range(new_mdx.cameras);
 		// bind_poses.append_range(new_mdx.bind_poses);
-		// texture_animations.append_range(new_mdx.texture_animations);
+		texture_animations.append_range(new_mdx.texture_animations);
 
 		// Just to be sure
 		validate();

@@ -140,7 +140,9 @@ Checks: `.claude/tools/script-check/`.
 - LITE layout: v1300+ adds a u32 shadow_casting after `type`, plus shadow_casting_start/end floats after shadow_intensity and tracks KLSS/KLSE; v1600+ adds quadratic_falloff, linear_falloff, damping floats and tracks KLQF/KLLF/KLDA. The DILG chunk (geoset ids, `gliders`) is kept. Tracks not valid at the file's version are kept raw. Best 3.0 MDX source: WhiteoutLib `docs/MDX_FILE_FORMAT_SPECIFICATION.md`.
 - `MDX::validate` adds a bone and renumbers node ids, so byte-exact node tests need ids that survive it.
 - `consume_u32` in `mdl_reader` wraps negative MDL ints: convert via `int32_t` where the field is signed or float (negative attenuation).
-- `mdx::TrackTag` is not exported, so tests write track bytes by hand.
+- `mdx::TrackTag` is not exported, so tests write track bytes by hand. Tests that build MDX structs by hand hide reader gaps: add a read-from-bytes test.
+- Layer texture ids exist both static and as KMTF flipbook track values: every remap goes through `for_each_layer_texture_id` (`mdx.ixx`). Texture dedup and removal keep first occurrences in order with compact ids.
+- When a reader starts keeping data it used to drop, check the merge and optimize consumers. v800 models saved by builds from before 2026-11-28 may have lost their layer KMTF (the pre-v1100 SD reader dropped it).
 - Known gap (filed): `mdx_reader.cpp` near line 750 calls `read_vector<float>(reader.read<uint32_t>() * 12)`, which multiplies in 32 bits and can wrap past the bounds check.
 
 ## Tests
@@ -156,7 +158,7 @@ Checks: `.claude/tools/script-check/`.
 - Trigger round-trip sweep: set `HIVEWE_TRIGGER_ROUNDTRIP_ROOT` (it also checks cut wct files). wtg/wct round-trip checks must compare custom text per trigger id on maps with non-empty text (stock 0239, 0104, 0136; human05 and undead02 have none).
 - doctest `-tc` filters split on commas.
 - A test that uses `std::string` or `std::map` with module imports defines `DOCTEST_CONFIG_USE_STD_HEADERS` before including doctest, else C2027.
-- Never end a `TEST_CASE` name with a backslash: ctest reports it Not Run.
+- Never end a `TEST_CASE` name with a backslash (ctest reports it Not Run) or put `;` in one: discovery cuts the name there, the filter matches nothing and ctest reports Passed. Commas are safe under ctest (discovery escapes them).
 - A sweep check that a real file was parsed must read the checked copy, not the source folder, or a stubbed copy still passes.
 - doctest `SUBCASE` inside a `for` loop is unreliable, so looped refusal tests use plain blocks.
 - Synthetic object-data test ids must be exactly 4 characters, or the binary layout shifts silently.

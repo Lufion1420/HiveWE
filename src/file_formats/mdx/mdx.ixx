@@ -403,6 +403,25 @@ namespace mdx {
 		bool operator==(const Material&) const = default;
 	};
 
+	/// Calls `remap(uint32_t&)` on every texture id a layer holds: each slot's static id and every key of its KMTF flipbook
+	/// (value, plus the tangents of a hermite or bezier track; other tracks leave them unread). Code that renumbers textures
+	/// goes through this so flipbooks move with the static id.
+	template<typename Func>
+	void for_each_layer_texture_id(Layer& layer, const Func& remap) {
+		for (auto& texture : layer.textures) {
+			remap(texture.id);
+			const auto type = texture.KMTF.interpolation_type;
+			const bool tangents = type == InterpolationType::hermite || type == InterpolationType::bezier;
+			for (auto& track : texture.KMTF.tracks) {
+				remap(track.value);
+				if (tangents) {
+					remap(track.inTan);
+					remap(track.outTan);
+				}
+			}
+		}
+	}
+
 	struct Bone {
 		Node node;
 		int32_t geoset_id;

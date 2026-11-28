@@ -37,6 +37,7 @@ paths:
 - `SkeletalModelInstance::update(delta, advance_frame, wrapped)`: a caller that owns the clock must pass the loop-wrap flag itself (particle squirt emitters need it).
 - `EditableMesh::geosets` skips `lod != 0` geosets, so its indices differ from `mdx->geosets`. Key per-geoset UI state on `MeshEntry::source_index`.
 - The Model Editor viewport uses the default orbit camera, not the model's CAMS.
+- WarMash rule: a track with keys but none in the current sequence window gives the table default (texture 0, alpha 1), not the layer's static field. `src/resources/layer_animation.ixx` does this for KMTF; layer alpha (KMTA) goes through `SkeletalModelInstance::interpolate_keyframes`, which still returns the static alpha. The alpha 1 default: Needs verification.
 - HD rendering in offscreen hooks follows `HKCU\Software\HiveWE\HiveWE` value `hd`; restore it after the run. Hook script steps are separated by `;`.
 - Model Editor Save MDX is a modal `QFileDialog`, not drivable offscreen: cover the save path with an in-process test.
 - Storm VFX (the user's converted Naruto Storm effects, read only, in the Desktop folder `Model -Conversions WIP\Storm_VFX`) use no particles or ribbons. The measured brief and acceptance set are linked in the notes of Asana ticket 1220963798672494.

@@ -7,6 +7,7 @@ import GPUTexture;
 export import ModelTextureSource;
 import Shader;
 import SkeletalModelInstance;
+export import LayerAnimation;
 import ParticleEmitter2Renderer;
 import Hierarchy;
 import BinaryReader;
@@ -35,6 +36,38 @@ export class EditableMesh: public Resource {
 	std::shared_ptr<mdx::MDX> mdx;
 
 	std::vector<MeshEntry> geosets;
+
+	/// One geoset layer in draw order: `entry` indexes `geosets`, `layer` the material's layers.
+	struct DrawItem {
+		int entry = 0;
+		int layer = 0;
+	};
+	/// Every geoset layer in WarMash's draw order (layer_animation::draw_order): the first `opaque_draw_count` are the None and
+	/// Transparent layers in model order, the rest the sorted translucent layers. Built once; the order does not animate.
+	std::vector<DrawItem> draw_items;
+	std::size_t opaque_draw_count = 0;
+
+	/// What one draw item shows at the skeleton's current time. The render passes and the Model Editor QA hook both read this.
+	struct LayerState {
+		/// Index into mdx->geosets.
+		int geoset = 0;
+		int layer = 0;
+		std::uint32_t blend_mode = 0;
+		std::uint32_t priority_plane = 0;
+		float depth_key = 0.f;
+		bool opaque = true;
+		bool hd = false;
+		/// Hidden in the viewport by the user (hidden_geosets).
+		bool hidden = false;
+		/// Geoset and layer alpha each above 0.01, and a texture to draw.
+		bool visible = true;
+		float geoset_alpha = 1.f;
+		float layer_alpha = 1.f;
+		glm::vec3 geoset_color = glm::vec3(1.f);
+		/// Texture of slot 0 after the KMTF flipbook; nothing when neither the flipbook nor the static id is a model texture.
+		std::optional<std::uint32_t> texture;
+		layer_animation::UvTransform uv;
+	};
 
 	/// View-only: geosets (by index into mdx->geosets) that the render passes skip. Not part of the model data.
 	std::vector<bool> hidden_geosets;
@@ -188,6 +221,8 @@ export class EditableMesh: public Resource {
 			}
 		}
 
+		build_draw_order();
+
 		for (size_t i = 0; i < mdx->textures.size(); i++) {
 			const mdx::Texture& texture = mdx->textures[i];
 
@@ -340,98 +375,170 @@ export class EditableMesh: public Resource {
 		glUniform1i(9, team_color_index);
 		glUniformMatrix4fv(11, mdx->bones.size(), false, &skeleton.world_matrices[0][0][0]);
 
-		for (const auto& geoset_entry : geosets) {
-			if (static_cast<size_t>(geoset_entry.source_index) < hidden_geosets.size() && hidden_geosets[geoset_entry.source_index]) {
+		const std::size_t first = opaque_pass ? 0 : opaque_draw_count;
+		const std::size_t last = opaque_pass ? opaque_draw_count : draw_items.size();
+		for (std::size_t draw_index = first; draw_index < last; ++draw_index) {
+			const DrawItem& item = draw_items[draw_index];
+			const MeshEntry& geoset_entry = geosets[item.entry];
+			const mdx::Layer& layer = mdx->materials[geoset_entry.material_id].layers[item.layer];
+			if (layer.hd != render_hd) {
 				continue;
 			}
-			const auto& layers = mdx->materials[geoset_entry.material_id].layers;
-			const bool geoset_is_opaque = (layers[0].blend_mode == 0 || layers[0].blend_mode == 1);
-			if (geoset_is_opaque != opaque_pass) {
+			const LayerState state = layer_state(draw_index, skeleton);
+			if (state.hidden || !state.visible) {
 				continue;
 			}
 
-			glm::vec3 geoset_color(1.f);
-			float geoset_anim_visibility = 1.0f;
-			if (geoset_entry.geoset_anim && skeleton.sequence_index >= 0) {
-				geoset_color = skeleton.get_geoset_animation_color(*geoset_entry.geoset_anim);
-				geoset_anim_visibility = skeleton.get_geoset_animation_visiblity(*geoset_entry.geoset_anim);
+			const glm::vec4 layer_color = glm::vec4(state.geoset_color, state.layer_alpha * state.geoset_alpha);
+
+			// SD and HD alike: WarMash's HD shader (MdxShaders.fsHd) also discards only Transparent below 0.75, never None.
+			glUniform1f(1, layer_animation::alpha_test_threshold(layer.blend_mode));
+			glUniform1i(2, !(layer.shading_flags & 0x1));
+			glUniform4fv(8, 1, &layer_color[0]);
+			if (!render_hd) {
+				// Texture animation (TXAN); the SD vertex shader applies it. The HD shaders do not animate UVs yet.
+				glUniform2fv(4, 1, &state.uv.translation.x);
+				glUniform2fv(5, 1, &state.uv.rotation.x);
+				glUniform2fv(6, 1, &state.uv.scale.x);
 			}
 
-			for (const auto& layer : layers) {
-				if (layer.hd != render_hd) {
-					continue;
-				}
+			const uint32_t replaceable = mdx->textures[*state.texture].replaceable_id;
+			glUniform1i(10, replaceable == 1 || replaceable == 2);
 
-				float layer_visibility = 1.0f;
-				if (skeleton.sequence_index >= 0) {
-					layer_visibility = skeleton.get_layer_visiblity(layer);
-				}
-
-				const float final_alpha = layer_visibility * geoset_anim_visibility;
-				if (!opaque_pass && final_alpha <= 0.01f) {
-					continue;
-				}
-
-				const glm::vec4 layer_color = glm::vec4(geoset_color, final_alpha);
-
-				glUniform1f(1, layer.blend_mode == 1 ? 0.75f : 0.01f);
-				glUniform1i(2, !(layer.shading_flags & 0x1));
-				glUniform4fv(8, 1, &layer_color[0]);
-
-				const uint32_t replaceable = mdx->textures[layer.textures[0].id].replaceable_id;
-				glUniform1i(10, replaceable == 1 || replaceable == 2);
-
-				switch (layer.blend_mode) {
-					case 0:
-					case 1:
-						glBlendFunc(GL_ONE, GL_ZERO);
-						break;
-					case 2:
-						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-						break;
-					case 3:
-					case 4:
-						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-						break;
-					case 5:
-						glBlendFunc(GL_ZERO, GL_SRC_COLOR);
-						break;
-					case 6:
-						glBlendFunc(GL_DST_COLOR, GL_SRC_COLOR);
-						break;
-				}
-
-				if (layer.shading_flags & 0x10) {
-					glDisable(GL_CULL_FACE);
-				} else {
-					glEnable(GL_CULL_FACE);
-				}
-				if (layer.shading_flags & 0x40) {
-					glDisable(GL_DEPTH_TEST);
-				} else {
-					glEnable(GL_DEPTH_TEST);
-				}
-				if (opaque_pass) {
-					glDepthMask(!(layer.shading_flags & 0x80));
-				}
-
-				// SD path: just albedo (slot 0). HD path: albedo/normal/orm/emissive/team_color (slots 0..4).
-				// For HD layers with fewer than 5 textures, fall back to albedo so we don't read stale state.
-				const size_t slot_count = render_hd ? 5 : 1;
-				const uint32_t fallback_tex_id = layer.textures[0].id;
-				for (size_t slot = 0; slot < slot_count; slot++) {
-					const uint32_t tex_id = slot < layer.textures.size() ? layer.textures[slot].id : fallback_tex_id;
-					glBindTextureUnit(static_cast<GLuint>(slot), textures[tex_id]->id);
-				}
-
-				glDrawElementsBaseVertex(
-					GL_TRIANGLES,
-					geoset_entry.indices,
-					GL_UNSIGNED_SHORT,
-					reinterpret_cast<void*>(static_cast<uintptr_t>(geoset_entry.base_index) * sizeof(uint16_t)),
-					geoset_entry.base_vertex
-				);
+			switch (layer.blend_mode) {
+				case 0:
+				case 1:
+					glBlendFunc(GL_ONE, GL_ZERO);
+					break;
+				case 2:
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+					break;
+				case 3:
+				case 4:
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					break;
+				case 5:
+					glBlendFunc(GL_ZERO, GL_SRC_COLOR);
+					break;
+				case 6:
+					glBlendFunc(GL_DST_COLOR, GL_SRC_COLOR);
+					break;
+				default: // an unknown filter mode: draw it as Blend rather than with the previous layer's blend state
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+					break;
 			}
+
+			if (layer.shading_flags & 0x10) {
+				glDisable(GL_CULL_FACE);
+			} else {
+				glEnable(GL_CULL_FACE);
+			}
+			if (layer.shading_flags & 0x40) {
+				glDisable(GL_DEPTH_TEST);
+			} else {
+				glEnable(GL_DEPTH_TEST);
+			}
+			if (opaque_pass) {
+				glDepthMask(!(layer.shading_flags & 0x80));
+			}
+
+			// SD path: just albedo (slot 0). HD path: albedo/normal/orm/emissive/team_color (slots 0..4).
+			// For HD layers with fewer than 5 textures, fall back to albedo so we don't read stale state.
+			const size_t slot_count = render_hd ? 5 : 1;
+			const layer_animation::TrackTime time = track_time(skeleton);
+			for (size_t slot = 0; slot < slot_count; slot++) {
+				std::uint32_t tex_id = *state.texture;
+				if (slot > 0 && slot < layer.textures.size()) {
+					tex_id = layer_animation::layer_texture_id(layer.textures[slot], time, textures.size()).value_or(tex_id);
+				}
+				glBindTextureUnit(static_cast<GLuint>(slot), textures[tex_id]->id);
+			}
+
+			glDrawElementsBaseVertex(
+				GL_TRIANGLES,
+				geoset_entry.indices,
+				GL_UNSIGNED_SHORT,
+				reinterpret_cast<void*>(static_cast<uintptr_t>(geoset_entry.base_index) * sizeof(uint16_t)),
+				geoset_entry.base_vertex
+			);
+		}
+	}
+
+  public:
+	/// The clock the layer tracks of `skeleton` are sampled at: its sequence and frame, and its global-sequence clock.
+	layer_animation::TrackTime track_time(const SkeletalModelInstance& skeleton) const {
+		layer_animation::TrackTime time;
+		time.has_sequence = skeleton.sequence_index >= 0 && static_cast<std::size_t>(skeleton.sequence_index) < mdx->sequences.size();
+		if (time.has_sequence) {
+			const mdx::Sequence& sequence = mdx->sequences[skeleton.sequence_index];
+			time.sequence_start = sequence.start_frame;
+			time.sequence_end = sequence.end_frame;
+		}
+		time.frame = skeleton.current_frame;
+		time.global_ms = skeleton.global_clock_ms();
+		time.global_sequences = mdx->global_sequences;
+		return time;
+	}
+
+	/// The state of draw item `draw_index` (an index into draw_items) at the skeleton's current time.
+	LayerState layer_state(const std::size_t draw_index, const SkeletalModelInstance& skeleton) const {
+		const DrawItem& item = draw_items[draw_index];
+		const MeshEntry& geoset_entry = geosets[item.entry];
+		const mdx::Material& material = mdx->materials[geoset_entry.material_id];
+		const mdx::Layer& layer = material.layers[item.layer];
+		const bool animating = skeleton.sequence_index >= 0;
+		const layer_animation::TrackTime time = track_time(skeleton);
+
+		LayerState state;
+		state.geoset = geoset_entry.source_index;
+		state.layer = item.layer;
+		state.blend_mode = layer.blend_mode;
+		state.priority_plane = material.priority_plane;
+		state.depth_key = layer_animation::translucent_depth_key(geoset_entry.extent);
+		state.opaque = draw_index < opaque_draw_count;
+		state.hd = layer.hd;
+		state.hidden = static_cast<std::size_t>(geoset_entry.source_index) < hidden_geosets.size() && hidden_geosets[geoset_entry.source_index];
+		if (geoset_entry.geoset_anim && animating) {
+			state.geoset_color = skeleton.get_geoset_animation_color(*geoset_entry.geoset_anim);
+			state.geoset_alpha = skeleton.get_geoset_animation_visiblity(*geoset_entry.geoset_anim);
+		}
+		if (animating) {
+			state.layer_alpha = skeleton.get_layer_visiblity(layer);
+		}
+		if (!layer.textures.empty()) {
+			state.texture = layer_animation::layer_texture_id(layer.textures[0], time, textures.size());
+		}
+		state.uv = layer_animation::texture_animation_transform(*mdx, layer.texture_animation_id, time);
+		state.visible = state.texture.has_value() && layer_animation::layer_visible(state.geoset_alpha, state.layer_alpha);
+		return state;
+	}
+
+  private:
+	/// Fills draw_items once. A geoset whose material id is past the material list has nothing to draw and is left out.
+	void build_draw_order() {
+		std::vector<layer_animation::DrawCandidate> candidates;
+		std::vector<DrawItem> items;
+		for (std::size_t entry = 0; entry < geosets.size(); ++entry) {
+			const MeshEntry& geoset_entry = geosets[entry];
+			if (geoset_entry.material_id < 0 || static_cast<std::size_t>(geoset_entry.material_id) >= mdx->materials.size()) {
+				continue;
+			}
+			const mdx::Material& material = mdx->materials[geoset_entry.material_id];
+			const float depth_key = layer_animation::translucent_depth_key(geoset_entry.extent);
+			for (std::size_t layer = 0; layer < material.layers.size(); ++layer) {
+				candidates.push_back({
+					geoset_entry.source_index,
+					static_cast<int>(layer),
+					material.layers[layer].blend_mode,
+					material.priority_plane,
+					depth_key,
+				});
+				items.push_back({ static_cast<int>(entry), static_cast<int>(layer) });
+			}
+		}
+		for (const std::size_t index : layer_animation::draw_order(candidates)) {
+			draw_items.push_back(items[index]);
+			opaque_draw_count += layer_animation::is_opaque_filter(candidates[index].blend_mode) ? 1 : 0;
 		}
 	}
 };

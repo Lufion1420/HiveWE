@@ -48,16 +48,20 @@ namespace mdx {
 			return;
 		}
 
+		// An id outside the list (damaged input) marks nothing used and is left as is: it stays outside the shorter list.
+		const size_t texture_count = mdx.textures.size();
 		std::set<u32> used_textures;
-		for (const auto& material : mdx.materials) {
-			for (const auto& layer : material.layers) {
-				for (const auto& texture : layer.textures) {
-					used_textures.emplace(texture.id);
-				}
+		for (auto& material : mdx.materials) {
+			for (auto& layer : material.layers) {
+				for_each_layer_texture_id(layer, [&](const u32& id) {
+					if (id < texture_count) {
+						used_textures.emplace(id);
+					}
+				});
 			}
 		}
 
-		std::vector<u32> mapping(mdx.textures.size(), 0);
+		std::vector<u32> mapping(texture_count, 0);
 		size_t current_slot = 0;
 		for (const auto& i : used_textures) {
 			mapping[i] = current_slot++;
@@ -65,9 +69,11 @@ namespace mdx {
 
 		for (auto& material : mdx.materials) {
 			for (auto& layer : material.layers) {
-				for (auto& texture : layer.textures) {
-					texture.id = mapping[texture.id];
-				}
+				for_each_layer_texture_id(layer, [&](u32& id) {
+					if (id < texture_count) {
+						id = mapping[id];
+					}
+				});
 			}
 		}
 
@@ -82,26 +88,31 @@ namespace mdx {
 
 	/// Deduplicate materials and geosets before this for best results
 	MDX& MDX::deduplicate_textures() {
-		std::unordered_map<Texture, size_t> texture_map;
+		// mapping[old id] is the position in `unique`, which keeps first occurrences in their original order
+		std::unordered_map<Texture, u32> texture_map;
+		std::vector<Texture> unique;
 		std::vector<u32> mapping;
 
 		for (const auto& texture : textures) {
-			const auto& [elem, inserted] = texture_map.emplace(texture, mapping.size());
+			const auto& [elem, inserted] = texture_map.emplace(texture, static_cast<u32>(unique.size()));
+			if (inserted) {
+				unique.push_back(texture);
+			}
 			mapping.push_back(elem->second);
 		}
 
+		// An id outside the list (damaged input) is left as is: it stays outside the shorter list.
 		for (auto& material : materials) {
 			for (auto& layer : material.layers) {
-				for (auto& texture : layer.textures) {
-					texture.id = mapping[texture.id];
-				}
+				for_each_layer_texture_id(layer, [&](u32& id) {
+					if (id < mapping.size()) {
+						id = mapping[id];
+					}
+				});
 			}
 		}
 
-		textures.clear();
-		for (const auto& [key, value] : texture_map) {
-			textures.push_back(key);
-		}
+		textures = std::move(unique);
 		return *this;
 	}
 

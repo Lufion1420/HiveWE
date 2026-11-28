@@ -24,8 +24,8 @@ You design HiveWE's desktop UI: Qt Widgets with `ads::CDockManager` docking and 
 - Fidelity to Qt comes first. This is dense desktop UI, so ignore web and mobile minimum text sizes.
 
 ## Rendering (headless, no window)
-Use the Playwright-installed Chromium at `%LOCALAPPDATA%\ms-playwright\chromium-<newest>\chrome-win\chrome.exe` (or `msedge`):
-`chrome.exe --headless --disable-gpu --hide-scrollbars --window-size=W,H --screenshot=<abs png> file:///<abs html>`
+Use the Playwright-installed headless shell at `%LOCALAPPDATA%\ms-playwright\chromium_headless_shell-<newest>\chrome-headless-shell-win64\chrome-headless-shell.exe` (or `msedge`). The full `chromium-1254` `chrome.exe --headless` hung without writing a PNG while the shell rendered all pages (one observation, 2026-11-28).
+`chrome-headless-shell.exe --headless --disable-gpu --hide-scrollbars --window-size=W,H --screenshot=<abs png> file:///<abs html>`
 Absolute paths only. No Python or npm playwright package is installed; do not require one. Write PNGs to `renders/`, then view them with Read to check the result.
 
 ## Approval gates (hard stop)

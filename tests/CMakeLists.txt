@@ -47,6 +47,9 @@ add_executable(HiveWE_tests
 	missing_asset_fallback_test.cpp
 	model_texture_source_test.cpp
 	blp_test.cpp
+	layer_animation_test.cpp
+	mdx_layer_flipbook_test.cpp
+	mdx_texture_remap_test.cpp
 )
 
 target_link_libraries(HiveWE_tests PRIVATE

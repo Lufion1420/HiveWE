@@ -51,7 +51,7 @@ description: >-
 - Tests must never construct a `QApplication` or `QWidget`: `HiveWE_tests` has no Qt platform plugin and the failure shows a modal Windows error on the user's desktop (happened 2026-11-22).
 - `hivewe.h` is CRLF while `hivewe.cpp` is LF; keep each as it is.
 - `doctest.h` forward-declares `std::char_traits`, so a test that only has `import std` and uses `std::string` needs `#include <string>` before `doctest.h`.
-- After restoring a source file from a backup copy, touch it (set `LastWriteTime` to now) before rebuilding: the restored file can keep an old timestamp and the build skips it.
+- After restoring a source file from a backup copy (PowerShell `Copy-Item` keeps the source timestamp), touch it (set `LastWriteTime` to now) before rebuilding: the restored file can keep an old timestamp and the build skips it.
 - Asana MCP calls can time out: check with `get_task` whether the change landed before retrying.
 
 ## Verification checklist

@@ -547,8 +547,14 @@ std::expected<ads::CDockWidget*, std::string> ModelEditor::open_model(const fs::
 //   seq:<sequence name>  (case-insensitive, whole name)
 //   at:<ms>  (pause <ms> into the sequence with a fresh camera, particles and global sequences stepped from its start: repeatable)
 //   textures  (one INFO line per model texture with the file used, then FAIL if any shows a placeholder or did not decode)
+//   camera:<yaw>,<pitch>  (orbit angles in degrees after at:, default -90,-56: in front of the model; -90,-89 looks down from above)
+//   layers  (one INFO line per geoset layer in draw order at the current time: geoset, layer, filter, plane, centre Z, pass,
+//            current texture id, UV transform t(u,v) r(z,w) s(u,v), geoset/layer alpha, visible, hidden)
 //   expect:advanced | same | time=<ms>[/tol] | timefrac=<0..1> | rate=<x> | playing=0|1 | loop=0|1 | speed=<x> | wireframe=0|1
-//          | hidden=<n>/0|1 | sequence=<n> | viewfewer | viewdifferent
+//          | hidden=<n>/0|1 | sequence=<n> | viewfewer | viewdifferent | viewmin=<pixels>
+//          | order=<g>[.<l>],<g>[.<l>],...  (every geoset layer in draw order; <g> = index into the model's geosets, <l> = layer, default 0)
+//          | texture=<g>[.<l>]/<texture id>  (the layer's current texture after the flipbook)
+//          | uv=<g>[.<l>]/<tu>,<tv>[,<rz>,<rw>,<su>,<sv>]  (the layer's current UV transform, each within 0.001)
 // "mark" remembers the playhead and the clock; advanced, same and rate compare against it.
 
 void ModelEditor::run_qa_script(const QString& steps, const QString& out_file) {
@@ -721,6 +727,53 @@ void ModelEditor::qa_continue() {
 						+ QString::fromStdString(texture.source) + (texture.missing ? " (MISSING)" : ""));
 			}
 			check(missing == 0, QString("%1 textures, %2 missing").arg(active->mesh->textures.size()).arg(missing));
+		} else if (command == "camera") {
+			// Orbit angles in degrees, after at: (which resets the camera). Pitch -90 (straight down) is refused: the camera's up axis.
+			const QStringList parts = argument.split(',');
+			bool yaw_ok = false;
+			bool pitch_ok = false;
+			const double yaw = parts.value(0).toDouble(&yaw_ok);
+			const double pitch = parts.value(1).toDouble(&pitch_ok);
+			if (parts.size() != 2 || !yaw_ok || !pitch_ok || std::abs(pitch) >= 90.0) {
+				log("FAIL", "needs <yaw>,<pitch> in degrees, pitch between -90 and 90 exclusive");
+				continue;
+			}
+			active->camera.horizontal_angle = static_cast<float>(yaw * std::numbers::pi / 180.0);
+			active->camera.vertical_angle = static_cast<float>(pitch * std::numbers::pi / 180.0);
+			active->camera.update(0);
+			log("INFO", QString("camera yaw=%1 pitch=%2").arg(yaw).arg(pitch));
+		} else if (command == "layers") {
+			if (!active->mesh) {
+				log("FAIL", "nothing is shown (wait first)");
+				continue;
+			}
+			static constexpr std::array<const char*, 7> filters = { "None", "Transparent", "Blend", "Additive", "AddAlpha", "Modulate", "Modulate2x" };
+			const auto& mesh = *active->mesh;
+			for (std::size_t i = 0; i < mesh.draw_items.size(); ++i) {
+				const auto layer = mesh.layer_state(i, active->skeleton);
+				log("INFO",
+					QString("draw %1: geoset=%2 layer=%3 filter=%4 plane=%5 z=%6 pass=%7 texture=%8 uv=t(%9,%10) r(%11,%12) s(%13,%14) "
+							"alpha=%15/%16 visible=%17 hidden=%18")
+						.arg(i)
+						.arg(layer.geoset)
+						.arg(layer.layer)
+						.arg(layer.blend_mode < filters.size() ? QString(filters[layer.blend_mode]) : QString::number(layer.blend_mode))
+						.arg(static_cast<std::int32_t>(layer.priority_plane))
+						.arg(layer.depth_key, 0, 'f', 2)
+						.arg(layer.opaque ? "opaque" : "translucent")
+						.arg(layer.texture ? QString::number(*layer.texture) : QString("none"))
+						.arg(layer.uv.translation.x, 0, 'g', 6)
+						.arg(layer.uv.translation.y, 0, 'g', 6)
+						.arg(layer.uv.rotation.x, 0, 'g', 6)
+						.arg(layer.uv.rotation.y, 0, 'g', 6)
+						.arg(layer.uv.scale.x, 0, 'g', 6)
+						.arg(layer.uv.scale.y, 0, 'g', 6)
+						.arg(layer.geoset_alpha, 0, 'f', 3)
+						.arg(layer.layer_alpha, 0, 'f', 3)
+						.arg(layer.visible)
+						.arg(layer.hidden));
+			}
+			log("INFO", QString("%1 layers, %2 opaque").arg(mesh.draw_items.size()).arg(mesh.opaque_draw_count));
 		} else if (command == "slider") {
 			timeline->findChild<QSlider*>("timelineSlider")->setValue(argument.toInt());
 			log("INFO", state);
@@ -850,6 +903,89 @@ void ModelEditor::qa_continue() {
 					const long long before = qa_view_counts[qa_view_counts.size() - 2];
 					const long long after = qa_view_counts.back();
 					check(key == "viewfewer" ? after < before : after != before, QString("drawn pixels %1 -> %2").arg(before).arg(after));
+				}
+			} else if (key == "viewmin") {
+				bool number = false;
+				const long long minimum = value.toLongLong(&number);
+				if (!number || minimum <= 0) {
+					log("FAIL", "viewmin needs a pixel count above 0");
+				} else if (qa_view_counts.empty()) {
+					log("FAIL", "needs a viewshot");
+				} else {
+					check(qa_view_counts.back() >= minimum, QString("drawn pixels %1").arg(qa_view_counts.back()));
+				}
+			} else if (key == "order" || key == "texture" || key == "uv") {
+				if (!active->mesh) {
+					log("FAIL", "nothing is shown (wait first)");
+					continue;
+				}
+				const auto& mesh = *active->mesh;
+				// "<g>" or "<g>.<l>": geoset index into the model's geosets and layer index (default 0).
+				const auto parse_layer = [](const QString& text, int& geoset, int& layer) {
+					bool geoset_ok = false;
+					bool layer_ok = true;
+					geoset = text.section('.', 0, 0).toInt(&geoset_ok);
+					layer = text.contains('.') ? text.section('.', 1).toInt(&layer_ok) : 0;
+					return geoset_ok && layer_ok;
+				};
+				if (key == "order") {
+					QStringList actual;
+					for (std::size_t i = 0; i < mesh.draw_items.size(); ++i) {
+						const auto layer = mesh.layer_state(i, active->skeleton);
+						actual << (layer.layer == 0 ? QString::number(layer.geoset) : QString("%1.%2").arg(layer.geoset).arg(layer.layer));
+					}
+					QStringList wanted;
+					bool parsed = true;
+					for (const QString& token : value.split(',', Qt::SkipEmptyParts)) {
+						int geoset = 0;
+						int layer = 0;
+						parsed = parsed && parse_layer(token.trimmed(), geoset, layer);
+						wanted << (layer == 0 ? QString::number(geoset) : QString("%1.%2").arg(geoset).arg(layer));
+					}
+					if (!parsed || wanted.isEmpty()) {
+						log("FAIL", "order needs <g>[.<l>] tokens separated by ','");
+					} else {
+						check(actual == wanted, QString("draw order %1").arg(actual.join(',')));
+					}
+					continue;
+				}
+				int geoset = 0;
+				int layer_index = 0;
+				if (!parse_layer(value.section('/', 0, 0), geoset, layer_index) || !value.contains('/')) {
+					log("FAIL", QString("%1 needs <g>[.<l>]/<value>").arg(key));
+					continue;
+				}
+				std::optional<EditableMesh::LayerState> found;
+				for (std::size_t i = 0; i < mesh.draw_items.size() && !found; ++i) {
+					const auto layer = mesh.layer_state(i, active->skeleton);
+					if (layer.geoset == geoset && layer.layer == layer_index) {
+						found = layer;
+					}
+				}
+				if (!found) {
+					log("FAIL", QString("geoset %1 layer %2 is not drawn by this model").arg(geoset).arg(layer_index));
+					continue;
+				}
+				const QString wanted = value.section('/', 1);
+				if (key == "texture") {
+					bool number = false;
+					const uint wanted_id = wanted.toUInt(&number);
+					check(number && found->texture && *found->texture == wanted_id,
+						QString("texture %1").arg(found->texture ? QString::number(*found->texture) : QString("none")));
+				} else {
+					const QStringList parts = wanted.split(',');
+					const std::array<float, 6> actual = {
+						found->uv.translation.x, found->uv.translation.y, found->uv.rotation.x,
+						found->uv.rotation.y,    found->uv.scale.x,       found->uv.scale.y,
+					};
+					bool matches = parts.size() == 2 || parts.size() == 6;
+					for (qsizetype i = 0; matches && i < parts.size(); ++i) {
+						bool number = false;
+						const double part = parts[i].toDouble(&number);
+						matches = number && std::abs(part - actual[static_cast<std::size_t>(i)]) <= 0.001;
+					}
+					check(matches,
+						QString("uv t(%1,%2) r(%3,%4) s(%5,%6)").arg(actual[0]).arg(actual[1]).arg(actual[2]).arg(actual[3]).arg(actual[4]).arg(actual[5]));
 				}
 			} else {
 				log("FAIL", "unknown expectation");

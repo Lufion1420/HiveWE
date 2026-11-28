@@ -7,6 +7,8 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 ## [Unreleased]
 
 ### Bug Fixes
+- **Classic models keep their texture flipbooks** — HiveWE dropped them when loading standard-definition models older than version 1100 (including version 800), so copies written by Save to MDX, Edit MDL, the Doodad palette's merge export, or Map Protector (when it rewrote a model's attachment or particle paths) no longer animated. This is fixed, but copies already written that way must be exported again from the original.
+- **The Doodad palette's merge export keeps flipbook frames and texture animations on the right textures** — Before, every merged layer pointed at a first texture animation that was not even written into the merged model, and flipbook frames could point at another model's textures.
 - **A damaged or truncated texture no longer blanks a whole model or risks a crash** — It now shows a placeholder and writes a log line, whether the texture comes from the model's folder, your map or the game data.
 - **Stock Warcraft III 3.0 maps no longer report false cliff-texture and doodad pathing errors** — Renamed 3.0 textures that exist only as .dds now load (fixing some objects that rendered white, black or red), as do .tga/.blp pathing textures, including your map's own imports, when only the .dds exists, and some doodads now get their skin data despite a letter-case mismatch in the game data. Definitive-edition-only models still do not load; saved map files are unchanged.
 - **Damaged or unreadable images are reported by file name** — HiveWE logs the file and, for textures, shows a placeholder or blank texture instead of crashing on some of these files; missing-model messages now name the missing file too.
@@ -148,7 +150,8 @@ This is the changelog for the Lufion fork of HiveWE. Versions follow the fork's 
 - **Browse Models sidebar has "Models" and "VFX/SFX" filters** — Effect models can be separated from unit and doodad models.
 - **Object Editor: double-clicking a model field opens the Browse Models picker** — The picker has a Path line, so typed paths and clearing the field still work, and it replaces the old model picker.
 - **Browse Models tiles now animate** — Tiles in view play their Stand animation instead of showing still pictures, up to 12 at once, and pause while you scroll or when the window is inactive.
-- **Model Editor: a model opened from a file now shows the textures stored in its folder** — They take priority over same-named game or map files, and models from different folders keep their own textures; the file name and extension must match the model's reference (a leading `.\` is accepted). Effects may still look wrong, because draw order, scrolling textures, camera-facing parts and large skeletons are not properly supported yet.
+- **Model Editor: a model opened from a file now shows the textures stored in its folder** — They take priority over same-named game or map files, and models from different folders keep their own textures; the file name and extension must match the model's reference (a leading `.\` is accepted). Effects may still look wrong, because camera-facing parts and large skeletons are not properly supported yet.
+- **Model Editor draws effect models closer to the game** — Model previews there, in its model thumbnails and in the Object Editor model grid now draw layers in the right order, play texture flipbooks and scroll, rotate and scale textures (classic SD materials only), and layers with filter mode None no longer lose faint pixels (SD and HD). Placed objects in the map view are unchanged.
 
 ---
 

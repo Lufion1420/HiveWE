@@ -7,6 +7,11 @@ layout (location = 3) in vec4 vTangent;
 layout (location = 4) in uvec2 vSkin;
 
 layout (location = 0) uniform mat4 MVP;
+// Texture animation (TXAN), as WarMash: translate, rotate about (0.5, 0.5) by the quaternion's z and w, scale about (0.5, 0.5).
+// Mirrored on the CPU by layer_animation::apply_uv_transform. Affine, so applying it per vertex equals applying it per pixel.
+layout (location = 4) uniform vec2 uv_translation = vec2(0.0);
+layout (location = 5) uniform vec2 uv_rotation = vec2(0.0, 1.0);
+layout (location = 6) uniform vec2 uv_scale = vec2(1.0);
 layout (location = 8) uniform vec4 layer_color;
 layout (location = 9) uniform int team_color_index;
 layout (location = 11) uniform mat4 bones[217]; // max 200 because the shader compiler issues an error when going higher
@@ -60,7 +65,12 @@ void main() {
 
 	gl_Position = MVP * skinMatrix * vec4(vPosition, 1.f);
 
-	UV = vUV;
+	vec2 uv = vUV + uv_translation;
+	const vec2 v = uv - 0.5;
+	const vec2 a = vec2(-uv_rotation.x * v.y, uv_rotation.x * v.x);
+	const vec2 b = vec2(-uv_rotation.x * a.y, uv_rotation.x * a.x);
+	uv = v + 2.0 * (a * uv_rotation.y + b) + 0.5;
+	UV = uv_scale * (uv - 0.5) + 0.5;
 	Normal = vNormal;
 	vertexColor = layer_color;
 	team_color = team_colors[team_color_index];
